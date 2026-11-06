@@ -11,9 +11,7 @@ import styles from './ApiTokensSettingsPanel.module.css';
 type ScopeFilter = 'all' | 'organization' | 'projects';
 type StatusFilter = 'all' | 'active' | 'revoked';
 
-interface TokenDisplay extends T3xApiKey {
-  expires_at?: string | null;
-}
+type TokenDisplay = T3xApiKey;
 
 function dateParts(value: string) {
   const date = new Date(value);

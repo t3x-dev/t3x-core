@@ -90,7 +90,8 @@ function watchRelevantBrowserErrors(page: Page, projectId: string, workspaceId: 
     if (
       response.status() === 404 &&
       response.request().method() === 'GET' &&
-      url === `${API_BASE}/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
+      new URL(url).pathname ===
+        `/api/v1/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
     ) return;
     if (!/\/api\/v1\/(projects|materials|pins|workspaces|yops|branches|commits)/.test(url)) {
       return;
@@ -150,13 +151,12 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
       await includeMaterial(request, projectId, materialId);
     }
 
-    // Extraction follows an explicit contract; an unbound workspace only has
-    // the generic summary fallback and cannot produce PRD requirements.
+    // Extraction and Review both follow the explicit PRD contract.
     const seeded = await request.patch(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`, {
       data: { workspace: {
         id: workspaceId, projectId, title: 'Main workspace', targetBranch: 'main', status: 'draft',
         summary: '', updatedAt: new Date().toISOString(), baseCommitHash: null, sourceBundle: [],
-        schemaBindings: [],
+        schemaBindings: [{ rootKey: 'prd', canonicalName: 't3x/prd', schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
         schemaCandidate: { summary: '', fields: [] }, schemaReview: { verdict: 'ready', summary: '', gaps: [] },
         yopsDraft: { id: 'complex-draft', operations: [] }, outputTargets: [],
       } },
@@ -177,13 +177,21 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
     }
     await page.keyboard.press('Escape');
     await page.screenshot({ path: testInfo.outputPath('workspace-compose.png') });
-    const initialized = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.url().endsWith(`/workspaces/${encodeURIComponent(workspaceId)}/authoring`)
+    const currentResponse = await request.get(
+      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}`
     );
-    await page.getByRole('button', { name: 'Enable Draft activity' }).click();
-    const initializedResponse = await initialized;
+    expect(currentResponse.ok(), await currentResponse.text()).toBe(true);
+    const current = (await currentResponse.json()).data.workspace;
+    const initializedResponse = await request.post(
+      `${API_BASE}/projects/${projectId}/workspaces/${encodeURIComponent(workspaceId)}/authoring`,
+      {
+        data: {
+          request_id: `initialize-${token}`,
+          expected_workspace_revision: current.revision,
+          expected_ref_head: null,
+        },
+      }
+    );
     expect(initializedResponse.ok(), await initializedResponse.text()).toBe(true);
     const initializedPayload = await initializedResponse.json();
     const published = await request.post(
@@ -208,7 +216,10 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
     expect(authoringPayload.data.current.trees).toEqual(COMPLEX_TREE);
 
     await page.reload();
-    await expect(page.getByText('Branch head precondition', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
+    await expect(
+      page.getByText('Branch head precondition', { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
     await page.getByRole('tab', { name: 'Review', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('button', { name: 'Prepare review', exact: true }).click();

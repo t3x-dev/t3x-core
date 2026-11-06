@@ -9,7 +9,7 @@
   "transitionControlPlane": [
     {
       "path": "packages/api/src/lib/transition-control-plane/applicable-policy.ts",
-      "lines": 409
+      "lines": 425
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
@@ -17,7 +17,7 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 872
+      "lines": 882
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",

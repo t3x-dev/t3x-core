@@ -12,7 +12,7 @@ import {
 } from '@/domain/collaboration/invitationLink';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useInvitationAcceptance } from '@/hooks/accounts/useInvitationAcceptance';
-import { useSession } from '@/hooks/shared/useSession';
+import { ApiError } from '@/infrastructure/core';
 
 type AcceptanceState =
   | { kind: 'loading' }
@@ -21,7 +21,6 @@ type AcceptanceState =
 
 export function InvitationAcceptancePage() {
   const router = useRouter();
-  const { getKey } = useSession();
   const { acceptInvitation } = useInvitationAcceptance();
   const attempted = useRef(false);
   const [state, setState] = useState<AcceptanceState>({ kind: 'loading' });
@@ -42,25 +41,26 @@ export function InvitationAcceptancePage() {
       return;
     }
 
-    const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
-    if (!authDisabled && !getKey()) {
-      router.replace('/login?callbackUrl=%2Finvite');
-      return;
-    }
-
     void acceptInvitation(token)
-      .then((response) => setState({ kind: 'accepted', response }))
-      .catch((error: unknown) =>
+      .then((response) => {
+        sessionStorage.removeItem(PENDING_INVITATION_TOKEN_KEY);
+        setState({ kind: 'accepted', response });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.code === 'UNAUTHORIZED') {
+          router.replace('/login?callbackUrl=%2Finvite');
+          return;
+        }
+        sessionStorage.removeItem(PENDING_INVITATION_TOKEN_KEY);
         setState({
           kind: 'error',
           message: formatUserFacingError(
             error,
             'This invitation could not be accepted. It may be expired, revoked, or already used.'
           ),
-        })
-      )
-      .finally(() => sessionStorage.removeItem(PENDING_INVITATION_TOKEN_KEY));
-  }, [acceptInvitation, getKey, router]);
+        });
+      });
+  }, [acceptInvitation, router]);
 
   let content: React.ReactNode;
   if (state.kind === 'loading') {

@@ -147,6 +147,9 @@ describe('RecipesPage', () => {
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'Notify after commit' },
     });
+    fireEvent.change(screen.getByLabelText('Webhook URL'), {
+      target: { value: 'https://example.com/webhook' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create recipe' }));
 
     await waitFor(() => {
@@ -154,7 +157,7 @@ describe('RecipesPage', () => {
         name: 'Notify after commit',
         description: undefined,
         trigger: { event: 'commit.created' },
-        steps: [{ action: 'send_webhook', config: {} }],
+        steps: [{ action: 'send_webhook', config: { url: 'https://example.com/webhook' } }],
         enabled: true,
       });
     });

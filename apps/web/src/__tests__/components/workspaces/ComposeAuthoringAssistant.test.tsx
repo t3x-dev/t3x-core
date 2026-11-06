@@ -71,6 +71,66 @@ describe('ComposeAuthoringAssistant first message', () => {
     expect(mocks.send).toHaveBeenCalledTimes(2);
   });
 
+  it('prepares on first send and sends the original text and files once the draft is ready', () => {
+    mocks.send.mockClear();
+    const props = {
+      projectId: 'fresh-project',
+      context: { workspaceId: 'fresh-workspace', workspaceRevision: 0, sourceMaterialIds: [] },
+      onCreateConversation: vi.fn(),
+      onPublishCandidate: vi.fn(),
+    };
+    const preparation = { start: vi.fn(), cancel: vi.fn(), busy: false, importing: false };
+    const view = render(<ComposeAuthoringAssistant {...props} draftPreparation={preparation} />);
+    const file = new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { items: [], files: [file], getData: () => '' },
+    });
+    expect(preparation.start).not.toHaveBeenCalled();
+    const send = screen.getByRole('button', { name: 'Send message' });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    expect(preparation.start).toHaveBeenCalledOnce();
+    expect(mocks.send).not.toHaveBeenCalled();
+    view.rerender(
+      <ComposeAuthoringAssistant
+        {...props}
+        draftPreparation={{ ...preparation, error: 'Try again' }}
+      />
+    );
+    expect(send).toBeEnabled();
+    expect(screen.getByText('brief.pdf')).toBeVisible();
+    fireEvent.click(send);
+    view.rerender(
+      <ComposeAuthoringAssistant {...props} draftPreparation={{ ...preparation, busy: true }} />
+    );
+    view.rerender(<ComposeAuthoringAssistant {...props} />);
+    expect(mocks.send).toHaveBeenCalledExactlyOnceWith('天气为晴天', { files: [file] });
+  });
+
+  it('cancels a deferred send when the user declines the draft import', () => {
+    mocks.send.mockClear();
+    const props = {
+      projectId: 'legacy-project',
+      context: { workspaceId: 'legacy-workspace', workspaceRevision: 1, sourceMaterialIds: [] },
+      onCreateConversation: vi.fn(),
+      onPublishCandidate: vi.fn(),
+    };
+    const preparation = { start: vi.fn(), cancel: vi.fn(), busy: false, importing: false };
+    const view = render(<ComposeAuthoringAssistant {...props} draftPreparation={preparation} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    view.rerender(
+      <ComposeAuthoringAssistant
+        {...props}
+        draftPreparation={{ ...preparation, importing: true }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }));
+    expect(preparation.cancel).toHaveBeenCalledOnce();
+    view.rerender(<ComposeAuthoringAssistant {...props} />);
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveValue('天气为晴天');
+  });
+
   it('passes the selected conversation title to first-message title generation', () => {
     render(
       <ComposeAuthoringAssistant

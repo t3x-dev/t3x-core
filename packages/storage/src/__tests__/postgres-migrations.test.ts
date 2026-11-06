@@ -17,6 +17,64 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v82 identities to canonical values with account ownership enforced', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE users DROP CONSTRAINT users_email_canonical_check;
+      ALTER TABLE users DROP CONSTRAINT users_username_canonical_check;
+      ALTER TABLE accounts DROP CONSTRAINT accounts_user_id_fkey;
+      INSERT INTO users(id, email, email_verified, username, password_hash, created_at)
+      VALUES ('legacy-identity', ' Legacy@Example.COM ', TRUE, ' Legacy-A21 ', 'hash', NOW());
+      UPDATE _schema_version SET version = 82;
+    `);
+    await closePostgresStorage();
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+
+    expect(
+      await setup.sql.unsafe("SELECT email, username FROM users WHERE id = 'legacy-identity'")
+    ).toEqual([{ email: 'legacy@example.com', username: 'legacy-a21' }]);
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO accounts(id, user_id, provider, provider_account_id)
+        VALUES ('orphan-account', 'missing-user', 'github', 'missing')
+      `)
+    ).rejects.toThrow();
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO users(id, email, email_verified, created_at)
+        VALUES ('non-canonical', 'Mixed@Example.com', TRUE, NOW())
+      `)
+    ).rejects.toThrow();
+  });
+
+  it('rolls back the v82 identity migration when canonical values collide', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      ALTER TABLE users DROP CONSTRAINT users_email_canonical_check;
+      ALTER TABLE users DROP CONSTRAINT users_username_canonical_check;
+      DROP INDEX idx_users_email;
+      CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE email IS NOT NULL;
+      INSERT INTO users(id, email, email_verified, created_at) VALUES
+        ('collision-a', 'Collision@Example.com', TRUE, NOW()),
+        ('collision-b', 'collision@example.COM', TRUE, NOW());
+      UPDATE _schema_version SET version = 82;
+    `);
+    await closePostgresStorage();
+
+    await expect(
+      createPostgresBootstrapStorage({ connectionString: setup.connectionString })
+    ).rejects.toThrow(/canonical email collision/i);
+    expect(await setup.sql.unsafe('SELECT version FROM _schema_version')).toEqual([
+      { version: 82 },
+    ]);
+    expect(
+      await setup.sql.unsafe(
+        "SELECT email FROM users WHERE id IN ('collision-a', 'collision-b') ORDER BY id"
+      )
+    ).toEqual([{ email: 'Collision@Example.com' }, { email: 'collision@example.COM' }]);
+  });
   it.each([
     76, 77,
   ])('upgrades v%s with independent public publisher ownership without publishing historical private data', async (version) => {
@@ -327,6 +385,7 @@ describe('PostgreSQL schema migrations', () => {
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS uq_projects_id_namespace;
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
+      ALTER TABLE api_keys DROP COLUMN namespace_id;
       DROP TABLE namespaces;
       CREATE TABLE namespaces (incompatible INTEGER);
       DROP TABLE rate_limit_buckets;
@@ -611,6 +670,7 @@ describe('PostgreSQL schema migrations', () => {
       ALTER TABLE projects DROP CONSTRAINT IF EXISTS fk_projects_namespace;
       ALTER TABLE projects DROP COLUMN namespace_id;
       ALTER TABLE yschema_artifacts DROP COLUMN publisher_namespace_id;
+      ALTER TABLE api_keys DROP COLUMN namespace_id;
       DROP TABLE namespaces;
       UPDATE _schema_version SET version = 67 WHERE singleton = TRUE;
     `);
@@ -874,6 +934,113 @@ describe('PostgreSQL schema migrations', () => {
           'pve_unconfirmed', 'project_visibility_audit', 'ns_t3x_dev',
           'private', 'public', 'human', 'user_admin', FALSE
         )
+      `)
+    ).rejects.toThrow();
+  });
+
+  it('upgrades v80 browser credentials to the sessions table', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      DROP TABLE sessions;
+      INSERT INTO api_keys (id, key_prefix, key_hash, name)
+      VALUES
+        ('legacy_browser_session', 't3x_old', 'legacy_browser_hash', 'session:user_legacy'),
+        ('ordinary_api_key', 't3x_api', 'ordinary_api_hash', 'automation');
+      UPDATE _schema_version SET version = 80 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+
+    const [version] = await setup.sql.unsafe<{ version: number }[]>(
+      'SELECT version FROM _schema_version WHERE singleton = TRUE'
+    );
+    const [sessionTable] = await setup.sql.unsafe<Array<{ table_name: string | null }>>(
+      "SELECT to_regclass('public.sessions')::text AS table_name"
+    );
+    const keys = await setup.sql.unsafe<Array<{ id: string; revoked_at: Date | null }>>(`
+      SELECT id, revoked_at
+      FROM api_keys
+      WHERE id IN ('legacy_browser_session', 'ordinary_api_key')
+      ORDER BY id
+    `);
+
+    expect(version?.version).toBe(POSTGRES_SCHEMA_VERSION);
+    expect(sessionTable?.table_name).toBe('sessions');
+    expect(keys).toEqual([
+      { id: 'legacy_browser_session', revoked_at: expect.any(Date) },
+      { id: 'ordinary_api_key', revoked_at: null },
+    ]);
+  });
+
+  it('upgrades v81 API keys into constrained Credentials', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+
+    await closePostgresStorage();
+    await setup.sql.unsafe(`
+      DROP INDEX IF EXISTS idx_api_keys_active_expiry;
+      DROP INDEX IF EXISTS idx_api_keys_namespace;
+      ALTER TABLE api_keys DROP CONSTRAINT IF EXISTS api_keys_expiry_check;
+      ALTER TABLE api_keys DROP CONSTRAINT IF EXISTS api_keys_machine_project_scope_check;
+      ALTER TABLE api_keys DROP CONSTRAINT IF EXISTS api_keys_resource_scope_check;
+      ALTER TABLE api_keys DROP CONSTRAINT IF EXISTS api_keys_credential_kind_check;
+      ALTER TABLE api_keys DROP COLUMN revocation_reason;
+      ALTER TABLE api_keys DROP COLUMN expires_at;
+      ALTER TABLE api_keys DROP COLUMN delegator_user_id;
+      ALTER TABLE api_keys DROP COLUMN namespace_id;
+      ALTER TABLE api_keys DROP COLUMN credential_kind;
+      INSERT INTO api_keys (
+        id, key_prefix, key_hash, name, user_id, principal_kind, transition_scopes
+      ) VALUES
+        ('legacy_service', 't3x_svc', 'legacy_service_hash', 'service', 'user_owner',
+         'service', '["transition:inspect"]'::jsonb),
+        ('legacy_human', 't3x_usr', 'legacy_human_hash', 'human', 'user_owner',
+         'human', '[]'::jsonb);
+      UPDATE _schema_version SET version = 81 WHERE singleton = TRUE;
+    `);
+
+    await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+
+    const credentials = await setup.sql.unsafe<
+      Array<{
+        id: string;
+        credential_kind: string;
+        delegator_user_id: string | null;
+        revoked_at: Date | null;
+        revocation_reason: string | null;
+      }>
+    >(`
+      SELECT id, credential_kind, delegator_user_id, revoked_at, revocation_reason
+      FROM api_keys
+      WHERE id IN ('legacy_human', 'legacy_service')
+      ORDER BY id
+    `);
+
+    expect(credentials).toEqual([
+      {
+        id: 'legacy_human',
+        credential_kind: 'api_key',
+        delegator_user_id: null,
+        revoked_at: null,
+        revocation_reason: null,
+      },
+      {
+        id: 'legacy_service',
+        credential_kind: 'service',
+        delegator_user_id: 'user_owner',
+        revoked_at: expect.any(Date),
+        revocation_reason: 'migration: machine credential missing project scope',
+      },
+    ]);
+
+    await expect(
+      setup.sql.unsafe(`
+        INSERT INTO api_keys (
+          id, key_prefix, key_hash, name, principal_kind, credential_kind
+        ) VALUES ('bad_service', 't3x_bad', 'bad_service_hash', 'bad', 'service', 'service')
       `)
     ).rejects.toThrow();
   });

@@ -1,4 +1,5 @@
-import type { ApiKey, TransitionScope } from '@t3x-dev/core';
+import type { RequestPrincipal } from '@t3x-dev/application';
+import type { TransitionScope } from '@t3x-dev/core';
 import { type AnyDB, findWorkspaceDraft } from '@t3x-dev/storage';
 import { requireTransitionAuthority, resolveTransitionControlPlane } from './transition-authority';
 import { WorkspaceTransitionNotFoundError } from './workspace-transition';
@@ -22,7 +23,7 @@ function decisionScope(
  */
 export async function resolveWorkspaceTransitionAuthority(input: {
   db: AnyDB;
-  apiKey: ApiKey | undefined;
+  apiKey: RequestPrincipal | undefined;
   projectId: string;
   workspaceId: string;
   operation: CompatibilityOperation;

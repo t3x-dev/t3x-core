@@ -1,4 +1,6 @@
+import type { RequestPrincipal } from '@t3x-dev/application';
 import type { ApiKey } from '@t3x-dev/core';
+import type { WebSession } from '@t3x-dev/storage';
 import type { InferenceIngressChannel } from './lib/inference';
 import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
 import type { RateLimitStore } from './middleware/rate-limit';
@@ -12,6 +14,10 @@ import type { RateLimitStore } from './middleware/rate-limit';
 export type AppEnv = {
   Variables: {
     apiKey?: ApiKey;
+    /** Active browser session set by auth middleware. */
+    session?: WebSession;
+    /** Server-derived identity shared by every authenticated ingress. */
+    requestPrincipal?: RequestPrincipal;
     /** Authenticated user ID. Set by auth middleware (JWT or API Key path). Undefined when AUTH_DISABLED=true. */
     userId?: string;
     /** Trusted host classification for inference admission; never copied from request payloads. */

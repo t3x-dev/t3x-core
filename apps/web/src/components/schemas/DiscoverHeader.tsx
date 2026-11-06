@@ -14,6 +14,7 @@ import {
   History,
   LayoutGrid,
   type LucideIcon,
+  Mail,
   Plus,
   Settings,
   UsersRound,
@@ -56,6 +57,7 @@ export function DiscoverHeader({
   newProjectHref,
   namespaceTab,
   exploreNavigation,
+  repositoriesNavigation = false,
 }: {
   exploreNavigation?: {
     view: 'discover' | 'browse';
@@ -74,14 +76,21 @@ export function DiscoverHeader({
   owner?: string;
   projectName?: string;
   newProjectHref?: string;
+  repositoriesNavigation?: boolean;
 }) {
-  const isExplore = !namespaceTab && !repoPath;
+  const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore?view=discover';
   const browseHref = exploreNavigation?.browseHref ?? '/explore?view=browse';
   const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
   const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
-  const ownerHref = owner ? `/${encodeURIComponent(owner)}` : '/';
+  const ownerHref = repositoriesNavigation
+    ? '/repositories'
+    : owner
+      ? `/${encodeURIComponent(owner)}`
+      : '/';
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const homeHref = authDisabled ? '/t3x-dev' : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
     contextLabel === 'Organization'
@@ -110,7 +119,7 @@ export function DiscoverHeader({
     >
       <div className={styles.topRow}>
         <div className={styles.identity}>
-          <Link className={styles.brand} href="/" aria-label="T3X home">
+          <Link className={styles.brand} href={homeHref} aria-label="T3X home">
             <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
               <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
               <path
@@ -133,6 +142,8 @@ export function DiscoverHeader({
             >
               {isExplore ? (
                 <ExploreIcon aria-hidden="true" />
+              ) : repositoriesNavigation ? (
+                <FolderGit2 aria-hidden="true" />
               ) : owner ? (
                 <OwnerIcon aria-hidden="true" />
               ) : (
@@ -181,9 +192,16 @@ export function DiscoverHeader({
             >
               Browse
             </Link>
-            <Link href="/">Your repositories</Link>
+            <Link href="/repositories" aria-current={repositoriesNavigation ? 'page' : undefined}>
+              Your repositories
+            </Link>
           </nav>
           <div className={styles.actions}>
+            <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
+              <Link href="/invitations" aria-label="Invitations" title="Invitations">
+                <Mail aria-hidden="true" />
+              </Link>
+            </Button>
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
               <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
                 <CircleUserRound aria-hidden="true" />

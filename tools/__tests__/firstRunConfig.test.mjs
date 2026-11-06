@@ -83,8 +83,8 @@ test('turbo dev tasks preserve source-dev environment defaults', () => {
     'expected turbo dev tasks to preserve AUTH_DISABLED'
   );
   assert.ok(
-    taskEnv.includes('NEXT_PUBLIC_API_URL') || globalEnv.includes('NEXT_PUBLIC_API_URL'),
-    'expected turbo dev tasks to preserve NEXT_PUBLIC_API_URL'
+    taskEnv.includes('T3X_API_URL') || globalEnv.includes('T3X_API_URL'),
+    'expected turbo dev tasks to preserve T3X_API_URL'
   );
   assert.ok(
     taskEnv.includes('NEXT_PUBLIC_AUTH_DISABLED') ||

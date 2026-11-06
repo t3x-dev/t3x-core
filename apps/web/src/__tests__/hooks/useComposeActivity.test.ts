@@ -6,9 +6,18 @@ import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { deferred } from './deferred';
 
-const { read, reconcile } = vi.hoisted(() => ({ read: vi.fn(), reconcile: vi.fn() }));
+const { read, reconcile, prepareReconciliation, decideReconciliation } = vi.hoisted(() => ({
+  read: vi.fn(),
+  reconcile: vi.fn(),
+  prepareReconciliation: vi.fn(),
+  decideReconciliation: vi.fn(),
+}));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
-  getSharedApiClient: () => ({ workspaces: { authoring: { read, reconcile } } }),
+  getSharedApiClient: () => ({
+    workspaces: {
+      authoring: { read, reconcile, prepareReconciliation, decideReconciliation },
+    },
+  }),
 }));
 
 it('does not let an old Workspace activity load replace the selected Workspace', async () => {
@@ -161,6 +170,145 @@ it('syncs using fresh preconditions and preserves the visible Draft if reconcili
     expect.objectContaining({ expected_workspace_revision: 2, expected_ref_head: 'head-b' })
   );
   expect(result.current.view).toEqual(next);
+  unmount();
+});
+
+it('previews branch advancement before an explicit adopt decision', async () => {
+  read.mockReset();
+  prepareReconciliation.mockReset();
+  decideReconciliation.mockReset();
+  const stale = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 4,
+    compositionRevision: 1,
+    basis: { refName: 'main', refHead: 'head-a', baseDigest: 'base-a' },
+    synchronization: { required: true, currentRefHead: 'head-b' },
+  };
+  const current = {
+    ...stale,
+    workspaceRevision: 5,
+    basis: { ...stale.basis, refHead: 'head-b' },
+    synchronization: { required: false, currentRefHead: 'head-b' },
+  };
+  read.mockResolvedValue(stale);
+  const preview = {
+    schema: 't3x.application/workspace-reconciliation-preparation/v1',
+    preparationDigest: `sha256:${'a'.repeat(64)}`,
+    workspaceRevision: 4,
+    refName: 'main',
+    baseHead: 'head-a',
+    currentRefHead: 'head-b',
+    base: { title: 'base' },
+    ours: { title: 'ours' },
+    theirs: { title: 'base', status: 'live' },
+    merged: { title: 'ours', status: 'live' },
+    conflicts: [],
+  };
+  prepareReconciliation.mockResolvedValue(preview);
+  const candidate = { id: 'ws', projectId: 'p', revision: 4 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  await waitFor(() => expect(result.current.view).toEqual(stale));
+  await act(async () => {
+    expect(await result.current.prepareReconciliation()).toEqual(preview);
+  });
+  expect(result.current.reconciliationPreview).toEqual(preview);
+  expect(prepareReconciliation).toHaveBeenCalledWith('p', 'ws', {
+    expected_workspace_revision: 4,
+    expected_ref_head: 'head-b',
+  });
+  decideReconciliation.mockImplementationOnce(async () => {
+    read.mockResolvedValue(current);
+    return { kind: 'reconciled' };
+  });
+  await act(async () => {
+    expect(await result.current.decideReconciliation('adopt')).toBe(true);
+  });
+  expect(decideReconciliation).toHaveBeenCalledWith(
+    'p',
+    'ws',
+    expect.objectContaining({
+      expected_workspace_revision: 4,
+      expected_ref_head: 'head-b',
+      preparation_digest: preview.preparationDigest,
+      action: 'adopt',
+    })
+  );
+  expect(result.current.reconciliationPreview).toBeNull();
+  expect(result.current.view).toEqual(current);
+  unmount();
+});
+
+it('sends every selected structured conflict to the explicit resolve decision', async () => {
+  read.mockReset();
+  prepareReconciliation.mockReset();
+  decideReconciliation.mockReset();
+  const stale = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 6,
+    compositionRevision: 2,
+    basis: { refName: 'main', refHead: 'head-a', baseDigest: 'base-a' },
+    synchronization: { required: true, currentRefHead: 'head-b' },
+  };
+  const current = {
+    ...stale,
+    workspaceRevision: 7,
+    basis: { ...stale.basis, refHead: 'head-b' },
+    synchronization: { required: false, currentRefHead: 'head-b' },
+  };
+  const conflictId = `sha256:${'d'.repeat(64)}`;
+  const preview = {
+    schema: 't3x.application/workspace-reconciliation-preparation/v1',
+    preparationDigest: `sha256:${'a'.repeat(64)}`,
+    workspaceRevision: 6,
+    refName: 'main',
+    baseHead: 'head-a',
+    currentRefHead: 'head-b',
+    base: { priority: 'must' },
+    ours: { priority: 'should' },
+    theirs: { priority: 'could' },
+    merged: { priority: 'should' },
+    conflicts: [
+      {
+        id: conflictId,
+        path: '/priority',
+        kind: 'value',
+        base: { source: 'base', present: true, value: 'must' },
+        ours: { source: 'workspace_draft', present: true, value: 'should' },
+        theirs: { source: 'branch', present: true, value: 'could' },
+      },
+    ],
+  } as const;
+  read.mockResolvedValue(stale);
+  prepareReconciliation.mockResolvedValue(preview);
+  const candidate = { id: 'ws', projectId: 'p', revision: 6 } as WorkspaceCandidate;
+  const { result, unmount } = renderHook(() => useComposeActivity(candidate, true));
+  await waitFor(() => expect(result.current.view).toEqual(stale));
+  await act(async () => {
+    await result.current.prepareReconciliation();
+  });
+  decideReconciliation.mockImplementationOnce(async () => {
+    read.mockResolvedValue(current);
+    return { kind: 'resolved' };
+  });
+  const resolutions = [{ conflict_id: conflictId, choice: 'ours' as const }];
+  await act(async () => {
+    expect(await result.current.decideReconciliation('resolve', resolutions)).toBe(true);
+  });
+  expect(decideReconciliation).toHaveBeenCalledWith('p', 'ws', {
+    request_id: expect.any(String),
+    expected_workspace_revision: 6,
+    expected_ref_head: 'head-b',
+    preparation_digest: preview.preparationDigest,
+    action: 'resolve',
+    resolutions,
+  });
+  expect(result.current.view).toEqual(current);
   unmount();
 });
 

@@ -585,13 +585,16 @@
   border-color: var(--ring);
 }
 .editor[data-workbench-footer] .content {
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: var(--repo-main-with-inspector);
   overflow: hidden;
+  background: var(--surface-panel);
 }
 .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: var(--repo-nested-navigation-track) minmax(0, 1fr);
 }
 .editor[data-workbench-footer] .importSources {
+  border-right: 0;
+  background: transparent;
   padding: 12px 14px 18px;
   gap: 12px;
   scrollbar-width: thin;
@@ -623,6 +626,14 @@
   --field-type-width: 120px;
   --field-required-width: 64px;
   --field-actions-width: 76px;
+  margin: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap);
+}
+.editor[data-workbench-footer] .fieldWorkarea[data-sources] .fieldMain {
+  margin-left: 0;
+}
+.editor[data-workbench-footer] .content > aside {
+  border-left: 0;
+  background: transparent;
 }
 .editor[data-workbench-footer] .fieldScroll {
   padding: 0 16px 12px;
@@ -766,12 +777,6 @@
   box-shadow: none;
 }
 @container (max-width: 980px) {
-  .editor[data-workbench-footer] .content {
-    grid-template-columns: minmax(0, 1fr) 230px;
-  }
-  .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
-    grid-template-columns: 156px minmax(0, 1fr);
-  }
   .editor[data-workbench-footer] .fieldScroll {
     padding-inline: 10px;
   }
@@ -808,6 +813,9 @@
   .editor[data-workbench-footer] .fieldMain {
     flex: none;
     height: clamp(320px, 55vh, 480px);
+  }
+  .editor[data-workbench-footer] .fieldWorkarea[data-sources] .fieldMain {
+    margin-inline: var(--repo-frame-gap);
   }
   .editor[data-workbench-footer] .importSources {
     flex: none;

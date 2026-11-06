@@ -110,7 +110,7 @@ it('keeps Schema choices editable and blocks publication until the exact edits a
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save & recheck Schema and content' }));
   await waitFor(() => expect(rerun).toHaveBeenCalledTimes(1));
-  expect(saveState).toHaveBeenLastCalledWith('saved');
+  await waitFor(() => expect(saveState).toHaveBeenLastCalledWith('saved'));
   expect(save.mock.calls.at(-1)).toEqual([
     'draft-2',
     expect.objectContaining({
@@ -137,6 +137,9 @@ it('restores concrete migration edits after reload and does not rerun when savin
       }}
       fetchMergeReview={vi.fn().mockResolvedValue({
         draft_id: 'draft-3',
+        source_commit_id: 's',
+        target_commit_id: 't',
+        merge_base_commit_id: 'base',
         decision_revision: 8,
         decisions: {
           conflictResolutions: {},

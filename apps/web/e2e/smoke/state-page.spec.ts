@@ -118,7 +118,8 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await page.setViewportSize({ width: 1280, height: 720 });
 
 
-    await page.getByRole('link', { name: 'History 2', exact: true }).click();
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await page.getByRole('link', { name: 'History canvas', exact: true }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();

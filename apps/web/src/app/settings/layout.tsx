@@ -147,7 +147,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   if (projectId && AUTOMATION_NAV.some((item) => item.href === currentPath)) {
     context.set('project', projectId);
   }
-  const { clear, getKey } = useSession();
+  const { clear } = useSession();
   const { activeAccount } = useNamespaceAccounts();
   const headerOwner = credentialOwner || activeAccount?.namespace.slug;
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
@@ -161,7 +161,10 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
     item.activePaths.includes(currentPath)
   )?.href;
 
-  useEffect(() => setIsAuthEnabled(Boolean(getKey())), [getKey]);
+  useEffect(
+    () => setIsAuthEnabled(process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() !== 'true'),
+    []
+  );
 
   return (
     <div className={`${palette.scope} ${styles.accountLayout}`}>
@@ -207,7 +210,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
             type="button"
             className={styles.mobileSignOut}
             aria-label="Sign out"
-            onClick={() => clear()}
+            onClick={() => void clear()}
           >
             <LogOut aria-hidden="true" size={18} />
           </button>
@@ -260,7 +263,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
           </section>
 
           {isAuthEnabled ? (
-            <button type="button" className={styles.signOut} onClick={() => clear()}>
+            <button type="button" className={styles.signOut} onClick={() => void clear()}>
               <LogOut aria-hidden="true" size={18} />
               Sign out
             </button>

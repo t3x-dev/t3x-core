@@ -225,10 +225,13 @@ export function getProjectWorkspaceStarterCandidate(
   projectId: string,
   materials: Material[] = [],
   targetBranch = 'main',
-  baseCommitHash: string | null = null
+  baseCommitHash: string | null = null,
+  ownerId?: string | null
 ): WorkspaceCandidate {
   const normalizedBranch = targetBranch.trim() || 'main';
-  const workspaceId = `workspace_branch:${encodeURIComponent(normalizedBranch)}`;
+  const workspaceId = `workspace_branch:${encodeURIComponent(normalizedBranch)}${
+    ownerId ? `:human:${encodeURIComponent(ownerId)}` : ''
+  }`;
 
   return {
     id: workspaceId,

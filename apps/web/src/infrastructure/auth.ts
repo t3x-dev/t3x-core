@@ -38,9 +38,19 @@ export interface UpdatePersonalModelPreferences {
 
 export interface ProfileSession {
   id: string;
-  name: string;
+  auth_method: string;
+  user_agent: string | null;
   current: boolean;
-  last_active: string | null;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+}
+
+export interface LinkedAuthAccount {
+  id: string;
+  provider: string;
+  provider_account_id: string;
+  created_at: string;
 }
 
 export interface ProfileSettings {
@@ -49,6 +59,7 @@ export interface ProfileSettings {
   avatar_url: string | null;
   timezone: string;
   sessions: ProfileSession[];
+  linked_accounts: LinkedAuthAccount[];
 }
 
 export interface UpdateProfileSettings {
@@ -117,6 +128,13 @@ export async function revokeProfileSession(id: string): Promise<void> {
   await handleResponse<{ revoked: true }>(res);
 }
 
+export async function unlinkAuthAccount(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/me/accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse<{ unlinked: true }>(res);
+}
+
 // ── Login / register (pre-session) ──
 
 export interface LoginCredentials {
@@ -129,16 +147,15 @@ export interface RegisterCredentials extends LoginCredentials {
 }
 
 export interface AuthSessionResponse {
-  api_key: string;
   id: string;
   name: string | null;
   username: string | null;
 }
 
 /**
- * Exchange credentials for a session api_key. Pre-session, so
- * `injectAuthHeaders` is a no-op (no token to inject yet) — we still
- * route through `fetchWithTimeout` + `handleResponse` so timeouts,
+ * Exchange credentials for an HttpOnly browser Session. The BFF removes the
+ * credential from the JSON response — we still route through
+ * `fetchWithTimeout` + `handleResponse` so timeouts,
  * backend error envelopes, and error translation are consistent with
  * the rest of the client.
  */
@@ -158,6 +175,12 @@ export async function postRegister(credentials: RegisterCredentials): Promise<Au
     body: JSON.stringify(credentials),
   });
   return handleResponse<AuthSessionResponse>(res);
+}
+
+export async function postLogout(): Promise<void> {
+  const res = await fetchWithTimeout(`${API_V1}/auth/logout`, { method: 'POST' });
+  if (res.status === 401) return;
+  await handleResponse<{ logged_out: true }>(res);
 }
 
 export async function getAuthCapabilities(): Promise<{ operator: boolean }> {

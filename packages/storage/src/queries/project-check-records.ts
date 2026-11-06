@@ -29,8 +29,13 @@ export async function listProjectCheckRecords(
     WITH records AS (
       SELECT 'review:' || s.snapshot_id AS id, 'review' AS kind, s.created_at,
         s.workspace_id AS workspace, NULL::integer AS pr,
-        s.snapshot #>> '{objects,commit,digest}' AS commit_hash, to_jsonb(s) AS payload
-      FROM transition_review_snapshots s WHERE s.project_id = ${input.projectId}
+        s.snapshot #>> '{objects,commit,digest}' AS commit_hash,
+        to_jsonb(s) || jsonb_build_object(
+          'content_validation', prep.canonical_json::jsonb #> '{schemaReview,contentValidation}'
+        ) AS payload
+      FROM transition_review_snapshots s
+      LEFT JOIN transition_proposal_preparations prep ON prep.transition_id = s.transition_id
+      WHERE s.project_id = ${input.projectId}
       UNION ALL
       SELECT 'validation:' || v.id, 'validation', v.created_at,
         v.workspace_id, NULL::integer, NULL::text, to_jsonb(v)

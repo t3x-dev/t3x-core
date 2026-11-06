@@ -67,7 +67,7 @@ it('rejects an old API active-list response and becomes interactive after retryi
   );
   expect(screen.queryByText('active-repository')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
-  const requested = new URL(fetch.mock.calls[0][0]);
+  const requested = new URL(fetch.mock.calls[0][0], 'http://localhost');
   expect(requested.pathname).toBe('/api/v1/projects');
   expect(requested.searchParams.get('namespace')).toBe('t3x-dev');
   expect(requested.searchParams.get('status')).toBe('deleted');

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { eventBus, type RealtimeEvent } from '../lib/event-bus';
 import { roomManager } from '../lib/room-manager';
 
@@ -10,6 +10,15 @@ function fakeWs() {
     close: () => {},
     readyState: 1,
   } as unknown as WebSocket;
+}
+
+function makeConnection(id: string) {
+  return {
+    id,
+    ws: { send: vi.fn(), close: vi.fn(), readyState: 1 } as never,
+    userId: id,
+    joinedAt: Date.now(),
+  };
 }
 
 describe('roomManager', () => {
@@ -56,6 +65,81 @@ describe('roomManager', () => {
     roomManager.leave('project:proj_rm_b', 'c2');
   });
 
+  it('delivers principal-private Workspace events only to their owner', () => {
+    const wsA = fakeWs();
+    const wsB = fakeWs();
+    roomManager.join('project:proj_private', {
+      id: 'private-a',
+      ws: wsA,
+      userId: 'test-a',
+      workspaceOwner: { kind: 'human', id: 'test-a' },
+      joinedAt: Date.now(),
+    });
+    roomManager.join('project:proj_private', {
+      id: 'private-b',
+      ws: wsB,
+      userId: 'test-b',
+      workspaceOwner: { kind: 'human', id: 'test-b' },
+      joinedAt: Date.now(),
+    });
+    const beforeA = (wsA as unknown as { sent: string[] }).sent.length;
+    const beforeB = (wsB as unknown as { sent: string[] }).sent.length;
+
+    eventBus.broadcast({
+      type: 'draft.changed',
+      conversationId: '',
+      projectId: 'proj_private',
+      payload: {
+        workspace_id: 'workspace-a',
+        owner_principal_kind: 'human',
+        owner_principal_id: 'test-a',
+        revision: 2,
+      },
+      timestamp: Date.now(),
+    });
+
+    expect((wsA as unknown as { sent: string[] }).sent).toHaveLength(beforeA + 1);
+    expect((wsB as unknown as { sent: string[] }).sent).toHaveLength(beforeB);
+    roomManager.leave('project:proj_private', 'private-a');
+    roomManager.leave('project:proj_private', 'private-b');
+  });
+
+  it('keeps legacy unowned Workspace events inside AUTH_DISABLED sessions', () => {
+    const authenticatedWs = fakeWs();
+    const localWs = fakeWs();
+    roomManager.join('project:proj_legacy', {
+      id: 'legacy-authenticated',
+      ws: authenticatedWs,
+      userId: 'test-a',
+      workspaceOwner: { kind: 'human', id: 'test-a' },
+      joinedAt: Date.now(),
+    });
+    roomManager.join('project:proj_legacy', {
+      id: 'legacy-local',
+      ws: localWs,
+      userId: 'local',
+      authenticationDisabled: true,
+      joinedAt: Date.now(),
+    });
+    const authenticatedBefore = (authenticatedWs as unknown as { sent: string[] }).sent.length;
+    const localBefore = (localWs as unknown as { sent: string[] }).sent.length;
+
+    eventBus.broadcast({
+      type: 'draft.changed',
+      conversationId: '',
+      projectId: 'proj_legacy',
+      payload: { workspace_id: 'legacy-workspace', revision: 2 },
+      timestamp: Date.now(),
+    });
+
+    expect((authenticatedWs as unknown as { sent: string[] }).sent).toHaveLength(
+      authenticatedBefore
+    );
+    expect((localWs as unknown as { sent: string[] }).sent).toHaveLength(localBefore + 1);
+    roomManager.leave('project:proj_legacy', 'legacy-authenticated');
+    roomManager.leave('project:proj_legacy', 'legacy-local');
+  });
+
   it('leaving cleans up the room when no connections remain', () => {
     const ws = fakeWs();
     roomManager.join('conv:conv_rm_c', {
@@ -67,5 +151,22 @@ describe('roomManager', () => {
     roomManager.leave('conv:conv_rm_c', 'c3');
 
     expect(roomManager.getRoomSize('conv:conv_rm_c')).toBe(0);
+  });
+
+  it('disconnects every socket authenticated by a revoked Session', () => {
+    const first = makeConnection('session-first');
+    const second = makeConnection('session-second');
+    first.sessionId = 'sess_revoked';
+    second.sessionId = 'sess_other';
+    roomManager.join('project:session-project', first);
+    roomManager.join('conv:session-conversation', first);
+    roomManager.join('project:session-project', second);
+
+    roomManager.disconnectSession('sess_revoked');
+
+    expect(first.ws.close).toHaveBeenCalledWith(1008, 'Session revoked');
+    expect(second.ws.close).not.toHaveBeenCalled();
+    expect(roomManager.getRoomSize('project:session-project')).toBe(1);
+    expect(roomManager.getRoomSize('conv:session-conversation')).toBe(0);
   });
 });

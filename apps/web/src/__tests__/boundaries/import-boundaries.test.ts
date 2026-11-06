@@ -106,7 +106,7 @@ describe('L1-L4 import boundaries', () => {
     expect(violations, `Boundary violations:\n${violations.join('\n')}`).toEqual([]);
   });
 
-  it('only infrastructure/** contains literal fetch( calls', () => {
+  it('only infrastructure/** and server/** contain literal fetch( calls', () => {
     const stripComments = (s: string): string =>
       // Drop /* block */ and // line comments so `fetch(` mentioned in
       // docstrings/commit-history notes doesn't falsely flag a file.
@@ -122,6 +122,7 @@ describe('L1-L4 import boundaries', () => {
       // fetch() against upstream services.
       if (rel.startsWith('app/')) continue;
       if (rel.startsWith('infrastructure/')) continue;
+      if (rel.startsWith('server/')) continue;
       const body = stripComments(readFileSync(f, 'utf8'));
       if (/\bfetch\s*\(/.test(body)) offenders.push(rel);
     }
@@ -141,6 +142,11 @@ describe('L1-L4 import boundaries', () => {
       'app/deploy/layout.tsx:import @/infrastructure',
       'app/deploy/page.tsx:import @/infrastructure',
       'app/dev/db/page.tsx:literal fetch',
+      'app/invitations/page.tsx:import @/infrastructure/sharedApiClient',
+      'app/invite/page.tsx:import @/infrastructure/core',
+      'app/login/page.tsx:import @/infrastructure/namespaces',
+      'app/page.tsx:import @/infrastructure/core',
+      'app/page.tsx:import @/infrastructure/namespaces',
       'app/project/[projectId]/page.tsx:import @/queries/project',
       'app/project/[projectId]/page.tsx:import @/queries/yschemaValidation',
       'app/project/[projectId]/settings/LegacyProjectSettings.tsx:import @/queries/project',

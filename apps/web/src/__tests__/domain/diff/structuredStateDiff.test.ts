@@ -98,6 +98,7 @@ describe('buildStructuredStateDiff', () => {
       kind: 'added',
       op: 'APPEND',
       path: 'prd/acceptance/-',
+      structurePath: 'prd/acceptance/1',
       reason: 'Ensures the trip plan accounts for local legal requirements.',
       summary: 'Added acceptance criterion',
     });

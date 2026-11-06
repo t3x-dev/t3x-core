@@ -211,7 +211,7 @@ test('signed-in Studio preserves community releases while enforcing destination 
     await page.getByLabel('Username').fill(reader.username);
     await page.getByLabel('Password').fill(reader.password);
     await page.getByRole('button', { name: 'Sign In' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(`/studio-reader-${suffix}`);
     await page.goto(`/project/${target}?tab=schemas&schemaView=studio&candidate=${candidate.id}`, {
       waitUntil: 'domcontentloaded',
     });

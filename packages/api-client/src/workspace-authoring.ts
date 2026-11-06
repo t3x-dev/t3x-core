@@ -1,3 +1,7 @@
+import type {
+  AssistantSchemaSettingsInput,
+  AssistantSchemaSettingsView,
+} from './assistant-schema-settings';
 import type { WorkspaceSchemaDefinitionSnapshot } from './schema-studio';
 import type { TransitionControlPlaneView, TransitionProtocolValue } from './types';
 export interface WorkspaceCommitChanges {
@@ -125,6 +129,14 @@ export interface PublishWorkspaceAuthoringInput {
   operations: TransitionProtocolValue[];
   reason?: string;
 }
+export interface PublishWorkspaceSchemaAuthoringInput {
+  request_id: string;
+  expected_workspace_revision: number;
+  expected_revision: number;
+  expected_ref_head: string | null;
+  settings: AssistantSchemaSettingsInput;
+  discard_studio_candidate?: boolean;
+}
 export interface WorkspaceAuthoringOutcome {
   kind: 'published' | 'reused' | 'no_change';
   workspaceRevision: number;
@@ -132,12 +144,71 @@ export interface WorkspaceAuthoringOutcome {
   action?: WorkspaceAuthoringAction;
   receipt?: { actionId: string; outcome: 'no_change'; message: string };
 }
+export interface WorkspaceReconciliationValue {
+  source: 'base' | 'workspace_draft' | 'branch' | 'resolution';
+  present: boolean;
+  value?: TransitionProtocolValue;
+}
+export interface WorkspaceReconciliationConflict {
+  id: string;
+  path: string;
+  scope: 'content' | 'schema';
+  kind: 'value' | 'type' | 'collection' | 'delete_modify' | 'schema';
+  base: WorkspaceReconciliationValue;
+  ours: WorkspaceReconciliationValue;
+  theirs: WorkspaceReconciliationValue;
+}
+export interface WorkspaceReconciliationPreparation {
+  schema: 't3x.application/workspace-reconciliation-preparation/v1';
+  preparationDigest: string;
+  workspaceRevision: number;
+  refName: string;
+  baseHead: string | null;
+  currentRefHead: string | null;
+  base: TransitionProtocolValue;
+  ours: TransitionProtocolValue;
+  theirs: TransitionProtocolValue;
+  merged: TransitionProtocolValue;
+  schemaBase: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaOurs: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaTheirs: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  schemaMerged: import('./schema-studio').WorkspaceSchemaDefinitionSnapshot;
+  conflicts: WorkspaceReconciliationConflict[];
+}
+export type WorkspaceReconciliationResolution =
+  | { conflict_id: string; choice: 'base' | 'ours' | 'theirs' }
+  | { conflict_id: string; choice: 'custom'; value: TransitionProtocolValue };
+export interface WorkspaceReconciliationDecisionInput {
+  request_id: string;
+  expected_workspace_revision: number;
+  expected_ref_head: string | null;
+  preparation_digest: string;
+  action: 'adopt' | 'cancel' | 'discard' | 'resolve';
+  resolutions?: WorkspaceReconciliationResolution[];
+}
 export interface WorkspaceAuthoringCapability {
   reconcile(
     projectId: string,
     workspaceId: string,
     input: Omit<InitializeWorkspaceAuthoringInput, 'legacy_document'>
   ): Promise<{ kind: 'reconciled' | 'reused' | 'no_change'; workspaceRevision: number }>;
+  prepareReconciliation(
+    projectId: string,
+    workspaceId: string,
+    input: {
+      expected_workspace_revision: number;
+      expected_ref_head: string | null;
+    }
+  ): Promise<WorkspaceReconciliationPreparation>;
+  decideReconciliation(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceReconciliationDecisionInput
+  ): Promise<{
+    kind: 'reconciled' | 'resolved' | 'discarded' | 'cancelled' | 'reused' | 'no_change';
+    preparationDigest: string;
+    workspaceRevision: number;
+  }>;
   confirmDeletion(
     projectId: string,
     workspaceId: string,
@@ -178,6 +249,11 @@ export interface WorkspaceAuthoringCapability {
     workspaceId: string,
     input: PublishWorkspaceAuthoringInput
   ): Promise<WorkspaceAuthoringOutcome>;
+  publishSchema(
+    projectId: string,
+    workspaceId: string,
+    input: PublishWorkspaceSchemaAuthoringInput
+  ): Promise<AssistantSchemaSettingsView>;
   publishCandidate(
     projectId: string,
     workspaceId: string,

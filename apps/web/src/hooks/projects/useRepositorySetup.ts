@@ -1,8 +1,10 @@
+import type { CreateProjectInput } from '@t3x-dev/api-client';
 import { useRef, useState } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createProject } from '@/commands/projects';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import { changeProjectVisibility } from '@/infrastructure/projects';
+import { getSessionUser } from '@/infrastructure/session';
 import { saveWorkspaceDraft } from '@/queries/workspaces';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
@@ -14,6 +16,7 @@ export interface RepositorySetupInput {
   owner: string;
   visibility: 'private' | 'unlisted' | 'public';
   initializeReadme?: boolean;
+  starter?: CreateProjectInput['starter'];
   tags?: string[];
 }
 
@@ -41,7 +44,7 @@ export function useRepositorySetup() {
         config.name.trim(),
         { description: config.description.trim() },
         config.owner,
-        undefined,
+        config.starter,
         { initialize_readme: config.initializeReadme ?? false, tags: config.tags ?? [] }
       );
       setStarted(true);
@@ -50,13 +53,25 @@ export function useRepositorySetup() {
       if (!store.projects.some((project) => project.id === id))
         store.addToProjects(apiProjectToSummary(state.project));
       if (!state.workspace) {
-        state.workspace = (
-          await saveWorkspaceDraft(
-            id,
-            'workspace_branch:main',
-            getProjectWorkspaceStarterCandidate(id, [])
-          )
-        ).workspace;
+        const starter = getProjectWorkspaceStarterCandidate(
+          id,
+          [],
+          'main',
+          null,
+          getSessionUser()?.id
+        );
+        if (config.starter === 'prd-v1') {
+          starter.schemaBindings = [
+            {
+              rootKey: 'prd',
+              canonicalName: 't3x/prd',
+              schemaName: 'PRD Schema',
+              version: 'v2',
+              mode: 'pinned',
+            },
+          ];
+        }
+        state.workspace = (await saveWorkspaceDraft(id, starter.id, starter)).workspace;
       }
       if (!state.conversation) {
         const conversation = await createConversation(

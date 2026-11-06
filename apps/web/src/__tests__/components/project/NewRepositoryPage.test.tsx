@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
+import { useProjects } from '@/hooks/projects/useProjects';
 
 vi.mock('@/queries/projects', () => ({
   checkRepositoryName: async (namespace: string, name: string) => ({
@@ -13,6 +14,12 @@ vi.mock('@/queries/projects', () => ({
     canonical_path: `/${namespace}/${name}`,
   }),
 }));
+vi.mock('@/hooks/projects/useProjects', () => ({ useProjects: vi.fn() }));
+function selectOption(label: string, option: string) {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('option', { name: option, exact: true }), { key: 'Enter' });
+}
+
 const mocks = vi.hoisted(() => ({
   query: '',
   create: vi.fn(),
@@ -52,10 +59,11 @@ it('shows General and Configuration with optional README and tags inputs but no 
   expect(screen.getByLabelText('Description').tagName).toBe('INPUT');
   expect(screen.getByRole('region', { name: 'General' })).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'Configuration' })).toBeInTheDocument();
-  expect(screen.getByRole('checkbox', { name: 'Initialize README' })).not.toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Initialize README' })).not.toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Initialize PRD starter' })).not.toBeChecked();
   expect(screen.getByRole('textbox', { name: 'Tags', exact: true })).toBeInTheDocument();
   expect(container.querySelector('input[type="file"]')).toBeNull();
-  expect(screen.queryByText(/Schema|\.gitignore|Add license/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/\.gitignore|Add license/i)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
 });
 it('creates without AI and retains the canonical D01-005 destination', async () => {
@@ -66,8 +74,8 @@ it('creates without AI and retains the canonical D01-005 destination', async () 
   });
   render(<NewRepositoryPage />);
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
-  fireEvent.change(screen.getByLabelText('Owner'), { target: { value: 'another-team' } });
-  fireEvent.change(screen.getByLabelText('Visibility'), { target: { value: 'unlisted' } });
+  selectOption('Owner', 'another-team');
+  selectOption('Visibility', 'Unlisted');
   expect(screen.queryByLabelText('Connection')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Model')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Upload files')).not.toBeInTheDocument();
@@ -109,14 +117,15 @@ it('keeps a partially created repository locked and allows setup retry', async (
 it('adds and removes hashtag chips and submits unfinished input with README initialization', async () => {
   render(<NewRepositoryPage />);
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Final-Name' } });
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Initialize README' }));
+  fireEvent.click(screen.getByRole('switch', { name: 'Initialize README' }));
+  fireEvent.click(screen.getByRole('switch', { name: 'Initialize PRD starter' }));
   const input = screen.getByRole('textbox', { name: 'Tags', exact: true });
   for (const tag of [' 中文 ', 'Dev', '中文', 'Remove me', '#Existing']) {
     fireEvent.change(input, { target: { value: tag } });
     fireEvent.keyDown(input, { key: 'Enter' });
   }
   fireEvent.click(screen.getByRole('button', { name: 'Remove tag Remove me' }));
-  expect(screen.getByLabelText('Selected tags')).toHaveTextContent('#中文#Dev#Existing');
+  expect(screen.getByLabelText('Selected tags')).toHaveTextContent('中文Dev#Existing');
   expect(screen.getByLabelText('Selected tags')).not.toHaveTextContent('##Existing');
   expect(mocks.create).not.toHaveBeenCalled();
   fireEvent.change(input, { target: { value: 'case' } });
@@ -128,6 +137,7 @@ it('adds and removes hashtag chips and submits unfinished input with README init
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         initializeReadme: true,
+        starter: 'prd-v1',
         tags: ['中文', 'Dev', '#Existing', 'case'],
       })
     )
@@ -180,4 +190,39 @@ it('returns a newly created project to the exact Explore release without applyin
   expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
   expect(destination.searchParams.get('studioTarget')).toBe('new-project');
   expect(destination.searchParams.get('workspace')).toBe('workspace:main');
+});
+
+it('loads existing tags for the chosen owner only when requested and retains unfinished input', async () => {
+  vi.mocked(useProjects).mockReturnValue({
+    projects: [{ project_id: 'existing', repository_profile: { tags: ['#中文', 'Dev', 'dev'] } }],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  } as unknown as ReturnType<typeof useProjects>);
+  render(<NewRepositoryPage />);
+  expect(useProjects).not.toHaveBeenCalled();
+  selectOption('Owner', 'another-team');
+  fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Catalog' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Tags', exact: true }), {
+    target: { value: 'unfinished' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Choose existing tags' }));
+  expect(useProjects).toHaveBeenCalledWith(100, 'another-team', true);
+  fireEvent.click(screen.getByRole('checkbox', { name: '#中文', exact: true }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Dev', exact: true }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'dev', exact: true }));
+  fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search tags' }), { key: 'Escape' });
+  expect(screen.getByRole('textbox', { name: 'Tags', exact: true })).toHaveValue('unfinished');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Create repository' })).toBeEnabled()
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Create repository' }));
+  await waitFor(() =>
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: 'another-team',
+        tags: ['#中文', 'Dev', 'dev', 'unfinished'],
+      })
+    )
+  );
 });

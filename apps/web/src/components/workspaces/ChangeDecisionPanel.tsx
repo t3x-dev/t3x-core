@@ -274,13 +274,16 @@ function CheckRow({ check, summaryOnly }: { check: ChangeCheckRow; summaryOnly?:
           {check.findings.map((finding) => (
             <li
               className="rounded bg-[var(--surface-panel)] px-2 py-1.5 text-[11px] leading-4 text-[var(--text-secondary)]"
-              key={`${finding.code}-${finding.message}`}
+              key={`${finding.code}-${finding.path ?? ''}-${finding.message}`}
             >
               <span className="font-mono font-semibold text-[var(--text-primary)]">
                 {finding.code}
               </span>
               {finding.count > 1 ? (
                 <span className="ml-1 text-[var(--text-tertiary)]">×{finding.count}</span>
+              ) : null}
+              {finding.path ? (
+                <span className="mt-0.5 block break-all font-mono">{finding.path}</span>
               ) : null}
               <span className="mt-0.5 block">{finding.message}</span>
             </li>

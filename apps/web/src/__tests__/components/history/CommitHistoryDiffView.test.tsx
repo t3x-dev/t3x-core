@@ -51,6 +51,20 @@ const SELECTED_COMMIT: ApiCommit = {
 };
 
 describe('CommitHistoryDiffView', () => {
+  it('uses the same missing-message fallback for the heading and reason', () => {
+    render(
+      <CommitHistoryDiffView
+        commit={{ ...SELECTED_COMMIT, message: '   ' }}
+        parentCommit={PARENT_COMMIT}
+        onBack={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'No commit message' })).toBeInTheDocument();
+    expect(screen.getByText('Commit message:').parentElement).toHaveTextContent(
+      'Commit message: No commit message'
+    );
+  });
+
   it('renders the source-matched YAML review with real commit data and selected values', () => {
     const onBack = vi.fn();
     render(
@@ -100,6 +114,133 @@ describe('CommitHistoryDiffView', () => {
     expect(
       screen.getByRole('complementary', { name: 'History change walkthrough' })
     ).toHaveTextContent('Checkout Retry and Payment Recovery');
+  });
+
+  it.each([
+    {
+      before: [{ name: 'old-name' }],
+      after: [{ name: 'new-name' }],
+      path: '0/name',
+      step: '2',
+      kind: 'Modified',
+      beforeValue: 'old-name',
+      afterValue: 'new-name',
+    },
+    {
+      before: [{ name: 'same' }],
+      after: [{ name: 'same' }, { name: 'same' }],
+      path: '1/name',
+      step: '2',
+      kind: 'Added',
+      afterValue: 'same',
+    },
+    {
+      before: ['same'],
+      after: ['same', 'same', 'last'],
+      path: '2',
+      step: '3',
+      kind: 'Added',
+      afterValue: 'last',
+    },
+    {
+      before: [{ name: 'old-name', obsolete: 'removed-value' }],
+      after: [{ name: 'new-name' }],
+      path: '0/obsolete',
+      step: '2',
+      kind: 'Removed',
+      beforeValue: 'removed-value',
+    },
+  ])('inspects the exact nested $kind field at $path', ({
+    before,
+    after,
+    path,
+    step,
+    kind,
+    beforeValue,
+    afterValue,
+  }) => {
+    const content = (inputs: unknown[], first: string) => ({
+      relations: [],
+      trees: [{ key: 'prd', children: [], slots: { first, inputs } }],
+    });
+    const parent = { ...PARENT_COMMIT, content: content(before, 'old-first') };
+    const head = { ...SELECTED_COMMIT, content: content(after, 'new-first') };
+    const original = JSON.stringify([parent, head]);
+    render(<CommitHistoryDiffView commit={head} parentCommit={parent} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
+    const tree = screen.getByRole('region', { name: 'Workspace structure rows' });
+    const field = within(tree).getByTitle(`prd/inputs/${path}`);
+    fireEvent.click(field);
+    const inspector = screen.getByRole('complementary', { name: 'History change walkthrough' });
+    expect(within(inspector).getByText(`prd.inputs.${path.replaceAll('/', '.')}`)).toBeVisible();
+    expect(within(inspector).getByText(kind, { exact: true })).toBeVisible();
+    expect(inspector.querySelector('[data-side="before"]')?.textContent).toBe(beforeValue);
+    expect(inspector.querySelector('[data-side="after"]')?.textContent).toBe(afterValue);
+    expect(field.closest('tr')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('slider', { name: 'Walkthrough progress' })).toHaveValue(step);
+    fireEvent.click(screen.getByRole('tab', { name: 'YAML diff' }));
+    const yamlPane = screen.getByRole('region', {
+      name: kind === 'Removed' ? 'Parent YAML' : 'Commit YAML',
+    });
+    expect(yamlPane.querySelector('[data-selected="true"]')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause walkthrough' })).not.toBeInTheDocument();
+    expect(JSON.stringify([parent, head])).toBe(original);
+  });
+
+  it('preserves nested selection across views and returns to the owning walkthrough change', () => {
+    const content = (name: string, first: string) => ({
+      relations: [],
+      trees: [{ key: 'prd', children: [], slots: { first, inputs: [{ name }] } }],
+    });
+    render(
+      <CommitHistoryDiffView
+        commit={{ ...SELECTED_COMMIT, content: content('new-name', 'new-first') }}
+        parentCommit={{ ...PARENT_COMMIT, content: content('old-name', 'old-first') }}
+        onBack={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
+    fireEvent.click(screen.getByTitle('prd/inputs/0/name'));
+    fireEvent.click(screen.getByRole('tab', { name: 'YAML diff' }));
+    const inspector = screen.getByRole('complementary', { name: 'History change walkthrough' });
+    expect(inspector).toHaveTextContent('prd.inputs.0.name');
+    expect(
+      screen.getByRole('region', { name: 'Commit YAML' }).querySelector('[data-selected="true"]')
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous change' }));
+    expect(inspector).toHaveTextContent('prd.first');
+    fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
+    expect(inspector).toHaveTextContent('prd.inputs');
+    expect(inspector).toHaveTextContent('new-name');
+    fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
+    expect(screen.getByTitle('prd/inputs').closest('tr')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('copies the selected nested path and clears it when that difference disappears', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    try {
+      const content = (name: string) => ({
+        relations: [],
+        trees: [{ key: 'prd', children: [], slots: { inputs: [{ name }] } }],
+      });
+      const parent = { ...PARENT_COMMIT, content: content('old') };
+      const head = { ...SELECTED_COMMIT, content: content('new') };
+      const { rerender } = render(
+        <CommitHistoryDiffView commit={head} parentCommit={parent} onBack={vi.fn()} />
+      );
+      fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
+      fireEvent.click(screen.getByTitle('prd/inputs/0/name'));
+      fireEvent.click(screen.getByRole('button', { name: 'Copy selected path' }));
+      expect(writeText).toHaveBeenCalledWith('prd.inputs.0.name');
+      rerender(<CommitHistoryDiffView commit={head} parentCommit={head} onBack={vi.fn()} />);
+      expect(screen.getByText('No state changes in this commit.')).toBeVisible();
+      expect(screen.queryByText('prd.inputs.0.name')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Copy selected path' }));
+      expect(writeText).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('replays, pauses, steps and restores the complete comparison without mutating commits', () => {

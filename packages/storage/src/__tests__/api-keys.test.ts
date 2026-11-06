@@ -34,6 +34,7 @@ describe('API Keys Storage', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
+  let testNamespaceId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
@@ -45,6 +46,7 @@ describe('API Keys Storage', () => {
       slug: 'api-keys-owner',
       ownerUserId: 'user_api_keys_owner',
     });
+    testNamespaceId = namespace.namespaceId;
     const project = await insertProject(db, {
       ...testData.project({ name: 'API Keys Test Project' }),
       ownerId: 'user_api_keys_owner',
@@ -71,11 +73,16 @@ describe('API Keys Storage', () => {
       expect(result.key_hash).toBeDefined();
       expect(result.key_hash.length).toBe(64); // SHA-256 hex
       expect(result.project_id).toBeNull();
+      expect(result.namespace_id).toBeNull();
       expect(result.principal_kind).toBe('human');
+      expect(result.credential_kind).toBe('api_key');
+      expect(result.delegator_user_id).toBeNull();
       expect(result.transition_scopes).toEqual([]);
+      expect(result.expires_at).toBeNull();
       expect(result.created_at).toBeDefined();
       expect(result.last_used_at).toBeNull();
       expect(result.revoked_at).toBeNull();
+      expect(result.revocation_reason).toBeNull();
     });
 
     it('creates a project-scoped API key', async () => {
@@ -122,6 +129,7 @@ describe('API Keys Storage', () => {
       });
 
       expect(result.principal_kind).toBe('agent');
+      expect(result.credential_kind).toBe('agent');
       expect(result.transition_scopes).toEqual(['transition:propose', 'transition:verify']);
       const grants = await db
         .select()
@@ -137,17 +145,68 @@ describe('API Keys Storage', () => {
       ]);
     });
 
-    it('rejects unscoped agent and service Transition writers', async () => {
+    it('persists an expiring delegated MCP credential', async () => {
+      const expiresAt = new Date('2099-01-01T00:00:00.000Z');
+      const result = await createApiKey(db, {
+        name: 'MCP for test user',
+        keyValue: testApiKey('mcpdelegated1234567890'),
+        projectId: testProjectId,
+        userId: 'user_api_keys_owner',
+        principalKind: 'service',
+        credentialKind: 'mcp',
+        delegatorUserId: 'user_api_keys_owner',
+        expiresAt,
+      });
+
+      expect(result).toMatchObject({
+        credential_kind: 'mcp',
+        principal_kind: 'service',
+        project_id: testProjectId,
+        namespace_id: null,
+        user_id: 'user_api_keys_owner',
+        delegator_user_id: 'user_api_keys_owner',
+        expires_at: expiresAt.toISOString(),
+      });
+    });
+
+    it('persists a namespace-scoped human PAT', async () => {
+      const result = await createApiKey(db, {
+        name: 'Namespace PAT',
+        keyValue: testApiKey('namespacepat1234567890'),
+        namespaceId: testNamespaceId,
+        userId: 'user_api_keys_owner',
+        credentialKind: 'pat',
+      });
+
+      expect(result).toMatchObject({
+        credential_kind: 'pat',
+        principal_kind: 'human',
+        project_id: null,
+        namespace_id: testNamespaceId,
+      });
+    });
+
+    it('rejects every unscoped agent and service credential', async () => {
       for (const principalKind of ['agent', 'service'] as const) {
         await expect(
           createApiKey(db, {
-            name: `Global ${principalKind} writer`,
-            keyValue: testApiKey(`global${principalKind}writer12345`),
+            name: `Global ${principalKind}`,
+            keyValue: testApiKey(`global${principalKind}123456789`),
             principalKind,
-            transitionScopes: ['transition:propose'],
           })
         ).rejects.toThrow('must be project-scoped');
       }
+    });
+
+    it('rejects a credential with both project and namespace scope', async () => {
+      await expect(
+        createApiKey(db, {
+          name: 'Ambiguous scope',
+          keyValue: testApiKey('ambiguousscope12345678'),
+          projectId: testProjectId,
+          namespaceId: testNamespaceId,
+        })
+      ).rejects.toThrow('exactly one resource scope');
     });
   });
 
@@ -183,6 +242,19 @@ describe('API Keys Storage', () => {
 
       const found = await findApiKeyByValue(db, rawKey);
       expect(found).toBeNull();
+    });
+
+    it('returns null for an expired Credential', async () => {
+      const rawKey = testApiKey('expiredcredential123456');
+      await createApiKey(db, {
+        name: 'Expired later',
+        keyValue: rawKey,
+        expiresAt: new Date('2027-01-01T00:00:00.000Z'),
+      });
+
+      await expect(
+        findApiKeyByValue(db, rawKey, new Date('2028-01-01T00:00:00.000Z'))
+      ).resolves.toBeNull();
     });
   });
 
@@ -278,6 +350,18 @@ describe('API Keys Storage', () => {
       expect(revoked!.revoked_at).not.toBeNull();
     });
 
+    it('persists the server-selected revocation reason', async () => {
+      const created = await createApiKey(db, {
+        name: 'Rotated MCP key',
+        keyValue: testApiKey('rotatedmcp123456789012'),
+      });
+
+      const revoked = await revokeApiKey(db, created.id, 'rotated');
+
+      expect(revoked?.revocation_reason).toBe('rotated');
+      expect((await findApiKeyById(db, created.id))?.revocation_reason).toBe('rotated');
+    });
+
     it('returns null for non-existent ID', async () => {
       const revoked = await revokeApiKey(db, 'ak_nonexistent');
 
@@ -348,11 +432,16 @@ describe('API Keys Storage', () => {
       expect(created).toHaveProperty('key_hash');
       expect(created).toHaveProperty('name');
       expect(created).toHaveProperty('project_id');
+      expect(created).toHaveProperty('namespace_id');
       expect(created).toHaveProperty('principal_kind');
+      expect(created).toHaveProperty('credential_kind');
+      expect(created).toHaveProperty('delegator_user_id');
       expect(created).toHaveProperty('transition_scopes');
+      expect(created).toHaveProperty('expires_at');
       expect(created).toHaveProperty('created_at');
       expect(created).toHaveProperty('last_used_at');
       expect(created).toHaveProperty('revoked_at');
+      expect(created).toHaveProperty('revocation_reason');
 
       // Verify camelCase keys don't exist
       expect(created).not.toHaveProperty('keyPrefix');

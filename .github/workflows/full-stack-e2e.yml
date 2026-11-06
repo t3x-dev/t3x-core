@@ -106,6 +106,26 @@ jobs:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
         run: pnpm test
 
+      - name: Run Workspace concurrency gate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:workspace-concurrency-gate
+
+      - name: Run Workspace reconciliation gate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:workspace-reconciliation-gate
+
+      - name: Run Workspace structured conflict gate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:workspace-structured-conflict-gate
+
+      - name: Run Workspace protected ref gate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test:workspace-protected-ref-gate
+
       - name: Build local runtime artifact
         run: pnpm build:local-runtime
 

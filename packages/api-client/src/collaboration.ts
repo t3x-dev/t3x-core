@@ -86,6 +86,19 @@ export const CollaborationPrincipalViewSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 
+export const CollaborationUserSearchResultSchema = z
+  .object({
+    user_id: ResourceIdSchema,
+    username: z.string().min(1).max(32),
+    display_name: z.string().max(200).nullable(),
+    avatar_url: z.url().nullable(),
+  })
+  .strict();
+
+export const SearchCollaborationUsersResponseSchema = z
+  .object({ users: z.array(CollaborationUserSearchResultSchema).max(20) })
+  .strict();
+
 export const NamespaceMembershipSchema = z
   .object({
     membership_id: ResourceIdSchema,
@@ -290,6 +303,26 @@ export const ListCollaborationInvitationsResponseSchema = z.discriminatedUnion('
   ListProjectInvitationsResponseSchema,
 ]);
 
+export const ReceivedCollaborationInvitationSchema = z
+  .object({
+    invitation: CollaborationInvitationSchema,
+    namespace: z
+      .object({
+        slug: z.string().min(1).max(40),
+        display_name: z.string().min(1).max(200),
+      })
+      .strict(),
+    project: z
+      .object({ name: z.string().min(1).max(200) })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+
+export const ListReceivedCollaborationInvitationsResponseSchema = z
+  .object({ invitations: z.array(ReceivedCollaborationInvitationSchema).max(1000) })
+  .strict();
+
 export const UpsertNamespaceMemberRequestSchema = z
   .object({
     principal: CanonicalPrincipalSchema,
@@ -314,9 +347,18 @@ export const CreateNamespaceInvitationRequestSchema = CreateInvitationRequestBas
   role: NamespaceMemberRoleSchema,
 }).strict();
 
-export const CreateProjectInvitationRequestSchema = CreateInvitationRequestBaseSchema.extend({
-  role: ProjectGrantRoleSchema,
-}).strict();
+const ProjectInvitationRecipientInputSchema = z.union([
+  CollaborationInvitationRecipientSchema,
+  z.object({ username: z.string().trim().min(2).max(32) }).strict(),
+]);
+
+export const CreateProjectInvitationRequestSchema = z
+  .object({
+    recipient: ProjectInvitationRecipientInputSchema,
+    expires_at: InstantSchema,
+    role: ProjectGrantRoleSchema,
+  })
+  .strict();
 
 export const CollaborationInvitationTokenSchema = z.string().regex(/^t3xi_v1_[A-Za-z0-9_-]{43}$/);
 
@@ -340,6 +382,12 @@ export const TransferProjectRequestSchema = z
 
 /** Raw invitation tokens are isolated to this one-time delivery envelope. */
 export const CollaborationInvitationDeliverySchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      mode: z.literal('inbox'),
+      token: z.null(),
+    })
+    .strict(),
   z
     .object({
       mode: z.literal('email_queued'),
@@ -417,6 +465,10 @@ export const AcceptCollaborationInvitationResponseSchema = z
 
 export type CanonicalPrincipal = z.infer<typeof CanonicalPrincipalSchema>;
 export type CollaborationPrincipalView = z.infer<typeof CollaborationPrincipalViewSchema>;
+export type CollaborationUserSearchResult = z.infer<typeof CollaborationUserSearchResultSchema>;
+export type SearchCollaborationUsersResponse = z.infer<
+  typeof SearchCollaborationUsersResponseSchema
+>;
 export type NamespaceMembership = z.infer<typeof NamespaceMembershipSchema>;
 export type ProjectGrant = z.infer<typeof ProjectGrantSchema>;
 export type CollaborationInvitationRecipient = z.infer<
@@ -438,6 +490,10 @@ export type ListNamespaceInvitationsResponse = z.infer<
 export type ListProjectInvitationsResponse = z.infer<typeof ListProjectInvitationsResponseSchema>;
 export type ListCollaborationInvitationsResponse = z.infer<
   typeof ListCollaborationInvitationsResponseSchema
+>;
+export type ReceivedCollaborationInvitation = z.infer<typeof ReceivedCollaborationInvitationSchema>;
+export type ListReceivedCollaborationInvitationsResponse = z.infer<
+  typeof ListReceivedCollaborationInvitationsResponseSchema
 >;
 export type UpsertNamespaceMemberRequest = z.infer<typeof UpsertNamespaceMemberRequestSchema>;
 export type UpsertProjectGuestRequest = z.infer<typeof UpsertProjectGuestRequestSchema>;

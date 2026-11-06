@@ -127,6 +127,8 @@ export function buildAuthoringReviewProjection<
     candidate: {
       ...candidate,
       revision: view.workspaceRevision,
+      baseCommitHash: view.basis.refHead,
+      targetBranch: view.basis.refName,
       yopsDraft: {
         ...candidate.yopsDraft,
         id: `${candidate.yopsDraft.id}:authoring:${String(view.compositionRevision)}`,

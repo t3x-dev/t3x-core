@@ -116,6 +116,7 @@ vi.mock('@/hooks/shared/useChatModelSelection', () => ({
     handleModelChange: vi.fn(),
     isSelectionReady: true,
     loading: false,
+    providers: [],
     selectedModel: 'gpt-5.4-mini',
     selectedProvider: 'openai',
   }),
@@ -304,12 +305,10 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       release.title
     );
-    expect(
-      within(screen.getByRole('region', { name: 'Workspace AI chat' })).getByTitle(release.title)
-    ).toBeVisible();
+    expect(screen.getByText(release.title, { selector: 'header span' })).toBeVisible();
   });
 
-  it('waits for the user to enable Draft activity before preparing Chat', () => {
+  it('opens Chat without saving a Draft', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -317,8 +316,8 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
       />
     );
 
-    expect(mocks.sourceThreadGenerationOptions).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Enable Draft activity/ })).toBeEnabled();
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Workspace instruction' })).toBeEnabled();
     expect(screen.queryByText('Preparing your draft…')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate changes/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Switch to discuss/ })).not.toBeInTheDocument();
@@ -332,6 +331,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     ]);
     render(<WorkspaceWorkbench candidates={[candidate]} projectId="proj_1" />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     const outcome = screen.getByRole('button', { name: 'Inspect Outcome: prd/summary/outcome' });
     const title = screen.getByRole('button', {
       name: 'Inspect Title: prd/requirements/canary/title',
@@ -389,6 +389,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       baseline.title
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     expect(screen.getByText('Baseline')).toBeVisible();
     expect(screen.queryByText('Reduced risk')).not.toBeInTheDocument();
     rerender(
@@ -402,6 +403,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(screen.getByRole('region', { name: 'Workspace detail' })).toHaveAccessibleDescription(
       scenario.title
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Draft' }));
     expect(screen.getByText('Reduced risk')).toBeVisible();
     expect(screen.queryByText('Baseline')).not.toBeInTheDocument();
     expect(mocks.onSelectedWorkspaceChange).not.toHaveBeenCalled();
@@ -472,7 +474,7 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
   });
 
-  it('fails honestly when preparation produces no deterministic operations', async () => {
+  it('returns an empty workspace to Compose before preparing a review', () => {
     render(
       <WorkspaceWorkbench
         candidates={[workspace('workspace_main', 'Main workspace')]}
@@ -481,13 +483,12 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('No structured changes yet');
-    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
     expect(
-      screen.queryByRole('button', { name: /Commit changes|Approve and commit/i })
-    ).not.toBeInTheDocument();
+      screen.getByText('This draft has no Content or Schema changes to review.')
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Prepare review' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));
+    expect(screen.getByRole('textbox', { name: 'Workspace instruction' })).toBeVisible();
     expect(mocks.saveDraft).not.toHaveBeenCalled();
   });
 

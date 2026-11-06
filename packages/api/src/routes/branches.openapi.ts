@@ -9,7 +9,6 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { ApiKey } from '@t3x-dev/core';
 import {
   type AnyDB,
   bindTransitionPolicy,
@@ -25,16 +24,17 @@ import {
   type TransitionPolicyBinding,
   unbindTransitionPolicy,
 } from '@t3x-dev/storage';
-import type { Context } from 'hono';
 import { createBranchWorkspace } from '../lib/branch-workspace';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getRequestPrincipal } from '../lib/request-principal';
 import { deriveTrustedTransitionPrincipal } from '../lib/transition-authority';
 import {
   branchRulesFromBinding,
   planBranchRuleChange,
 } from '../lib/transition-control-plane/applicable-policy';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -177,6 +177,7 @@ const createBranchRoute = createRoute({
           schema: z.object({
             project_id: z.string().min(1),
             name: z.string().min(1),
+            head_commit_hash: z.string().min(1).optional(),
             parent_branch: z.string().optional(),
             description: z.string().optional(),
           }),
@@ -366,7 +367,7 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
 
     const existing = await findBranchByName(db, body.project_id, body.name);
     if (existing) {
-      if (branchMatchesCreateIntent(existing, body.parent_branch ?? null)) {
+      if (branchMatchesCreateIntent(existing, body.parent_branch ?? null, body.head_commit_hash)) {
         return c.json({ success: true as const, data: await withRules(db, existing) }, 200);
       }
       return errorResponse(
@@ -380,6 +381,9 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
       const branch = await createBranchWorkspace(db, {
         projectId: body.project_id,
         name: body.name,
+        actor: deriveTrustedTransitionPrincipal(getRequestPrincipal(c)).actor,
+        owner: workspaceOwnerFromContext(c) ?? undefined,
+        headCommitHash: body.head_commit_hash,
         parentBranch: body.parent_branch,
         description: body.description,
       });
@@ -388,7 +392,9 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
     } catch (err) {
       const concurrent = await findBranchByName(db, body.project_id, body.name);
       if (concurrent) {
-        if (branchMatchesCreateIntent(concurrent, body.parent_branch ?? null)) {
+        if (
+          branchMatchesCreateIntent(concurrent, body.parent_branch ?? null, body.head_commit_hash)
+        ) {
           return c.json({ success: true as const, data: await withRules(db, concurrent) }, 200);
         }
         return errorResponse(
@@ -408,10 +414,14 @@ branchRoutes.openapi(createBranchRoute, async (c) => {
 });
 
 function branchMatchesCreateIntent(
-  branch: { parentBranch: string | null },
-  parentBranch: string | null
+  branch: { headCommitHash: string | null; parentBranch: string | null },
+  parentBranch: string | null,
+  headCommitHash?: string
 ): boolean {
-  return branch.parentBranch === parentBranch;
+  return (
+    branch.parentBranch === parentBranch &&
+    (headCommitHash === undefined || branch.headCommitHash === headCommitHash)
+  );
 }
 
 // GET /v1/branches/current - Get current branch
@@ -464,6 +474,8 @@ branchRoutes.openapi(switchBranchRoute, async (c) => {
         branch = await createBranchWorkspace(db, {
           projectId: body.project_id,
           name: body.branch_name,
+          actor: deriveTrustedTransitionPrincipal(getRequestPrincipal(c)).actor,
+          owner: workspaceOwnerFromContext(c) ?? undefined,
           parentBranch: body.parent_branch,
         });
       } else {
@@ -536,13 +548,9 @@ const updateBranchRulesRoute = createRoute({
   },
 });
 
-function authenticatedApiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
-}
-
 branchRoutes.openapi(updateBranchRulesRoute, async (c) => {
-  const apiKey = authenticatedApiKey(c);
-  if (apiKey !== undefined && apiKey.principal_kind !== 'human') {
+  const requestPrincipal = getRequestPrincipal(c);
+  if (requestPrincipal !== undefined && requestPrincipal.subject.kind !== 'human') {
     return errorResponse(c, 'FORBIDDEN', 'Branch rules require a human principal');
   }
   const body = c.req.valid('json');
@@ -574,7 +582,7 @@ branchRoutes.openapi(updateBranchRulesRoute, async (c) => {
           refName: body.branch_name,
           uri: change.uri,
           policy: change.policy,
-          actor: deriveTrustedTransitionPrincipal(apiKey).actor,
+          actor: deriveTrustedTransitionPrincipal(requestPrincipal).actor,
         });
       }
     }

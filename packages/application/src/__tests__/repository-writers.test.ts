@@ -382,6 +382,7 @@ describe('repository writer preparation', () => {
         keepRelationsFromSource: true,
         keepRelationsFromTarget: true,
       },
+      proposalActor: { kind: 'human', id: 'human:pull-request-author' },
       actor: ACTOR,
       message: 'Merge feature into main',
       policyBinding: REPOSITORY_MERGE_POLICY,
@@ -424,6 +425,10 @@ describe('repository writer preparation', () => {
         },
       ],
     });
+    expect(prepared.proposal.actor).toEqual({
+      kind: 'human',
+      id: 'human:pull-request-author',
+    });
 
     const facts = await prepared.authority.resolve({
       projectId: 'project_1',
@@ -432,6 +437,7 @@ describe('repository writer preparation', () => {
       effect: prepared.effect,
     });
     expect(facts.observationScope.sources).toEqual(['server:repository-semantic-merge']);
+    expect(facts.actorContext.actor).toEqual(ACTOR);
     expect(facts.policyResource).toEqual(REPOSITORY_MERGE_POLICY.resource);
     expect(facts.statements[0]!.statement.predicate).toMatchObject({
       outcome: 'verified',

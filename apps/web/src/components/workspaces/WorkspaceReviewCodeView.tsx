@@ -3,7 +3,6 @@
 import * as yaml from 'js-yaml';
 import { Check, Code2, Copy, GitBranch, Search } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { type StateYamlReviewLine, stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { cn } from '@/utils/cn';
 import styles from './WorkspaceReviewCode.module.css';
@@ -45,7 +44,6 @@ export function WorkspaceReviewCodeView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const codeRef = useRef<HTMLElement>(null);
   const jsonText = useMemo(() => {
     try {
       return JSON.stringify(yaml.load(yamlText) ?? null, null, 2);
@@ -94,14 +92,6 @@ export function WorkspaceReviewCodeView({
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
-
-  useEffect(() => {
-    if (review)
-      codeRef.current?.querySelector('[data-selected="true"]')?.scrollIntoView?.({
-        block: 'nearest',
-        inline: 'nearest',
-      });
-  }, [activeLine, codeMode, review?.selectedPath]);
 
   const handleCopyCode = useCallback(async () => {
     // A unified diff is not valid YAML. Copy the actual result, never the merged before/after lines.
@@ -229,13 +219,13 @@ export function WorkspaceReviewCodeView({
           </div>
         ) : null}
 
-        <StateScrollArea
-          className="min-h-0 min-w-0 flex-1 bg-[var(--editor-bg)]"
-          horizontal
-          label={codeMode === 'json' ? 'JSON code content' : 'Canonical YAML content'}
-          viewportClassName="font-mono text-[13px] leading-[22px] text-[var(--text-primary)]"
+        <section
+          className={styles.codeViewport}
+          aria-label={codeMode === 'json' ? 'JSON code content' : 'Canonical YAML content'}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Long code lines remain keyboard-scrollable horizontally.
+          tabIndex={0}
         >
-          <code className="block min-w-max py-4 pr-6" ref={codeRef}>
+          <code className="block min-w-max py-4 pr-6">
             {lines.map((line, index) => {
               const highlightedBySearch =
                 Boolean(normalizedSearchQuery) &&
@@ -297,7 +287,7 @@ export function WorkspaceReviewCodeView({
               );
             })}
           </code>
-        </StateScrollArea>
+        </section>
 
         <footer className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-1 text-xs leading-4 text-[var(--text-tertiary)]">
           <span

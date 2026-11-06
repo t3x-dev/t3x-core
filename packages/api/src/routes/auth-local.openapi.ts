@@ -2,20 +2,27 @@
  * Local Auth Routes (Open-Source)
  *
  * Username + password authentication for self-hosted deployments.
- * Generates an API key on successful register/login.
+ * Generates a browser Session on successful register/login.
  *
  * Endpoints:
  * - POST /v1/auth/register — Create a new local user
  * - POST /v1/auth/login    — Login with username + password
+ * - POST /v1/auth/logout   — Revoke the current browser Session
  */
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
-import { createApiKey, createLocalUser, findUserByUsername } from '@t3x-dev/storage';
+import {
+  createLocalUser,
+  createSession,
+  findUserByUsername,
+  revokeSession,
+} from '@t3x-dev/storage';
 import bcrypt from 'bcryptjs';
 import { getDB } from '../lib/db';
 import { createError, errorResponse, zodErrorHook } from '../lib/errors';
+import { getRequestPrincipal, WEB_SESSION_TOKEN_PREFIX } from '../lib/request-principal';
+import { roomManager } from '../lib/room-manager';
 import { pinoLogger } from '../middleware/logger';
 import {
   applyRateLimitHeaders,
@@ -25,12 +32,14 @@ import {
   RATE_LIMIT_POLICIES,
 } from '../middleware/rate-limit';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import type { AppEnv } from '../types';
 
-export const authLocalRoutes = new OpenAPIHono({
+export const authLocalRoutes = new OpenAPIHono<AppEnv>({
   defaultHook: zodErrorHook,
 });
 
 const BCRYPT_ROUNDS = 10;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ============================================================
 // Schemas
@@ -64,7 +73,7 @@ const registerRoute = createRoute({
   tags: ['Auth'],
   summary: 'Register a new local user',
   description:
-    'Create a new user with username and password. Returns user ID and an API key for authenticated requests.',
+    'Create a new user with username and password. Returns user ID and a browser Session token.',
   request: {
     body: {
       content: {
@@ -129,12 +138,13 @@ authLocalRoutes.openapi(registerRoute, async (c) => {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const user = await createLocalUser(db, { username, passwordHash, name });
 
-    // Generate a session API key
-    const rawKey = `${API_KEY_VALUE_PREFIX}${randomBytes(24).toString('base64url')}`;
-    await createApiKey(db, {
-      name: `session:${user.id}`,
+    const rawKey = `${WEB_SESSION_TOKEN_PREFIX}${randomBytes(24).toString('base64url')}`;
+    await createSession(db, {
+      rawToken: rawKey,
       userId: user.id,
-      keyValue: rawKey,
+      authMethod: 'local_password',
+      userAgent: c.req.header('user-agent') ?? null,
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     });
 
     return c.json({
@@ -157,7 +167,7 @@ const loginRoute = createRoute({
   tags: ['Auth'],
   summary: 'Login with username and password',
   description:
-    'Authenticate with username and password. Returns user ID and a new API key for authenticated requests.',
+    'Authenticate with username and password. Returns user ID and a new browser Session token.',
   request: {
     body: {
       content: {
@@ -221,12 +231,13 @@ authLocalRoutes.openapi(loginRoute, async (c) => {
       return c.json(createError('UNAUTHORIZED', 'Invalid username or password'), 401);
     }
 
-    // Generate a session API key
-    const rawKey = `${API_KEY_VALUE_PREFIX}${randomBytes(24).toString('base64url')}`;
-    await createApiKey(db, {
-      name: `session:${userRecord.id}`,
+    const rawKey = `${WEB_SESSION_TOKEN_PREFIX}${randomBytes(24).toString('base64url')}`;
+    await createSession(db, {
+      rawToken: rawKey,
       userId: userRecord.id,
-      keyValue: rawKey,
+      authMethod: 'local_password',
+      userAgent: c.req.header('user-agent') ?? null,
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     });
 
     return c.json({
@@ -241,5 +252,55 @@ authLocalRoutes.openapi(loginRoute, async (c) => {
   } catch (err) {
     pinoLogger.error({ err }, 'error in login');
     return errorResponse(c, 'INTERNAL_ERROR', 'Login failed');
+  }
+});
+
+const logoutRoute = createRoute({
+  method: 'post',
+  path: '/v1/auth/logout',
+  tags: ['Auth'],
+  summary: 'Log out the current browser session',
+  responses: {
+    200: {
+      description: 'Session revoked',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(z.object({ logged_out: z.literal(true) })),
+        },
+      },
+    },
+    400: {
+      description: 'The current credential is not a browser Session',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    401: {
+      description: 'The Session is missing, expired, or revoked',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Logout failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+authLocalRoutes.openapi(logoutRoute, async (c) => {
+  const principal = getRequestPrincipal(c);
+  if (
+    principal?.credential.kind !== 'session' ||
+    principal.sessionId === null ||
+    principal.userId === null
+  ) {
+    return c.json(createError('INVALID_REQUEST', 'A browser Session is required'), 400);
+  }
+
+  try {
+    const db = await getDB();
+    await revokeSession(db, principal.sessionId, principal.userId);
+    roomManager.disconnectSession(principal.sessionId);
+    return c.json({ success: true as const, data: { logged_out: true as const } });
+  } catch (err) {
+    pinoLogger.error({ err }, 'error in logout');
+    return errorResponse(c, 'INTERNAL_ERROR', 'Logout failed');
   }
 });

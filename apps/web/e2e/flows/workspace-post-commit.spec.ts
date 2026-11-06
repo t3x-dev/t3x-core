@@ -172,6 +172,73 @@ async function readWorkspace(request: APIRequestContext, fixture: RenewedWorkspa
   return (await response.json()).data.workspace;
 }
 
+async function commitWorkspaceChange(
+  request: APIRequestContext,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    expectedHead: string;
+    path: string;
+    value: unknown;
+  }
+): Promise<string> {
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const endpoint = `${API_BASE}/projects/${input.projectId}/workspaces/${encodeURIComponent(input.workspaceId)}`;
+  const currentResponse = await request.get(endpoint);
+  expect(currentResponse.ok(), await currentResponse.text()).toBe(true);
+  const current = (await currentResponse.json()).data.workspace;
+  const action = await request.post(`${endpoint}/authoring/actions`, {
+    data: {
+      request_id: `action-${token}`,
+      expected_workspace_revision: current.revision,
+      expected_revision: current.authoringLedger.compositionRevision,
+      expected_ref_head: input.expectedHead,
+      operations: [{ set: { path: input.path, value: input.value } }],
+      reason: 'Verify continuation from an exact committed version.',
+    },
+  });
+  expect(action.ok(), await action.text()).toBe(true);
+  const actionData = (await action.json()).data;
+  const review = await request.post(`${endpoint}/authoring/reviews`, {
+    data: {
+      request_id: `review-${token}`,
+      expected_workspace_revision: actionData.workspaceRevision,
+      expected_revision: actionData.compositionRevision,
+      expected_ref_head: input.expectedHead,
+    },
+  });
+  expect(review.ok(), await review.text()).toBe(true);
+  const reviewed = (await review.json()).data;
+  const decision = await request.post(
+    `${API_BASE}/projects/${input.projectId}/transitions/${reviewed.view.transition_id}/decisions`,
+    {
+      data: {
+        request_id: `decision-${token}`,
+        outcome: 'accepted',
+        precondition: reviewed.view.precondition,
+      },
+    }
+  );
+  if (!decision.ok()) {
+    throw new Error(
+      `${await decision.text()}\nReview: ${JSON.stringify(reviewed.view, null, 2)}`
+    );
+  }
+  const decisionData = (await decision.json()).data;
+  const committed = await request.post(
+    `${API_BASE}/projects/${input.projectId}/transitions/${reviewed.view.transition_id}/commits`,
+    {
+      data: {
+        request_id: `commit-${token}`,
+        decision_digest: decisionData.decision_digest,
+        expected_head: input.expectedHead,
+      },
+    }
+  );
+  expect(committed.ok(), await committed.text()).toBe(true);
+  return (await committed.json()).data.commit_digest as string;
+}
+
 test('post-commit: accepted change renews the main Workspace from the committed baseline', async ({
   page,
   request,
@@ -242,6 +309,75 @@ test('post-commit: exact committed State export remains stable after Workspace r
     expect(second.ok(), await second.text()).toBe(true);
     expect((await second.json()).data.content).toBe((await first.json()).data.content);
     expect((await readWorkspace(request, fixture)).baseCommitHash).toBe(fixture.commitHash);
+  } finally {
+    await cleanupProject(request, fixture.projectId);
+  }
+});
+
+test('post-commit: historical State creates an isolated branch Workspace pinned to that version', async ({
+  page,
+  request,
+}) => {
+  const fixture = await createRenewedWorkspaceFixture(request, 'historical continuation');
+  const historicalCommit = fixture.commitHash;
+  const branchName = `restore/old-version-${Date.now().toString(36)}`;
+  try {
+    const latestMainCommit = await commitWorkspaceChange(request, {
+      projectId: fixture.projectId,
+      workspaceId: fixture.workspaceId,
+      expectedHead: historicalCommit,
+      path: 'prd.summary.outcome',
+      value: 'The main branch moved beyond the historical version.',
+    });
+    expect(latestMainCommit).not.toBe(historicalCommit);
+
+    await page.goto(
+      `${fixture.repoPath}?view=overview&commit=${encodeURIComponent(historicalCommit)}&branch=main`
+    );
+    await expect(page.getByRole('region', { name: 'Committed State' })).toBeVisible();
+    await page.getByRole('button', { name: /Switch branches\/tags, current branch main/ }).click();
+    await page.getByPlaceholder('Find or create branch').fill(branchName);
+    await page
+      .getByRole('menuitem', { name: `Create branch ${branchName} from main` })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`branch=${encodeURIComponent(branchName)}`));
+
+    const branchWorkspaceId = `workspace_branch:${encodeURIComponent(branchName)}`;
+    const branchWorkspaceResponse = await request.get(
+      `${API_BASE}/projects/${fixture.projectId}/workspaces/${encodeURIComponent(branchWorkspaceId)}`
+    );
+    expect(branchWorkspaceResponse.ok(), await branchWorkspaceResponse.text()).toBe(true);
+    const branchWorkspace = (await branchWorkspaceResponse.json()).data.workspace;
+    expect(branchWorkspace.baseCommitHash).toBe(historicalCommit);
+    expect(branchWorkspace.targetBranch).toBe(branchName);
+
+    const restoredCommit = await commitWorkspaceChange(request, {
+      projectId: fixture.projectId,
+      workspaceId: branchWorkspaceId,
+      expectedHead: historicalCommit,
+      path: 'prd.summary.outcome',
+      value: 'The historical version continued independently.',
+    });
+    const branchesResponse = await request.get(
+      `${API_BASE}/branches?project_id=${fixture.projectId}`
+    );
+    expect(branchesResponse.ok(), await branchesResponse.text()).toBe(true);
+    const branches = (await branchesResponse.json()).data.branches as Array<{
+      name: string;
+      head_commit_hash: string | null;
+    }>;
+    expect(branches.find((branch) => branch.name === 'main')?.head_commit_hash).toBe(
+      latestMainCommit
+    );
+    expect(branches.find((branch) => branch.name === branchName)?.head_commit_hash).toBe(
+      restoredCommit
+    );
+
+    const historicalExport = await request.get(
+      `${API_BASE}/commits/${encodeURIComponent(historicalCommit)}/export?project_id=${fixture.projectId}&format=yaml`
+    );
+    expect(historicalExport.ok(), await historicalExport.text()).toBe(true);
+    expect((await historicalExport.json()).data.content).toContain('Post-commit workspace smoke');
   } finally {
     await cleanupProject(request, fixture.projectId);
   }

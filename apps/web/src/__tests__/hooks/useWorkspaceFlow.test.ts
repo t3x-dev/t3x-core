@@ -37,7 +37,14 @@ it('uses the atomic server-inherited Workspace rather than copying a mutable sou
     parentCommitHash: 'committed',
     targetBranch: 'feature/schema',
   });
-  expect(mocks.create).toHaveBeenCalledWith('p', 'feature/schema', 'main');
+  expect(mocks.create).toHaveBeenCalledWith(
+    'p',
+    'feature/schema',
+    'main',
+    undefined,
+    false,
+    'committed'
+  );
   expect(next.workspace).toBe(inherited);
   expect(mocks.save).not.toHaveBeenCalled();
 });

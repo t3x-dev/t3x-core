@@ -44,10 +44,10 @@ test('repository README authoring preserves exact State and keeps cancelled edit
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.goto(`${projectPath}?view=overview`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Add README', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Add repository README' });
+    const editor = page.getByRole('form', { name: 'Edit repository README' });
     const readme =
       '# Release guide\n\nReview the configuration before delivery.\n\n## Delivery checklist\n\n- Review service images.\n- Pin the revision before exporting.\n\n<script>window.unsafeReadme = true</script>\n\n![Remote tracker](https://example.invalid/tracker.png)';
-    await dialog.getByRole('textbox', { name: 'Repository README' }).fill(readme);
+    await editor.getByRole('textbox', { name: 'Repository README' }).fill(readme);
     await page.screenshot({
       animations: 'disabled',
       path: testInfo.outputPath('author-desktop.png'),
@@ -57,8 +57,8 @@ test('repository README authoring preserves exact State and keeps cancelled edit
       animations: 'disabled',
       path: testInfo.outputPath('author-mobile.png'),
     });
-    await dialog.getByRole('button', { name: 'Save README', exact: true }).click();
-    await expect(dialog).not.toBeVisible();
+    await editor.getByRole('button', { name: 'Save README', exact: true }).click();
+    await expect(editor).not.toBeVisible();
     await expect(page.getByRole('heading', { name: 'Release guide' })).toBeVisible();
     expect(await page.evaluate(() => 'unsafeReadme' in window)).toBe(false);
     expect(await page.locator('img[src*="example.invalid"]').count()).toBe(0);
@@ -74,11 +74,11 @@ test('repository README authoring preserves exact State and keeps cancelled edit
 
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.getByRole('button', { name: 'Edit README', exact: true }).click();
-    const editDialog = page.getByRole('dialog', { name: 'Edit repository README' });
-    await editDialog
+    const editForm = page.getByRole('form', { name: 'Edit repository README' });
+    await editForm
       .getByRole('textbox', { name: 'Repository README' })
       .fill('# Unsaved local edit');
-    await editDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await editForm.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Release guide' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Unsaved local edit' })).toHaveCount(0);
   } finally {

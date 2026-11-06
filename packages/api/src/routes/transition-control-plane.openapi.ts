@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ApiKey, LLMProviderError } from '@t3x-dev/core';
+import type { RequestPrincipal } from '@t3x-dev/application';
+import { LLMProviderError } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
@@ -37,6 +38,7 @@ import {
 } from '../lib/proposal-generation';
 import { defaultProposalGenerationModel } from '../lib/proposal-generation-model';
 import { createProposalGenerationPostureProvider } from '../lib/proposal-generation-posture-provider';
+import { getRequestPrincipal } from '../lib/request-principal';
 import {
   requireTransitionAuthority,
   TransitionProjectScopeDeniedError,
@@ -363,8 +365,8 @@ const CommitEnvelopeSchema = z.object({
   workspace: z.record(z.string(), z.unknown()).optional(),
 });
 
-function apiKey(c: Context): ApiKey | undefined {
-  return c.get('apiKey') as ApiKey | undefined;
+function apiKey(c: Context): RequestPrincipal | undefined {
+  return getRequestPrincipal(c);
 }
 
 function wireRequest(body: z.infer<typeof ProposeRequestSchema>) {
@@ -1037,6 +1039,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         requestId: body.request_id,
         decisionDigest: body.decision_digest,
         expectedHead: body.expected_head,
+        synchronizeWorkspaces: true,
         ...(workspaceProjection === undefined ? {} : { workspaceProjection }),
       });
       return c.json(

@@ -57,8 +57,8 @@ it('shows deleted metadata without an inaccessible repository link and respects 
     rows([{ ...project, can_permanently_delete: false }])
   );
   render(<DeletedRepositoriesView namespace="alice" backHref="/alice" />);
-  expect(await screen.findByText('alice/test')).toBeInTheDocument();
-  expect(screen.getByText(/Visibility: public/)).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'test', exact: true })).toBeInTheDocument();
+  expect(screen.getByText('Public')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Restore' })).toBeEnabled();
   expect(screen.queryByRole('button', { name: 'Permanently delete' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'test' })).not.toBeInTheDocument();
@@ -215,31 +215,49 @@ it('distinguishes loading failures from empty results and retries', async () => 
     screen.queryByText('No deleted repositories to manage in this namespace.')
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  expect(await screen.findByText('alice/test')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'test', exact: true })).toBeInTheDocument();
 });
 
-it('paginates within the namespace and returns to the previous page after removing its last row', async () => {
-  const many = Array.from({ length: 21 }, (_, i) => ({
+it('paginates cards and returns to the previous page after removing its last row', async () => {
+  const many = Array.from({ length: 5 }, (_, i) => ({
+    ...project,
+    project_id: `id-${i}`,
+    name: `test-${i}`,
+  }));
+  vi.mocked(fetchDeletedProjects).mockResolvedValue(rows(many));
+  render(<DeletedRepositoriesView namespace="alice" backHref="/alice" />);
+  expect(await screen.findByRole('heading', { name: 'test-0' })).toBeInTheDocument();
+  expect(
+    within(screen.getByRole('list', { name: 'Deleted repositories' })).getAllByRole('listitem')
+  ).toHaveLength(4);
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('heading', { name: 'test-4' })).toBeInTheDocument();
+  vi.mocked(restoreProject).mockResolvedValue({ ...many[4], deleted_at: null });
+  vi.mocked(fetchDeletedProjects).mockResolvedValue(rows(many.slice(0, 4)));
+  fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Restore repository' }));
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'test-0' })).toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  expect(fetchDeletedProjects).toHaveBeenLastCalledWith(21, 0, 'alice');
+});
+
+it('searches repositories beyond the first backend page', async () => {
+  const first = Array.from({ length: 21 }, (_, i) => ({
     ...project,
     project_id: `id-${i}`,
     name: `test-${i}`,
   }));
   vi.mocked(fetchDeletedProjects)
-    .mockResolvedValueOnce(rows(many))
-    .mockResolvedValueOnce(rows([project], 20));
+    .mockResolvedValueOnce(rows(first))
+    .mockResolvedValueOnce(rows([{ ...project, name: 'Older repository' }], 21));
   render(<DeletedRepositoriesView namespace="alice" backHref="/alice" />);
-  expect(await screen.findByText('alice/test-0')).toBeInTheDocument();
-  expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(20);
-  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-  expect(await screen.findByText('alice/test')).toBeInTheDocument();
-  expect(fetchDeletedProjects).toHaveBeenLastCalledWith(21, 20, 'alice');
-  vi.mocked(restoreProject).mockResolvedValue(project);
-  vi.mocked(fetchDeletedProjects)
-    .mockResolvedValueOnce(rows([], 20))
-    .mockResolvedValueOnce(rows(many.slice(0, 20)));
-  fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Restore repository' }));
-  await waitFor(() => expect(screen.getByText('alice/test-0')).toBeInTheDocument());
-  expect(screen.queryByText('Page 2')).not.toBeInTheDocument();
-  expect(fetchDeletedProjects).toHaveBeenLastCalledWith(21, 0, 'alice');
+  await screen.findByRole('heading', { name: 'test-0' });
+  expect(fetchDeletedProjects).toHaveBeenLastCalledWith(21, 21, 'alice');
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search deleted repositories' }), {
+    target: { value: 'Older' },
+  });
+  expect(screen.getByRole('heading', { name: 'Older repository' })).toBeInTheDocument();
+  expect(
+    within(screen.getByRole('list', { name: 'Deleted repositories' })).getAllByRole('listitem')
+  ).toHaveLength(1);
 });

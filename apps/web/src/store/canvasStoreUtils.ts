@@ -1,12 +1,12 @@
 import type { Edge, Node } from '@xyflow/react';
 import { parseApiCommitAnchors } from '@/domain/commitAnchors';
+import { commitTitle } from '@/domain/format/formatters';
 import type { ApiCommit, Commit, Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
 
 // API base URL - shared across store slices
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-export const API_V1 = `${API_BASE}/api/v1`;
+export const API_V1 = '/api/v1';
 
 const connectionMatrix: Record<NodeKind, NodeKind[]> = {
   unit: ['unit'],
@@ -506,8 +506,8 @@ export const unitToNode = (
       entryId: commit
         ? commit.commit_hash.slice(0, 12)
         : conv.conversation_id.replace(/^(conv_|orphan-)/, '').slice(0, 8),
-      // Priority: commit.message (committed) > conv.title > fallback
-      title: (isCommitted && commit?.message) || conv.title || 'Untitled Unit',
+      // Keep the conversation title in Sources; the committed title follows History.
+      title: commit ? commitTitle(commit.message) : conv.title || 'Untitled Unit',
       summary: isCommitted
         ? facetCount > 0
           ? `${facetCount} facets`

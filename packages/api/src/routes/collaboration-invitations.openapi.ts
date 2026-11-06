@@ -16,12 +16,14 @@ import {
   type HumanPrincipalDto,
 } from '@t3x-dev/application';
 import {
+  type AnyDB,
   CollaborationStorageError,
   createPostgresCollaborationLifecycleUnitOfWork,
   findCollaborationInvitationViewById,
   findCollaborationInvitationViewByTokenHash,
   findNamespaceById,
   findUserById,
+  findUserByUsername,
   type StoredCollaborationInvitationDto,
   type StoredCollaborationPrincipalDto,
 } from '@t3x-dev/storage';
@@ -30,6 +32,7 @@ import {
   issueCollaborationInvitationToken,
 } from '../lib/collaboration-invitation-token';
 import { getDB } from '../lib/db';
+import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse } from '../lib/errors';
 import { assertNamespaceAccess, getNamespacePrincipal } from '../lib/namespace-access';
 import { assertProjectAccess } from '../lib/project-access';
@@ -91,8 +94,12 @@ function invitationError(c: Parameters<typeof errorResponse>[0], error: unknown)
     const code = error.code === 'NAMESPACE_NOT_FOUND' ? 'NOT_FOUND' : 'HASH_CONFLICT';
     return errorResponse(c, code, error.message, { reason: error.code });
   }
-  if ((error as { code?: string }).code === '23505') {
-    return errorResponse(c, 'HASH_CONFLICT', 'A pending invitation already exists');
+  if (hasDbErrorCode(error, '23505')) {
+    return errorResponse(
+      c,
+      'HASH_CONFLICT',
+      'This user already has a pending invitation. Revoke it before creating a new one.'
+    );
   }
   const message = error instanceof Error ? error.message : 'Invitation mutation failed';
   return errorResponse(c, 'UPDATE_FAILED', message);
@@ -122,6 +129,78 @@ function safeInvitation(input: {
     revoked_at: null,
     expired_at: null,
   } as StoredCollaborationInvitationDto;
+}
+
+async function acceptStoredInvitation(
+  db: AnyDB,
+  firstRead: StoredCollaborationInvitationDto,
+  actor: HumanPrincipalDto
+) {
+  const user = await findUserById(db, actor.principal_id);
+  const verifiedEmails = user?.email_verified && user.email ? [user.email] : [];
+  const evaluatedAt = new Date().toISOString();
+  const authority = await createPostgresCollaborationLifecycleUnitOfWork(db).transaction(
+    async (transaction) => {
+      await transaction.lockNamespace(firstRead.target.namespace_id);
+      const invitation = await transaction.findInvitationByIdForUpdate(firstRead.invitation_id);
+      if (!invitation || invitation.target.namespace_id !== firstRead.target.namespace_id) {
+        throw new InvitationRouteError('NOT_FOUND', 'Invitation not found');
+      }
+      assertInvitationMayBeAccepted({
+        invitation,
+        actor,
+        verified_emails: verifiedEmails,
+        evaluated_at: evaluatedAt,
+      });
+
+      const materialized =
+        invitation.target.kind === 'namespace'
+          ? {
+              kind: 'namespace_membership' as const,
+              membership: await transaction.upsertNamespaceMembership({
+                namespaceId: invitation.target.namespace_id,
+                principal: actor,
+                role: invitation.role,
+              }),
+            }
+          : {
+              kind: 'project_grant' as const,
+              grant: await transaction.upsertProjectGrant({
+                namespaceId: invitation.target.namespace_id,
+                projectId: invitation.target.project_id,
+                principal: actor,
+                role: invitation.role,
+                expiresAt: null,
+              }),
+            };
+      await transaction.acceptInvitation({
+        invitationId: invitation.invitation_id,
+        acceptedByUserId: actor.principal_id,
+        acceptedAt: evaluatedAt,
+      });
+      return materialized;
+    }
+  );
+
+  return {
+    authority:
+      authority.kind === 'namespace_membership'
+        ? {
+            kind: authority.kind,
+            membership: {
+              ...authority.membership,
+              principal: principalView(authority.membership.principal),
+            },
+          }
+        : {
+            kind: authority.kind,
+            grant: {
+              ...authority.grant,
+              principal: principalView(authority.grant.principal),
+            },
+          },
+    mutation: mutation('invitation.accept', evaluatedAt),
+  };
 }
 
 const createNamespaceInvitationRoute = createRoute({
@@ -193,7 +272,9 @@ collaborationInvitationRoutes.openapi(createNamespaceInvitationRoute, async (c) 
         success: true as const,
         data: {
           invitation,
-          delivery: { mode: 'manual' as const, token: issued.token },
+          delivery: invitation.recipient.user_id
+            ? { mode: 'inbox' as const, token: null }
+            : { mode: 'manual' as const, token: issued.token },
           mutation: mutation('invitation.create', evaluatedAt),
         },
       },
@@ -250,13 +331,19 @@ collaborationInvitationRoutes.openapi(createProjectInvitationRoute, async (c) =>
   try {
     const input = c.req.valid('json');
     assertInvitationExpiry({ expires_at: input.expires_at, evaluated_at: evaluatedAt });
+    const recipient =
+      'username' in input.recipient ? await findUserByUsername(db, input.recipient.username) : null;
+    if ('username' in input.recipient && !recipient) {
+      throw new InvitationRouteError('NOT_FOUND', 'Invitation recipient not found');
+    }
     const issued = issueCollaborationInvitationToken();
     const invitation = safeInvitation({
       invitationId: `inv_${randomUUID().replaceAll('-', '')}`,
       target: { kind: 'project', namespace_id: project.namespaceId, project_id: id },
       recipient: {
-        user_id: input.recipient.user_id,
-        email: input.recipient.email?.trim().toLowerCase() ?? null,
+        user_id: recipient?.id ?? ('user_id' in input.recipient ? input.recipient.user_id : null),
+        email:
+          'email' in input.recipient ? (input.recipient.email?.trim().toLowerCase() ?? null) : null,
       },
       role: input.role,
       actor,
@@ -272,7 +359,9 @@ collaborationInvitationRoutes.openapi(createProjectInvitationRoute, async (c) =>
         success: true as const,
         data: {
           invitation,
-          delivery: { mode: 'manual' as const, token: issued.token },
+          delivery: invitation.recipient.user_id
+            ? { mode: 'inbox' as const, token: null }
+            : { mode: 'manual' as const, token: issued.token },
           mutation: mutation('invitation.create', evaluatedAt),
         },
       },
@@ -407,76 +496,125 @@ collaborationInvitationRoutes.openapi(acceptInvitationRoute, async (c) => {
   if (!tokenHash) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
   const firstRead = await findCollaborationInvitationViewByTokenHash(db, tokenHash);
   if (!firstRead) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
-  const user = await findUserById(db, humanActor.principal_id);
-  const verifiedEmails = user?.email_verified && user.email ? [user.email] : [];
-  const evaluatedAt = new Date().toISOString();
 
   try {
-    const authority = await createPostgresCollaborationLifecycleUnitOfWork(db).transaction(
-      async (transaction) => {
-        // Always acquire the namespace lock before the invitation row lock.
-        await transaction.lockNamespace(firstRead.target.namespace_id);
-        const invitation = await transaction.findInvitationByTokenHashForUpdate(tokenHash);
-        if (!invitation || invitation.target.namespace_id !== firstRead.target.namespace_id) {
-          throw new InvitationRouteError('NOT_FOUND', 'Invitation not found');
-        }
-        assertInvitationMayBeAccepted({
-          invitation,
-          actor: humanActor,
-          verified_emails: verifiedEmails,
-          evaluated_at: evaluatedAt,
-        });
-
-        const materialized =
-          invitation.target.kind === 'namespace'
-            ? {
-                kind: 'namespace_membership' as const,
-                membership: await transaction.upsertNamespaceMembership({
-                  namespaceId: invitation.target.namespace_id,
-                  principal: humanActor,
-                  role: invitation.role,
-                }),
-              }
-            : {
-                kind: 'project_grant' as const,
-                grant: await transaction.upsertProjectGrant({
-                  namespaceId: invitation.target.namespace_id,
-                  projectId: invitation.target.project_id,
-                  principal: humanActor,
-                  role: invitation.role,
-                  expiresAt: null,
-                }),
-              };
-        await transaction.acceptInvitation({
-          invitationId: invitation.invitation_id,
-          acceptedByUserId: humanActor.principal_id,
-          acceptedAt: evaluatedAt,
-        });
-        return materialized;
-      }
-    );
-
     return c.json({
       success: true as const,
-      data: {
-        authority:
-          authority.kind === 'namespace_membership'
-            ? {
-                kind: authority.kind,
-                membership: {
-                  ...authority.membership,
-                  principal: principalView(authority.membership.principal),
-                },
-              }
-            : {
-                kind: authority.kind,
-                grant: {
-                  ...authority.grant,
-                  principal: principalView(authority.grant.principal),
-                },
-              },
-        mutation: mutation('invitation.accept', evaluatedAt),
+      data: await acceptStoredInvitation(db, firstRead, humanActor),
+    });
+  } catch (error) {
+    return invitationError(c, error);
+  }
+});
+
+const acceptInvitationByIdRoute = createRoute({
+  method: 'post',
+  path: '/v1/invitations/{id}/accept',
+  tags: ['Collaboration'],
+  summary: 'Accept an inbox invitation as its recipient',
+  request: { params: IdParamSchema },
+  responses: {
+    200: {
+      description: 'Invitation accepted and authority materialized atomically',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(AcceptCollaborationInvitationResponseSchema),
+        },
       },
+    },
+    403: {
+      description: 'Recipient mismatch',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Invitation not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Invitation conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationInvitationRoutes.openapi(acceptInvitationByIdRoute, async (c) => {
+  const actor = getNamespacePrincipal(c);
+  if (!actor || actor.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
+  }
+  const db = await getDB();
+  const invitation = await findCollaborationInvitationViewById(db, c.req.valid('param').id);
+  if (!invitation) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
+  try {
+    return c.json({
+      success: true as const,
+      data: await acceptStoredInvitation(db, invitation, {
+        kind: 'human',
+        principal_id: actor.principal_id,
+      }),
+    });
+  } catch (error) {
+    return invitationError(c, error);
+  }
+});
+
+const declineInvitationRoute = createRoute({
+  method: 'post',
+  path: '/v1/invitations/{id}/decline',
+  tags: ['Collaboration'],
+  summary: 'Decline an inbox invitation as its recipient',
+  request: { params: IdParamSchema },
+  responses: {
+    200: {
+      description: 'Invitation declined',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(CollaborationMutationResultSchema) },
+      },
+    },
+    403: {
+      description: 'Recipient mismatch',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Invitation not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Invitation conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationInvitationRoutes.openapi(declineInvitationRoute, async (c) => {
+  const actor = getNamespacePrincipal(c);
+  if (!actor || actor.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
+  }
+  const db = await getDB();
+  const id = c.req.valid('param').id;
+  const firstRead = await findCollaborationInvitationViewById(db, id);
+  if (!firstRead) return errorResponse(c, 'NOT_FOUND', 'Invitation not found');
+  const user = await findUserById(db, actor.principal_id);
+  const evaluatedAt = new Date().toISOString();
+  try {
+    await createPostgresCollaborationLifecycleUnitOfWork(db).transaction(async (transaction) => {
+      await transaction.lockNamespace(firstRead.target.namespace_id);
+      const invitation = await transaction.findInvitationByIdForUpdate(id);
+      if (!invitation || invitation.target.namespace_id !== firstRead.target.namespace_id) {
+        throw new InvitationRouteError('NOT_FOUND', 'Invitation not found');
+      }
+      assertInvitationMayBeAccepted({
+        invitation,
+        actor: { kind: 'human', principal_id: actor.principal_id },
+        verified_emails: user?.email_verified && user.email ? [user.email] : [],
+        evaluated_at: evaluatedAt,
+      });
+      await transaction.revokeInvitation(id, evaluatedAt);
+    });
+    return c.json({
+      success: true as const,
+      data: mutation('invitation.revoke', evaluatedAt),
     });
   } catch (error) {
     return invitationError(c, error);

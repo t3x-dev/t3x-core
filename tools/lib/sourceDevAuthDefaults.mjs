@@ -8,8 +8,7 @@ const SOURCE_DEV_DEFAULTS = {
 };
 
 const WEBUI_SOURCE_DEV_DEFAULTS = {
-  NEXT_PUBLIC_API_URL: 'http://localhost:8000',
-  NEXT_PUBLIC_AUTH_DISABLED: 'true',
+  T3X_API_URL: 'http://localhost:8000',
 };
 
 export function applySourceDevDefaults(target, env) {
@@ -19,12 +18,12 @@ export function applySourceDevDefaults(target, env) {
     nextEnv.AUTH_DISABLED = SOURCE_DEV_DEFAULTS.AUTH_DISABLED;
   }
 
-  if (target === 'webui' && nextEnv.NEXT_PUBLIC_API_URL === undefined) {
-    nextEnv.NEXT_PUBLIC_API_URL = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_API_URL;
+  if (target === 'webui' && nextEnv.T3X_API_URL === undefined) {
+    nextEnv.T3X_API_URL = WEBUI_SOURCE_DEV_DEFAULTS.T3X_API_URL;
   }
 
   if (target === 'webui' && nextEnv.NEXT_PUBLIC_AUTH_DISABLED === undefined) {
-    nextEnv.NEXT_PUBLIC_AUTH_DISABLED = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_AUTH_DISABLED;
+    nextEnv.NEXT_PUBLIC_AUTH_DISABLED = nextEnv.AUTH_DISABLED;
   }
 
   return nextEnv;

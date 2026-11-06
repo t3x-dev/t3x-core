@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
@@ -16,6 +16,7 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useBranches } from '@/hooks/shared/useBranches';
+import { useSession } from '@/hooks/shared/useSession';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
@@ -53,14 +54,38 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const routeQuery = searchParams.toString();
+  const navigationScope = useMemo(
+    () => ({ active: true, request: 0 }),
+    [projectId, pathname, routeQuery]
+  );
+  const activeNavigation = useRef(navigationScope);
+  activeNavigation.current = navigationScope;
+  useEffect(() => {
+    navigationScope.active = true;
+    return () => {
+      navigationScope.active = false;
+      ++navigationScope.request;
+    };
+  }, [navigationScope]);
+  const captureNavigation = useCallback(() => {
+    const request = ++navigationScope.request;
+    return () =>
+      navigationScope.active &&
+      activeNavigation.current === navigationScope &&
+      navigationScope.request === request;
+  }, [navigationScope]);
   const projectMaterials = useProjectMaterials(projectId);
   const projectWorkspaces = useProjectWorkspaces(projectId);
+  const { getUser } = useSession();
+  const sessionUserId = getUser()?.id ?? null;
   const branch = searchParams.get('branch')?.trim() || null;
   const {
     branchHeads,
     branches,
     loading: branchesLoading,
     refresh: refreshBranches,
+    create: createBranch,
   } = useBranches(projectId, true);
   const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
   const starterCandidate = useMemo(
@@ -69,9 +94,10 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
         projectId,
         projectMaterials.materials,
         branch ?? 'main',
-        branchHead
+        branchHead,
+        sessionUserId
       ),
-    [branch, branchHead, projectId, projectMaterials.materials]
+    [branch, branchHead, projectId, projectMaterials.materials, sessionUserId]
   );
   const workspaceCandidates = useMemo(
     () => mergePersistedWorkspaceCandidates(starterCandidate, projectWorkspaces.workspaces),
@@ -113,14 +139,36 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
   );
 
   const handleWorkspaceBranchChange = useCallback(
-    async (nextBranch: string) => {
+    async (nextBranch: string, requestNavigation?: (navigate: () => void) => void) => {
+      const isCurrent = captureNavigation();
+      if (!isCurrent()) return;
       await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
-      const params = new URLSearchParams(searchParams.toString());
+      if (!isCurrent()) return;
+      const params = new URLSearchParams(routeQuery);
       params.set('branch', nextBranch);
       params.delete('workspace');
-      router.replace(`?${params.toString()}`, { scroll: false });
+      const navigate = () => {
+        if (isCurrent()) router.replace(`?${params.toString()}`, { scroll: false });
+      };
+      if (requestNavigation) requestNavigation(navigate);
+      else navigate();
     },
-    [projectWorkspaces.refresh, refreshBranches, router, searchParams]
+    [captureNavigation, projectWorkspaces.refresh, refreshBranches, router, routeQuery]
+  );
+
+  const handleCreateWorkspaceBranch = useCallback(
+    async (
+      name: string,
+      fromBranch: string,
+      requestNavigation?: (navigate: () => void) => void
+    ) => {
+      const isCurrent = captureNavigation();
+      if (!isCurrent()) return;
+      await createBranch(name, fromBranch);
+      if (!isCurrent()) return;
+      await handleWorkspaceBranchChange(name, requestNavigation);
+    },
+    [captureNavigation, createBranch, handleWorkspaceBranchChange]
   );
 
   const handleViewCommitInState = useCallback(
@@ -158,6 +206,7 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
       onViewCommitInState={handleViewCommitInState}
       onWorkspacesRefresh={projectWorkspaces.refresh}
       onWorkspaceBranchChange={handleWorkspaceBranchChange}
+      onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
     />
   );
 }

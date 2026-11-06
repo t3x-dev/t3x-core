@@ -124,6 +124,8 @@ interface PullRequestActivity {
   id: string;
   label: string;
   detail: string;
+  actor?: string;
+  audit?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -262,6 +264,7 @@ const DETAIL_TABS: Array<{ id: PullRequestDetailTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'structured-diff', label: 'Changes' },
   { id: 'checks', label: 'Checks' },
+  { id: 'activity', label: 'Activity' },
 ];
 
 const BASE_BRANCHES = ['main', 'release/2026-07'];
@@ -385,6 +388,8 @@ function toProjectPullRequestDetail(api: ApiProjectPullRequestDetail): ProjectPu
   return {
     ...toProjectPullRequest(api),
     activity: api.activity.map((item) => ({
+      actor: item.actor_id,
+      ...(item.details ? { audit: item.details } : {}),
       createdAt: new Date(item.created_at).toLocaleString(),
       detail: item.message,
       id: item.id,
@@ -2195,7 +2200,7 @@ function PullRequestDetailView({
   const [copied, setCopied] = useState(false);
   const tabsId = useId();
   // Keep one review session across tabs so pending decision saves are not discarded.
-  const reviewKey = `${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.updatedAtIso ?? ''}`;
+  const reviewKey = `${pullRequest.number}:${pullRequest.mergeDraftId ?? 'none'}:${pullRequest.sourceCommitId}:${pullRequest.targetBaseCommitId}:${pullRequest.updatedAtIso ?? ''}`;
   const [loadedReview, setLoadedReview] = useState<(MergeReviewLoadState & { key: string }) | null>(
     null
   );
@@ -2225,10 +2230,34 @@ function PullRequestDetailView({
         };
   const saveState = savedDecision?.key === reviewKey ? savedDecision.state : 'idle';
   const terminal = ['merged', 'closed'].includes(pullRequest.status);
+  const comparisonBlocker =
+    projectId && !terminal
+      ? reviewState.error
+        ? 'Merge is blocked until the comparison is available. Retry comparison in Changes or rerun readiness.'
+        : reviewState.loading
+          ? 'Loading the reviewed comparison before merging…'
+          : !reviewState.review
+            ? 'Prepare a merge comparison by rerunning readiness.'
+            : null
+      : null;
   const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
   const ready =
+    !comparisonBlocker &&
+    saveState !== 'saving' &&
+    saveState !== 'error' &&
     (conflictProgress?.unresolved ?? 0) === 0 &&
     (pullRequest.status === 'ready' || conflictResolved);
+  const readinessStatus = terminal
+    ? pullRequest.status
+    : reviewState.loading
+      ? 'checking'
+      : comparisonBlocker || (conflictProgress?.unresolved ?? 0) > 0 || saveState === 'error'
+        ? 'blocked'
+        : saveState === 'saving'
+          ? 'checking'
+          : ready
+            ? 'ready'
+            : pullRequest.status;
   const checks = pullRequest.checks ?? [];
   const passedChecks = checks.filter((check) => check.status === 'passed').length;
   const progress = projectId && !reviewState.review ? null : conflictProgress;
@@ -2236,21 +2265,23 @@ function PullRequestDetailView({
     ? pullRequest.status === 'merged'
       ? `Merged into ${pullRequest.targetBranch}.`
       : 'Closed without merging.'
-    : conflictResolved
-      ? saveState === 'saving'
-        ? 'All conflicts decided. Saving decisions…'
-        : saveState === 'error'
-          ? 'Decisions could not be saved. Retry before merging.'
-          : 'All conflicts decided. Merge is ready.'
-      : progress && progress.unresolved > 0
-        ? `${progress.unresolved} of ${progress.total} conflicts still need a decision.`
-        : pullRequest.status === 'blocked'
-          ? 'Review the blocked checks and unresolved changes.'
-          : ready
-            ? `${passedChecks} of ${checks.length} checks passed. Ready to merge.`
-            : pullRequest.status === 'checking'
-              ? 'Checks are running.'
-              : 'Run checks to confirm merge readiness.';
+    : comparisonBlocker
+      ? comparisonBlocker
+      : conflictResolved
+        ? saveState === 'saving'
+          ? 'All conflicts decided. Saving decisions…'
+          : saveState === 'error'
+            ? 'Decisions could not be saved. Retry before merging.'
+            : 'All conflicts decided. Merge is ready.'
+        : progress && progress.unresolved > 0
+          ? `${progress.unresolved} of ${progress.total} conflicts still need a decision.`
+          : pullRequest.status === 'blocked'
+            ? 'Review the blocked checks and unresolved changes.'
+            : ready
+              ? `${passedChecks} of ${checks.length} checks passed. Ready to merge.`
+              : pullRequest.status === 'checking'
+                ? 'Checks are running.'
+                : 'Run checks to confirm merge readiness.';
   const error = closeError ?? readinessError ?? detailError ?? mergeError ?? resolutionError;
 
   return (
@@ -2261,7 +2292,7 @@ function PullRequestDetailView({
         </button>
         <div className={detailStyles.titleRow}>
           <h1>{pullRequest.title}</h1>
-          <ListReadinessBadge pullRequest={pullRequest} />
+          <ListReadinessBadge pullRequest={{ ...pullRequest, status: readinessStatus }} />
         </div>
         <div className={detailStyles.refs} aria-label="Merge direction">
           <span>
@@ -2383,8 +2414,17 @@ function PullRequestDetailView({
                       </Link>
                     </p>
                   ) : null}
+                  <p className="mb-4 text-sm">
+                    Recorded checks for {shortHash(pullRequest.sourceCommitId)} →{' '}
+                    {shortHash(pullRequest.targetBaseCommitId)}. Rerun readiness to check the
+                    current branch heads.
+                  </p>
                   <ChecksPanel checks={checks} />
                 </>
+              ) : null
+            ) : tab.id === 'activity' ? (
+              detailTab === tab.id ? (
+                <ActivityPanel activity={pullRequest.activity ?? []} />
               ) : null
             ) : projectId ? (
               <PullRequestMergeReviewPanel
@@ -2464,7 +2504,7 @@ function PullRequestDetailView({
             <button
               aria-label="Merge PR"
               className={detailStyles.mergeButton}
-              disabled={!ready || busy || saveState === 'error'}
+              disabled={!ready || busy}
               onClick={onMerge}
               type="button"
             >
@@ -2552,7 +2592,7 @@ function OverviewPanel({
       </div>
       <aside className={detailStyles.overviewAside}>
         <div className={detailStyles.sectionHeading}>
-          <h2>Checks</h2>
+          <h2>Recorded checks</h2>
           <span>
             {passed} of {checks.length} passed
           </span>
@@ -3031,6 +3071,44 @@ function ChecksPanel({ checks }: { checks: PullRequestCheck[] }) {
             <span className={detailStyles.checkStatus} data-status={check.status}>
               {CHECK_STATUS_LABELS[check.status]}
             </span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActivityPanel({ activity }: { activity: PullRequestActivity[] }) {
+  if (activity.length === 0) {
+    return <DetailEmptyState message="No pull request activity has been recorded." />;
+  }
+  return (
+    <section aria-label="Pull request audit trail" className={detailStyles.checksPanel}>
+      <div className={detailStyles.sectionHeading}>
+        <h2>Audit trail</h2>
+        <span>{activity.length} recorded actions</span>
+      </div>
+      <p className={detailStyles.checksIntro}>
+        Immutable actors, reviewed revisions, decisions and outcomes for this pull request.
+      </p>
+      <div className={detailStyles.checkRows}>
+        {activity.map((item) => (
+          <article className={detailStyles.checkRow} key={item.id}>
+            <GitPullRequestArrow aria-hidden="true" className="mt-0.5 h-5 w-5" />
+            <div className={detailStyles.checkContent}>
+              <h3>{item.label}</h3>
+              <p>{item.detail}</p>
+              <small>
+                {item.actor ? `${item.actor} · ` : ''}
+                {item.createdAt}
+              </small>
+              {item.audit ? (
+                <details className={detailStyles.checkEvidence}>
+                  <summary>View exact audit facts</summary>
+                  <pre>{JSON.stringify(item.audit, null, 2)}</pre>
+                </details>
+              ) : null}
+            </div>
           </article>
         ))}
       </div>

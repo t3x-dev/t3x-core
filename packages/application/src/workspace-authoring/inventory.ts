@@ -1,10 +1,10 @@
 /**
- * Inventory of Workspace Draft write paths and their ledger compatibility.
+ * Inventory of Workspace Draft write paths and their command-boundary status.
  *
  * Canonical authoring truth for #1588 is a pinned Base plus ordered immutable
- * successful action records. Legacy blobs remain only for pre-ledger workflows;
- * their structural writes are rejected once a ledger exists. Rejection is not
- * migration. New Compose action publication goes through the command service.
+ * successful action records. Every path is classified as migrated, an explicit
+ * legacy adapter, or prohibited. Legacy blobs remain only for pre-ledger
+ * workflows; their structural writes are rejected once a ledger exists.
  */
 
 export const WORKSPACE_DRAFT_LEDGER_KEY = 'authoringLedger' as const;
@@ -13,9 +13,10 @@ export type WorkspaceDraftSaveKind =
   | 'blob_merge'
   | 'blob_replace'
   | 'proposal_materialize'
-  | 'commit_side_effect';
+  | 'commit_side_effect'
+  | 'schema_action';
 
-export type WorkspaceDraftSaveStatus = 'legacy_blob' | 'ledger_command';
+export type WorkspaceDraftSaveStatus = 'migrated' | 'legacy_adapter' | 'prohibited';
 
 export interface WorkspaceDraftSavePath {
   readonly id: string;
@@ -31,7 +32,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'patch-workspace',
     surface: 'PATCH /v1/projects/{projectId}/workspaces/{workspaceId}',
     kind: 'blob_merge',
-    status: 'legacy_blob',
+    status: 'legacy_adapter',
     ledgerBehavior: 'metadata_only',
     notes:
       'Pre-ledger JSON merge; existing ledgers allow metadata only and reject structural replacement.',
@@ -40,7 +41,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'upsert-workspace-draft',
     surface: 'storage.upsertWorkspaceDraft',
     kind: 'blob_replace',
-    status: 'legacy_blob',
+    status: 'prohibited',
     ledgerBehavior: 'metadata_only',
     notes:
       'Revision CAS plus ledger guard: metadata only, no structural overwrite or audit deletion.',
@@ -49,7 +50,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'yschema-composition-save',
     surface: 'PATCH workspace composition (yschema-composition routes)',
     kind: 'blob_merge',
-    status: 'legacy_blob',
+    status: 'legacy_adapter',
     ledgerBehavior: 'rejected',
     notes: 'Studio/composition saves persist through upsertWorkspaceDraft.',
   },
@@ -57,7 +58,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'extraction-proposal-persist',
     surface: 'workspace-extraction-proposal persist',
     kind: 'blob_replace',
-    status: 'legacy_blob',
+    status: 'legacy_adapter',
     ledgerBehavior: 'rejected',
     notes: 'Generated extraction writes workspace_state after materialize, not an action record.',
   },
@@ -65,7 +66,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'workspace-source-transition',
     surface: 'workspace-source-transition exact-source workflow',
     kind: 'proposal_materialize',
-    status: 'legacy_blob',
+    status: 'legacy_adapter',
     ledgerBehavior: 'rejected',
     notes:
       'Independent exact-source codec and Review flow; not interchangeable with a YOps ledger.',
@@ -74,7 +75,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'transition-commit-workspace',
     surface: 'transition-control-plane commit workspace_state',
     kind: 'commit_side_effect',
-    status: 'legacy_blob',
+    status: 'legacy_adapter',
     ledgerBehavior: 'rejected',
     notes:
       'Legacy workspace projection updates; ledger-backed Commit uses the separate sealed authoring path.',
@@ -83,7 +84,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'publish-workspace-authoring-action',
     surface: 'authoring command API / MCP t3x_edit mode=draft / manual cards',
     kind: 'blob_replace',
-    status: 'ledger_command',
+    status: 'migrated',
     ledgerBehavior: 'append',
     notes: 'Shared transactional append with revision/ref checks and idempotent recovery.',
   },
@@ -91,7 +92,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'publish-workspace-generation',
     surface: 'verified generated candidate publication',
     kind: 'proposal_materialize',
-    status: 'ledger_command',
+    status: 'migrated',
     ledgerBehavior: 'append',
     notes: 'Generation alone does not change the Draft; verified publication appends an action.',
   },
@@ -99,7 +100,7 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'seal-workspace-authoring',
     surface: 'canonical Transition Commit / storage.sealWorkspaceAuthoring',
     kind: 'commit_side_effect',
-    status: 'ledger_command',
+    status: 'migrated',
     ledgerBehavior: 'seal',
     notes: 'Retains immutable authoring history and basis in the committed workspace.',
   },
@@ -107,12 +108,54 @@ export const WORKSPACE_DRAFT_SAVE_PATHS: readonly WorkspaceDraftSavePath[] = Obj
     id: 'publish-draft-action',
     surface: 'application.publishDraftAction',
     kind: 'blob_replace',
-    status: 'ledger_command',
+    status: 'migrated',
     ledgerBehavior: 'append',
     notes: 'Append-only successful action records. Current document is derived by replay.',
+  },
+  {
+    id: 'workspace-chat-exact-edit',
+    surface: 'Web Workspace chat exact edit',
+    kind: 'blob_replace',
+    status: 'migrated',
+    ledgerBehavior: 'append',
+    notes: 'Calls publishWorkspaceAuthoringAction with server-derived authority and exact guards.',
+  },
+  {
+    id: 'cli-workspace-edit',
+    surface: 'CLI workspace edit',
+    kind: 'blob_replace',
+    status: 'migrated',
+    ledgerBehavior: 'append',
+    notes: 'Calls the versioned Workspace authoring API; it has no storage adapter.',
+  },
+  {
+    id: 'mcp-t3x-edit-draft',
+    surface: 'MCP t3x_edit mode=draft',
+    kind: 'blob_replace',
+    status: 'migrated',
+    ledgerBehavior: 'append',
+    notes: 'Calls the same API client capability as Web and CLI; storage backend is rejected.',
+  },
+  {
+    id: 'workspace-schema-action',
+    surface: 'Web chat, CLI and MCP exact Schema action',
+    kind: 'schema_action',
+    status: 'migrated',
+    ledgerBehavior: 'metadata_only',
+    notes:
+      'Uses the Workspace chat Schema confirmation/generation/application service with exact Workspace, composition and ref guards.',
+  },
+  {
+    id: 'runner-workspace-write',
+    surface: 'evaluation runner',
+    kind: 'blob_replace',
+    status: 'prohibited',
+    ledgerBehavior: 'rejected',
+    notes:
+      'The evaluation runner has no Workspace persistence capability; future writers must use the API client command.',
   },
 ]);
 
 export function legacyWorkspaceDraftSavePaths(): readonly WorkspaceDraftSavePath[] {
-  return WORKSPACE_DRAFT_SAVE_PATHS.filter((path) => path.status === 'legacy_blob');
+  return WORKSPACE_DRAFT_SAVE_PATHS.filter((path) => path.status === 'legacy_adapter');
 }

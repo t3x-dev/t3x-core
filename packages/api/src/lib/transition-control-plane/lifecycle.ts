@@ -65,6 +65,7 @@ import {
   assertWorkspaceAuthoringReview,
   renewWorkspaceAuthoringState,
 } from '../workspace-authoring';
+import { synchronizeCleanBranchWorkspaces } from '../workspace-reconciliation';
 import {
   assertWorkspaceSchemaReview,
   frozenWorkspaceSchemaReview,
@@ -638,6 +639,7 @@ export async function commitTransition(input: {
   decisionDigest: string;
   expectedHead: string | null;
   workspaceProjection?: TransitionWorkspaceCommitProjection;
+  synchronizeWorkspaces?: boolean;
 }): Promise<CommitTransitionResult> {
   const { requestDigest } = buildTransitionCommitCommand({
     decisionDigest: input.decisionDigest,
@@ -829,6 +831,14 @@ export async function commitTransition(input: {
         resultKind: 'commit',
         resultDigest: commitDigest,
       });
+      if (input.synchronizeWorkspaces)
+        await synchronizeCleanBranchWorkspaces(tx, {
+          projectId: input.projectId,
+          refName: graph.membership.refName,
+          refHead: commitDigest,
+          actor: input.actor,
+          excludeWorkspaceId: graph.membership.workspaceId,
+        });
     });
   } catch (error) {
     if (

@@ -601,3 +601,90 @@
     grid-column: 3;
   }
 }
+
+/* These cards live in an inspector whose width differs from the browser viewport. */
+@container compose-inspector (max-width: 480px) {
+  .timeline {
+    --timeline-gutter: 0px;
+    padding: 8px 12px 24px;
+  }
+  .timeline::before {
+    left: 26px;
+  }
+  .date > span {
+    font-size: 11px;
+  }
+  .eventTime {
+    display: block;
+    grid-column: 3;
+    grid-row: 1;
+    padding: 0 0 4px 8px;
+    text-align: left;
+    font-size: 11px;
+  }
+  .eventTime small {
+    display: inline;
+    margin-left: 6px;
+  }
+  .icon {
+    grid-row: 2;
+    margin-top: 8px;
+  }
+  .eventBody {
+    grid-row: 2;
+    padding: 8px;
+  }
+  .eventHeader {
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .heading {
+    flex-basis: 100%;
+  }
+  .titleLine {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    white-space: normal;
+  }
+  .titleLine > strong {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+  .author {
+    display: flex;
+    max-width: 100%;
+    flex: 0 1 auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .author > span {
+    width: 18px;
+    height: 18px;
+  }
+  .event[data-latest="true"] .eventBody {
+    border: 0;
+    background: transparent;
+  }
+  .changeRow,
+  .changeRow[data-object="true"] {
+    grid-template-columns: 18px minmax(0, 1fr) 16px;
+    gap: 6px;
+    padding: 8px;
+  }
+  .cardLabel {
+    grid-column: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .valueSummary {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+  .verified {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

@@ -2,8 +2,19 @@
 
 import type { WorkspaceAuthoringAction, WorkspaceAuthoringCard } from '@t3x-dev/api-client';
 import * as yaml from 'js-yaml';
-import { Check, ChevronDown, Circle, Loader2, Pencil, Search, Sparkles } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  GitPullRequest,
+  Loader2,
+  Pencil,
+  Search,
+  Sparkles,
+} from 'lucide-react';
 import { expandAuthoringCards } from '@/domain/composeActivity';
+import { composeObjectFieldChanges } from '@/domain/workspaces/composeObjectChanges';
 import type { WorkspaceAssistantActivity as Activity } from '@/hooks/sourceThreads/useSourceThreadGeneration';
 import styles from './WorkspaceAssistantActivity.module.css';
 
@@ -97,27 +108,30 @@ export function WorkspaceAssistantActivity({
   activity,
   publication,
   publishing = false,
+  compact = false,
 }: {
   activity: Activity;
   publication?: AssistantPublication | null;
   publishing?: boolean;
+  compact?: boolean;
 }) {
   const running =
     publishing || (!['complete', 'error'].includes(activity.phase) && !publication?.action);
   const action = publication?.action;
-  const cards = action ? expandAuthoringCards(publication?.cards ?? []) : [];
-  const paths = cards.length
-    ? cards.map((card) => ({ path: card.path, before: card.before, after: card.after }))
-    : (action?.operations ?? []).flatMap((operation) => {
-        const path = operationPath(operation);
-        return path ? [{ path, before: undefined, after: undefined }] : [];
-      });
   const label = phaseLabel(activity, publication, publishing);
 
   return (
-    <section className={styles.activity} aria-label="Assistant activity" aria-live="polite">
+    <section
+      className={styles.activity}
+      data-compact={compact || undefined}
+      aria-label="Assistant activity"
+      aria-live="polite"
+    >
       <details className={styles.process} open={running ? true : undefined}>
         <summary className={styles.processToggle}>
+          {!running && activity.phase !== 'error' ? (
+            <Check className={styles.completedMark} aria-hidden="true" />
+          ) : null}
           <span className={styles.chevron}>
             <ChevronDown aria-hidden="true" />
           </span>
@@ -149,7 +163,7 @@ export function WorkspaceAssistantActivity({
           {action ? (
             <div className={styles.step}>
               <Check aria-hidden="true" />
-              <span>Published to Draft r{action.afterRevision}</span>
+              <span>Published to Content r{action.afterRevision}</span>
             </div>
           ) : null}
           {!running && activity.operations.length === 0 ? (
@@ -162,47 +176,110 @@ export function WorkspaceAssistantActivity({
           ) : null}
         </div>
       </details>
-      {action ? (
-        <div className={styles.changes}>
-          <strong className={styles.changesTitle}>
-            <Pencil aria-hidden="true" />
-            {paths.length} YAML {paths.length === 1 ? 'path' : 'paths'} changed
-          </strong>
-          {paths.map((item, index) => (
-            <details className={styles.change} key={`${item.path}-${index}`}>
-              <summary>
-                <span className={styles.changeIcon}>
-                  <ChevronDown aria-hidden="true" />
-                </span>
-                <span className={styles.changeHeading}>
-                  <strong>{changeLabel(item.path, item.after)}</strong>
-                  <code title={item.path}>{item.path}</code>
-                </span>
-              </summary>
-              <div className={styles.changeDetail}>
-                {cards.length ? (
-                  <div className={styles.values}>
-                    <span>
-                      Before<code>{displayValue(item.before)}</code>
-                    </span>
-                    <span>
-                      After<code>{displayValue(item.after)}</code>
-                    </span>
-                  </div>
-                ) : null}
-                <strong>YOps in this Action</strong>
-                <pre>{yopsYaml(yopsForPath(action.operations, item.path))}</pre>
-              </div>
-            </details>
-          ))}
-          {paths.length === 0 ? (
-            <details className={styles.change}>
-              <summary>View YOps for this Action</summary>
-              <pre>{yopsYaml(action.operations)}</pre>
-            </details>
-          ) : null}
-        </div>
+      {action && !compact ? (
+        <WorkspaceTurnChanges action={action} cards={publication?.cards} />
       ) : null}
     </section>
+  );
+}
+
+export interface PublishedTurnChanges {
+  action: WorkspaceAuthoringAction;
+  cards?: WorkspaceAuthoringCard[];
+}
+
+function turnPaths({ action, cards: sourceCards }: PublishedTurnChanges) {
+  const cards = expandAuthoringCards(sourceCards ?? []);
+  return cards.length
+    ? cards.map((card) => ({ path: card.path, before: card.before, after: card.after }))
+    : action.operations.flatMap((operation) => {
+        const path = operationPath(operation);
+        return path ? [{ path, before: undefined, after: undefined }] : [];
+      });
+}
+
+export function WorkspaceTurnReceipt({
+  changes,
+  onOpen,
+}: {
+  changes: PublishedTurnChanges;
+  onOpen: (changes: PublishedTurnChanges) => void;
+}) {
+  const paths = turnPaths(changes);
+  return (
+    <button type="button" className={styles.receipt} onClick={() => onOpen(changes)}>
+      <GitPullRequest aria-hidden="true" />
+      <span className={styles.receiptBody}>
+        <strong>
+          This reply ·{' '}
+          {paths.length
+            ? `${paths.length} changed ${paths.length === 1 ? 'path' : 'paths'}`
+            : 'Draft update'}
+        </strong>
+        <small>
+          {paths[0] ? changeLabel(paths[0].path, paths[0].after) : 'Draft'} · Content r
+          {changes.action.beforeRevision} → r{changes.action.afterRevision}
+        </small>
+      </span>
+      <ChevronRight aria-hidden="true" />
+    </button>
+  );
+}
+
+export function WorkspaceTurnChanges({ action, cards }: PublishedTurnChanges) {
+  const paths = turnPaths({ action, cards });
+  return (
+    <div className={styles.changes}>
+      <strong className={styles.changesTitle}>
+        <Pencil aria-hidden="true" />
+        {paths.length} YAML {paths.length === 1 ? 'path' : 'paths'} changed
+      </strong>
+      {paths.map((item, index) => {
+        const fields = composeObjectFieldChanges(item.before, item.after);
+        const preview = fields[0] ?? item;
+        return (
+          <details className={styles.change} key={`${item.path}-${index}`}>
+            <summary>
+              <span className={styles.changeIcon}>
+                <ChevronDown aria-hidden="true" />
+              </span>
+              <span className={styles.changeHeading}>
+                <strong>{changeLabel(item.path, item.after)}</strong>
+                <code title={item.path}>{item.path}</code>
+                {cards?.length ? (
+                  <span className={styles.delta}>
+                    {fields[0] ? <span>{fields[0].key}</span> : null}
+                    <del title={displayValue(preview.before)}>{displayValue(preview.before)}</del>
+                    <span aria-hidden="true">→</span>
+                    <ins title={displayValue(preview.after)}>{displayValue(preview.after)}</ins>
+                    {fields.length > 1 ? <small>+{fields.length - 1}</small> : null}
+                  </span>
+                ) : null}
+              </span>
+            </summary>
+            <div className={styles.changeDetail}>
+              {cards?.length ? (
+                <div className={styles.values}>
+                  <span>
+                    Before<code>{displayValue(item.before)}</code>
+                  </span>
+                  <span>
+                    After<code>{displayValue(item.after)}</code>
+                  </span>
+                </div>
+              ) : null}
+              <strong>YOps in this Action</strong>
+              <pre>{yopsYaml(yopsForPath(action.operations, item.path))}</pre>
+            </div>
+          </details>
+        );
+      })}
+      {paths.length === 0 ? (
+        <details className={styles.change}>
+          <summary>View YOps for this Action</summary>
+          <pre>{yopsYaml(action.operations)}</pre>
+        </details>
+      ) : null}
+    </div>
   );
 }

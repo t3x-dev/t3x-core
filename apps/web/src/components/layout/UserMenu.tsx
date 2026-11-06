@@ -13,7 +13,7 @@
  * in background, and hides until a session exists.
  */
 
-import { LogOut, Settings, User } from 'lucide-react';
+import { Inbox, LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
@@ -103,7 +103,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
   const [authEnabled, setAuthEnabled] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { loadAuthMe } = useAuthMe();
-  const { clear, getKey, getUser, setUser: persistUser } = useSession();
+  const { clear, getUser, setUser: persistUser } = useSession();
   const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
   const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
@@ -112,10 +112,6 @@ export function UserMenu({ collapsed }: UserMenuProps) {
 
   useEffect(() => {
     if (authDisabled) return;
-
-    // Check if user has a session (auth is active)
-    const sessionKey = getKey();
-    if (!sessionKey) return;
 
     setAuthEnabled(true);
 
@@ -139,7 +135,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       .catch(() => {
         // Ignore — we already have cached data or no user
       });
-  }, [authDisabled, getKey, getUser, loadAuthMe, persistUser]);
+  }, [authDisabled, getUser, loadAuthMe, persistUser]);
 
   const localDisplayName = resolveLocalWorkspaceName(localWorkspaceName);
   const menuUser = authDisabled ? { name: localDisplayName, username: null } : user;
@@ -242,6 +238,12 @@ export function UserMenu({ collapsed }: UserMenuProps) {
         ) : (
           <>
             <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/invitations">
+                <Inbox className="h-4 w-4" />
+                Invitations
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
               <Link href="/settings/profile">
                 <User className="h-4 w-4" />
                 Profile
@@ -259,7 +261,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => clear()}
+              onClick={() => void clear()}
               className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
             >
               <LogOut className="h-4 w-4" />

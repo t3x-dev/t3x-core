@@ -1,25 +1,37 @@
 import { currentComposition } from '@t3x-dev/application';
 import { createYOpsState } from '@t3x-dev/core';
 import {
+  branches,
+  createMaterial,
   findWorkspaceDraft,
   getTransitionRefHead,
   insertBranch,
   insertProject,
+  saveWorkspaceSchemaPreparation,
+  transactWorkspaceAuthoring,
   transactWorkspaceReconciliation,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
+import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
 import {
+  ensureWorkspaceAuthoringSchema,
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
   readWorkspaceAuthoring,
   workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import {
+  decideWorkspaceReconciliation,
+  prepareWorkspaceReconciliation,
   reconcileDocuments,
   reconcileWorkspaceAuthoring,
+  reconcileWorkspaceSchemas,
   synchronizeCleanBranchWorkspaces,
+  WorkspaceReconciliationConflictError,
+  WorkspaceReconciliationValidationError,
 } from '../lib/workspace-reconciliation';
 import { setupTestDB } from './setup';
 
@@ -57,7 +69,7 @@ describe('Workspace branch reconciliation', () => {
       workspace_state: {
         targetBranch: 'main',
         sourceBundle: [{ id: 'source:keep' }],
-        schemaBindings: [{ canonicalName: 'test' }],
+        schemaBindings: [],
       },
     });
     const init = await initializeWorkspaceAuthoring(setup.db, {
@@ -95,7 +107,27 @@ describe('Workspace branch reconciliation', () => {
     expect(reconcileDocuments(dangerous, {}, dangerous).current).toEqual({});
   });
 
-  it('synchronizes a clean Workspace without a Commit and permits the next edit', async () => {
+  it('inherits a branch Schema and requires an explicit choice for simultaneous Schema edits', () => {
+    const unbound = { status: 'unbound' as const, bindings: [] };
+    const branch = {
+      status: 'bound' as const,
+      bindings: [{ canonicalName: 'product', version: '1' }],
+      schemaHash: 'sha256:branch',
+      definition: { root: 'product' },
+    };
+    expect(
+      reconcileWorkspaceSchemas({ base: unbound, ours: unbound, theirs: branch })
+    ).toMatchObject({ merged: branch, conflict: null });
+
+    const ours = { ...branch, schemaHash: 'sha256:ours' };
+    const theirs = { ...branch, schemaHash: 'sha256:theirs' };
+    expect(reconcileWorkspaceSchemas({ base: branch, ours, theirs })).toMatchObject({
+      merged: ours,
+      conflict: { scope: 'schema', kind: 'schema', path: '/schema' },
+    });
+  });
+
+  it('synchronizes a clean Workspace after a Commit and permits the next edit', async () => {
     const f = await fixture();
     const next = await f.advance({ product: { title: 'remote', status: 'live' }, keep: 1 });
     expect((await readWorkspaceAuthoring(setup.db, f)).synchronization.required).toBe(true);
@@ -130,6 +162,174 @@ describe('Workspace branch reconciliation', () => {
     expect(
       (await getTransitionRefHead(setup.db, { projectId: f.projectId, refName: 'main' })).head
     ).toBe(next.commitDigest);
+  });
+
+  it('initializes an untouched Workspace from the latest committed Content and Schema', async () => {
+    const f = await fixture();
+    const workspaceId = 'workspace_branch:main:human:other';
+    await upsertWorkspaceDraft(setup.db, {
+      project_id: f.projectId,
+      workspace_id: workspaceId,
+      title: 'Other collaborator',
+      target_branch: 'main',
+      parent_commit_hash: f.base.commitDigest,
+      workspace_state: { targetBranch: 'main', schemaBindings: [] },
+    });
+    const next = await f.advance({ product: { title: 'shared', status: 'live' }, keep: 2 });
+
+    await synchronizeCleanBranchWorkspaces(setup.db, {
+      projectId: f.projectId,
+      refName: 'main',
+      refHead: next.commitDigest,
+      actor,
+    });
+
+    const saved = (await findWorkspaceDraft(setup.db, f.projectId, workspaceId))!;
+    const state = workspaceAuthoringState(saved.workspace_state!);
+    expect(state.basis.refHead).toBe(next.commitDigest);
+    expect(currentComposition(state.ledger)).toEqual({
+      product: { title: 'shared', status: 'live' },
+      keep: 2,
+    });
+    expect(saved.parent_commit_hash).toBe(next.commitDigest);
+    expect(saved.workspace_state?.workspaceSchemaBase).toMatchObject({
+      refHead: next.commitDigest,
+      snapshot: { status: 'unbound', schemaHash: null, bindings: [] },
+    });
+  });
+
+  it('fast-forwards an untouched Workspace on first use after another collaborator commits', async () => {
+    const f = await fixture();
+    const workspaceId = 'workspace_branch:main:human:late';
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: f.projectId,
+      workspace_id: workspaceId,
+      title: 'Late collaborator',
+      target_branch: 'main',
+      parent_commit_hash: f.base.commitDigest,
+      workspace_state: {
+        targetBranch: 'main',
+        schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
+      },
+    });
+    const next = await f.advance({ product: { title: 'shared', status: 'live' }, keep: 3 });
+
+    const initialized = await initializeWorkspaceAuthoring(setup.db, {
+      projectId: f.projectId,
+      workspaceId,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: f.base.commitDigest,
+      actionId: 'late-init',
+      actor,
+    });
+
+    expect(initialized.value.basis.refHead).toBe(next.commitDigest);
+    expect(currentComposition(initialized.value.ledger)).toEqual({
+      product: { title: 'shared', status: 'live' },
+      keep: 3,
+    });
+    expect(initialized.draft.parent_commit_hash).toBe(next.commitDigest);
+    expect(initialized.draft.workspace_state?.schemaBindings).toMatchObject([
+      { canonicalName: 't3x/prd', version: 'v2' },
+    ]);
+    expect(initialized.draft.workspace_state?.workspaceSchemaBase).toMatchObject({
+      refHead: next.commitDigest,
+      snapshot: { status: 'bound' },
+    });
+    const retried = await initializeWorkspaceAuthoring(setup.db, {
+      projectId: f.projectId,
+      workspaceId,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: f.base.commitDigest,
+      actionId: 'late-init',
+      actor,
+    });
+    expect(retried.draft.revision).toBe(initialized.draft.revision);
+  });
+
+  it('restores the committed Schema when Content is already at the current head', async () => {
+    const f = await fixture();
+    const workspaceId = 'workspace_branch:main:human:same-head';
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: f.projectId,
+      workspace_id: workspaceId,
+      title: 'Same-head collaborator',
+      target_branch: 'main',
+      parent_commit_hash: f.base.commitDigest,
+      workspace_state: {
+        targetBranch: 'main',
+        schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
+      },
+    });
+
+    const initialized = await initializeWorkspaceAuthoring(setup.db, {
+      projectId: f.projectId,
+      workspaceId,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: f.base.commitDigest,
+      actionId: 'same-head-init',
+      actor,
+    });
+
+    expect(initialized.draft.workspace_state?.schemaBindings).toMatchObject([
+      { canonicalName: 't3x/prd', version: 'v2' },
+    ]);
+    expect(initialized.draft.workspace_state?.workspaceSchemaBase).toMatchObject({
+      refHead: f.base.commitDigest,
+      snapshot: {
+        status: 'bound',
+        bindings: [{ canonicalName: 't3x/prd', version: 'v2' }],
+      },
+    });
+
+    const damaged = await transactWorkspaceAuthoring(
+      setup.db,
+      { projectId: f.projectId, workspaceId, refName: 'main' },
+      async (_tx, current) => ({
+        workspace: { ...current.workspace_state!, schemaBindings: [] },
+        value: null,
+      })
+    );
+    const repairedRevision = await ensureWorkspaceAuthoringSchema(setup.db, {
+      projectId: f.projectId,
+      workspaceId,
+      expectedRevision: damaged.draft.revision,
+    });
+    const repaired = (await findWorkspaceDraft(setup.db, f.projectId, workspaceId))!;
+    expect(repairedRevision).toBe(repaired.revision);
+    expect(repaired.workspace_state?.schemaBindings).toMatchObject([
+      { canonicalName: 't3x/prd', version: 'v2' },
+    ]);
+  });
+
+  it('does not fast-forward an uninitialized Workspace with local edits', async () => {
+    const f = await fixture();
+    const workspaceId = 'workspace_branch:main:human:dirty';
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: f.projectId,
+      workspace_id: workspaceId,
+      title: 'Dirty collaborator',
+      target_branch: 'main',
+      parent_commit_hash: f.base.commitDigest,
+      workspace_state: {
+        targetBranch: 'main',
+        schemaBindings: [],
+        yopsDraft: { operations: [{ set: { path: 'keep', value: 9 } }] },
+      },
+    });
+    await f.advance({ product: { title: 'shared', status: 'live' }, keep: 3 });
+
+    await expect(
+      initializeWorkspaceAuthoring(setup.db, {
+        projectId: f.projectId,
+        workspaceId,
+        expectedWorkspaceRevision: draft.revision,
+        expectedRefHead: f.base.commitDigest,
+        actionId: 'dirty-init',
+        actor,
+      })
+    ).rejects.toThrow('reconcile the existing Draft');
+    expect(await findWorkspaceDraft(setup.db, f.projectId, workspaceId)).toEqual(draft);
   });
 
   it('leaves dirty Workspaces intact during merge and explicitly carries edits forward with an immutable archive', async () => {
@@ -169,6 +369,27 @@ describe('Workspace branch reconciliation', () => {
     ).rejects.toThrow('different facts');
   });
 
+  it('leaves a Schema-only Draft pending instead of blocking another Commit', async () => {
+    const f = await fixture();
+    const before = (await f.read())!;
+    const dirty = await saveWorkspaceSchemaPreparation(setup.db, {
+      projectId: f.projectId,
+      workspaceId: f.workspaceId,
+      expectedRevision: before.revision,
+      schemaEditCandidate: { candidateId: 'schema-draft', revision: 1 },
+    });
+    const next = await f.advance({ product: { title: 'remote', status: 'live' }, keep: 1 });
+
+    await synchronizeCleanBranchWorkspaces(setup.db, {
+      projectId: f.projectId,
+      refName: 'main',
+      refHead: next.commitDigest,
+      actor,
+    });
+
+    expect(await f.read()).toEqual(dirty);
+  });
+
   it('rejects overlapping edits, stale Workspace revisions and changed heads without losing anything', async () => {
     const f = await fixture();
     await f.publish('local');
@@ -199,5 +420,328 @@ describe('Workspace branch reconciliation', () => {
         value: null,
       }))
     ).rejects.toThrow('preserve');
+  });
+
+  it('previews Base/Ours/Theirs and records explicit cancel, adopt and discard decisions', async () => {
+    const adopt = await fixture();
+    await adopt.publish('local');
+    let before = (await adopt.read())!;
+    const advanced = await adopt.advance({
+      product: { title: 'base', status: 'live' },
+      keep: 1,
+    });
+    let preview = await prepareWorkspaceReconciliation(setup.db, {
+      projectId: adopt.projectId,
+      workspaceId: adopt.workspaceId,
+      expectedWorkspaceRevision: before.revision,
+      expectedRefHead: advanced.commitDigest,
+    });
+    expect(preview).toMatchObject({
+      workspaceRevision: before.revision,
+      baseHead: adopt.base.commitDigest,
+      currentRefHead: advanced.commitDigest,
+      ours: { product: { title: 'local', status: 'draft' }, keep: 1 },
+      theirs: { product: { title: 'base', status: 'live' }, keep: 1 },
+      merged: { product: { title: 'local', status: 'live' }, keep: 1 },
+      conflicts: [],
+    });
+    expect(preview.preparationDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const cancelInput = {
+      projectId: adopt.projectId,
+      workspaceId: adopt.workspaceId,
+      requestId: 'cancel-sync',
+      actor,
+      expectedWorkspaceRevision: before.revision,
+      expectedRefHead: advanced.commitDigest,
+      preparationDigest: preview.preparationDigest,
+      action: 'cancel' as const,
+    };
+    const cancelled = await decideWorkspaceReconciliation(setup.db, cancelInput);
+    expect(cancelled.value.kind).toBe('cancelled');
+    expect(workspaceAuthoringState(cancelled.draft.workspace_state!).basis.refHead).toBe(
+      adopt.base.commitDigest
+    );
+    expect((await decideWorkspaceReconciliation(setup.db, cancelInput)).value.kind).toBe('reused');
+
+    before = (await adopt.read())!;
+    preview = await prepareWorkspaceReconciliation(setup.db, {
+      projectId: adopt.projectId,
+      workspaceId: adopt.workspaceId,
+      expectedWorkspaceRevision: before.revision,
+      expectedRefHead: advanced.commitDigest,
+    });
+    const adopted = await decideWorkspaceReconciliation(setup.db, {
+      ...cancelInput,
+      requestId: 'adopt-sync',
+      expectedWorkspaceRevision: before.revision,
+      preparationDigest: preview.preparationDigest,
+      action: 'adopt',
+    });
+    expect(adopted.value.kind).toBe('reconciled');
+    expect(
+      currentComposition(workspaceAuthoringState(adopted.draft.workspace_state!).ledger)
+    ).toEqual(preview.merged);
+
+    const discard = await fixture();
+    await discard.publish('local');
+    const discardBefore = (await discard.read())!;
+    const discardHead = await discard.advance({
+      product: { title: 'remote', status: 'live' },
+      keep: 1,
+    });
+    const conflicting = await prepareWorkspaceReconciliation(setup.db, {
+      projectId: discard.projectId,
+      workspaceId: discard.workspaceId,
+      expectedWorkspaceRevision: discardBefore.revision,
+      expectedRefHead: discardHead.commitDigest,
+    });
+    expect(conflicting.conflicts).toHaveLength(1);
+    expect(conflicting.conflicts[0]).toMatchObject({ path: '/product/title' });
+    await expect(
+      decideWorkspaceReconciliation(setup.db, {
+        projectId: discard.projectId,
+        workspaceId: discard.workspaceId,
+        requestId: 'adopt-conflict',
+        actor,
+        expectedWorkspaceRevision: discardBefore.revision,
+        expectedRefHead: discardHead.commitDigest,
+        preparationDigest: conflicting.preparationDigest,
+        action: 'adopt',
+      })
+    ).rejects.toBeInstanceOf(WorkspaceReconciliationConflictError);
+    const discarded = await decideWorkspaceReconciliation(setup.db, {
+      projectId: discard.projectId,
+      workspaceId: discard.workspaceId,
+      requestId: 'discard-conflict',
+      actor,
+      expectedWorkspaceRevision: discardBefore.revision,
+      expectedRefHead: discardHead.commitDigest,
+      preparationDigest: conflicting.preparationDigest,
+      action: 'discard',
+    });
+    expect(discarded.value.kind).toBe('discarded');
+    expect(
+      currentComposition(workspaceAuthoringState(discarded.draft.workspace_state!).ledger)
+    ).toEqual(conflicting.theirs);
+  });
+
+  it('rejects a stale explicit preview when the Workspace revision or branch head changes', async () => {
+    const f = await fixture();
+    await f.publish('local');
+    const before = (await f.read())!;
+    const firstAdvance = await f.advance({
+      product: { title: 'base', status: 'live' },
+      keep: 1,
+    });
+    await expect(
+      prepareWorkspaceReconciliation(setup.db, {
+        projectId: f.projectId,
+        workspaceId: f.workspaceId,
+        expectedWorkspaceRevision: before.revision - 1,
+        expectedRefHead: firstAdvance.commitDigest,
+      })
+    ).rejects.toThrow();
+    const preview = await prepareWorkspaceReconciliation(setup.db, {
+      projectId: f.projectId,
+      workspaceId: f.workspaceId,
+      expectedWorkspaceRevision: before.revision,
+      expectedRefHead: firstAdvance.commitDigest,
+    });
+    await f.advance({
+      product: { title: 'base', status: 'live' },
+      keep: 2,
+    });
+    await expect(
+      decideWorkspaceReconciliation(setup.db, {
+        projectId: f.projectId,
+        workspaceId: f.workspaceId,
+        requestId: 'stale-preview',
+        actor,
+        expectedWorkspaceRevision: before.revision,
+        expectedRefHead: firstAdvance.commitDigest,
+        preparationDigest: preview.preparationDigest,
+        action: 'adopt',
+      })
+    ).rejects.toThrow('changed again');
+    expect(await f.read()).toEqual(before);
+  });
+
+  it('refuses automatic synchronization when the target ref no longer descends from the Draft Base', async () => {
+    const f = await fixture();
+    await f.publish('local');
+    const before = (await f.read())!;
+    await insertBranch(setup.db, { projectId: f.projectId, name: 'unrelated' });
+    const unrelated = await commitRepositoryYOpsState({
+      db: setup.db,
+      projectId: f.projectId,
+      refName: 'unrelated',
+      expectedHead: null,
+      target: createYOpsState({ product: { title: 'unrelated' } }),
+      actor,
+    });
+    await setup.db
+      .update(branches)
+      .set({ headCommitHash: unrelated.commitDigest })
+      .where(and(eq(branches.projectId, f.projectId), eq(branches.name, 'main')));
+    await expect(
+      prepareWorkspaceReconciliation(setup.db, {
+        projectId: f.projectId,
+        workspaceId: f.workspaceId,
+        expectedWorkspaceRevision: before.revision,
+        expectedRefHead: unrelated.commitDigest,
+      })
+    ).rejects.toThrow('diverged from the Draft Base');
+    expect(await f.read()).toEqual(before);
+  });
+
+  it('resolves every structured conflict explicitly and validates the complete result before applying', async () => {
+    const projectId = (await insertProject(setup.db, { name: 'Validated resolution' })).projectId;
+    await insertBranch(setup.db, { projectId, name: 'main' });
+    const material = await createMaterial(setup.db, {
+      project_id: projectId,
+      source_type: 'document',
+      title: 'prd.md',
+      content_text: 'Evidence for the complete PRD fixture.',
+      content_hash: 'resolution-evidence',
+    });
+    const baseCandidate = structuredClone(t3xPrdP0Fixtures.validCandidateTree);
+    const base = await commitRepositoryYOpsState({
+      db: setup.db,
+      projectId,
+      refName: 'main',
+      expectedHead: null,
+      target: createYOpsState({ candidate: baseCandidate }),
+      actor,
+    });
+    const workspaceId = 'workspace_validated_resolution';
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: projectId,
+      workspace_id: workspaceId,
+      title: 'Validated resolution',
+      target_branch: 'main',
+      workspace_state: {
+        targetBranch: 'main',
+        schemaBindings: [
+          {
+            canonicalName: 't3x/prd',
+            schemaName: 'Candidate Schema',
+            version: 'v2',
+          },
+        ],
+        sourceBundle: [
+          {
+            id: `material:${material.id}`,
+            materialId: material.id,
+            contentHash: material.content_hash,
+          },
+        ],
+      },
+    });
+    const initialized = await initializeWorkspaceAuthoring(setup.db, {
+      projectId,
+      workspaceId,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: base.commitDigest,
+      actionId: 'init-resolution',
+      actor,
+    });
+    const local = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId,
+      actor,
+      channel: 'manual',
+      actionId: 'local-priority',
+      operations: [
+        {
+          set: {
+            path: 'candidate/requirements/schema_contract/priority',
+            value: 'should',
+          },
+        },
+      ],
+      expectedRevision: 0,
+      expectedWorkspaceRevision: initialized.draft.revision,
+      expectedRefHead: base.commitDigest,
+    });
+    const remoteCandidate = structuredClone(baseCandidate);
+    remoteCandidate.requirements.schema_contract.priority = 'could';
+    const remote = await commitRepositoryYOpsState({
+      db: setup.db,
+      projectId,
+      refName: 'main',
+      expectedHead: base.commitDigest,
+      target: createYOpsState({ candidate: remoteCandidate }),
+      actor,
+    });
+    const preview = await prepareWorkspaceReconciliation(setup.db, {
+      projectId,
+      workspaceId,
+      expectedWorkspaceRevision: local.draft.revision,
+      expectedRefHead: remote.commitDigest,
+    });
+    expect(preview.conflicts).toHaveLength(1);
+    expect(preview.conflicts[0]).toMatchObject({
+      path: '/candidate/requirements/schema_contract/priority',
+      kind: 'value',
+      base: { present: true, source: 'base', value: 'must' },
+      ours: { present: true, source: 'workspace_draft', value: 'should' },
+      theirs: { present: true, source: 'branch', value: 'could' },
+    });
+    const conflictId = preview.conflicts[0]!.id;
+    await expect(
+      decideWorkspaceReconciliation(setup.db, {
+        projectId,
+        workspaceId,
+        requestId: 'incomplete-resolution',
+        actor,
+        expectedWorkspaceRevision: local.draft.revision,
+        expectedRefHead: remote.commitDigest,
+        preparationDigest: preview.preparationDigest,
+        action: 'resolve',
+        resolutions: [],
+      })
+    ).rejects.toThrow('Every conflict requires a resolution');
+    await expect(
+      decideWorkspaceReconciliation(setup.db, {
+        projectId,
+        workspaceId,
+        requestId: 'invalid-resolution',
+        actor,
+        expectedWorkspaceRevision: local.draft.revision,
+        expectedRefHead: remote.commitDigest,
+        preparationDigest: preview.preparationDigest,
+        action: 'resolve',
+        resolutions: [{ conflictId, choice: 'custom', value: 'critical' }],
+      })
+    ).rejects.toBeInstanceOf(WorkspaceReconciliationValidationError);
+    expect((await findWorkspaceDraft(setup.db, projectId, workspaceId))?.revision).toBe(
+      local.draft.revision
+    );
+    const resolved = await decideWorkspaceReconciliation(setup.db, {
+      projectId,
+      workspaceId,
+      requestId: 'valid-resolution',
+      actor,
+      expectedWorkspaceRevision: local.draft.revision,
+      expectedRefHead: remote.commitDigest,
+      preparationDigest: preview.preparationDigest,
+      action: 'resolve',
+      resolutions: [{ conflictId, choice: 'ours' }],
+    });
+    expect(resolved.value.kind).toBe('resolved');
+    expect(
+      currentComposition(workspaceAuthoringState(resolved.draft.workspace_state!).ledger)
+    ).toMatchObject({ candidate: { requirements: { schema_contract: { priority: 'should' } } } });
+    expect(
+      (
+        resolved.draft.workspace_state?.authoringReconciliations as Array<Record<string, unknown>>
+      ).at(-1)
+    ).toMatchObject({
+      outcome: 'resolve',
+      conflictIds: [conflictId],
+      resolutions: [{ conflictId, choice: 'ours' }],
+      actor,
+    });
   });
 });

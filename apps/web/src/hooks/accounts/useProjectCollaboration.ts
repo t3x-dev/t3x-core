@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProjectGrant, ProjectGrantRole } from '@t3x-dev/api-client';
+import { useCallback } from 'react';
 import { useQuery } from '@/hooks/shared/useQuery';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 
@@ -44,15 +45,20 @@ export function useProjectCollaboration(projectId: string) {
     guestsQuery.refetch();
   }
 
-  async function createInvitation(email: string, role: ProjectGrantRole) {
+  async function createInvitation(recipient: string, role: ProjectGrantRole) {
     const response = await client.createProjectInvitation(projectId, {
-      recipient: { user_id: null, email },
+      recipient: { user_id: recipient, email: null },
       role,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
     invitationsQuery.refetch();
     return response;
   }
+
+  const searchUsers = useCallback(
+    async (query: string) => (await client.searchCollaborationUsers(query)).users,
+    [client]
+  );
 
   async function revokeInvitation(invitationId: string) {
     await client.revokeCollaborationInvitation(invitationId);
@@ -66,6 +72,7 @@ export function useProjectCollaboration(projectId: string) {
     updateGuestRole,
     revokeGuest,
     createInvitation,
+    searchUsers,
     revokeInvitation,
   };
 }

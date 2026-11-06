@@ -124,6 +124,14 @@ export function PullRequestMergeReviewPanel({
     fetchMergeReview(projectId, pullRequest.number)
       .then((loaded) => {
         if (cancelled) return;
+        if (
+          loaded.draft_id !== draftId ||
+          loaded.source_commit_id !== pullRequest.sourceCommitId ||
+          loaded.target_commit_id !== pullRequest.targetBaseCommitId
+        )
+          throw new Error(
+            'The comparison does not match the reviewed branch versions. Rerun readiness.'
+          );
         const restored = choicesFromDecision(loaded, loaded.decisions);
         revision.current = loaded.decision_revision;
         dirty.current = false;
@@ -145,7 +153,15 @@ export function PullRequestMergeReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [draftId, fetchMergeReview, projectId, pullRequest.number, loadAttempt]);
+  }, [
+    draftId,
+    fetchMergeReview,
+    projectId,
+    pullRequest.number,
+    pullRequest.sourceCommitId,
+    pullRequest.targetBaseCommitId,
+    loadAttempt,
+  ]);
 
   useEffect(() => {
     onReviewChange?.({

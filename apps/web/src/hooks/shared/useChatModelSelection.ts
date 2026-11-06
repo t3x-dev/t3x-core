@@ -15,7 +15,6 @@ export function useChatModelSelection({
 }: UseChatModelSelectionParams) {
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const { loadAuthMe } = useAuthMe();
-  const { getKey } = useSession();
   const {
     providers,
     loading: modelsLoading,
@@ -30,19 +29,10 @@ export function useChatModelSelection({
   const setSelection = useChatModelPreferencesStore((s) => s.setSelection);
   const [userDefaultProvider, setUserDefaultProvider] = useState<string | null>(null);
   const [userDefaultModel, setUserDefaultModel] = useState<string | null>(null);
-  const [userPreferenceLoading, setUserPreferenceLoading] = useState<boolean>(
-    !authDisabled && Boolean(getKey())
-  );
+  const [userPreferenceLoading, setUserPreferenceLoading] = useState<boolean>(!authDisabled);
 
   useEffect(() => {
     if (authDisabled) {
-      setUserDefaultProvider(null);
-      setUserDefaultModel(null);
-      setUserPreferenceLoading(false);
-      return;
-    }
-
-    if (!getKey()) {
       setUserDefaultProvider(null);
       setUserDefaultModel(null);
       setUserPreferenceLoading(false);
@@ -70,7 +60,7 @@ export function useChatModelSelection({
     return () => {
       cancelled = true;
     };
-  }, [authDisabled, getKey, loadAuthMe]);
+  }, [authDisabled, loadAuthMe]);
 
   const candidateProvider = initialProvider ?? sessionProvider;
   const candidateModel = initialModel ?? sessionModel;

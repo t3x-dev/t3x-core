@@ -2,10 +2,21 @@
 
 import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 
 describe('DiscoverHeader navigation', () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('links home to t3x-dev when local auth is disabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+
+    render(<DiscoverHeader owner="t3x-dev" namespaceTab="repositories" />);
+
+    expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/t3x-dev');
+  });
   it('preserves the current branch and Workspace on canonical repository tabs', () => {
     const settingsHref = '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';
     render(
@@ -56,12 +67,17 @@ describe('DiscoverHeader navigation', () => {
       'href',
       '/explore?view=browse'
     );
+    expect(globalNavigation.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
     expect(
       globalNavigation.getAllByRole('link').every((link) => !link.hasAttribute('aria-current'))
     ).toBe(true);
   });
 
-  it('keeps namespace settings and repository creation under the supplied owner', () => {
+  it('keeps namespace settings and repository creation under the supplied owner', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'false');
     render(
       <DiscoverHeader
         owner="orbit-labs"
@@ -87,6 +103,14 @@ describe('DiscoverHeader navigation', () => {
       'href',
       '/settings/profile'
     );
+    expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/');
+  });
+
+  it('uses the authenticated home resolver instead of the visible organization owner', () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'false');
+    render(<DiscoverHeader owner="orbit-labs" namespaceTab="repositories" />);
+
+    expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/');
   });
 
   it('gives Discover and Browse global navigation without invented repository state', () => {
@@ -117,5 +141,25 @@ describe('DiscoverHeader navigation', () => {
     expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
     expect(screen.queryByText('Private')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Notifications preview')).not.toBeInTheDocument();
+  });
+
+  it('marks the aggregate repository directory as the current global destination', () => {
+    render(<DiscoverHeader repositoriesNavigation />);
+
+    expect(screen.getByRole('link', { name: 'Repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
+    expect(screen.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
+    expect(screen.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(
+      screen.queryByRole('navigation', { name: 'Namespace navigation' })
+    ).not.toBeInTheDocument();
   });
 });

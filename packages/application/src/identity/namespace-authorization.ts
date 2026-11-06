@@ -113,6 +113,7 @@ export interface TrustedNamespaceAuthorityFacts {
    */
   credential_scope?: {
     project_id: string | null;
+    namespace_id?: string | null;
     actions: readonly ProjectAction[];
   };
 }
@@ -123,6 +124,7 @@ export type ProjectActionDecision =
       allowed: false;
       reason:
         | 'credential_project_mismatch'
+        | 'credential_namespace_mismatch'
         | 'credential_scope_denied'
         | 'machine_principal_requires_project_scope'
         | 'inactive_membership'
@@ -138,6 +140,7 @@ export interface TrustedNamespaceActionFacts {
   principal: CanonicalPrincipalDto;
   namespace: { namespace_id: string };
   namespace_membership: NamespaceMembershipDto | null;
+  credential_scope?: { project_id: string | null; namespace_id: string | null };
 }
 
 export type NamespaceActionDecision =
@@ -146,6 +149,8 @@ export type NamespaceActionDecision =
       allowed: false;
       reason:
         | 'machine_principal_requires_namespace_scope'
+        | 'credential_namespace_mismatch'
+        | 'credential_project_scope_denied'
         | 'inactive_membership'
         | 'namespace_mismatch'
         | 'role_denied'
@@ -166,8 +171,18 @@ function credentialDenial(
       ? null
       : { allowed: false, reason: 'machine_principal_requires_project_scope' };
   }
-  if (scope.project_id !== project.project_id) {
+  if (principal.kind !== 'human' && scope.project_id !== project.project_id) {
     return { allowed: false, reason: 'credential_project_mismatch' };
+  }
+  if (principal.kind === 'human' && scope.project_id && scope.project_id !== project.project_id) {
+    return { allowed: false, reason: 'credential_project_mismatch' };
+  }
+  if (
+    principal.kind === 'human' &&
+    scope.namespace_id &&
+    scope.namespace_id !== project.namespace_id
+  ) {
+    return { allowed: false, reason: 'credential_namespace_mismatch' };
   }
   if (!scope.actions.includes(action)) {
     return { allowed: false, reason: 'credential_scope_denied' };
@@ -241,6 +256,15 @@ export function evaluateNamespaceAction(
 ): NamespaceActionDecision {
   if (facts.principal.kind !== 'human') {
     return { allowed: false, reason: 'machine_principal_requires_namespace_scope' };
+  }
+  if (facts.credential_scope?.project_id) {
+    return { allowed: false, reason: 'credential_project_scope_denied' };
+  }
+  if (
+    facts.credential_scope?.namespace_id &&
+    facts.credential_scope.namespace_id !== facts.namespace.namespace_id
+  ) {
+    return { allowed: false, reason: 'credential_namespace_mismatch' };
   }
 
   const membership = facts.namespace_membership;

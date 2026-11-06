@@ -103,3 +103,14 @@ it('resolves a branch-only entry and never substitutes an invalid explicit Works
   expect(resolveStudioWorkspaceId([main, feature], '', 'missing')).toBe('');
   expect(resolveStudioWorkspaceId([main, feature], 'missing', 'main')).toBe('missing');
 });
+
+it('retains a committed branch target for continuation and prefers an open draft when available', () => {
+  const committed = workspace('workspace_branch:main', 'Previous iteration', 'committed');
+  const open = workspace('another-main-draft', 'Current draft', 'draft');
+  const starter = (branch: string) =>
+    getProjectWorkspaceStarterCandidate('proj_1', [], branch, null);
+  expect(listStudioWorkspacesForBranches([committed], ['main'], starter)).toEqual([committed]);
+  expect(resolveStudioWorkspaceId([committed], '', 'main')).toBe(committed.id);
+  expect(listStudioWorkspacesForBranches([committed, open], ['main'], starter)).toEqual([open]);
+  expect(resolveStudioWorkspaceId([committed, open], '', 'main')).toBe(open.id);
+});

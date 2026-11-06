@@ -24,6 +24,7 @@ import {
   type MergeSummaryData,
   type ProposalStatement,
   prepareMerge,
+  repositorySemanticYSchemaTree,
   type SemanticContent,
   type SlotValue,
   type State,
@@ -40,7 +41,7 @@ import {
   TransitionHeadConflictError,
   type VerifiedTransitionCommitGraph,
 } from '@t3x-dev/storage';
-import type { CanonicalTimestamp, EvidenceRef } from '@t3x-dev/transition';
+import type { CanonicalTimestamp, EvidenceRef, ProtocolValue } from '@t3x-dev/transition';
 import {
   advanceMergedSchemaWorkspace,
   MERGE_SCHEMA_ACTOR,
@@ -54,6 +55,7 @@ import {
   commitPreparedRepositoryTransition,
   TransitionDecisionDeniedError,
 } from './transition-control-plane/lifecycle';
+import { workspaceProvenance } from './workspace-provenance';
 
 type ActorRef = ProposalStatement['actor'];
 
@@ -133,7 +135,10 @@ export async function getRepositoryConversationEvidence(
     limit: 10_000,
     offset: 0,
   });
-  return turns.map((turn) => ({
+  const pendingStartedAt = conversation.commitTrackingStartedAt;
+  const pendingTurns =
+    pendingStartedAt === null ? [] : turns.filter((turn) => turn.createdAt >= pendingStartedAt);
+  return pendingTurns.map((turn) => ({
     resource: {
       uri: `t3x://projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turn.turnHash)}`,
       mediaType: 'text/plain;charset=utf-8',
@@ -475,10 +480,20 @@ export async function inspectRepositoryYOpsMergeSchema(
     before: before.value,
     after: result.value,
     error: null,
-    validation: validateRepositoryMergedSchema(result, context.schema, {
-      id: 'repository-merge-readiness',
-      recordedAt: new Date().toISOString() as CanonicalTimestamp,
-    }),
+    validation: validateRepositoryMergedSchema(
+      result,
+      context.schema,
+      {
+        id: 'repository-merge-readiness',
+        recordedAt: new Date().toISOString() as CanonicalTimestamp,
+      },
+      await workspaceProvenance(
+        input.db,
+        input.projectId,
+        { sourceBundle: context.schema.contentSources },
+        repositorySemanticYSchemaTree(result, context.schema.rootKey) as ProtocolValue
+      )
+    ),
   };
 }
 
@@ -641,6 +656,8 @@ export async function reviewRepositoryYOpsMerge(
 export interface CommitRepositoryYOpsMergeInput extends PrepareRepositoryYOpsMergeInput {
   refName: string;
   decisions: MergeDecision;
+  /** Reviewed PR author; distinct from actor when another principal approves the merge. */
+  proposalActor?: ActorRef;
   actor: ActorRef;
   message: string;
   /** Exact server-selected policy binding; compatibility callers retain the built-in policy. */
@@ -700,25 +717,35 @@ async function commitRepositoryYOpsMergeInTransaction(
     );
   if (!context.schema && (input.decisions as MergeWorkspaceDecision).schemaResolution)
     throw new RepositorySchemaMergeError('Schema resolution requires a bound branch contract.');
-  const validation = context.schema
-    ? validateRepositoryMergedSchema(
-        migrateRepositoryMergeContent(
-          createRepositorySemanticState(
-            executeMerge(
-              decodeRepositorySemanticState(context.mergeBaseState),
-              decodeRepositorySemanticState(context.source.state),
-              decodeRepositorySemanticState(context.target.state),
-              context.prepared,
-              input.decisions
-            )
-          ),
-          context.schema.rootKey,
-          input.decisions
+  const mergedState = context.schema
+    ? migrateRepositoryMergeContent(
+        createRepositorySemanticState(
+          executeMerge(
+            decodeRepositorySemanticState(context.mergeBaseState),
+            decodeRepositorySemanticState(context.source.state),
+            decodeRepositorySemanticState(context.target.state),
+            context.prepared,
+            input.decisions
+          )
         ),
-        context.schema,
-        { id: `repository-merge:${input.targetDigest}:${input.sourceDigest}`, recordedAt }
+        context.schema.rootKey,
+        input.decisions
       )
     : null;
+  const validation =
+    context.schema && mergedState
+      ? validateRepositoryMergedSchema(
+          mergedState,
+          context.schema,
+          { id: `repository-merge:${input.targetDigest}:${input.sourceDigest}`, recordedAt },
+          await workspaceProvenance(
+            input.db,
+            input.projectId,
+            { sourceBundle: context.schema.contentSources },
+            repositorySemanticYSchemaTree(mergedState, context.schema.rootKey) as ProtocolValue
+          )
+        )
+      : null;
   if (validation && validation.predicate.outcome !== 'passed') {
     const details =
       validation.predicate.outcome === 'failed'
@@ -741,6 +768,7 @@ async function commitRepositoryYOpsMergeInTransaction(
     sourceCommit: context.source.commit,
     targetCommit: context.target.commit,
     decisions: input.decisions,
+    ...(input.proposalActor === undefined ? {} : { proposalActor: input.proposalActor }),
     ...(context.schema
       ? {
           contentMigration: {

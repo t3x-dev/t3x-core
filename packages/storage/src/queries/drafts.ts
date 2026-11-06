@@ -13,7 +13,13 @@
  */
 
 import { isDeepStrictEqual } from 'node:util';
-import type { CreateDraftInput, Draft, DraftConstraint, DraftStatus } from '@t3x-dev/core';
+import type {
+  ApiKeyPrincipalKind,
+  CreateDraftInput,
+  Draft,
+  DraftConstraint,
+  DraftStatus,
+} from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
 import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
@@ -87,6 +93,12 @@ export interface WorkspaceDraftInput {
   parent_commit_hash?: string | null;
   target_branch?: string | null;
   workspace_state: Record<string, unknown>;
+  owner?: WorkspaceOwner;
+}
+
+export interface WorkspaceOwner {
+  kind: ApiKeyPrincipalKind;
+  id: string;
 }
 
 // ============================================================
@@ -115,6 +127,8 @@ export function rowToDraft(row: DraftRecord): Draft {
     committed_leaf_id: row.committedLeafId ?? undefined,
     target_branch: row.targetBranch ?? undefined,
     workspace_id: row.workspaceId ?? undefined,
+    owner_principal_kind: (row.ownerPrincipalKind as ApiKeyPrincipalKind | null) ?? undefined,
+    owner_principal_id: row.ownerPrincipalId ?? undefined,
     workspace_state: (row.workspaceStateJson ?? undefined) as Record<string, unknown> | undefined,
     revision: row.revision,
     created_at: row.createdAt.toISOString(),
@@ -161,6 +175,8 @@ export async function insertDraft(db: AnyDB, input: CreateDraftInput): Promise<D
       committedLeafId: null,
       targetBranch: input.target_branch ?? 'main',
       workspaceId: input.workspace_id ?? null,
+      ownerPrincipalKind: input.owner_principal_kind ?? null,
+      ownerPrincipalId: input.owner_principal_id ?? null,
       workspaceStateJson: input.workspace_state ?? null,
       revision: 1,
       createdAt: now,
@@ -387,6 +403,44 @@ export async function findWorkspaceDraft(
   return row ? rowToDraft(row) : null;
 }
 
+/** Read only the private owner binding without projecting Draft content. */
+export async function findWorkspaceDraftOwner(
+  db: AnyDB,
+  projectId: string,
+  workspaceId: string
+): Promise<WorkspaceOwner | null | undefined> {
+  const [row] = await db
+    .select({ kind: drafts.ownerPrincipalKind, id: drafts.ownerPrincipalId })
+    .from(drafts)
+    .where(and(eq(drafts.projectId, projectId), eq(drafts.workspaceId, workspaceId)))
+    .limit(1);
+  if (!row) return undefined;
+  if (!row.kind || !row.id) return null;
+  return { kind: row.kind as ApiKeyPrincipalKind, id: row.id };
+}
+
+/** Find a Workspace only when its persisted owner matches the trusted principal. */
+export async function findWorkspaceDraftForOwner(
+  db: AnyDB,
+  projectId: string,
+  workspaceId: string,
+  owner: WorkspaceOwner
+): Promise<Draft | null> {
+  const [row] = await db
+    .select()
+    .from(drafts)
+    .where(
+      and(
+        eq(drafts.projectId, projectId),
+        eq(drafts.workspaceId, workspaceId),
+        eq(drafts.ownerPrincipalKind, owner.kind),
+        eq(drafts.ownerPrincipalId, owner.id)
+      )
+    )
+    .limit(1);
+  return row ? rowToDraft(row) : null;
+}
+
 /**
  * List Drafts that back Project Workspaces staged states.
  */
@@ -406,6 +460,28 @@ export async function listWorkspaceDrafts(db: AnyDB, projectId: string): Promise
   return rows.map(rowToDraft);
 }
 
+/** List only private Workspaces owned by the trusted principal. */
+export async function listWorkspaceDraftsForOwner(
+  db: AnyDB,
+  projectId: string,
+  owner: WorkspaceOwner
+): Promise<Draft[]> {
+  const rows = await db
+    .select()
+    .from(drafts)
+    .where(
+      and(
+        eq(drafts.projectId, projectId),
+        eq(drafts.ownerPrincipalKind, owner.kind),
+        eq(drafts.ownerPrincipalId, owner.id),
+        isNotNull(drafts.workspaceId),
+        ne(drafts.status, 'abandoned')
+      )
+    )
+    .orderBy(desc(drafts.updatedAt));
+  return rows.map(rowToDraft);
+}
+
 /**
  * Create or update the Draft that backs a Workspace staged state.
  */
@@ -416,6 +492,15 @@ export async function upsertWorkspaceDraft(
 ): Promise<Draft> {
   const targetBranch = input.target_branch?.trim() || 'main';
   const existing = await findWorkspaceDraft(db, input.project_id, input.workspace_id);
+
+  if (
+    existing &&
+    input.owner &&
+    (existing.owner_principal_kind !== input.owner.kind ||
+      existing.owner_principal_id !== input.owner.id)
+  ) {
+    throw new NotFoundError(input.workspace_id);
+  }
 
   if (!existing) {
     if (ifRevision !== undefined) {
@@ -428,6 +513,8 @@ export async function upsertWorkspaceDraft(
       target_branch: targetBranch,
       preview_type: 'workspace',
       workspace_id: input.workspace_id,
+      owner_principal_kind: input.owner?.kind,
+      owner_principal_id: input.owner?.id,
       workspace_state: input.workspace_state,
     });
   }
@@ -744,22 +831,30 @@ function assertReconciledWorkspace(
   next: Record<string, unknown>
 ) {
   const before = (previous.authoringReconciliations ?? []) as unknown[];
-  const after = next.authoringReconciliations as Array<{ ledger: unknown; basis: unknown }>;
+  const after = next.authoringReconciliations as Array<{
+    ledger: unknown;
+    basis: unknown;
+    schemaBindings: unknown;
+    workspaceSchemaBase: unknown;
+  }>;
   const changed = new Set([
     'authoringLedger',
     'authoringBasis',
     'authoringReconciliations',
     'baseCommitHash',
+    'schemaBindings',
+    'workspaceSchemaBase',
   ]);
   const retained = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).filter(([key]) => !changed.has(key)));
   if (
-    !previous.authoringLedger ||
     !Array.isArray(after) ||
     after.length !== before.length + 1 ||
     !isDeepStrictEqual(before, after.slice(0, -1)) ||
     !isDeepStrictEqual(after.at(-1)?.ledger, previous.authoringLedger) ||
     !isDeepStrictEqual(after.at(-1)?.basis, previous.authoringBasis) ||
+    !isDeepStrictEqual(after.at(-1)?.schemaBindings, previous.schemaBindings) ||
+    !isDeepStrictEqual(after.at(-1)?.workspaceSchemaBase, previous.workspaceSchemaBase) ||
     !isDeepStrictEqual(retained(previous), retained(next))
   )
     throw new DraftAuthoringConflictError('Reconciliation must preserve the previous Workspace');

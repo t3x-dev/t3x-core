@@ -208,12 +208,13 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .where(and(eq(leaves.projectId, p.projectId), isNotNull(leaves.generatedAt)))
         .then((rows) => rows[0]),
     ]);
-    const actions =
-      status === 'deleted'
-        ? await listAuthorizedProjectActions(c, db, p.projectId, { includeDeleted: true })
-        : [];
+    const actions = await listAuthorizedProjectActions(c, db, p.projectId, {
+      includeDeleted: status === 'deleted',
+    });
     return {
       ...(await getRepositoryAddress(db, p)),
+      can_edit: actions.includes('project:edit'),
+      can_delete: actions.includes('project:delete'),
       deleted_at: p.deletedAt?.toISOString() ?? null,
       ...(status === 'deleted'
         ? {

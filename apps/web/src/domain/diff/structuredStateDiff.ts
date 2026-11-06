@@ -9,6 +9,8 @@ import type {
 export type StructuredDiffKind = 'added' | 'modified' | 'removed';
 
 export interface StructuredDiffChange {
+  children?: StructuredDiffChange[];
+  structurePath?: string;
   afterValue: string;
   beforeValue: string;
   evidence?: string;
@@ -28,6 +30,7 @@ interface BuildStructuredStateDiffInput {
 }
 
 interface RawChange {
+  structurePath?: string;
   afterValue: unknown;
   beforeValue: unknown;
   id: string;
@@ -143,6 +146,7 @@ function buildArrayTailChanges(
       id: `added:${path}/-:${String(index)}`,
       kind: 'added',
       path: `${path}/-`,
+      structurePath: `${path}/${String(beforeValue.length + index)}`,
     }));
   }
 
@@ -163,6 +167,10 @@ function enrichChange(
   const source = findSource(workspace?.sourceBundle ?? [], operation);
   const fieldLabel = humanizeField(change.path);
   return {
+    ...(change.structurePath ? { structurePath: change.structurePath } : {}),
+    ...(change.kind === 'modified'
+      ? { children: buildChildChanges(change).map((child) => enrichChange(child, workspace)) }
+      : {}),
     afterValue: formatValue(change.afterValue),
     beforeValue: formatValue(change.beforeValue),
     evidence: source ? sourceExcerpt(source) : undefined,
@@ -174,6 +182,25 @@ function enrichChange(
     reason: operation?.reason?.trim() || fallbackReason(change.kind, fieldLabel),
     summary: summaryFor(change.kind, fieldLabel),
   };
+}
+
+function buildChildChanges(change: RawChange): RawChange[] {
+  const before = change.beforeValue;
+  const after = change.afterValue;
+  const beforeEntries = new Map(before && typeof before === 'object' ? Object.entries(before) : []);
+  const afterEntries = new Map(after && typeof after === 'object' ? Object.entries(after) : []);
+  return Array.from(new Set([...beforeEntries.keys(), ...afterEntries.keys()])).flatMap((key) => {
+    const beforeValue = beforeEntries.get(key);
+    const afterValue = afterEntries.get(key);
+    if (stableValue(beforeValue) === stableValue(afterValue)) return [];
+    const kind = !beforeEntries.has(key)
+      ? 'added'
+      : !afterEntries.has(key)
+        ? 'removed'
+        : 'modified';
+    const path = `${change.structurePath ?? change.path}/${key}`;
+    return [{ beforeValue, afterValue, kind, path, id: `${kind}:${path}` }];
+  });
 }
 
 function findOperation(

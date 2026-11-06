@@ -21,7 +21,33 @@ export interface RoomConnection {
   id: string;
   ws: WSContext;
   userId?: string;
+  sessionId?: string;
+  workspaceOwner?: { kind: string; id: string };
+  authenticationDisabled?: boolean;
   joinedAt: number;
+}
+
+/**
+ * Workspace events share the project room transport but remain principal
+ * private. Events without a Workspace identity are ordinary project events.
+ * Legacy/unowned Workspace events are visible only in the explicit local
+ * AUTH_DISABLED bypass.
+ */
+export function canReceiveRealtimeEvent(
+  conn: Pick<RoomConnection, 'workspaceOwner' | 'authenticationDisabled'>,
+  event: RealtimeEvent
+): boolean {
+  const workspaceId = event.payload?.workspace_id;
+  if (typeof workspaceId !== 'string' || workspaceId.length === 0) return true;
+  if (conn.authenticationDisabled) return true;
+  const ownerKind = event.payload?.owner_principal_kind;
+  const ownerId = event.payload?.owner_principal_id;
+  return (
+    typeof ownerKind === 'string' &&
+    typeof ownerId === 'string' &&
+    conn.workspaceOwner?.kind === ownerKind &&
+    conn.workspaceOwner.id === ownerId
+  );
 }
 
 /**
@@ -148,6 +174,24 @@ class RoomManager {
     return this.rooms.get(roomKey)?.size ?? 0;
   }
 
+  /** Close and remove every live socket authenticated by a revoked Session. */
+  disconnectSession(sessionId: string): void {
+    const connections = new Map<string, RoomConnection>();
+    for (const room of this.rooms.values()) {
+      for (const conn of room.values()) {
+        if (conn.sessionId === sessionId) connections.set(conn.id, conn);
+      }
+    }
+    for (const conn of connections.values()) {
+      try {
+        conn.ws.close(1008, 'Session revoked');
+      } catch {
+        // Removal below still prevents further delivery if the socket is already dead.
+      }
+      for (const roomKey of [...this.rooms.keys()]) this.leave(roomKey, conn.id);
+    }
+  }
+
   /**
    * Broadcast an event to all connections in a room.
    * Optionally exclude the sender (to avoid echo).
@@ -164,6 +208,7 @@ class RoomManager {
 
     for (const [id, conn] of room) {
       if (id === excludeConnectionId) continue;
+      if (!canReceiveRealtimeEvent(conn, event)) continue;
       try {
         conn.ws.send(message);
       } catch {

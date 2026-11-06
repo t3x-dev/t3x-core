@@ -109,6 +109,22 @@ describe('Repository Checks', () => {
     expect(mocks.list).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Commit|Merge|Rerun/ })).not.toBeInTheDocument();
   });
+  it('shows the saved non-applicability reason without claiming a missing validation run', async () => {
+    const schemaOnly = structuredClone(record);
+    schemaOnly.payload.content_validation = 'not_applicable';
+    const snapshot = schemaOnly.payload.snapshot as {
+      transition: { checks: { validation: unknown } };
+    };
+    snapshot.transition.checks.validation = { observation: 'not_observed', outcomes: [], runs: [] };
+    mocks.detail.mockResolvedValue(schemaOnly);
+    mocks.query = 'check=validation';
+    render(<ProjectChecksPage projectId="p" recordId="review:r12" />);
+    await screen.findByRole('button', { name: /Content validation/ });
+    expect(screen.getByText(/no business content is being submitted/)).toBeInTheDocument();
+    expect(screen.getAllByText('not applicable').length).toBeGreaterThan(0);
+    expect(screen.queryByText('not observed')).not.toBeInTheDocument();
+  });
+
   it('never leaves a previous record visible when the requested record fails to load', async () => {
     const view = render(<ProjectChecksPage projectId="p" recordId="review:r12" />);
     await screen.findByText('EVIDENCE_MISSING');

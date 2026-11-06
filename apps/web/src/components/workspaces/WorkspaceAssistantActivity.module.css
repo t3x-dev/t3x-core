@@ -6,6 +6,16 @@
   color: var(--text-primary);
   font-size: 13px;
 }
+.activity[data-compact] {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+.completedMark {
+  order: -1;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
 .process {
   min-width: 0;
 }
@@ -209,4 +219,78 @@
   .spinner {
     animation: none;
   }
+}
+
+.receipt {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 54px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  font-size: 12px;
+  text-align: left;
+}
+.receiptBody {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.receiptBody strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.receiptBody small {
+  font-size: 12px;
+}
+.receipt:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.receipt svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.receipt svg:first-child {
+  color: var(--accent-commit);
+}
+
+.delta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  font: 12px / 1.5 var(--font-mono);
+}
+.delta ins,
+.delta del {
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-sm);
+  padding-inline: 4px;
+}
+.delta ins {
+  color: var(--diff-added-text);
+  background: var(--diff-added-bg);
+  text-decoration: none;
+}
+.delta del {
+  color: var(--diff-removed-text);
+  background: var(--diff-removed-bg);
+}
+.delta > span,
+.delta small {
+  color: var(--text-secondary);
 }

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, GitCommitHorizontal } from 'lucide-react';
 import { activityOperation } from '@/domain/composeActivity';
-import { shortHash } from '@/domain/format/formatters';
+import { commitTitle, shortHash } from '@/domain/format/formatters';
 import {
   composeDraftChangeCards,
   composeDraftValueAtPath,
@@ -51,12 +51,12 @@ export function WorkspaceCommitHistoryPanel({
     <section className={styles.panel} aria-label="Committed changes">
       <header className={styles.header}>
         <button type="button" onClick={onReturn}>
-          <ArrowLeft size={14} /> Return to current Draft
+          <ArrowLeft size={14} /> Back to History
         </button>
         <span>Read-only · {shortHash(commit.hash)}</span>
       </header>
       <h2>
-        <GitCommitHorizontal size={16} /> {commit.message?.trim() || 'Untitled commit'}
+        <GitCommitHorizontal size={16} /> {commitTitle(commit.message)}
       </h2>
       <p className={styles.hint}>
         Historical submission · {commit.committed_at}. Your current Draft is unchanged.

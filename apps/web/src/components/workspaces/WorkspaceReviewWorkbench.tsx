@@ -7,15 +7,15 @@ import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import styles from './WorkspaceReviewWorkbench.module.css';
 
-export const WORKSPACE_REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
+export const WORKSPACE_REVIEW_VIEWS = ['changes', 'yaml', 'rendered'] as const;
 export type WorkspaceReviewPane = (typeof WORKSPACE_REVIEW_VIEWS)[number];
 export type WorkspaceReviewSubject = 'content' | 'schema';
 export type WorkspaceReviewSubjectChanges = Record<WorkspaceReviewSubject, boolean>;
 const SUBJECTS = ['content', 'schema'] as const;
 const VIEWS = [
   { id: 'changes', label: 'Changes', detail: 'Before → After', icon: GitCompareArrows },
-  { id: 'rendered', label: 'Preview', detail: 'Result structure', icon: Eye },
   { id: 'yaml', label: 'YAML', detail: 'Complete text', icon: Code2 },
+  { id: 'rendered', label: 'Preview', detail: 'Result structure', icon: Eye },
 ] as const;
 
 export function workspaceReviewPreferenceKey(projectId: string, workspaceId: string) {
@@ -66,6 +66,7 @@ export function WorkspaceReviewWorkbench({
   notice,
   pane,
   onPaneChange,
+  viewsDisabled = false,
   subject,
   onSubjectChange,
   subjectChanges,
@@ -79,6 +80,7 @@ export function WorkspaceReviewWorkbench({
   details?: ReactNode;
   notice?: ReactNode;
   pane: WorkspaceReviewPane;
+  viewsDisabled?: boolean;
   onPaneChange: (pane: WorkspaceReviewPane) => void;
   subject: WorkspaceReviewSubject;
   onSubjectChange: (subject: WorkspaceReviewSubject) => void;
@@ -89,14 +91,6 @@ export function WorkspaceReviewWorkbench({
 }) {
   return (
     <section className={styles.workbench} aria-label="Workspace Review">
-      <header className={styles.heading}>
-        <div>
-          <h1>{title}</h1>
-          <p>{status}</p>
-        </div>
-        <div className={styles.actions}>{actions}</div>
-      </header>
-      {notice}
       <div className={styles.body}>
         <div className={styles.main}>
           <div className={styles.toolbar}>
@@ -123,6 +117,7 @@ export function WorkspaceReviewWorkbench({
                 <button
                   type="button"
                   key={id}
+                  disabled={viewsDisabled}
                   aria-label={label}
                   aria-current={pane === id ? 'page' : undefined}
                   onClick={() => onPaneChange(id)}
@@ -137,6 +132,14 @@ export function WorkspaceReviewWorkbench({
             </nav>
           </div>
           <div className={styles.content} data-review-pane={pane} data-review-subject={subject}>
+            <header className={styles.heading}>
+              <div>
+                <h1>{title}</h1>
+                <p>{status}</p>
+              </div>
+              <div className={styles.actions}>{actions}</div>
+            </header>
+            {notice}
             {subjectChanges.content || subjectChanges.schema
               ? children
               : (emptyState ?? (

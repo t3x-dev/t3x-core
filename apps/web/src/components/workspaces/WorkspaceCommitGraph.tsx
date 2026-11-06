@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronRight, GitBranch, RotateCw } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { shortHash } from '@/domain/format/formatters';
+import { commitTitle, shortHash } from '@/domain/format/formatters';
 import {
   COMPACT_GRAPH_ROW_HEIGHT,
   layoutCompactCommitGraph,
@@ -129,7 +129,7 @@ export function WorkspaceCommitGraph({
                     const labels = history.branches.filter(
                       (item) => item.head_commit_hash === commit.hash
                     );
-                    const message = commit.message?.trim() || 'Untitled commit';
+                    const message = commitTitle(commit.message);
                     const params = new URLSearchParams({
                       view: 'overview',
                       branch: filter === 'current' ? branch : (labels[0]?.name ?? commit.branch),

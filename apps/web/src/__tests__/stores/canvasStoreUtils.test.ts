@@ -19,6 +19,7 @@ import {
   nextNodeId,
   resolveLatestMainUnitId,
   snapPosition,
+  unitToNode,
 } from '../../store/canvasStoreUtils';
 import type { CanvasNodeData } from '../../types/nodes';
 
@@ -373,5 +374,29 @@ describe('determineStagingUnitBranchMode', () => {
         'staging'
       )
     ).toBe('branch-only');
+  });
+});
+
+describe('committed node identity', () => {
+  it.each([
+    null,
+    '',
+    '   ',
+    'Recorded change',
+  ])('keeps source titles separate from commit descriptions %j', (message) => {
+    const conversation = {
+      conversation_id: 'conv_source',
+      title: 'Conversation title',
+      created_at: '2026-01-01',
+    } as Parameters<typeof unitToNode>[0];
+    const commit = {
+      commit_hash: 'sha256:abcdef123',
+      message,
+      created_at: '2026-01-02',
+    } as NonNullable<Parameters<typeof unitToNode>[1]>;
+    const node = unitToNode(conversation, commit, 0);
+    expect(node.data.title).toBe(message?.trim() || 'No commit message');
+    expect(node.data.sources[0].title).toBe('Conversation title');
+    expect(unitToNode(conversation, null, 0).data.title).toBe('Conversation title');
   });
 });

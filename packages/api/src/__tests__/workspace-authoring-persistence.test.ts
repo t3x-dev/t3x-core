@@ -5,6 +5,8 @@ import {
   createMaterial,
   deleteDraft,
   findWorkspaceDraft,
+  getTransitionProposalPreparation,
+  getTransitionRefHead,
   insertBranch,
   insertProject,
   resolveTransitionProposalGraph,
@@ -14,6 +16,7 @@ import {
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readCommitChanges } from '../lib/commit-changes';
+import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
 import { verifyTransition } from '../lib/transition-control-plane';
 import {
   resolveApplicableTransitionPolicy,
@@ -81,7 +84,49 @@ describe('durable Draft authoring commands', () => {
       actor,
     });
   }
-  it('repairs missing Schema with revision protection and leaves immutable history intact', async () => {
+  it('freezes an exact unbound Schema base when initializing from a schema-less Commit', async () => {
+    const workspaceId = 'schema-less-commit';
+    await insertBranch(setup.db, { projectId, name: workspaceId });
+    await commitRepositoryYOpsState({
+      db: setup.db,
+      projectId,
+      refName: workspaceId,
+      expectedHead: null,
+      target: createYOpsState({ seeded: true }),
+      actor,
+      intent: 'Seed a schema-less workspace base',
+    });
+    const head = await getTransitionRefHead(setup.db, { projectId, refName: workspaceId });
+    const draft = await upsertWorkspaceDraft(setup.db, {
+      project_id: projectId,
+      workspace_id: workspaceId,
+      title: workspaceId,
+      target_branch: workspaceId,
+      workspace_state: {
+        targetBranch: workspaceId,
+        yopsDraft: { operations: [] },
+        schemaBindings: [],
+      },
+    });
+
+    await initializeWorkspaceAuthoring(setup.db, {
+      projectId,
+      workspaceId,
+      expectedWorkspaceRevision: draft.revision,
+      expectedRefHead: head.head,
+      actionId: `import:${workspaceId}`,
+      actor,
+    });
+
+    expect(
+      (await findWorkspaceDraft(setup.db, projectId, workspaceId))?.workspace_state
+        ?.workspaceSchemaBase
+    ).toEqual({
+      refHead: head.head,
+      snapshot: { status: 'unbound', schemaHash: null, definition: null, bindings: [] },
+    });
+  });
+  it('keeps an unbound Workspace unbound instead of guessing a default Schema', async () => {
     const init = await initialize('unbound', true);
     const input = { projectId, workspaceId: 'unbound', expectedRevision: init.draft.revision };
     const unbound = await readWorkspaceAuthoring(setup.db, input);
@@ -92,23 +137,90 @@ describe('durable Draft authoring commands', () => {
       bindings: [],
     });
     expect(await findWorkspaceDraft(setup.db, projectId, 'unbound')).toEqual(init.draft);
-    await expect(
-      ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: 0 })
-    ).rejects.toThrow();
     const revision = await ensureWorkspaceAuthoringSchema(setup.db, input);
     const saved = (await findWorkspaceDraft(setup.db, projectId, 'unbound'))!;
-    expect(revision).toBe(init.draft.revision + 1);
+    expect(revision).toBe(init.draft.revision);
     expect(saved.workspace_state?.authoringLedger).toEqual(
       init.draft.workspace_state?.authoringLedger
     );
     expect(saved.workspace_state?.authoringBasis).toEqual(
       init.draft.workspace_state?.authoringBasis
     );
-    expect(saved.workspace_state?.schemaBindings).toEqual([
-      expect.objectContaining({ canonicalName: 't3x/prd', version: 'v2' }),
-    ]);
+    expect(saved.workspace_state?.schemaBindings).toEqual([]);
     await ensureWorkspaceAuthoringSchema(setup.db, { ...input, expectedRevision: revision });
     expect((await findWorkspaceDraft(setup.db, projectId, 'unbound'))?.revision).toBe(revision);
+  });
+  it('records the authored root key instead of deriving it from the Schema name', async () => {
+    const workspaceId = 'dynamic-root';
+    const init = await initialize(workspaceId);
+    const edited = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId,
+      actionId: 'edit-dynamic-root',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'checklist', value: { title: 'Dynamic root' } } }],
+    });
+
+    const prepared = await prepareWorkspaceAuthoringReview({
+      db: setup.db,
+      projectId,
+      workspaceId,
+      requestId: 'review-before-root-repair',
+      actor,
+      expectedRevision: 1,
+      expectedWorkspaceRevision: edited.draft.revision,
+      expectedRefHead: null,
+    }).catch(() => null);
+    if (prepared) expect(prepared.view.precondition.workspaceRevision).toBe(edited.draft.revision);
+    expect((await findWorkspaceDraft(setup.db, projectId, workspaceId))?.revision).toBe(
+      edited.draft.revision
+    );
+
+    const revision = await ensureWorkspaceAuthoringSchema(setup.db, {
+      projectId,
+      workspaceId,
+      expectedRevision: edited.draft.revision,
+    });
+
+    expect(revision).toBe(edited.draft.revision + 1);
+    expect(
+      (await findWorkspaceDraft(setup.db, projectId, workspaceId))?.workspace_state?.schemaBindings
+    ).toEqual([expect.objectContaining({ canonicalName: 't3x/prd', rootKey: 'checklist' })]);
+  });
+  it('requires an explicit Schema binding before the first Review', async () => {
+    const workspaceId = 'unbound-review';
+    const init = await initialize(workspaceId, true);
+    const saved = await publishWorkspaceAuthoringAction(setup.db, {
+      projectId,
+      workspaceId,
+      actionId: 'edit-unbound',
+      actor,
+      channel: 'manual',
+      expectedRevision: 0,
+      expectedWorkspaceRevision: init.draft.revision,
+      expectedRefHead: null,
+      operations: [{ set: { path: 'prd', value: { audience: 'operators' } } }],
+    });
+
+    await expect(
+      prepareWorkspaceAuthoringReview({
+        db: setup.db,
+        projectId,
+        workspaceId,
+        requestId: 'review-unbound',
+        actor,
+        expectedRevision: 1,
+        expectedWorkspaceRevision: saved.draft.revision,
+        expectedRefHead: null,
+      })
+    ).rejects.toThrow('A resolved Workspace schema is required for Review');
+    expect(
+      (await findWorkspaceDraft(setup.db, projectId, workspaceId))?.workspace_state?.schemaBindings
+    ).toEqual([]);
   });
   it('persists a new root object after earlier actions added fields to an existing object', async () => {
     const workspaceId = 'append-root-after-edit';
@@ -381,21 +493,22 @@ describe('durable Draft authoring commands', () => {
     });
     const state = saved.draft.workspace_state;
     if (!state) throw new Error('Workspace state missing');
+    const sourceBundle = [
+      {
+        id: `material:${material.id}`,
+        type: 'document',
+        title: 'prd.docx',
+        materialId: material.id,
+        contentHash: material.content_hash,
+      },
+    ];
     const sourced = await updateDraft(
       setup.db,
       saved.draft.id,
       {
         workspace_state: {
           ...state,
-          sourceBundle: [
-            {
-              id: `material:${material.id}`,
-              type: 'document',
-              title: 'prd.docx',
-              materialId: material.id,
-              contentHash: material.content_hash,
-            },
-          ],
+          sourceBundle,
         },
       },
       saved.draft.revision
@@ -412,6 +525,11 @@ describe('durable Draft authoring commands', () => {
     });
     expect(schemaGaps(reviewed)).toEqual([]);
     expect(reviewed.view.transition.checks.validation.outcomes).toEqual(['passed']);
+    const preparation = await getTransitionProposalPreparation(
+      setup.db,
+      reviewed.view.transitionId
+    );
+    expect(JSON.parse(preparation!.canonicalJson).sourceBundle).toEqual(sourceBundle);
   });
   it('freezes the full manifest through canonical Review, Decision and Commit', async () => {
     const init = await initialize('review');

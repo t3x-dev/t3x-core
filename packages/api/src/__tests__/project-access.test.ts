@@ -13,11 +13,17 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertResourceProjectAccess } from '../lib/project-access';
 import type {
   ProjectLifecyclePolicy,
   ProjectLifecyclePolicyInput,
 } from '../lib/project-lifecycle-policy';
 import { ProjectLifecyclePolicyDeniedError } from '../lib/project-lifecycle-policy';
+import {
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+} from '../lib/request-principal';
+import { pinoLogger } from '../middleware/logger';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown> & {
@@ -42,6 +48,7 @@ function createApp(input?: {
   keyId?: string;
   userId?: string | null;
   projectId?: string | null;
+  namespaceId?: string | null;
   principalKind?: 'human' | 'agent' | 'service';
   projectLifecyclePolicy?: ProjectLifecyclePolicy;
 }) {
@@ -49,15 +56,30 @@ function createApp(input?: {
   if (input) {
     app.use('*', async (c, next) => {
       // biome-ignore lint/suspicious/noExplicitAny: test context mock
-      (c as any).set('apiKey', {
-        id: input.keyId ?? 'ak_test',
-        user_id: input.userId ?? null,
-        project_id: input.projectId ?? null,
-        principal_kind: input.principalKind ?? 'human',
-        transition_scopes: [],
-        key_prefix: 'test',
-        name: 'test',
-      });
+      (c as any).set(
+        'requestPrincipal',
+        requestPrincipalFromApiKey(
+          {
+            id: input.keyId ?? 'ak_test',
+            user_id: input.userId ?? null,
+            project_id: input.projectId ?? null,
+            namespace_id: input.namespaceId ?? null,
+            principal_kind: input.principalKind ?? 'human',
+            credential_kind: 'api_key',
+            delegator_user_id: null,
+            transition_scopes: [],
+            expires_at: null,
+            key_prefix: 'test',
+            key_hash: 'test',
+            name: 'test',
+            created_at: '2026-11-02T00:00:00.000Z',
+            last_used_at: null,
+            revoked_at: null,
+            revocation_reason: null,
+          },
+          'http'
+        )
+      );
       return next();
     });
   }
@@ -179,12 +201,57 @@ describe('canonical project access', () => {
     expect(names).not.toContain(other.name);
   });
 
+  it('restricts a human Credential to its namespace', async () => {
+    const first = await insertMemberProject('user_namespace_scope', 'First namespace project');
+    const secondNamespace = await ensurePersonalNamespace('user_namespace_scope_other_owner');
+    const second = await insertProject(mockDB, {
+      name: 'Second namespace project',
+      namespaceId: secondNamespace.namespaceId,
+    });
+    await mockDB.insert(namespaceMemberships).values({
+      membershipId: 'nsm_user_namespace_scope_second',
+      namespaceId: secondNamespace.namespaceId,
+      principalKind: 'human',
+      principalId: 'user_namespace_scope',
+      role: 'viewer',
+      status: 'active',
+    });
+    if (!first.namespaceId) throw new Error('project namespace missing');
+
+    const response = await createApp({
+      userId: 'user_namespace_scope',
+      namespaceId: first.namespaceId,
+    }).request('/v1/projects');
+    expect(response.status).toBe(200);
+    const payload: ApiResponse = await response.json();
+    const ids = (payload.data?.projects as Array<{ project_id: string }>).map(
+      (project) => project.project_id
+    );
+    expect(ids).toContain(first.projectId);
+    expect(ids).not.toContain(second.projectId);
+  });
+
   it('fails closed when an authenticated deployment has no canonical list authority', async () => {
     await insertMemberProject('user_hidden_list', 'Hidden project');
 
     const response = await createApp().request('/v1/projects');
     expect(response.status).toBe(403);
     expect(((await response.json()) as ApiResponse).error?.code).toBe('FORBIDDEN');
+  });
+
+  it('keeps null-project compatibility resources available only to local development', async () => {
+    process.env.AUTH_DISABLED = 'true';
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('requestPrincipal', localDevelopmentRequestPrincipal());
+      return next();
+    });
+    app.get('/resource', async (c) => {
+      const denied = await assertResourceProjectAccess(c, mockDB, null);
+      return denied ?? c.json({ success: true });
+    });
+
+    expect((await app.request('/resource')).status).toBe(200);
   });
 
   it('never treats historical owner_id as runtime authority', async () => {
@@ -273,6 +340,7 @@ describe('canonical project access', () => {
     const guest = createApp({ userId: 'user_guest_viewer' });
     expect((await guest.request(`/v1/projects/${allowed.projectId}`)).status).toBe(200);
     expect((await guest.request(`/v1/projects/${denied.projectId}`)).status).toBe(403);
+    const deniedAudit = vi.spyOn(pinoLogger, 'warn').mockImplementation(() => undefined);
     expect(
       (
         await createApp({ userId: 'user_revoked_viewer' }).request(
@@ -280,6 +348,17 @@ describe('canonical project access', () => {
         )
       ).status
     ).toBe(403);
+    expect(deniedAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'authorization.denied',
+        entrypoint: 'http',
+        action: 'project:read',
+        resource: { kind: 'project', id: denied.projectId },
+        reason: 'inactive_project_grant',
+      }),
+      'authorization denied'
+    );
+    deniedAudit.mockRestore();
   });
 
   it('rejects expired project grants in lists and direct access', async () => {

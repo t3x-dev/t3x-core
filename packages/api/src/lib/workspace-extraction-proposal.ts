@@ -386,6 +386,12 @@ export async function createWorkspaceExtractionProposal(
       payload: {
         source: 'workspace-extraction-proposal',
         workspace_id: input.workspaceId,
+        ...(persisted.owner_principal_kind && persisted.owner_principal_id
+          ? {
+              owner_principal_kind: persisted.owner_principal_kind,
+              owner_principal_id: persisted.owner_principal_id,
+            }
+          : {}),
         candidate_id: candidateId,
         revision: persisted.revision,
       },

@@ -21,7 +21,6 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&candidate=${candidates['t3x/prd-core']}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
-    await page.getByLabel('Target Workspace').selectOption(workspaceId);
     await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Manage sources', exact: true }).click();
     // Legacy V1 requires are suggestions in open V2 composition, not mandatory locks.
@@ -68,6 +67,7 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`/project/${projectId}?tab=workspaces&workspace=${workspaceId}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Workspace detail' })).toContainText('Release planning');
+    await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
     await page.getByRole('navigation', { name: 'Workspace tools' }).getByRole('button', { name: 'Structure', exact: true }).click();
     await expect(page.getByLabel('Workspace schema')).not.toHaveValue('');
     await page.screenshot({ path: testInfo.outputPath('studio-active.png'), animations: 'disabled' });

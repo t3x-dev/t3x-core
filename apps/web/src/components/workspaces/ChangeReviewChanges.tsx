@@ -1,5 +1,4 @@
 import { type ReactNode, useState } from 'react';
-import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Badge } from '@/components/ui/badge';
 import { composeValueLabel } from '@/domain/composePresentation';
 import {
@@ -198,11 +197,7 @@ function OperationList({ operations }: { operations: readonly unknown[] }) {
 }
 
 function ChangeList({ children, label }: { children: ReactNode; label: string }) {
-  return (
-    <StateScrollArea label={label} type="always" viewportClassName="h-auto max-h-[40rem]">
-      {children}
-    </StateScrollArea>
-  );
+  return <section aria-label={label}>{children}</section>;
 }
 
 const KIND_LABEL: Record<FieldChangeKind, string> = {

@@ -37,8 +37,10 @@ export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 
 export interface Project {
   repository_profile?: import('./repository-profile').RepositoryProfile;
-  /** Present on the authorized project detail response. */
+  /** Present on authorized project list and detail responses. */
   can_edit?: boolean;
+  /** Delete capability returned by authorized project lists. */
+  can_delete?: boolean;
   deleted_at?: string | null;
   /** Management capabilities returned by status=deleted lists. */
   can_restore?: boolean;

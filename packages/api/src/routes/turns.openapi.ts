@@ -413,13 +413,6 @@ turnRoutes.openapi(createTurnRoute, async (c) => {
     }
     const accessResult = await assertProjectAccess(c, db, conversation.projectId);
     if (accessResult instanceof Response) return accessResult;
-    if (conversation.committedAs) {
-      return errorResponse(
-        c,
-        'ALREADY_COMMITTED',
-        `Conversation ${body.conversation_id} has already been committed`
-      );
-    }
 
     // Ring extraction has been retired — pass through any rings provided by the client
     const rings = body.rings as Record<string, unknown> | undefined;

@@ -223,7 +223,7 @@ function CheckDetails({
   const p = record.payload;
   const selected =
     view.items.find((item) => item.id === selectedCheck) ??
-    view.items.find((item) => !['passed', 'skipped'].includes(item.status)) ??
+    view.items.find((item) => !['passed', 'skipped', 'not_applicable'].includes(item.status)) ??
     view.items[0];
   const base = getProjectIdRepoPath(projectId);
   const snapshot = object(p.snapshot);

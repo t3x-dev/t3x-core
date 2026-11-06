@@ -1,7 +1,14 @@
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
+import type { RequestPrincipal } from '@t3x-dev/application';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createApiKey, createUser, insertConversation, insertProject } from '@t3x-dev/storage';
+import {
+  createApiKey,
+  createSession,
+  createUser,
+  insertConversation,
+  insertProject,
+} from '@t3x-dev/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { createTestRateLimitStore, setupTestDB } from './setup';
@@ -15,10 +22,12 @@ vi.mock('../lib/db', () => ({
 
 import { createApp } from '../app';
 import { verifyBearerToken } from '../middleware/auth';
+import { pinoLogger } from '../middleware/logger';
 
 const ownerKeyValue = 't3xk_ws_owner_0123456789abcdef';
 const otherKeyValue = 't3xk_ws_other_0123456789abcdef';
 const agentKeyValue = 't3xk_ws_agent_0123456789abcdef';
+const ownerSessionValue = 't3xs_ws_owner_0123456789abcdef';
 const cloudShortToken = 'cloud-short-lived-token';
 
 describe('authenticated WebSocket boundary smoke', () => {
@@ -75,6 +84,12 @@ describe('authenticated WebSocket boundary smoke', () => {
       principalKind: 'agent',
       keyValue: agentKeyValue,
     });
+    await createSession(testDb, {
+      rawToken: ownerSessionValue,
+      userId: owner.id,
+      authMethod: 'local_password',
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
 
     const { app, websocket } = createApp({
       skipLocalAuth: true,
@@ -82,12 +97,17 @@ describe('authenticated WebSocket boundary smoke', () => {
       websocketTokenVerifier: async (db, token) => {
         if (token === cloudShortToken) {
           return {
+            subject: { kind: 'human', principal_id: ownerUserId },
+            actor: { kind: 'human', id: `user:${ownerUserId}` },
+            delegator: null,
+            workspaceOwner: { kind: 'human', principal_id: ownerUserId },
             userId: ownerUserId,
-            projectId: null,
-            keyId: null,
-            principalKind: 'human',
-            transitionScopes: [],
-          };
+            accountId: null,
+            sessionId: null,
+            credential: { kind: 'deployment', id: null, projectId: null, namespaceId: null },
+            scopes: [],
+            ingress: 'websocket',
+          } satisfies RequestPrincipal;
         }
         return verifyBearerToken(db, token);
       },
@@ -121,10 +141,10 @@ describe('authenticated WebSocket boundary smoke', () => {
     return `${baseUrl}/ws?${new URLSearchParams(params).toString()}`;
   }
 
-  function openAndReadWelcome(params: Record<string, string>) {
+  function openAndReadWelcome(params: Record<string, string>, headers?: Record<string, string>) {
     return new Promise<{ socket: WebSocket; message: Record<string, unknown> }>(
       (resolve, reject) => {
-        const socket = new WebSocket(socketUrl(params));
+        const socket = new WebSocket(socketUrl(params), { headers });
         const timeout = setTimeout(() => {
           socket.terminate();
           reject(new Error('Timed out waiting for WebSocket welcome envelope'));
@@ -149,9 +169,9 @@ describe('authenticated WebSocket boundary smoke', () => {
     );
   }
 
-  function handshakeStatus(params: Record<string, string>) {
+  function handshakeStatus(params: Record<string, string>, headers?: Record<string, string>) {
     return new Promise<number>((resolve, reject) => {
-      const socket = new WebSocket(socketUrl(params));
+      const socket = new WebSocket(socketUrl(params), { headers });
       let settled = false;
       const timeout = setTimeout(() => {
         socket.terminate();
@@ -195,7 +215,6 @@ describe('authenticated WebSocket boundary smoke', () => {
       conversation_id: ownerConversationId,
       project_id: ownerProjectId,
       token: ownerKeyValue,
-      user_id: 'browser-owner',
     });
 
     expect(message).toMatchObject({
@@ -210,18 +229,83 @@ describe('authenticated WebSocket boundary smoke', () => {
     const { socket, message } = await openAndReadWelcome({
       project_id: ownerProjectId,
       token: cloudShortToken,
-      user_id: 'spoofed-browser-label',
     });
 
     expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
     await closeSocket(socket);
   });
 
+  it('authenticates the same browser session at the WebSocket boundary', async () => {
+    const { socket, message } = await openAndReadWelcome(
+      { project_id: ownerProjectId },
+      {
+        Cookie: `t3x-session=${encodeURIComponent(ownerSessionValue)}`,
+        Origin: 'http://127.0.0.1:3000',
+        'X-Forwarded-Host': '127.0.0.1:3000',
+        'X-Forwarded-Proto': 'http',
+      }
+    );
+
+    expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
+    await closeSocket(socket);
+  });
+
+  it('accepts the original same-origin host forwarded by the WebSocket proxy', async () => {
+    const { socket } = await openAndReadWelcome(
+      { project_id: ownerProjectId },
+      {
+        Cookie: `t3x-session=${encodeURIComponent(ownerSessionValue)}`,
+        Origin: 'https://app.example.test',
+        'X-Forwarded-Host': 'app.example.test',
+        'X-Forwarded-Proto': 'https',
+      }
+    );
+    await closeSocket(socket);
+  });
+
+  it('rejects browser Sessions in query strings and cross-site cookie handshakes', async () => {
+    await expect(
+      handshakeStatus({ project_id: ownerProjectId, token: ownerSessionValue })
+    ).resolves.toBe(400);
+    await expect(
+      handshakeStatus(
+        { project_id: ownerProjectId },
+        {
+          Cookie: `t3x-session=${encodeURIComponent(ownerSessionValue)}`,
+          Origin: 'https://attacker.example',
+        }
+      )
+    ).resolves.toBe(403);
+    await expect(
+      handshakeStatus(
+        { project_id: ownerProjectId },
+        {
+          Cookie: `t3x-session=${encodeURIComponent(ownerSessionValue)}`,
+          Origin: 'https://app.example.test:4443',
+          'X-Forwarded-Host': 'app.example.test',
+          'X-Forwarded-Proto': 'https',
+        }
+      )
+    ).resolves.toBe(403);
+  });
+
   it('rejects missing credentials and another user at the HTTP handshake boundary', async () => {
+    const denial = vi.spyOn(pinoLogger, 'warn').mockImplementation(() => undefined);
     await expect(handshakeStatus({ project_id: ownerProjectId })).resolves.toBe(401);
     await expect(
       handshakeStatus({ project_id: ownerProjectId, token: otherKeyValue })
     ).resolves.toBe(403);
+    expect(denial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'authorization.denied',
+        entrypoint: 'websocket',
+        action: 'project:read',
+        resource: { kind: 'project', id: ownerProjectId },
+        reason: 'no_authority',
+      }),
+      'authorization denied'
+    );
+    denial.mockRestore();
   });
 
   it('enforces conversation ownership, pair integrity, and agent project scope', async () => {
@@ -245,9 +329,23 @@ describe('authenticated WebSocket boundary smoke', () => {
     const { socket, message } = await openAndReadWelcome({
       project_id: ownerProjectId,
       token: agentKeyValue,
-      user_id: 'project-agent',
     });
     expect(message).toMatchObject({ type: 'connected', projectId: ownerProjectId });
     await closeSocket(socket);
+  });
+
+  it.each([
+    'user_id',
+    'actor',
+    'owner',
+    'delegator',
+    'role',
+    'namespace',
+    'scopes',
+    'principal',
+  ])('rejects authenticated identity override query %s', async (field) => {
+    await expect(
+      handshakeStatus({ project_id: ownerProjectId, token: ownerKeyValue, [field]: 'spoofed' })
+    ).resolves.toBe(400);
   });
 });

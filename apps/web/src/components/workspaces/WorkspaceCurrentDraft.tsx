@@ -85,7 +85,9 @@ export function WorkspaceCurrentDraft({
         ) : (
           <h2>Current Draft</h2>
         )}
-        {revision !== undefined ? <span title="Current Draft revision">r{revision}</span> : null}
+        {revision !== undefined ? (
+          <span title="Content editing revision">Content r{revision}</span>
+        ) : null}
         {!onEdit ? <small>Read-only</small> : null}
       </header>
       <div className={styles.currentDraftBody}>
@@ -112,7 +114,7 @@ export function WorkspaceCurrentDraft({
               {loading
                 ? 'Loading current Draft…'
                 : !enabled
-                  ? 'Enable Draft activity in Chat to load the content.'
+                  ? 'Send a message or edit the Draft to load its content.'
                   : 'Current Draft is unavailable.'}
             </p>
           )}

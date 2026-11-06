@@ -48,12 +48,12 @@ RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/api-client build
 
 # Build webui
-# NEXT_PUBLIC_* vars must be set at build time (inlined into JS bundle)
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+# The WebSocket rewrite and NEXT_PUBLIC_* values are baked at build time.
+ARG T3X_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_RUNNER_ENABLED=true
 ARG NEXT_PUBLIC_AUTH_DISABLED=false
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV T3X_API_URL=$T3X_API_URL
 ENV NEXT_PUBLIC_RUNNER_ENABLED=$NEXT_PUBLIC_RUNNER_ENABLED
 ENV NEXT_PUBLIC_AUTH_DISABLED=$NEXT_PUBLIC_AUTH_DISABLED
 RUN pnpm --filter t3x-webui build

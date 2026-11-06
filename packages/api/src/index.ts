@@ -23,6 +23,7 @@ export {
   SELF_HOSTED_DEPLOYMENT_CAPABILITIES,
   UNAVAILABLE_DEPLOYMENT_CAPABILITIES,
 } from '@t3x-dev/api-client';
+export type { RequestPrincipal } from '@t3x-dev/application';
 // Standalone runtime database maintenance.
 export { cleanupExpiredRateLimitBuckets, cleanupOldEvents } from '@t3x-dev/storage';
 export type { CreateAppOptions } from './app';
@@ -151,6 +152,16 @@ export {
   startRealtimeListener,
   stopRealtimeListener,
 } from './lib/realtime-listener';
+export {
+  getRequestPrincipal,
+  localDevelopmentRequestPrincipal,
+  requestPrincipalFromApiKey,
+  requestPrincipalFromSession,
+  runnerRequestPrincipal,
+  setRequestPrincipal,
+  WEB_SESSION_SCOPES,
+  WEB_SESSION_TOKEN_PREFIX,
+} from './lib/request-principal';
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 export type {
   TransitionControlPlaneOptions,
@@ -168,7 +179,7 @@ export {
   createWorkspaceSourceRunnerProvider,
   WORKSPACE_SOURCE_RUNNER_PROVIDER_SOURCE,
 } from './lib/workspace-source-transition';
-export type { BearerTokenPrincipal, BearerTokenVerifier } from './middleware/auth';
+export type { BearerTokenVerifier } from './middleware/auth';
 // Logger
 export { pinoLogger } from './middleware/logger';
 export {

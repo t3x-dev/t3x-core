@@ -11,6 +11,8 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+import { requestPrincipalFromApiKey } from '../lib/request-principal';
+import { pinoLogger } from '../middleware/logger';
 import { namespaceRoutes } from '../routes/namespaces.openapi';
 import { projectRoutes } from '../routes/projects.openapi';
 
@@ -19,15 +21,25 @@ function createAppWithUser(userId?: string) {
   if (userId) {
     app.use('*', async (c, next) => {
       // biome-ignore lint/suspicious/noExplicitAny: test context mock
-      (c as any).set('apiKey', {
-        id: `ak_${userId}`,
-        user_id: userId,
-        project_id: null,
-        principal_kind: 'human',
-        transition_scopes: [],
-        key_prefix: 'test',
-        name: 'test',
-      });
+      (c as any).set(
+        'requestPrincipal',
+        requestPrincipalFromApiKey(
+          {
+            id: `ak_${userId}`,
+            user_id: userId,
+            project_id: null,
+            principal_kind: 'human',
+            transition_scopes: [],
+            key_prefix: 'test',
+            key_hash: 'test',
+            name: 'test',
+            created_at: '2026-11-02T00:00:00.000Z',
+            last_used_at: null,
+            revoked_at: null,
+          },
+          'http'
+        )
+      );
       return next();
     });
   }
@@ -114,6 +126,7 @@ describe('Namespace persistence and project isolation', () => {
 
   it('rejects access from another user', async () => {
     const app = createAppWithUser('user_namespace_other');
+    const denial = vi.spyOn(pinoLogger, 'warn').mockImplementation(() => undefined);
 
     expect((await app.request('/v1/namespaces/me')).status).toBe(404);
     expect((await app.request('/v1/projects?namespace=personal-space')).status).toBe(403);
@@ -123,6 +136,16 @@ describe('Namespace persistence and project isolation', () => {
       body: JSON.stringify({ name: 'Escaped project', namespace: 'personal-space' }),
     });
     expect(response.status).toBe(403);
+    expect(denial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'authorization.denied',
+        entrypoint: 'http',
+        action: 'project:create',
+        reason: 'no_authority',
+      }),
+      'authorization denied'
+    );
+    denial.mockRestore();
   });
 
   it('returns the same persisted namespace on a local retry', async () => {

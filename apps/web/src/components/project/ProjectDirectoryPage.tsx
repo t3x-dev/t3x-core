@@ -3,18 +3,22 @@
 import {
   ArrowRight,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
-  FolderGit2,
+  Ellipsis,
+  FolderOpen,
+  GitBranch,
+  GitCommitHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  Settings,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
@@ -26,9 +30,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
@@ -42,22 +53,23 @@ import {
 } from '@/utils/recentProjects';
 import { DeletedRepositoriesView } from './DeletedRepositoriesView';
 import styles from './ProjectDirectoryPage.module.css';
+import {
+  RepositoryMark,
+  RepositoryTag,
+  RepositoryVisibility,
+  visibilityOptions,
+} from './RepositoryIdentity';
 import management from './RepositoryManagement.module.css';
 import { RepositoryNameFeedback } from './RepositoryNameFeedback';
+import { RepositorySelect } from './RepositorySelect';
+import { RepositoryTagPicker, repositoryTagOptions } from './RepositoryTagPicker';
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
+const REPOSITORIES_PER_PAGE = 20;
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
-}
-
-function RepoMark({ size = 'card' }: { size?: 'card' | 'row' }) {
-  return (
-    <span aria-hidden="true" className={cn(styles.repoMark, size === 'row' && styles.rowMark)}>
-      <FolderGit2 className={size === 'card' ? 'size-5' : 'size-4'} strokeWidth={1.8} />
-    </span>
-  );
 }
 
 function ProjectMetrics({ project }: { project: ProjectSummary }) {
@@ -65,10 +77,12 @@ function ProjectMetrics({ project }: { project: ProjectSummary }) {
   const branches = metricValue(project.branchesCount);
   return (
     <div className={styles.metrics}>
-      <span>
+      <span className={styles.commitMetric}>
+        <GitCommitHorizontal aria-hidden="true" size={14} />
         {commits} {commits === 1 ? 'commit' : 'commits'}
       </span>
       <span>
+        <GitBranch aria-hidden="true" size={14} />
         {branches} {branches === 1 ? 'branch' : 'branches'}
       </span>
     </div>
@@ -84,104 +98,117 @@ function ProjectActions({
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
 }) {
+  const path = getProjectRepoPath(project);
   return (
-    <div className={styles.actions}>
-      <Button
-        aria-label={`Rename repository ${project.name}`}
-        title={`Rename repository ${project.name}`}
-        onClick={() => onRename(project)}
-        size="icon"
-        type="button"
-        variant="canvas-ghost"
-      >
-        <Pencil className="size-3.5" />
-      </Button>
-      <Button
-        aria-label={`Delete repository ${project.name}`}
-        title={`Delete repository ${project.name}`}
-        className="hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
-        onClick={() => onDelete(project)}
-        size="icon"
-        type="button"
-        variant="canvas-ghost"
-      >
-        <Trash2 className="size-3.5" />
-      </Button>
-    </div>
-  );
-}
-
-function RecentProjectCard({ project }: { project: ProjectSummary }) {
-  return (
-    <article className={styles.recentCard}>
-      <Link
-        href={getProjectRepoPath(project)}
-        onClick={() => recordRecentProjectOpen(project.id)}
-        className={cn(styles.recentLink, focusRing)}
-      >
-        <FolderGit2 aria-hidden="true" className="size-4" />
-        <div>
-          <h3>{project.name}</h3>
-          <p className={styles.repositoryPath}>{getProjectRepoPath(project)}</p>
-        </div>
-        <ArrowRight aria-hidden="true" className="size-4" />
-      </Link>
-    </article>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button aria-label={`Actions for ${project.name}`} size="icon-sm" variant="ghost">
+          <Ellipsis aria-hidden="true" size={16} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={cn(palette.scope, styles.menu)}>
+        <DropdownMenuItem asChild>
+          <Link href={path} onClick={() => recordRecentProjectOpen(project.id)}>
+            <FolderOpen aria-hidden="true" size={15} />
+            Open repository
+          </Link>
+        </DropdownMenuItem>
+        {project.canEdit === true && (
+          <>
+            <DropdownMenuItem
+              aria-label={`Rename repository ${project.name}`}
+              onSelect={() => onRename(project)}
+            >
+              <Pencil aria-hidden="true" size={15} />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`${path}/settings`}>
+                <Settings aria-hidden="true" size={15} />
+                Repository settings
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+        {project.canDelete === true && (
+          <DropdownMenuItem
+            className={styles.dangerAction}
+            aria-label={`Delete repository ${project.name}`}
+            onSelect={() => onDelete(project)}
+          >
+            <Trash2 aria-hidden="true" size={15} />
+            Delete repository
+          </DropdownMenuItem>
+        )}
+        {project.canEdit === false && project.canDelete === false && (
+          <p className={styles.menuNote}>You have read access.</p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function ProjectRow({
   onDelete,
   onRename,
-  ownerSlug,
   project,
+  selectedTags,
+  onTag,
+  showAccess,
 }: {
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
-  ownerSlug: string;
   project: ProjectSummary;
+  selectedTags: string[];
+  onTag: (tag: string) => void;
+  showAccess: boolean;
 }) {
   return (
     <article className={styles.repositoryRow}>
-      <RepoMark size="row" />
+      <RepositoryMark id={project.id} />
       <div className={styles.rowContent}>
         <div className={styles.rowHeading}>
           <Link
             href={getProjectRepoPath(project)}
+            title={getProjectRepoPath(project)}
             onClick={() => recordRecentProjectOpen(project.id)}
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
           </Link>
-          {project.visibility && <span className={styles.visibility}>{project.visibility}</span>}
+          {project.visibility && <RepositoryVisibility value={project.visibility} />}
+          {project.canEdit === false && <span className={styles.readOnly}>Read only</span>}
         </div>
-        <p className={styles.repositoryPath}>{getProjectRepoPath(project, ownerSlug)}</p>
         {project.description && <p className={styles.description}>{project.description}</p>}
+        {Boolean(project.repositoryProfile?.tags.length) && (
+          <div className={styles.rowTags}>
+            {project.repositoryProfile?.tags.map((tag) => (
+              <RepositoryTag
+                key={tag}
+                name={tag}
+                selected={selectedTags.includes(tag)}
+                onClick={() => onTag(tag)}
+              />
+            ))}
+          </div>
+        )}
         <div className={styles.rowMeta}>
+          {showAccess && project.namespace && <span>Owner: {project.namespace}</span>}
+          {showAccess && (
+            <span>
+              {project.canDelete === true
+                ? 'Admin access'
+                : project.canEdit === true
+                  ? 'Editor access'
+                  : 'Read access'}
+            </span>
+          )}
           <ProjectMetrics project={project} />
           <span>Created {project.updatedAt}</span>
         </div>
       </div>
       <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
     </article>
-  );
-}
-
-function DirectoryIntroduction({
-  isPersonalNamespace,
-  ownerSlug,
-}: {
-  isPersonalNamespace: boolean;
-  ownerSlug: string;
-}) {
-  return (
-    <header className={management.heading}>
-      <p className={management.context}>
-        {isPersonalNamespace ? 'Personal namespace' : 'Organization namespace'}
-      </p>
-      <h1>{ownerSlug}</h1>
-      <p>A home for your structured state. Pick up a repository or start something new.</p>
-    </header>
   );
 }
 
@@ -199,7 +226,7 @@ function DirectoryLoadFailure({
       <h2 className="text-sm font-semibold text-[var(--text-primary)]">
         Couldn&apos;t load repositories
       </h2>
-      <p className="mt-2 max-w-[520px] text-[13px] leading-normal text-[var(--text-secondary)]">
+      <p className="mt-2 max-w-[520px] text-[14px] leading-normal text-[var(--text-secondary)]">
         {error}
       </p>
       <Button
@@ -221,13 +248,13 @@ function DirectoryLoadFailure({
 function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   return (
     <div className={styles.emptyState}>
-      <RepoMark />
+      <RepositoryMark id="empty-repository" />
       <h2>No repositories yet</h2>
       <p>
         Give your next project a place to grow. Create a repository, then bring your source material
         into its Workspace.
       </p>
-      <Button asChild className="mt-5">
+      <Button asChild className={cn('mt-5', management.createAction)}>
         <Link href={newRepositoryPath} className={styles.primaryLink}>
           <Plus className="size-4" /> New repository
         </Link>
@@ -236,27 +263,46 @@ function EmptyDirectory({ newRepositoryPath }: { newRepositoryPath: string }) {
   );
 }
 
-function SectionHeading({ count, title }: { count?: string; title: string }) {
-  return (
-    <div className={styles.sectionHeading}>
-      <h2>{title}</h2>
-      {count && <span>{count}</span>}
-    </div>
-  );
-}
-
-export function ProjectDirectoryPage({ ownerSlug = DEFAULT_OWNER_SLUG }: { ownerSlug?: string }) {
+export function ProjectDirectoryPage({
+  ownerSlug = DEFAULT_OWNER_SLUG,
+  scope = 'namespace',
+}: {
+  ownerSlug?: string;
+  scope?: 'namespace' | 'accessible';
+}) {
   return (
     <Suspense fallback={null}>
-      <ProjectDirectoryContent key={ownerSlug} ownerSlug={ownerSlug} />
+      <ProjectDirectoryContent key={`${scope}:${ownerSlug}`} ownerSlug={ownerSlug} scope={scope} />
     </Suspense>
   );
 }
 
-function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
+function ProjectDirectoryContent({
+  ownerSlug,
+  scope,
+}: {
+  ownerSlug: string;
+  scope: 'namespace' | 'accessible';
+}) {
+  const accessible = scope === 'accessible';
   const pathname = usePathname();
+  const router = useRouter();
+  const { accounts, activeAccount, selectNamespace } = useNamespaceAccounts();
+  const currentAccount = accounts.find((account) => account.namespace.slug === ownerSlug);
+  const namespaceOptions = Array.from(
+    new Set([ownerSlug, ...accounts.map((account) => account.namespace.slug)])
+  );
+  useEffect(() => {
+    if (
+      !accessible &&
+      currentAccount &&
+      currentAccount.namespace.namespace_id !== activeAccount?.namespace.namespace_id
+    ) {
+      selectNamespace(currentAccount.namespace.namespace_id);
+    }
+  }, [accessible, currentAccount, activeAccount?.namespace.namespace_id, selectNamespace]);
   const searchParams = useSearchParams();
-  const deletedView = searchParams.get('view') === 'deleted';
+  const deletedView = !accessible && searchParams.get('view') === 'deleted';
   const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (pageRef.current) pageRef.current.scrollTop = 0;
@@ -276,9 +322,16 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects(50, ownerSlug);
+  } = useProjects(100, accessible ? undefined : ownerSlug, true);
   const [query, setQuery] = useState('');
-  const [repositoriesExpanded, setRepositoriesExpanded] = useState(false);
+  const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
+  const [visibility, setVisibility] = useState('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [sort, setSort] = useState('created');
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    if (pageRef.current) pageRef.current.scrollTop = 0;
+  }, [page]);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -292,7 +345,13 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
   const [notice, setNotice] = useState<{ message: string; deleted?: boolean } | null>(null);
   const [recentProjectIds] = useState(() => readRecentProjectIds());
   const isPersonalNamespace = ownerSlug !== DEFAULT_OWNER_SLUG;
-  const newRepositoryPath = `/${ownerSlug}/new`;
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const newRepositoryOwner = accessible
+    ? (activeAccount?.namespace.slug ?? (authDisabled ? DEFAULT_OWNER_SLUG : null))
+    : ownerSlug;
+  const newRepositoryPath = newRepositoryOwner
+    ? `/${newRepositoryOwner}/new`
+    : '/onboarding/namespace';
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
@@ -378,57 +437,203 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
     setDeleteTarget(project);
   }, []);
 
+  const recentProjects = useMemo(
+    () => orderProjectsByRecentOpen(projectSummaries, recentProjectIds),
+    [projectSummaries, recentProjectIds]
+  );
+  const tags = useMemo(() => repositoryTagOptions(projects), [projects]);
   const filteredProjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return projectSummaries;
-    return projectSummaries.filter((project) => {
-      const text = `${project.name} ${project.description} ${project.status}`.toLowerCase();
-      return text.includes(normalized);
-    });
-  }, [projectSummaries, query]);
-  const recentProjects = useMemo(
-    () => orderProjectsByRecentOpen(filteredProjects, recentProjectIds).slice(0, 2),
-    [filteredProjects, recentProjectIds]
+    const source = directoryView === 'recent' ? recentProjects : projectSummaries;
+    const filtered = source.filter(
+      (project) =>
+        (!normalized ||
+          `${project.namespace ?? ''} ${project.name} ${project.description} ${(project.repositoryProfile?.tags ?? []).join(' ')}`
+            .toLowerCase()
+            .includes(normalized)) &&
+        (visibility === 'all' || project.visibility === visibility) &&
+        (!selectedTags.length ||
+          selectedTags.some((tag) => project.repositoryProfile?.tags.includes(tag)))
+    );
+    return sort === 'name' ? [...filtered].sort((a, b) => a.name.localeCompare(b.name)) : filtered;
+  }, [projectSummaries, recentProjects, directoryView, query, visibility, selectedTags, sort]);
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / REPOSITORIES_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const displayed = filteredProjects.slice(
+    (currentPage - 1) * REPOSITORIES_PER_PAGE,
+    currentPage * REPOSITORIES_PER_PAGE
   );
   const hasLoadedProjects = projectSummaries.length > 0;
+  const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
+  function clearFilters() {
+    setQuery('');
+    setSelectedTags([]);
+    setVisibility('all');
+    setPage(1);
+  }
+  function changeTag(next: string) {
+    setSelectedTags((current) =>
+      current.includes(next) ? current.filter((tag) => tag !== next) : [...current, next]
+    );
+    setPage(1);
+  }
 
   return (
     <div className={cn(palette.scope, management.shell)}>
       <DiscoverHeader
-        owner={ownerSlug}
-        namespaceTab="repositories"
-        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`}
-        contextLabel={isPersonalNamespace ? 'Personal' : 'Organization'}
+        owner={accessible ? undefined : ownerSlug}
+        namespaceTab={accessible ? undefined : 'repositories'}
+        repositoriesNavigation={accessible}
+        settingsHref={
+          accessible
+            ? undefined
+            : `/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`
+        }
+        contextLabel={accessible ? undefined : isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 
-      <div className={management.content} ref={pageRef}>
-        <main className={cn(management.scope, management.container)}>
+      <div className={cn(management.content, deletedView && styles.deletedSurface)} ref={pageRef}>
+        <main
+          className={cn(
+            management.scope,
+            management.container,
+            styles.page,
+            deletedView && styles.deletedPage
+          )}
+        >
           {deletedView ? (
             <DeletedRepositoriesView namespace={ownerSlug} backHref={activeHref} />
           ) : (
             <>
-              <DirectoryIntroduction
-                isPersonalNamespace={isPersonalNamespace}
-                ownerSlug={ownerSlug}
-              />
+              {accessible ? (
+                <div className={styles.namespaceContext}>
+                  Repositories you own or can collaborate on
+                </div>
+              ) : (
+                <div className={styles.namespaceContext}>
+                  <span>Namespace</span>
+                  {namespaceOptions.length > 1 ? (
+                    <RepositorySelect
+                      label="Namespace"
+                      value={ownerSlug}
+                      onValueChange={(value) => router.push(`/${encodeURIComponent(value)}`)}
+                      options={namespaceOptions.map((slug) => ({ value: slug, label: slug }))}
+                    />
+                  ) : (
+                    <span>{ownerSlug}</span>
+                  )}
+                </div>
+              )}
+              <div className={styles.titleRow}>
+                <h1>
+                  {accessible ? 'Your repositories' : 'Repositories'}{' '}
+                  <span>{loading && !hasLoadedProjects ? '…' : projectSummaries.length}</span>
+                </h1>
+                <div className={styles.titleActions}>
+                  {!accessible && (
+                    <Link
+                      href={deletedHref}
+                      scroll={false}
+                      className={cn(styles.deletedLink, focusRing)}
+                    >
+                      <Trash2 aria-hidden="true" size={15} />
+                      Deleted repositories
+                    </Link>
+                  )}
+                  <Button asChild className={management.createAction}>
+                    <Link href={newRepositoryPath}>
+                      <Plus aria-hidden="true" size={16} />
+                      New repository
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+              {notice && (
+                <div className={cn(management.notice, management.successNotice, styles.notice)}>
+                  <CheckCircle2 aria-hidden="true" className="size-4" />
+                  <output>
+                    {notice.message}{' '}
+                    {notice.deleted && (
+                      <Link href={deletedHref} scroll={false}>
+                        Manage deleted repositories
+                      </Link>
+                    )}
+                  </output>
+                </div>
+              )}
+              <nav className={styles.viewTabs} aria-label="Repository views">
+                <button
+                  type="button"
+                  aria-current={directoryView === 'all' ? 'page' : undefined}
+                  onClick={() => {
+                    setDirectoryView('all');
+                    setPage(1);
+                  }}
+                >
+                  All repositories <span>{projectSummaries.length}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-current={directoryView === 'recent' ? 'page' : undefined}
+                  onClick={() => {
+                    setDirectoryView('recent');
+                    setPage(1);
+                  }}
+                >
+                  Recently opened <span>{recentProjects.length}</span>
+                </button>
+              </nav>
               <div className={styles.toolbar}>
-                <label className={styles.search}>
+                <label className={styles.search} htmlFor="directory-search">
                   <span className="sr-only">Find a repository</span>
-                  <Search aria-hidden="true" className="size-4" />
+                  <Search aria-hidden="true" size={16} />
                   <Input
+                    id="directory-search"
                     type="search"
                     aria-controls="repository-list"
-                    aria-describedby={
-                      projectSummaries.length === 50 ? 'repository-list-scope' : undefined
-                    }
                     onChange={(event) => {
                       setQuery(event.target.value);
-                      setRepositoriesExpanded(false);
+                      setPage(1);
                     }}
-                    placeholder="Find a repository..."
+                    placeholder="Search name, description, or tag…"
                     value={query}
                   />
                 </label>
+                <RepositorySelect
+                  className={styles.filterControl}
+                  label="Filter by visibility"
+                  value={visibility}
+                  onValueChange={(value) => {
+                    setVisibility(value);
+                    setPage(1);
+                  }}
+                  options={[{ value: 'all', label: 'All visibility' }, ...visibilityOptions]}
+                />
+                <RepositoryTagPicker
+                  className={styles.tagFilter}
+                  selected={selectedTags}
+                  onChange={(values) => {
+                    setSelectedTags(values);
+                    setPage(1);
+                  }}
+                  options={tags}
+                />
+                <RepositorySelect
+                  className={styles.filterControl}
+                  label="Sort repositories"
+                  value={sort}
+                  onValueChange={(value) => {
+                    setSort(value);
+                    setPage(1);
+                  }}
+                  options={[
+                    {
+                      value: 'created',
+                      label: directoryView === 'recent' ? 'Recently opened' : 'Recently created',
+                    },
+                    { value: 'name', label: 'Name A–Z' },
+                  ]}
+                />
                 <Button
                   aria-label="Refresh repositories"
                   title="Refresh repositories"
@@ -441,37 +646,32 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                     className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
                   />
                 </Button>
-                <Link
-                  href={deletedHref}
-                  scroll={false}
-                  className={cn(styles.deletedLink, focusRing)}
-                >
-                  <Trash2 aria-hidden="true" className="size-4" /> Deleted repositories
-                </Link>
-                <Button asChild>
-                  <Link href={newRepositoryPath} className={styles.primaryLink}>
-                    <Plus className="size-4" /> New repository
-                  </Link>
-                </Button>
               </div>
-
-              {notice && (
-                <div className={cn(management.notice, styles.notice)}>
-                  <CheckCircle2
-                    aria-hidden="true"
-                    className={cn('size-4', management.successIcon)}
-                  />
-                  <output>
-                    {notice.message}{' '}
-                    {notice.deleted && (
-                      <Link href={deletedHref} scroll={false}>
-                        Manage deleted repositories
+              {directoryView === 'all' && !hasFilter && recentProjects.length > 0 && (
+                <section className={styles.recent} aria-label="Recently opened repositories">
+                  <h2>
+                    <Clock3 aria-hidden="true" size={16} />
+                    Recently opened
+                  </h2>
+                  <div className={styles.recentLinks}>
+                    {recentProjects.slice(0, 4).map((project) => (
+                      <Link
+                        key={project.id}
+                        href={getProjectRepoPath(project)}
+                        title={`${project.namespace ?? ownerSlug}/${project.name}`}
+                        onClick={() => recordRecentProjectOpen(project.id)}
+                      >
+                        <RepositoryMark id={project.id} />
+                        <span>
+                          <strong>{project.name}</strong>
+                          <span>{project.namespace ?? ownerSlug}</span>
+                        </span>
+                        <ArrowRight aria-hidden="true" size={15} />
                       </Link>
-                    )}
-                  </output>
-                </div>
+                    ))}
+                  </div>
+                </section>
               )}
-
               {error && hasLoadedProjects && (
                 <div className={cn(management.notice, styles.refreshError)} role="alert">
                   <span>Couldn&apos;t refresh repositories. Showing the last loaded data.</span>
@@ -479,114 +679,114 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
                     disabled={loading}
                     onClick={handleRefreshProjects}
                     size="sm"
-                    type="button"
                     variant="outline"
                   >
-                    <RefreshCw
-                      className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
-                    />
                     Retry
                   </Button>
                 </div>
               )}
-
-              {loading && projectSummaries.length === 0 ? (
-                <output className={styles.loading}>Loading repositories...</output>
-              ) : error && projectSummaries.length === 0 ? (
-                <DirectoryLoadFailure
-                  error={error}
-                  onRetry={handleRefreshProjects}
-                  retrying={loading}
-                />
-              ) : projectSummaries.length === 0 ? (
-                <EmptyDirectory newRepositoryPath={newRepositoryPath} />
-              ) : (
-                <>
-                  {recentProjects.length > 0 && !query.trim() && (
-                    <section
-                      className={styles.section}
-                      aria-labelledby="recent-repositories-heading"
-                    >
-                      <div className={styles.sectionHeading}>
-                        <h2 id="recent-repositories-heading">
-                          <Clock3 aria-hidden="true" className="size-4" /> Recently opened
-                        </h2>
-                        <span>On this browser</span>
-                      </div>
-                      <div className={styles.recentGrid}>
-                        {recentProjects.map((project) => (
-                          <RecentProjectCard key={project.id} project={project} />
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  <section className={styles.section}>
-                    <SectionHeading
-                      count={
-                        query.trim()
-                          ? `${filteredProjects.length} matches`
-                          : `${projectSummaries.length} loaded`
-                      }
-                      title="Repositories"
-                    />
-                    {projectSummaries.length === 50 && (
-                      <p className={styles.listScope} id="repository-list-scope">
-                        Showing the first 50 repositories. Search filters this loaded list.
-                      </p>
-                    )}
-                    <div className={styles.repositories} id="repository-list" aria-busy={loading}>
-                      {filteredProjects.length > 0 ? (
-                        <div>
-                          {(repositoriesExpanded
-                            ? filteredProjects
-                            : filteredProjects.slice(0, 6)
-                          ).map((project) => (
-                            <ProjectRow
-                              key={project.id}
-                              onDelete={openDeleteDialog}
-                              onRename={openRenameDialog}
-                              ownerSlug={ownerSlug}
-                              project={project}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className={styles.noResults}>
-                          <Search aria-hidden="true" className="size-5" />
-                          <h3>No repositories match this filter.</h3>
-                          <p>Try another name or description, or clear your search.</p>
-                          <Button
-                            onClick={() => setQuery('')}
-                            type="button"
-                            variant="canvas-outline"
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    {filteredProjects.length > 6 ? (
-                      <button
-                        className={styles.expand}
-                        aria-expanded={repositoriesExpanded}
-                        aria-controls="repository-list"
-                        onClick={() => setRepositoriesExpanded((value) => !value)}
-                        type="button"
-                      >
-                        {repositoriesExpanded ? (
-                          <ChevronUp aria-hidden="true" />
-                        ) : (
-                          <ChevronDown aria-hidden="true" />
-                        )}
-                        {repositoriesExpanded
-                          ? 'Show less'
-                          : `Show all ${filteredProjects.length} repositories`}
-                      </button>
-                    ) : null}
-                  </section>
-                </>
+              {selectedTags.length > 0 && (
+                <fieldset className={styles.activeTags} aria-label="Active tag filters">
+                  <span>Any of</span>
+                  {selectedTags.map((tag) => (
+                    <RepositoryTag key={tag} name={tag} onRemove={() => changeTag(tag)} />
+                  ))}
+                </fieldset>
               )}
+              <div className={styles.results}>
+                <div className={styles.resultLine}>
+                  <output aria-live="polite">
+                    {loading
+                      ? 'Loading repositories…'
+                      : error && !hasLoadedProjects
+                        ? 'List unavailable'
+                        : `${filteredProjects.length} ${hasFilter ? 'matching ' : ''}repositories`}
+                  </output>
+                  {hasFilter && (
+                    <button type="button" onClick={clearFilters}>
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+                {loading && !hasLoadedProjects ? (
+                  <output className={styles.loading}>Loading repositories...</output>
+                ) : error && !hasLoadedProjects ? (
+                  <DirectoryLoadFailure
+                    error={error}
+                    onRetry={handleRefreshProjects}
+                    retrying={loading}
+                  />
+                ) : !hasLoadedProjects ? (
+                  <EmptyDirectory newRepositoryPath={newRepositoryPath} />
+                ) : (
+                  <div className={styles.repositories} id="repository-list" aria-busy={loading}>
+                    {displayed.length ? (
+                      displayed.map((project) => (
+                        <ProjectRow
+                          key={project.id}
+                          project={project}
+                          onDelete={openDeleteDialog}
+                          onRename={openRenameDialog}
+                          selectedTags={selectedTags}
+                          onTag={changeTag}
+                          showAccess={accessible}
+                        />
+                      ))
+                    ) : (
+                      <div className={styles.noResults}>
+                        <Search aria-hidden="true" size={20} />
+                        <h3>
+                          {directoryView === 'recent' && !hasFilter
+                            ? 'No recently opened repositories'
+                            : 'No repositories match this filter.'}
+                        </h3>
+                        <p>
+                          {directoryView === 'recent' && !hasFilter
+                            ? 'Repositories you open on this browser will appear here.'
+                            : 'Try another name, description, or tag.'}
+                        </p>
+                        {hasFilter && (
+                          <Button onClick={clearFilters} variant="outline">
+                            Clear filters
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <footer className={styles.pagination}>
+                  <span>
+                    {error && !hasLoadedProjects
+                      ? 'List unavailable'
+                      : loading
+                        ? 'Loading…'
+                        : `${filteredProjects.length ? (currentPage - 1) * REPOSITORIES_PER_PAGE + 1 : 0}–${Math.min(currentPage * REPOSITORIES_PER_PAGE, filteredProjects.length)} of ${filteredProjects.length} repositories`}
+                  </span>
+                  <nav aria-label="Repository pagination">
+                    <Button
+                      aria-label="Previous page"
+                      disabled={loading || currentPage === 1}
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => setPage(currentPage - 1)}
+                    >
+                      <ChevronLeft aria-hidden="true" size={16} />
+                    </Button>
+                    <span>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      aria-label="Next page"
+                      disabled={loading || currentPage >= totalPages}
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => setPage(currentPage + 1)}
+                    >
+                      <ChevronRight aria-hidden="true" size={16} />
+                    </Button>
+                  </nav>
+                </footer>
+              </div>
             </>
           )}
         </main>
@@ -646,7 +846,7 @@ function ProjectDirectoryContent({ ownerSlug }: { ownerSlug: string }) {
               >
                 Cancel
               </Button>
-              <Button disabled={renaming || !nameCheck.canSubmit} type="submit">
+              <Button disabled={renaming || !nameCheck.canSubmit} type="submit" variant="outline">
                 {renaming ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>

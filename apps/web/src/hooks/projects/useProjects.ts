@@ -35,7 +35,11 @@ export interface UseProjectsResult {
   rename: (projectId: string, name: string) => Promise<Project>;
 }
 
-export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResult {
+export function useProjects(
+  limit = 50,
+  namespaceSlug?: string,
+  loadAll = false
+): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,9 +49,20 @@ export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResu
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const data = await listProjects(limit, 0, namespaceSlug);
-      if (requestId !== requestIdRef.current) return;
-      setProjects(data.projects ?? []);
+      const collected = new Map<string, Project>();
+      let offset = 0;
+      for (;;) {
+        const data = await listProjects(limit, offset, namespaceSlug);
+        if (requestId !== requestIdRef.current) return;
+        const rows = data.projects ?? [];
+        const previousSize = collected.size;
+        for (const project of rows) collected.set(project.project_id, project);
+        if (!loadAll || rows.length < limit) break;
+        if (collected.size === previousSize)
+          throw new Error('Repository pagination did not advance. Please refresh.');
+        offset += rows.length;
+      }
+      setProjects([...collected.values()]);
       setError(null);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
@@ -55,7 +70,7 @@ export function useProjects(limit = 50, namespaceSlug?: string): UseProjectsResu
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, namespaceSlug]);
+  }, [limit, namespaceSlug, loadAll]);
 
   useEffect(() => {
     setProjects([]);

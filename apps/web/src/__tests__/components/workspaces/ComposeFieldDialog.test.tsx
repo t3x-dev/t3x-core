@@ -12,6 +12,7 @@ function draftActivity() {
     notice: null,
     publish: vi.fn().mockResolvedValue({ kind: 'published' }),
     view: {
+      workspaceRevision: 12,
       current: {
         domain: 't3x.dev/semantic-content',
         version: 1,
@@ -38,6 +39,7 @@ describe('Compose field editing', () => {
         onDiscuss={vi.fn()}
       />
     );
+    expect(screen.getByText('Release · Content r4 · Workspace r12')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit domain' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit allocation' }));
     fireEvent.change(screen.getByLabelText('New value'), { target: { value: '25' } });
