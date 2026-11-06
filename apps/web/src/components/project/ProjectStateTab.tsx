@@ -544,9 +544,6 @@ export function ProjectStateTab({
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
-  const canvasQuery = new URLSearchParams(routeQuery);
-  canvasQuery.set('view', 'canvas');
-  const canvasHref = `${pathname}?${canvasQuery.toString()}`;
   const snapshotQuery = new URLSearchParams(routeQuery);
   snapshotQuery.set('view', lastSnapshotView);
   const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
@@ -671,7 +668,6 @@ export function ProjectStateTab({
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
-                canvasHref={canvasHref}
                 headCommit={headCommit}
                 headCommitHash={branchHeads[branchFocus] ?? null}
                 sourceCommitHash={focusedCommitHash}
@@ -764,7 +760,6 @@ export function ProjectStateTab({
                     hideHeader
                     navigation={null}
                     historyHref={historyHref}
-                    alternateHistoryHref={canvasHref}
                     historyReturnTo={currentStateReturnTo}
                     workspaceHref={workspaceHref}
                     commits={snapshot.commits}

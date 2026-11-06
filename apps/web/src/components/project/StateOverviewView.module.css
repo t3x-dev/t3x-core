@@ -55,7 +55,6 @@
   gap: 8px;
   margin-left: auto;
 }
-.historyTrigger,
 .actions a {
   display: inline-flex;
   align-items: center;
@@ -68,7 +67,6 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.historyTrigger:hover,
 .actions a:hover {
   background: var(--hover-bg);
 }
@@ -77,7 +75,6 @@
   border-color: var(--accent-commit);
   color: var(--text-on-accent, #fff);
 }
-.historyTrigger svg,
 .actions svg {
   width: 14px;
   height: 14px;

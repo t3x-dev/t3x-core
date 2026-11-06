@@ -16,6 +16,12 @@
   flex-wrap: wrap;
   padding: 8px 0;
 }
+.viewNavigation {
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.viewNavigation > div {
+  border-bottom: 0;
+}
 .revisionContext {
   display: inline-flex;
   align-items: center;
@@ -35,6 +41,7 @@
   align-items: center;
   gap: 10px;
   min-height: 36px;
+  margin-top: 10px;
   padding: 8px 12px;
   border: 1px solid var(--stroke-divider);
   border-radius: var(--radius-md);

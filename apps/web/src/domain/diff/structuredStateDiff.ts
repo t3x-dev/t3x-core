@@ -27,6 +27,7 @@ interface BuildStructuredStateDiffInput {
   baseline: StateTreeContent;
   head: StateTreeContent;
   includeEmptyArrayParent?: boolean;
+  literalValues?: boolean;
   workspace?: WorkspaceCandidate | null;
 }
 
@@ -43,6 +44,7 @@ export function buildStructuredStateDiff({
   baseline,
   head,
   includeEmptyArrayParent = false,
+  literalValues = false,
   workspace,
 }: BuildStructuredStateDiffInput): StructuredDiffChange[] {
   const baselineNodes = flattenNodes(baseline.trees ?? []);
@@ -59,9 +61,10 @@ export function buildStructuredStateDiff({
       const slotEntries = Object.entries(node?.slots ?? {});
       const kind: StructuredDiffKind = headNode ? 'added' : 'removed';
       if (slotEntries.length === 0 && !hasDescendant(nodePaths, nodePath)) {
+        const nodeValue = literalValues ? {} : headNode ? 'Node created' : 'Node existed';
         rawChanges.push({
-          afterValue: headNode ? 'Node created' : undefined,
-          beforeValue: baselineNode ? 'Node existed' : undefined,
+          afterValue: headNode ? nodeValue : undefined,
+          beforeValue: baselineNode ? nodeValue : undefined,
           id: `${kind}:${nodePath}`,
           kind,
           path: nodePath,
@@ -112,7 +115,7 @@ export function buildStructuredStateDiff({
     }
   }
 
-  return rawChanges.map((change) => enrichChange(change, workspace));
+  return rawChanges.map((change) => enrichChange(change, workspace, literalValues));
 }
 
 function flattenNodes(trees: StateTreeNode[], prefix = ''): Map<string, StateTreeNode> {
@@ -166,7 +169,8 @@ function buildArrayTailChanges(
 
 function enrichChange(
   change: RawChange,
-  workspace: WorkspaceCandidate | null | undefined
+  workspace: WorkspaceCandidate | null | undefined,
+  literalValues: boolean
 ): StructuredDiffChange {
   const operation = findOperation(workspace?.yopsDraft.operations ?? [], change.path);
   const source = findSource(workspace?.sourceBundle ?? [], operation);
@@ -174,10 +178,14 @@ function enrichChange(
   return {
     ...(change.structurePath ? { structurePath: change.structurePath } : {}),
     ...(change.kind === 'modified'
-      ? { children: buildChildChanges(change).map((child) => enrichChange(child, workspace)) }
+      ? {
+          children: buildChildChanges(change).map((child) =>
+            enrichChange(child, workspace, literalValues)
+          ),
+        }
       : {}),
-    afterValue: formatValue(change.afterValue),
-    beforeValue: formatValue(change.beforeValue),
+    afterValue: formatValue(change.afterValue, literalValues),
+    beforeValue: formatValue(change.beforeValue, literalValues),
     evidence: source ? sourceExcerpt(source) : undefined,
     evidenceSource: source?.title,
     id: change.id,
@@ -275,9 +283,9 @@ function defaultOp(kind: StructuredDiffKind): string {
   return 'SET';
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown, literalValues: boolean): string {
   if (value === undefined) return 'No value recorded';
-  if (typeof value === 'string') return value || 'Empty';
+  if (typeof value === 'string') return literalValues ? JSON.stringify(value) : value || 'Empty';
   return yaml.dump(value, { lineWidth: -1, noRefs: true, sortKeys: true }).trimEnd();
 }
 
