@@ -4446,6 +4446,7 @@ function buildWorkspaceReviewStructureModel(
     ? buildStructuredStateDiff({
         baseline: content.baseline,
         head: content.head,
+        includeEmptyArrayParent: true,
         workspace: candidate,
       })
     : [];

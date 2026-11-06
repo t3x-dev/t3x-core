@@ -348,7 +348,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     };
     const rows = buildWorkspaceReviewStructureRows(
       buildStatePointRows(head),
-      buildStructuredStateDiff({ baseline, head })
+      buildStructuredStateDiff({ baseline, head, includeEmptyArrayParent: true })
     );
     const descendants = rows.filter((row) => row.path.startsWith('candidate/inputs/'));
     expect(descendants.length).toBeGreaterThan(2);
@@ -428,8 +428,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const head = content(after);
     const rows = buildWorkspaceReviewStructureRows(
       buildStatePointRows(head),
-      buildStructuredStateDiff({ baseline, head })
+      buildStructuredStateDiff({ baseline, head, includeEmptyArrayParent: true })
     );
+    if (before.length === 0)
+      expect(rows.find((row) => row.path === 'candidate/inputs')?.diff).toMatchObject({
+        kind: 'modified',
+        beforeValue: '[]',
+        afterValue: '- name: new',
+        exact: true,
+      });
     expect(rows.find((row) => row.path === `candidate/inputs/${path}`)?.diff).toMatchObject({
       kind,
       beforeValue,

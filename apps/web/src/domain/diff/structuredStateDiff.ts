@@ -26,6 +26,7 @@ export interface StructuredDiffChange {
 interface BuildStructuredStateDiffInput {
   baseline: StateTreeContent;
   head: StateTreeContent;
+  includeEmptyArrayParent?: boolean;
   workspace?: WorkspaceCandidate | null;
 }
 
@@ -41,6 +42,7 @@ interface RawChange {
 export function buildStructuredStateDiff({
   baseline,
   head,
+  includeEmptyArrayParent = false,
   workspace,
 }: BuildStructuredStateDiffInput): StructuredDiffChange[] {
   const baselineNodes = flattenNodes(baseline.trees ?? []);
@@ -89,7 +91,10 @@ export function buildStructuredStateDiff({
       const slotPath = `${nodePath}/${slotKey}`;
       if (stableValue(beforeValue) === stableValue(afterValue)) continue;
 
-      const arrayChanges = buildArrayTailChanges(slotPath, beforeValue, afterValue);
+      const arrayChanges =
+        includeEmptyArrayParent && Array.isArray(beforeValue) && beforeValue.length === 0
+          ? null
+          : buildArrayTailChanges(slotPath, beforeValue, afterValue);
       if (arrayChanges) {
         rawChanges.push(...arrayChanges);
         continue;

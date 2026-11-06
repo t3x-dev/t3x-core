@@ -132,10 +132,12 @@ describe('WorkspaceSnapshotReview', () => {
     expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
     vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
       ...controller,
-      state: { ...controller.state, loading: false, error: 'Offline' },
+      state: { ...controller.state, loading: false, error: 'Offline', latestUnavailable: true },
     });
     rerender(<div>{snapshot}</div>);
-    expect(screen.getByText('The fixed Review is unavailable.')).toBeVisible();
+    expect(screen.getByRole('alert', { name: 'Fixed Review unavailable' })).toHaveTextContent(
+      'Use Refresh to try loading this fixed snapshot again.'
+    );
     expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
   });
 
@@ -351,6 +353,7 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
     />
   );
   expect(screen.getByRole('alert')).toHaveTextContent('Workspace revision changed');
+  expect(screen.getByText('Checking for a decision update…')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
   const recovery = new URL(
     screen
@@ -360,6 +363,40 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
   );
   expect(recovery.searchParams.get('workspace')).toBe('workspace_prd_handoff');
   expect(recovery.searchParams.has('reviewSnapshot')).toBe(false);
+});
+
+it('keeps the fixed Review visible and offers refresh when its decision update fails', () => {
+  const data = snapshotResponse();
+  const load = vi.fn();
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load,
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: {
+      data: data as never,
+      deciding: false,
+      loading: false,
+      latestUnavailable: true,
+      error: 'Offline',
+    },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
+  expect(
+    screen.getByRole('heading', { name: 'Review · Fixed snapshot · Workspace r3' })
+  ).toBeVisible();
+  expect(
+    screen.getByRole('alert', { name: 'Could not refresh decision status' })
+  ).toHaveTextContent('You can still read this snapshot and its recorded checks.');
+  expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  expect(load).toHaveBeenCalledOnce();
 });
 
 it('reviews Schema and content in one Workspace snapshot after a decision', () => {
