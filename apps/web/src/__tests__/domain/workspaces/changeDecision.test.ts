@@ -176,7 +176,7 @@ describe('changeCheckRows', () => {
 });
 
 describe('changeDecisionBlockers', () => {
-  it('does not treat trusted value replacement as deletion authorization', () => {
+  it('directs trusted replacement failures to Run without promising that a Draft edit clears them', () => {
     const current = view({
       accept: {
         disposition: 'denied',
@@ -208,7 +208,7 @@ describe('changeDecisionBlockers', () => {
     };
     expect(changeDecisionBlockers(changed)[0].title).toBe('Trusted content replacement is blocked');
     expect(changeDecisionBlockers(changed)[0].detail).toContain(
-      'does not authorize replacement values'
+      'leaves the original generated action subject to verification'
     );
     expect(changeCheckRows(changed).find((row) => row.id === 'runner')?.findings[0].path).toBe(
       'candidate/phone'
@@ -243,6 +243,7 @@ describe('changeDecisionBlockers', () => {
     const blocker = changeDecisionBlockers(current)[0];
     expect(blocker.title).toBe('Required source evidence is missing');
     expect(blocker.detail).toContain('accepted source evidence');
+    expect(blocker.detail).toContain('Add material under Workspace sources in Compose');
     expect(blocker.detail.includes('override reason')).toBe(allowed);
     expect(changeCheckRows(current).find((row) => row.id === 'validation')?.findings).toHaveLength(
       2

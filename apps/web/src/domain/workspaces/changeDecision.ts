@@ -200,7 +200,7 @@ function explainReason(
           code: reason.code,
           title: 'Trusted content replacement is blocked',
           detail:
-            'Inspect the affected paths in Run details, then revise or undo the conflicting changes in Compose and prepare a new Review. Deletion confirmation only authorizes an exact deletion; it does not authorize replacement values.',
+            'See Runner in Run for the affected paths. Editing or reverting a Draft value leaves the original generated action subject to verification.',
         };
       return {
         code: reason.code,
@@ -230,7 +230,7 @@ function explainReason(
           code: reason.code,
           title: 'Required source evidence is missing',
           detail:
-            'Inspect the affected fields and evidence requirements in Run details. These fields need accepted source evidence; changing their values alone does not resolve this check. Prepare a new Review after resolving the evidence gaps.' +
+            'See Schema validation in Run for the fields that need accepted source evidence. Add material under Workspace sources in Compose, then prepare a new Review and check its Schema validation result.' +
             (overrideAllowed
               ? ' The branch also permits a commit with a recorded override reason.'
               : ''),
