@@ -19,6 +19,7 @@ export function StatePageToolbar({
   canvasHref,
   headCommit,
   headCommitHash,
+  sourceCommitHash,
   historyHref,
   onBranchChange,
   onCreateBranch,
@@ -33,6 +34,7 @@ export function StatePageToolbar({
   canvasHref: string;
   headCommit: ApiCommit | null;
   headCommitHash: string | null;
+  sourceCommitHash?: string;
   historyHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
@@ -72,6 +74,7 @@ export function StatePageToolbar({
               branch={branch}
               branchOptions={branchOptions}
               headCommitHash={headCommitHash}
+              sourceCommitHash={sourceCommitHash}
               onBranchChange={onBranchChange}
               onCreateBranch={onCreateBranch}
               showCreate={false}

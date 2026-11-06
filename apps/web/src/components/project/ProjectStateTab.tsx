@@ -85,6 +85,7 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { BranchLoadError } from './BranchLoadError';
 import { StateEmptyContent } from './StateEmptyContent';
 import {
   StateFieldTable,
@@ -222,6 +223,7 @@ export function ProjectStateTab({
     branches,
     create: createBranch,
     loading: branchesLoading,
+    error: branchesError,
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -303,6 +305,7 @@ export function ProjectStateTab({
     const load = async () => {
       setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
+        if (!selectedHead && branchesError) throw new Error(branchesError);
         const requestedBranch = branchFocus || 'main';
         const branchHeadHash = selectedHead;
         let commits: ApiCommit[] = [];
@@ -369,6 +372,7 @@ export function ProjectStateTab({
     branchFocus,
     branchScope,
     waitingForBranch,
+    branchesError,
     selectionScope,
     snapshotTargetHead,
     focusedCommitHash,
@@ -549,7 +553,6 @@ export function ProjectStateTab({
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
   const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
-  const mainHeadCommitHash = branchHeads.main ?? null;
   const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
   const availableHeadHash =
     latestBranchHeadHash &&
@@ -658,6 +661,7 @@ export function ProjectStateTab({
         />
       </div>
 
+      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
           {activeView !== 'canvas' ? (
@@ -669,7 +673,8 @@ export function ProjectStateTab({
                 branchOptions={branchOptions}
                 canvasHref={canvasHref}
                 headCommit={headCommit}
-                headCommitHash={mainHeadCommitHash}
+                headCommitHash={branchHeads[branchFocus] ?? null}
+                sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}

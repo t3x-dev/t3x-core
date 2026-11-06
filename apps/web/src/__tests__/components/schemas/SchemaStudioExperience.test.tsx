@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   restoredSources: [] as StudioCandidate[],
   restoreSource: vi.fn(),
   branches: [] as string[],
+  branchesError: null as string | null,
+  refreshBranches: vi.fn(),
   workspacesLoading: false,
   workspacesError: null as string | null,
   createBranch: vi.fn(),
@@ -146,8 +148,9 @@ vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branchHeads: {},
     branches: mocks.branches,
+    error: mocks.branchesError,
     loading: false,
-    refresh: vi.fn(),
+    refresh: mocks.refreshBranches,
     create: mocks.createBranch,
   }),
 }));
@@ -251,6 +254,7 @@ beforeEach(() => {
       origin: { channel: 'studio' },
     },
   }));
+  mocks.branchesError = null;
   mocks.branches = [];
   mocks.workspacesLoading = false;
   mocks.workspacesError = null;
@@ -2333,4 +2337,17 @@ it('owns workspace setup attempts by project lifetime when returning while an ol
   const refreshCount = mocks.refresh.mock.calls.length;
   await act(async () => completeOld());
   expect(mocks.refresh).toHaveBeenCalledTimes(refreshCount);
+});
+
+it('keeps failed branch reads distinct from missing Workspaces and does not auto-create from stale heads', () => {
+  mocks.query = 'branch=main';
+  mocks.branches = ['main'];
+  mocks.branchesError = 'Offline';
+  mocks.workspaces = [];
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByText(/Branch list unavailable/)).toBeVisible();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  expect(mocks.replace).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+  expect(mocks.refreshBranches).toHaveBeenCalled();
 });

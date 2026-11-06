@@ -15,6 +15,7 @@ import { useBranches } from '@/hooks/shared/useBranches';
 import { useSession } from '@/hooks/shared/useSession';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import { BranchLoadError } from './BranchLoadError';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
@@ -79,6 +80,7 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
     branchHeads,
     branches,
     loading: branchesLoading,
+    error: branchesError,
     refresh: refreshBranches,
     create: createBranch,
   } = useBranches(projectId, true);
@@ -130,8 +132,8 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
     async (nextBranch: string, requestNavigation?: (navigate: () => void) => void) => {
       const isCurrent = captureNavigation();
       if (!isCurrent()) return;
-      await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
-      if (!isCurrent()) return;
+      const [, branchesReady] = await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
+      if (!isCurrent() || branchesReady === false) return;
       const params = new URLSearchParams(routeQuery);
       params.set('branch', nextBranch);
       params.delete('workspace');
@@ -175,27 +177,32 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   );
 
   return (
-    <WorkspaceWorkbench
-      branchOptions={branches}
-      candidates={visibleCandidates}
-      errorMessage={navigationError ?? undefined}
-      projectId={projectId}
-      selectedWorkspaceId={selectedWorkspaceId}
-      viewState={
-        (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
-        (Boolean(branch) && branchesLoading && branches.length === 0)
-          ? 'loading'
-          : navigationError
-            ? 'error'
-            : 'ready'
-      }
-      onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
-      onSourceMaterialUploaded={projectMaterials.refresh}
-      onViewCommitInState={handleViewCommitInState}
-      onWorkspacesRefresh={projectWorkspaces.refresh}
-      onWorkspaceBranchChange={handleWorkspaceBranchChange}
-      onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
-    />
+    <div className="flex h-full min-h-0 flex-col">
+      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refreshBranches} />
+      {!(branchesError && !branches.length && !projectWorkspaces.workspaces.length) && (
+        <WorkspaceWorkbench
+          branchOptions={branches}
+          candidates={visibleCandidates}
+          errorMessage={navigationError ?? undefined}
+          projectId={projectId}
+          selectedWorkspaceId={selectedWorkspaceId}
+          viewState={
+            (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+            (Boolean(branch) && branchesLoading && branches.length === 0)
+              ? 'loading'
+              : navigationError
+                ? 'error'
+                : 'ready'
+          }
+          onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
+          onSourceMaterialUploaded={projectMaterials.refresh}
+          onViewCommitInState={handleViewCommitInState}
+          onWorkspacesRefresh={projectWorkspaces.refresh}
+          onWorkspaceBranchChange={handleWorkspaceBranchChange}
+          onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
+        />
+      )}
+    </div>
   );
 }
 

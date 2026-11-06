@@ -15,6 +15,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
   branchesLoading: false,
+  branchesError: null as string | null,
   nativeView: null as unknown,
   committedSchema: { loading: false, snapshot: null, retry: vi.fn() } as CommittedSchemaState,
   createBranch: vi.fn(),
@@ -109,6 +110,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
     loading: hookMocks.branchesLoading,
+    error: hookMocks.branchesError,
     refresh: hookMocks.refreshBranches,
   }),
 }));
@@ -486,6 +488,7 @@ function setupHookMocks() {
   hookMocks.committedSchema = { loading: false, snapshot: null, retry: vi.fn() };
   hookMocks.branchHeads = {};
   hookMocks.branchesLoading = false;
+  hookMocks.branchesError = null;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue({
     branch_id: 'branch_feature_checkout_retry',
@@ -852,9 +855,11 @@ describe('ProjectStateTab', () => {
     fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
       target: { value: 'restore/historical-state' },
     });
+    expect(screen.getByText(/Create from commit/)).toBeVisible();
+    expect(screen.queryByText(/Create from the latest commit/)).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('menuitem', {
-        name: /Create branch restore\/historical-state from main/,
+        name: /Create branch restore\/historical-state from commit/,
       })
     );
     await waitFor(() =>
@@ -2004,5 +2009,17 @@ describe('ProjectStateTab', () => {
       'href',
       '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
+  });
+
+  it('shows branch load failure with retry instead of falling back to empty State', async () => {
+    hookMocks.branchesError = 'Branch service offline';
+    renderStateTab();
+    expect(screen.getByText(/Branch list unavailable/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+    expect(hookMocks.refreshBranches).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getAllByText(/Branch service offline/).length).toBeGreaterThan(0)
+    );
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
   });
 });

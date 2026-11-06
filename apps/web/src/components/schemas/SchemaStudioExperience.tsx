@@ -5,6 +5,7 @@ import { Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { Button } from '@/components/ui/button';
 import {
@@ -338,6 +339,7 @@ export function SchemaStudioExperience({
     if (
       !projectId ||
       projectBranches.loading ||
+      projectBranches.error ||
       workspaces.loading ||
       workspaces.error ||
       invalidTarget
@@ -389,6 +391,7 @@ export function SchemaStudioExperience({
     projectBranches.branchHeads,
     projectBranches.branches,
     projectBranches.loading,
+    projectBranches.error,
     projectId,
     saveDraft,
     workspaces.refresh,
@@ -400,7 +403,7 @@ export function SchemaStudioExperience({
     projectScope,
   ]);
   useEffect(() => {
-    if (!target || workspaces.loading || projectBranches.loading) return;
+    if (!target || workspaces.loading || projectBranches.loading || projectBranches.error) return;
     if (
       !legacyView &&
       requestedWorkspaceId === target.id &&
@@ -418,6 +421,7 @@ export function SchemaStudioExperience({
     target,
     workspaces.loading,
     projectBranches.loading,
+    projectBranches.error,
   ]);
 
   function changeWorkspace(id: string) {
@@ -1211,6 +1215,11 @@ export function SchemaStudioExperience({
       aria-label="Schema Studio"
       className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
     >
+      <BranchLoadError
+        error={projectBranches.error}
+        loading={projectBranches.loading}
+        onRetry={projectBranches.refresh}
+      />
       {!workspaces.loading && !workspaces.error && targetMismatch ? (
         <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           Workspace {workspaceId} belongs to {selectedTarget?.targetBranch}, not {requestedBranch}.
@@ -1223,7 +1232,13 @@ export function SchemaStudioExperience({
           applying.
         </p>
       ) : null}
-      {!workspaces.loading && !workspaces.error && !workspaceId && requestedBranch && !target ? (
+      {!projectBranches.error &&
+      !projectBranches.loading &&
+      !workspaces.loading &&
+      !workspaces.error &&
+      !workspaceId &&
+      requestedBranch &&
+      !target ? (
         <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           No Workspace is available for branch {requestedBranch}. Select a valid Workspace before
           editing.
