@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -112,5 +112,22 @@ describe('ProfileSettingsPanel', () => {
     expect(screen.getByText('jordan')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Unlink github account' }));
     expect(unlink).toHaveBeenCalledWith('acct_github');
+  });
+
+  it('keeps the edited profile and shows a save failure until the next attempt', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'false');
+    save.mockRejectedValueOnce(new Error('Profile service unavailable'));
+    render(<ProfileSettingsPanel />);
+
+    const input = screen.getByLabelText('Display name');
+    fireEvent.change(input, { target: { value: 'Updated name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Profile service unavailable');
+    expect(input).toHaveValue('Updated name');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Updated name' }));
   });
 });

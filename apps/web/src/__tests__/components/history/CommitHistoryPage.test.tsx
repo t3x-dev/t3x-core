@@ -307,4 +307,22 @@ describe('History node navigation', () => {
       expect(mocks.loadCommits).toHaveBeenLastCalledWith('proj_test', 'main', 100)
     );
   });
+
+  it.each([
+    ['list', 'History branch filter'],
+    ['canvas', 'Canvas branch filter'],
+  ])('shows a branch read failure and retries it in %s view', async (view, filter) => {
+    mocks.search = `branch=all&view=${view}`;
+    mocks.loadBranches
+      .mockRejectedValueOnce(new Error('Branch service unavailable'))
+      .mockResolvedValueOnce({ branches: [{ branch_id: 'feature', name: 'feature' }] });
+    render(<CommitHistoryPage projectId="proj_test" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Branch service unavailable');
+    expect(await screen.findByRole('combobox', { name: filter })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+    expect(await screen.findByRole('option', { name: 'feature' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

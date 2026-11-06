@@ -36,7 +36,15 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { commitTitle, formatDate, shortHash } from '@/domain/format/formatters';
 import { buildHistoryCanvasSvg, downloadTextFile } from '@/domain/history/historyCanvasExport';
 import {
@@ -56,6 +64,7 @@ export interface CanvasCommit {
 
 interface HistoryCanvasProps {
   branches: Branch[];
+  branchFeedback?: ReactNode;
   commits: CanvasCommit[];
   selectedBranch: string;
   onBack?: () => void;
@@ -218,6 +227,7 @@ export function HistoryCanvas(props: HistoryCanvasProps) {
 
 function HistoryCanvasInner({
   branches,
+  branchFeedback,
   commits,
   selectedBranch,
   onBack,
@@ -403,6 +413,7 @@ function HistoryCanvasInner({
         </button>
       </header>
 
+      {branchFeedback}
       <main className={styles.main}>
         <section
           aria-label="Commit graph canvas"

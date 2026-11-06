@@ -24,7 +24,7 @@ export function InvitationsPageContent() {
   const [invitations, setInvitations] = useState<ReceivedCollaborationInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actions, setActions] = useState<Record<string, { error?: string } | undefined>>({});
   const [accepted, setAccepted] = useState<ReceivedCollaborationInvitation | null>(null);
 
   const load = useCallback(async () => {
@@ -44,7 +44,8 @@ export function InvitationsPageContent() {
   }, [load]);
 
   async function accept(item: ReceivedCollaborationInvitation) {
-    setBusyId(item.invitation.invitation_id);
+    const id = item.invitation.invitation_id;
+    setActions((current) => ({ ...current, [id]: {} }));
     try {
       await client.acceptCollaborationInvitationById(item.invitation.invitation_id);
       setInvitations((current) =>
@@ -53,16 +54,19 @@ export function InvitationsPageContent() {
         )
       );
       setAccepted(item);
+      setActions((current) => ({ ...current, [id]: undefined }));
       toast.success('Invitation accepted');
     } catch (acceptError) {
-      toast.error(formatUserFacingError(acceptError, 'Failed to accept invitation.'));
-    } finally {
-      setBusyId(null);
+      setActions((current) => ({
+        ...current,
+        [id]: { error: formatUserFacingError(acceptError, 'Failed to accept invitation.') },
+      }));
     }
   }
 
   async function decline(item: ReceivedCollaborationInvitation) {
-    setBusyId(item.invitation.invitation_id);
+    const id = item.invitation.invitation_id;
+    setActions((current) => ({ ...current, [id]: {} }));
     try {
       await client.declineCollaborationInvitation(item.invitation.invitation_id);
       setInvitations((current) =>
@@ -70,11 +74,13 @@ export function InvitationsPageContent() {
           (candidate) => candidate.invitation.invitation_id !== item.invitation.invitation_id
         )
       );
+      setActions((current) => ({ ...current, [id]: undefined }));
       toast.success('Invitation declined');
     } catch (declineError) {
-      toast.error(formatUserFacingError(declineError, 'Failed to decline invitation.'));
-    } finally {
-      setBusyId(null);
+      setActions((current) => ({
+        ...current,
+        [id]: { error: formatUserFacingError(declineError, 'Failed to decline invitation.') },
+      }));
     }
   }
 
@@ -130,7 +136,8 @@ export function InvitationsPageContent() {
         ) : (
           <div className="space-y-3">
             {invitations.map((item) => {
-              const busy = busyId === item.invitation.invitation_id;
+              const action = actions[item.invitation.invitation_id];
+              const busy = Boolean(action && !action.error);
               return (
                 <section
                   key={item.invitation.invitation_id}
@@ -158,6 +165,11 @@ export function InvitationsPageContent() {
                       </Button>
                     </div>
                   </div>
+                  {action?.error && (
+                    <p className="mt-3 break-words text-sm text-[var(--status-error)]" role="alert">
+                      {action.error}
+                    </p>
+                  )}
                 </section>
               );
             })}

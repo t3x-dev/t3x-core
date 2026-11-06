@@ -32,6 +32,7 @@ import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
+import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
@@ -140,7 +141,15 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
   // State
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchResult, setBranchResult] = useState<{
+    projectId: string;
+    branches: Branch[];
+    error: string | null;
+    loading: boolean;
+  }>();
+  const [branchRetry, setBranchRetry] = useState(0);
+  const currentBranches = branchResult?.projectId === projectId ? branchResult : undefined;
+  const branches = currentBranches?.branches ?? [];
   const selectedBranch = branchFromUrl;
   const [listResult, setListResult] = useState<{
     projectId: string;
@@ -241,18 +250,36 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     [updateQuery]
   );
 
-  // Fetch branches
   useEffect(() => {
+    let cancelled = false;
+    setBranchResult((current) => ({
+      projectId,
+      branches: current?.projectId === projectId ? current.branches : [],
+      error: current?.projectId === projectId ? current.error : null,
+      loading: true,
+    }));
     const load = async () => {
       try {
         const data = await loadBranches(projectId);
-        setBranches(data.branches);
-      } catch {
-        // Non-critical
+        if (!cancelled) {
+          setBranchResult({ projectId, branches: data.branches, error: null, loading: false });
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setBranchResult((current) => ({
+            projectId,
+            branches: current?.projectId === projectId ? current.branches : [],
+            error: formatUserFacingError(cause, 'Could not load branches.'),
+            loading: false,
+          }));
+        }
       }
     };
-    load();
-  }, [projectId, loadBranches]);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, loadBranches, branchRetry]);
 
   // Fetch commits for selected branch
   useEffect(() => {
@@ -424,10 +451,19 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
+  const branchFeedback = (
+    <BranchLoadError
+      error={currentBranches?.error ?? null}
+      loading={currentBranches?.loading ?? true}
+      onRetry={() => setBranchRetry((current) => current + 1)}
+    />
+  );
+
   if (!loading && !error && !selectedCommitHash && commits.length > 0 && legacyCanvas) {
     return (
       <HistoryCanvas
         branches={branches}
+        branchFeedback={branchFeedback}
         commits={commits}
         selectedBranch={selectedBranch}
         focusedCommitHash={searchParams.get('focus')}
@@ -496,6 +532,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       <div className={styles.split}>
         <section aria-label="Commit list" className={styles.list} ref={listRef}>
           <h2 className={styles.listTitle}>Commits</h2>
+          {branchFeedback}
           <div className={styles.controls}>
             <label className={styles.filterControl}>
               <GitBranch size={15} strokeWidth={2} />

@@ -7,7 +7,7 @@ export function BranchLoadError({
 }: {
   error: string | null;
   loading: boolean;
-  onRetry: () => Promise<boolean>;
+  onRetry: () => void;
 }) {
   if (!error) return null;
   return (
