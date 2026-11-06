@@ -641,17 +641,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     enableComposeActivity();
     activityMocks.value!.view = null;
     renderCompose();
-    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent('0 operations');
-    expect(screen.queryByTitle('Changed Content objects')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveAccessibleDescription(
+      '0 Draft operations'
+    );
   });
 
-  it('labels object counts separately from content and Workspace revisions', () => {
+  it('labels change counts separately from content and Workspace revisions', () => {
     enableComposeActivity();
     activityMocks.value!.compositionRevision = 2;
     activityMocks.value!.view!.workspaceRevision = 7;
     renderCompose();
-    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent(
-      '0 changed objects'
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveAccessibleDescription(
+      '0 Content changes'
     );
     expect(screen.getByText('Content r2 · Workspace r7')).toBeInTheDocument();
   });
@@ -1986,7 +1987,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
-      'Current draft — no review snapshot prepared. Prepare review to freeze this revision.'
+      'Saved Draft · No fixed review selected'
     );
     expect(within(screen.getByLabelText('YAML code view')).getByRole('heading')).toHaveTextContent(
       candidate.revision === undefined
@@ -1998,6 +1999,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       projectId: 'proj_1',
       workspaceId: candidate.id,
       snapshotId: 'rvs_ready',
+      review: {
+        precondition: {
+          workspaceRevision: candidate.revision,
+          refHead: candidate.baseCommitHash,
+          refName: candidate.targetBranch,
+        },
+      },
     } as never;
     rerender(
       <WorkspaceComposeReviewSurface
@@ -2045,7 +2053,30 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     const code = screen.getByLabelText('YAML code view');
-    expect(code).toHaveTextContent('Current draft — matches prepared review snapshot');
+    expect(code).toHaveTextContent('Saved Draft · Matches the prepared snapshot');
+    controller.review.reviewSnapshot = {
+      ...controller.review.reviewSnapshot,
+      review: {
+        precondition: {
+          workspaceRevision: candidate.revision,
+          refHead: 'sha256:different-branch-base',
+          refName: candidate.targetBranch,
+        },
+      },
+    } as never;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    expect(code).toHaveTextContent(
+      'Saved Draft · Previous snapshot applies to a different version'
+    );
+    expect(code).not.toHaveTextContent('Matches the prepared snapshot');
+
     fireEvent.click(
       within(code)
         .getAllByRole('button', {
@@ -2078,7 +2109,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     } as ReturnType<typeof useComposeActivity>;
     controller.review.reviewSnapshot = {
       ...controller.review.reviewSnapshot,
-      review: { precondition: { workspaceRevision: 12 } },
+      review: { precondition: { workspaceRevision: 12, refHead: null, refName: 'main' } },
     } as never;
     rerender(
       <WorkspaceComposeReviewSurface
@@ -2090,10 +2121,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     expect(
-      screen.getByText('The branch or Draft changed. Prepare review again.')
+      screen.getByText(
+        'The previous snapshot does not cover the current Draft, branch base, or saved Schema.'
+      )
     ).toBeInTheDocument();
     expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
-      'Current draft — previous review snapshot is outdated. Prepare review again.'
+      'Saved Draft · Previous snapshot applies to a different version'
     );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
@@ -2361,8 +2394,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it.each([
-    ['sha256:abcdef0123456789', 'Base commit abcdef0'],
-    [null, 'Workspace baseline (no base commit)'],
+    ['sha256:abcdef0123456789', 'Base commit abcdef0 (empty Content)'],
+    [null, 'Empty base'],
   ])('identifies the comparison baseline %s without confusing the hash prefix or an imported base', (baseCommitHash, label) => {
     const candidate = { ...getWorkspacePreviewCandidates('proj_1')[0], baseCommitHash };
     const controller = {
@@ -2373,6 +2406,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         deterministicValidation: {
           ok: true,
           baselineTrees: [],
+          baselineRelations: [],
           previewTrees: [{ key: 'prd', slots: { title: 'New draft' }, children: [] }],
         },
         content: null,

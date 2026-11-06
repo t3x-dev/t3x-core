@@ -162,7 +162,9 @@ describe('WorkspaceSnapshotReview', () => {
       'href',
       '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewPane=yaml'
     );
-    expect(await screen.findByRole('heading', { name: /^Review ·/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Review · Fixed snapshot · Workspace r3' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     const checks = new URL(
       screen.getByRole('link', { name: 'View run' }).getAttribute('href')!,

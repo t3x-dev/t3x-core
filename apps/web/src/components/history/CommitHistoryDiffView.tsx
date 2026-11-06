@@ -316,11 +316,12 @@ export function CommitHistoryDiffView({
           <section className={styles.card}>
             <div className={styles.detailBlock}>
               <h3>
-                <MessageSquareText /> Why
+                <MessageSquareText /> Commit message
               </h3>
-              <p className={styles.reason}>
-                <strong>Commit message:</strong> {commitTitle(commit.message)}
-              </p>
+              <p className={styles.reason}>{commitTitle(commit.message)}</p>
+            </div>
+            <div className={styles.detailBlock}>
+              <h3>Field-level rationale</h3>
               <em>No field-level rationale recorded.</em>
             </div>
             <div className={styles.detailBlock}>

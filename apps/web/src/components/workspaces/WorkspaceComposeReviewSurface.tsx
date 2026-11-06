@@ -44,7 +44,15 @@ import {
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ChangeEvent, CSSProperties, FormEvent, RefObject } from 'react';
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayout';
@@ -92,7 +100,6 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { shortHash } from '@/domain/format/formatters';
 import { checksHref, checksReturnTo } from '@/domain/project/checks';
 import {
   buildCanonicalStateYaml,
@@ -178,6 +185,7 @@ import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 import {
+  WorkspaceReviewBaseline,
   WorkspaceReviewContentPreview,
   WorkspaceReviewSchemaView,
   WorkspaceReviewYaml,
@@ -1193,6 +1201,7 @@ function ComposeSurface({
     )?.title ||
     activeConversationTitle ||
     'Chat';
+  const draftCountId = useId();
   const contentChangeCount = activity.view
     ? composeDraftChangeCards(activity.view.netDiff, activity.view.base, activity.view.current)
         .length
@@ -1432,14 +1441,15 @@ function ComposeSurface({
               type="button"
               className={composeStyles.draftToggle}
               aria-label="Open Draft"
+              aria-describedby={draftCountId}
               aria-expanded={inspectorOpen}
               ref={draftButton}
               onClick={openDraft}
               title="Inspect Workspace Draft"
             >
               <PanelRightOpen aria-hidden="true" /> Draft
-              <span title={activity.view ? 'Changed Content objects' : 'Draft operations'}>
-                {contentChangeCount} {activity.view ? 'changed objects' : 'operations'}
+              <span id={draftCountId}>
+                {contentChangeCount} {activity.view ? 'Content changes' : 'Draft operations'}
               </span>
               {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
                 <small>Schema</small>
@@ -2862,6 +2872,8 @@ function formatRelativeTime(value: string | undefined): string {
   return `${String(Math.floor(elapsedHours / 24))}d ago`;
 }
 
+type DraftSnapshotStatus = 'none' | 'unknown' | 'outdated' | 'matching';
+
 function ReviewSurface({
   activity,
   compareScenarioId,
@@ -2887,12 +2899,18 @@ function ReviewSurface({
   const newerDraft =
     newerRevision !== undefined ||
     Boolean(activity.newActivity || authoring?.synchronization?.required);
-  const schemaReview =
-    !authoring ||
-    controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
-      authoring.workspaceRevision
-      ? controller.review.schemaReview
-      : null;
+  const snapshot = controller.review.reviewSnapshot;
+  const snapshotBasis = snapshot?.review?.precondition;
+  const inspectedRevision = authoring?.workspaceRevision ?? controller.candidate.revision;
+  const inspectedRefHead = authoring
+    ? authoring.basis.refHead
+    : controller.candidate.baseCommitHash;
+  const snapshotMatchesDraft =
+    snapshotBasis !== undefined &&
+    snapshotBasis.workspaceRevision === inspectedRevision &&
+    snapshotBasis.refHead === inspectedRefHead &&
+    snapshotBasis.refName === (authoring?.basis.refName ?? controller.candidate.targetBranch);
+  const schemaReview = !authoring || snapshotMatchesDraft ? controller.review.schemaReview : null;
   const authoringReview = useMemo(
     () =>
       buildAuthoringReviewProjection(
@@ -3071,20 +3089,23 @@ function ReviewSurface({
   const preparing = controller.busyAction === 'review.prepare';
   const draftLoading = activity.enabled && !authoring && activity.loading;
   const draftUnavailable = activity.enabled && !draftLoading && (!authoring || !authoringReview);
-  const snapshotCurrent =
-    Boolean(controller.review.reviewSnapshot) &&
-    !preparing &&
-    !preparingSchema &&
-    !hasSavedSchema &&
-    !newerDraft &&
-    !activity.error &&
-    !draftUnavailable &&
-    !draftLoading &&
-    !activity.awaitingPublishRefresh &&
-    (!authoring ||
-      (!authoring.synchronization?.required &&
-        controller.review.reviewSnapshot?.review?.precondition.workspaceRevision ===
-          authoring.workspaceRevision));
+  const snapshotStatus: DraftSnapshotStatus = !snapshot
+    ? 'none'
+    : newerDraft || hasSavedSchema
+      ? 'outdated'
+      : !snapshotBasis ||
+          preparing ||
+          preparingSchema ||
+          savedSchema.loading ||
+          savedSchema.error ||
+          activity.error ||
+          draftUnavailable ||
+          draftLoading ||
+          activity.awaitingPublishRefresh
+        ? 'unknown'
+        : snapshotMatchesDraft
+          ? 'matching'
+          : 'outdated';
   const committedId =
     committedReviewId(view) ??
     (controller.candidate.status === 'committed'
@@ -3160,6 +3181,9 @@ function ReviewSurface({
       branch={candidate.targetBranch}
       review={schemaReview}
       current={authoring?.currentSchema}
+      versionLabel={
+        candidate.revision === undefined ? undefined : `workspace-r${candidate.revision}`
+      }
     />
   );
   return (
@@ -3169,6 +3193,7 @@ function ReviewSurface({
           <>
             Workspace draft{candidate.revision !== undefined ? ` r${candidate.revision}` : ''} →{' '}
             {candidate.targetBranch || 'main'}
+            {authoring ? ` · Content r${authoring.compositionRevision}` : ''}
           </>
         }
         status={
@@ -3296,7 +3321,7 @@ function ReviewSurface({
               <WorkspaceReviewSummary
                 candidate={candidate}
                 controller={controller}
-                snapshotCurrent={snapshotCurrent}
+                snapshotStatus={snapshotStatus}
                 hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
                 preparingSchema={preparingSchema || Boolean(schemaPreparation)}
                 schemaLoading={Boolean(
@@ -3397,8 +3422,10 @@ function ReviewSurface({
             query=""
             rows={structureModel.rows}
             sourceLabel={materialLabel}
-            yamlModel={pane === 'yaml' ? structureModel : undefined}
-            snapshotCurrent={snapshotCurrent}
+            model={structureModel}
+            baselineStateDigest={authoring?.basis.baseDigest}
+            showYaml={pane === 'yaml'}
+            snapshotStatus={snapshotStatus}
           />
         ) : (
           <div className="py-12 text-center text-sm">
@@ -3474,7 +3501,7 @@ function ReviewCheckList({
 function WorkspaceReviewSummary({
   candidate,
   controller,
-  snapshotCurrent,
+  snapshotStatus,
   hasChanges,
   preparingSchema,
   schemaLoading,
@@ -3487,7 +3514,7 @@ function WorkspaceReviewSummary({
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
-  snapshotCurrent: boolean;
+  snapshotStatus: DraftSnapshotStatus;
   hasChanges: boolean | undefined;
   preparingSchema: boolean;
   schemaLoading: boolean;
@@ -3498,7 +3525,7 @@ function WorkspaceReviewSummary({
   onOpenChecks: () => void;
   onPrepare: () => void;
 }) {
-  const snapshot = controller.review.reviewSnapshot;
+  const snapshotCurrent = snapshotStatus === 'matching';
   const checks = getReviewChecks(controller);
   const preparing = preparingSchema || controller.busyAction === 'review.prepare';
   const status = preparing
@@ -3507,11 +3534,13 @@ function WorkspaceReviewSummary({
       ? 'Waiting for the saved Draft and its comparison baseline.'
       : hasChanges === false
         ? EMPTY_WORKSPACE_REVIEW
-        : snapshot && !snapshotCurrent
-          ? 'The branch or Draft changed. Prepare review again.'
-          : snapshot
-            ? 'Review snapshot ready for decision.'
-            : 'Prepare a fixed snapshot to approve and commit here.';
+        : snapshotStatus === 'outdated'
+          ? 'The previous snapshot does not cover the current Draft, branch base, or saved Schema.'
+          : snapshotStatus === 'unknown'
+            ? 'The previous snapshot could not yet be matched to this Draft.'
+            : snapshotCurrent
+              ? 'These checks apply to the fixed snapshot of this Draft.'
+              : 'Prepare a fixed snapshot to approve and commit here.';
   return (
     <section aria-label="Review readiness" className={workbenchStyles.draftChecks}>
       <div>
@@ -3520,9 +3549,11 @@ function WorkspaceReviewSummary({
             ? 'Preparing review'
             : snapshotCurrent
               ? 'Review prepared'
-              : snapshot
-                ? 'Review outdated'
-                : 'Not reviewed'}
+              : snapshotStatus === 'outdated'
+                ? 'Previous snapshot outdated'
+                : snapshotStatus === 'unknown'
+                  ? 'Snapshot freshness unconfirmed'
+                  : 'No fixed review selected'}
         </h2>
         <p aria-live="polite">{status}</p>
       </div>
@@ -3635,24 +3666,22 @@ function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeRevi
 function ResultYamlPane({
   model,
   revision,
-  hasSnapshot,
   changeCounts,
   branch,
   selectedRow,
   onSelectRow,
   preparing,
-  snapshotCurrent,
+  snapshotStatus,
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
   revision?: number;
-  hasSnapshot: boolean;
   changeCounts: { added: number; modified: number; removed: number };
   branch: string;
   selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
   preparing: boolean;
-  snapshotCurrent: boolean;
+  snapshotStatus: DraftSnapshotStatus;
   validationReady: boolean;
 }) {
   const lines = useMemo(() => buildStateYamlReview(model.baseline, model.head), [model]);
@@ -3671,14 +3700,15 @@ function ResultYamlPane({
     [model.rows, onSelectRow]
   );
   const statusLabel = preparing
-    ? 'Preparing review…'
+    ? 'Preparing fixed review…'
     : !model.hasReplayContent
-      ? 'Draft preview — base not verified'
-      : snapshotCurrent
-        ? 'Current draft — matches prepared review snapshot'
-        : hasSnapshot
-          ? 'Current draft — previous review snapshot is outdated. Prepare review again.'
-          : 'Current draft — no review snapshot prepared. Prepare review to freeze this revision.';
+      ? 'Base not verified'
+      : {
+          matching: 'Matches the prepared snapshot',
+          outdated: 'Previous snapshot applies to a different version',
+          unknown: 'Snapshot freshness unconfirmed',
+          none: 'No fixed review selected',
+        }[snapshotStatus];
 
   return (
     <WorkspaceReviewCodeView
@@ -3691,7 +3721,7 @@ function ResultYamlPane({
         lines,
         selectedPath: selectedRow?.path,
         onSelectPath: selectPath,
-        statusLabel: `${statusLabel} · Field-tree projection`,
+        statusLabel: `Saved Draft · ${statusLabel} · Field-tree projection`,
       }}
     />
   );
@@ -3854,8 +3884,10 @@ function WorkspaceReviewStructureView({
   query,
   rows,
   sourceLabel,
-  yamlModel,
-  snapshotCurrent,
+  showYaml,
+  model,
+  snapshotStatus,
+  baselineStateDigest,
 }: {
   activeRowId: string | null;
   candidate: WorkspaceCandidate;
@@ -3869,8 +3901,10 @@ function WorkspaceReviewStructureView({
   query: string;
   rows: WorkspaceReviewStructureRow[];
   sourceLabel: string;
-  yamlModel?: WorkspaceReviewStructureModel;
-  snapshotCurrent: boolean;
+  showYaml: boolean;
+  model: WorkspaceReviewStructureModel;
+  snapshotStatus: DraftSnapshotStatus;
+  baselineStateDigest?: string;
 }) {
   const changedRows = useMemo(() => rows.filter((row) => row.diff?.exact), [rows]);
   const selectedRow =
@@ -3889,21 +3923,19 @@ function WorkspaceReviewStructureView({
     >
       <div className={diffStyles.reviewBody}>
         <div className={diffStyles.mainColumn}>
-          {!yamlModel ? (
+          {!showYaml ? (
             <header className={diffStyles.toolbar}>
               <div className={diffStyles.diffHeading}>
                 <h1>Structure diff</h1>
                 <p>
-                  {candidate.baseCommitHash ? (
-                    <>
-                      Base commit{' '}
-                      <code title={candidate.baseCommitHash}>
-                        {shortHash(candidate.baseCommitHash)}
-                      </code>
-                    </>
-                  ) : (
-                    'Workspace baseline (no base commit)'
-                  )}{' '}
+                  <WorkspaceReviewBaseline
+                    commitHash={candidate.baseCommitHash}
+                    stateDigest={baselineStateDigest}
+                    available={model.hasReplayContent}
+                    empty={
+                      model.baseline.trees.length === 0 && model.baseline.relations?.length === 0
+                    }
+                  />{' '}
                   compared with Workspace draft{' '}
                   <code>
                     {candidate.revision === undefined
@@ -3930,19 +3962,18 @@ function WorkspaceReviewStructureView({
               </div>
             </header>
           ) : null}
-          {yamlModel ? (
+          {showYaml ? (
             <ResultYamlPane
               changeCounts={changeCounts}
               branch={candidate.targetBranch}
-              model={yamlModel}
+              model={model}
               revision={candidate.revision}
-              hasSnapshot={Boolean(controller.review.reviewSnapshot)}
               onSelectRow={onSelectRow}
               preparing={preparing}
               selectedRow={selectedRow}
-              snapshotCurrent={snapshotCurrent}
+              snapshotStatus={snapshotStatus}
               validationReady={
-                snapshotCurrent &&
+                snapshotStatus === 'matching' &&
                 checks.some(
                   (check) => check.label === 'Schema validation' && check.status === 'passed'
                 )
@@ -4037,16 +4068,28 @@ export function WorkspaceReviewStructureTree({
   }, [expansionRequest, rows]);
 
   const table = (
-    <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
+    <table
+      className={cn(diffStyles.tree, reference ? diffStyles.referenceTree : diffStyles.historyTree)}
+    >
       {reference ? (
         <ReviewDiffColumns />
       ) : (
-        <colgroup>
-          <col className="w-[29%]" />
-          <col className="w-[34%]" />
-          <col className="w-[25%]" />
-          <col className="w-[12%]" />
-        </colgroup>
+        <>
+          <colgroup>
+            <col className="w-[29%]" />
+            <col className="w-[34%]" />
+            <col />
+            <col className="w-[108px]" />
+          </colgroup>
+          <thead className={diffStyles.treeHeader}>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Value</th>
+              <th scope="col">Auto-generated summary</th>
+              <th scope="col">Commit date</th>
+            </tr>
+          </thead>
+        </>
       )}
       <tbody>
         {visibleRows.map((row) => (
@@ -4069,7 +4112,7 @@ export function WorkspaceReviewStructureTree({
       {table}
     </section>
   ) : (
-    <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
+    <StateScrollArea horizontal className={diffStyles.treePane} label="Structure diff rows">
       {table}
     </StateScrollArea>
   );
@@ -4213,9 +4256,7 @@ function WorkspaceReviewStructureTableRow({
           <td className={diffStyles.valueCell}>
             <WorkspaceReviewValueCell row={row} />
           </td>
-          <td className={diffStyles.whyCell}>
-            <WorkspaceReviewWhyCell row={row} />
-          </td>
+          <td className={diffStyles.summaryCell}>{row.diff?.summary ?? '—'}</td>
           <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
         </>
       )}
@@ -4256,16 +4297,6 @@ function WorkspaceReviewValueCell({ row }: { row: WorkspaceReviewStructureRow })
   return (
     <span className={diffStyles.plainValue} title={row.value}>
       {row.value === '-' ? '' : row.value}
-    </span>
-  );
-}
-
-function WorkspaceReviewWhyCell({ row }: { row: WorkspaceReviewStructureRow }) {
-  if (!row.diff && row.status === 'unchanged') return <span>—</span>;
-  const reason = workspaceReviewEffectText(row);
-  return (
-    <span className={diffStyles.whyText} title={reason}>
-      {reason}
     </span>
   );
 }

@@ -108,7 +108,7 @@ export function WorkspacePendingSchemaReview({
       ) : pane === 'yaml' ? (
         <WorkspaceReviewCodeView
           branch={branch}
-          rootKey="saved-schema"
+          rootKey={`saved-schema-candidate-r${candidate.revision}`}
           validationReady={false}
           statusLabel="Saved Schema candidate · awaiting preparation"
           yamlText={dump(preview.schema, { noRefs: true, sortKeys: true })}

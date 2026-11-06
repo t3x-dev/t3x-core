@@ -52,7 +52,7 @@ const head: ApiCommit = {
 function mount() {
   render(<CommitHistoryDiffView commit={head} parentCommit={parent} onBack={() => undefined} />);
   fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
-  return within(screen.getByRole('region', { name: 'Workspace structure rows' }));
+  return within(screen.getByRole('region', { name: 'Structure diff rows' }));
 }
 
 describe('Contextual diff navigation', () => {

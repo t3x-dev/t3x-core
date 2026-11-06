@@ -51,7 +51,7 @@ const SELECTED_COMMIT: ApiCommit = {
 };
 
 describe('CommitHistoryDiffView', () => {
-  it('uses the same missing-message fallback for the heading and reason', () => {
+  it('uses the same missing-message fallback for the title and commit message', () => {
     render(
       <CommitHistoryDiffView
         commit={{ ...SELECTED_COMMIT, message: '   ' }}
@@ -60,9 +60,8 @@ describe('CommitHistoryDiffView', () => {
       />
     );
     expect(screen.getByRole('heading', { name: 'No commit message' })).toBeInTheDocument();
-    expect(screen.getByText('Commit message:').parentElement).toHaveTextContent(
-      'Commit message: No commit message'
-    );
+    expect(screen.getByRole('heading', { name: 'Commit message' }).nextElementSibling)
+      .toHaveTextContent('No commit message');
   });
 
   it('renders the source-matched YAML review with real commit data and selected values', () => {
@@ -105,15 +104,28 @@ describe('CommitHistoryDiffView', () => {
       'aria-selected',
       'true'
     );
-    const tree = screen.getByRole('region', { name: 'Workspace structure rows' });
+    const tree = screen.getByRole('region', { name: 'Structure diff rows' });
     expect(tree).toBeInTheDocument();
     expect(
       screen.getAllByRole('complementary', { name: 'History change walkthrough' })
     ).toHaveLength(1);
     fireEvent.click(within(tree).getByText('title'));
-    expect(
-      screen.getByRole('complementary', { name: 'History change walkthrough' })
-    ).toHaveTextContent('Checkout Retry and Payment Recovery');
+    const inspector = screen.getByRole('complementary', { name: 'History change walkthrough' });
+    expect(inspector).toHaveTextContent('Checkout Retry and Payment Recovery');
+    expect(within(tree).getAllByRole('columnheader').map((column) => column.textContent)).toEqual([
+      'Field', 'Value', 'Auto-generated summary', 'Commit date',
+    ]);
+    const titleRow = within(tree).getByText('title').closest('tr')!;
+    expect(within(titleRow).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+      'title',
+      'Checkout Retry RecoveryCheckout Retry and Payment Recovery',
+      'Updated title',
+      '29 Jul 2026',
+    ]);
+    expect(within(inspector).getByRole('heading', { name: 'Commit message' }).nextElementSibling)
+      .toHaveTextContent(SELECTED_COMMIT.message);
+    expect(within(inspector).getByRole('heading', { name: 'Field-level rationale' }).nextElementSibling)
+      .toHaveTextContent('No field-level rationale recorded.');
   });
 
   it.each([
@@ -168,7 +180,7 @@ describe('CommitHistoryDiffView', () => {
     const original = JSON.stringify([parent, head]);
     render(<CommitHistoryDiffView commit={head} parentCommit={parent} onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Structure diff' }));
-    const tree = screen.getByRole('region', { name: 'Workspace structure rows' });
+    const tree = screen.getByRole('region', { name: 'Structure diff rows' });
     const field = within(tree).getByTitle(`prd/inputs/${path}`);
     fireEvent.click(field);
     const inspector = screen.getByRole('complementary', { name: 'History change walkthrough' });

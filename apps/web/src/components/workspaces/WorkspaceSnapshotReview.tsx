@@ -8,14 +8,17 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { checksHref } from '@/domain/project/checks';
 import { getProjectIdHistoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
 import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
 import { ChangeReviewChanges } from './ChangeReviewChanges';
 import {
+  WorkspaceReviewBaseline,
   WorkspaceReviewContentPreview,
   WorkspaceReviewSchemaView,
   WorkspaceReviewYaml,
@@ -64,6 +67,8 @@ export function WorkspaceSnapshotReview({
     );
   }
   const [subject, setSubject] = useWorkspaceReviewSubject(projectId, workspaceId, subjectChanges);
+  const baseContent = schemaReview?.baseContent;
+  const semanticBase = authoringSemanticContent(baseContent);
   const fieldGroups =
     schemaReview?.baseContent !== undefined && schemaReview.draftContent !== undefined
       ? fieldChangeGroups(schemaReview.baseContent, schemaReview.draftContent)
@@ -181,7 +186,7 @@ export function WorkspaceSnapshotReview({
           <>
             Review ·{' '}
             {snapshot
-              ? `Snapshot r${snapshot.review.precondition.workspaceRevision}`
+              ? `Fixed snapshot · Workspace r${snapshot.review.precondition.workspaceRevision}`
               : 'Fixed snapshot'}
           </>
         }
@@ -190,7 +195,7 @@ export function WorkspaceSnapshotReview({
             ? 'Committed. This snapshot stays available for reference.'
             : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected'
               ? 'Rejected. The Draft is retained for editing; the branch was not changed.'
-              : 'Fixed revision. Review Content and Schema, then approve and commit or reject.'
+              : 'Content, Schema and check results belong to this fixed snapshot.'
         }
         pane={pane}
         onPaneChange={(next) => {
@@ -306,6 +311,21 @@ export function WorkspaceSnapshotReview({
           ) : null
         }
       >
+        {view && pane === 'changes' ? (
+          <p className="mb-3 text-xs text-[var(--text-secondary)]">
+            Content baseline ·{' '}
+            <WorkspaceReviewBaseline
+              commitHash={snapshot?.review.precondition.refHead}
+              stateDigest={view.change.base?.digest}
+              available={baseContent !== undefined}
+              empty={
+                semanticBase
+                  ? semanticBase.trees.length === 0 && semanticBase.relations.length === 0
+                  : composeValuesEqual(baseContent, {})
+              }
+            />
+          </p>
+        ) : null}
         {view ? (
           subject === 'schema' ? (
             <WorkspaceReviewSchemaView
@@ -313,6 +333,7 @@ export function WorkspaceSnapshotReview({
               review={schemaReview}
               branch={branch ?? 'main'}
               frozen
+              versionLabel={activeSnapshotId}
             />
           ) : pane === 'rendered' ? (
             <WorkspaceReviewContentPreview value={schemaReview?.draftContent} frozen />
