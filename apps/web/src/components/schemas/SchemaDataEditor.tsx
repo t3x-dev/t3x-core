@@ -132,6 +132,7 @@ export function SchemaDataEditor({
   pending = false,
   loading = true,
   previewError,
+  previewErrorAction,
   onRetry,
   onPreview,
   onSave,
@@ -170,6 +171,7 @@ export function SchemaDataEditor({
   pending?: boolean;
   loading?: boolean;
   previewError?: string;
+  previewErrorAction?: ReactNode;
   onRetry?: () => void;
   disabledReason?: string;
   projectId?: string;
@@ -526,11 +528,12 @@ export function SchemaDataEditor({
         <>
           <strong>Could not load Schema</strong>
           <p role="alert">{previewError}</p>
-          {onRetry ? (
-            <Button size="sm" variant="canvas-outline" onClick={onRetry}>
-              Retry
-            </Button>
-          ) : null}
+          {previewErrorAction ??
+            (onRetry ? (
+              <Button size="sm" variant="canvas-outline" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null)}
         </>
       ) : loading ? (
         <output>Loading Schema definition…</output>
@@ -811,6 +814,7 @@ export function SchemaDataEditor({
             : error || previewError}
         </p>
       ) : null}
+      {definition && previewError ? previewErrorAction : null}
       <fieldset className={styles.content} disabled={pending || saving}>
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>

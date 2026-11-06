@@ -228,6 +228,7 @@ export function SchemaStudioExperience({
   const [compositionSaving, setCompositionSaving] = useState(false);
   const [editorActions, setEditorActions] = useState({ undo: false, rules: false, discard: false });
   const [sourceError, setSourceError] = useState<string>();
+  const [sourceRestore, setSourceRestore] = useState<{ key: string; error?: string }>();
   const [compositionRequest, setCompositionRequest] = useState<{
     ids: string[];
     revision: number;
@@ -496,6 +497,8 @@ export function SchemaStudioExperience({
     persistedTarget?.baseCommitHash ?? null,
   ]);
   const editIdentity = `${projectId}:${workspaceId}:${recoveredCandidateKey}:${savedEditIsApplied}:${boundRevision}`;
+  const currentRestore = sourceRestore?.key === editIdentity ? sourceRestore : undefined;
+  const restoringSources = Boolean(currentRestore && !currentRestore.error);
   const missingEditSources = (schemaEdit.candidate?.baseSources ?? []).filter(
     (base) =>
       !candidates.items.some(
@@ -508,12 +511,44 @@ export function SchemaStudioExperience({
   const recoveryError =
     !schemaEdit.loading &&
     !candidates.loading &&
+    !candidates.error &&
     recoveredEditIdentity !== editIdentity &&
     !savedEditIsApplied &&
     !savedEditUsesBinding &&
     missingEditSources.length
-      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. Restore them in Sources, or use Combine sources to prepare a replacement. The saved candidate is preserved until you save.`
+      ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. ${currentRestore?.error ?? 'Restore the pinned sources to reopen your saved draft, or use Combine sources to prepare a replacement.'}`
       : undefined;
+
+  async function restoreSavedSources() {
+    if (restoringSources || !recoveryError) return;
+    const scope = projectScope;
+    const isCurrent = () => scope.active && activeProjectScope.current === scope;
+    const attempt = { key: editIdentity };
+    setSourceRestore(attempt);
+    try {
+      for (const source of missingEditSources) {
+        if (!isCurrent()) break;
+        const restored = await candidates.add({
+          sourceProjectId: source.projectId ?? undefined,
+          canonicalName: source.canonicalName,
+          version: source.version,
+          expectedHash: source.hash,
+        });
+        if (
+          !restored?.available ||
+          !restored.source ||
+          schemaSourceKey(restored.source) !== schemaSourceKey(source)
+        )
+          throw new Error('Sources did not return the exact saved release.');
+      }
+      setSourceRestore((current) => (current === attempt ? undefined : current));
+    } catch (cause) {
+      const error =
+        cause instanceof Error ? cause.message : 'Could not restore the pinned sources.';
+      const failure = isCurrent() ? { ...attempt, error } : undefined;
+      setSourceRestore((current) => (current === attempt ? failure : current));
+    }
+  }
   const recoveryKey = `${projectId}:${persistedTarget?.id ?? ''}`;
   useEffect(() => {
     if (
@@ -907,12 +942,12 @@ export function SchemaStudioExperience({
   });
   const publishBlocker =
     editorUnavailable ||
+    !recoveredDefinitionReady ||
     definitionOpen ||
     applying ||
     preview.loading ||
-    schemaEdit.pending ||
-    schemaEdit.loading
-      ? 'Finish the current Schema action before publishing.'
+    schemaEdit.pending
+      ? (recoveryError ?? 'Finish the current Schema action before publishing.')
       : dataDirty || editorInvalid
         ? 'Fix field errors and save the Schema changes before publishing.'
         : studioPublicationBlocker(data);
@@ -1077,6 +1112,7 @@ export function SchemaStudioExperience({
       )}
       pending={
         compositionSaving ||
+        restoringSources ||
         applying ||
         schemaEdit.pending ||
         schemaEdit.loading ||
@@ -1308,7 +1344,8 @@ export function SchemaStudioExperience({
               }
               revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}:${boundRevision}`}
               disabledReason={
-                !persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined
+                recoveryError ??
+                (!persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined)
               }
               pending={schemaEdit.pending || applying}
               loading={
@@ -1325,6 +1362,18 @@ export function SchemaStudioExperience({
                 schemaEdit.error ||
                 candidates.error ||
                 preview.error
+              }
+              previewErrorAction={
+                recoveryError && !dataDirty ? (
+                  <Button
+                    size="sm"
+                    variant="canvas-outline"
+                    disabled={restoringSources || candidates.pending || applying}
+                    onClick={() => void restoreSavedSources()}
+                  >
+                    {restoringSources ? 'Restoring sources…' : 'Restore pinned sources'}
+                  </Button>
+                ) : undefined
               }
               onRetry={() => {
                 void workspaces.refresh();
@@ -1422,6 +1471,7 @@ export function SchemaStudioExperience({
         data={data}
         canEditDefinition={Boolean(
           persistedTarget &&
+            recoveredDefinitionReady &&
             (schemaDefinition || data) &&
             (selection.length || currentBinding || creatingBlank || activeCandidate) &&
             !editorInvalid &&
@@ -1457,7 +1507,12 @@ export function SchemaStudioExperience({
         onReview={() => void openReview()}
         onSave={() => void navigationRef.current?.save?.()}
         canSave={
-          !editorUnavailable && dataCanSave && !definitionOpen && !applying && !schemaEdit.pending
+          !editorUnavailable &&
+          !recoveryError &&
+          dataCanSave &&
+          !definitionOpen &&
+          !applying &&
+          !schemaEdit.pending
         }
         onPublish={() => {
           if (data) setPublishReview(data);

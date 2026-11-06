@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
+import type { StudioCandidate, StudioSchemaEditCandidate } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { dump, load } from 'js-yaml';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   pendingSchema: { status: 'none', pending: null } as unknown,
   query: 'candidate=provider',
   candidatesLoading: false,
+  restoredSources: [] as StudioCandidate[],
+  restoreSource: vi.fn(),
   branches: [] as string[],
   workspacesLoading: false,
   workspacesError: null as string | null,
@@ -126,8 +128,10 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
           hash: 'sha256:abc',
         },
       },
+      ...mocks.restoredSources,
     ],
     loading: mocks.candidatesLoading,
+    add: mocks.restoreSource,
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
@@ -224,6 +228,8 @@ beforeEach(() => {
     .mockResolvedValue('/project/p?tab=workspaces&reviewSnapshot=exact-review');
   mocks.previewResult = undefined;
   mocks.candidatesLoading = false;
+  mocks.restoredSources = [];
+  mocks.restoreSource.mockReset();
   mocks.apply.mockReset();
   mocks.publish.mockReset();
   mocks.push.mockReset();
@@ -329,6 +335,70 @@ it('synchronizes exact sources and revision when an assistant snapshot replaces 
     screen.queryByRole('checkbox', { name: 'Select Shared foundation 1.0' })
   ).not.toBeInTheDocument();
 });
+it('restores an exact missing source and reopens the same saved candidate', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.workspaces = [boundWorkspace()];
+  const source = {
+    projectId: 'source-project',
+    artifactVersionId: 'weekly-goals-v1',
+    canonicalName: 't3x/weekly-goals',
+    version: '1.0.0',
+    hash: 'sha256:weekly-goals',
+  };
+  mocks.schemaEditCandidate = {
+    candidateId: 'saved-weekly-goals',
+    revision: 4,
+    localContribution: {},
+    origin: { channel: 'studio' },
+    baseSources: [source],
+  };
+  mocks.restoreSource.mockRejectedValueOnce(new Error('Source release is unavailable.'));
+  mocks.restoreSource.mockImplementationOnce(async () => {
+    const restored = {
+      id: 'restored',
+      available: true,
+      title: 'Weekly goals',
+      kind: 'schema' as const,
+      source,
+      projectId: 'p',
+      studioId: 'main',
+      createdAt: '2026-11-05',
+      description: null,
+      license: null,
+      reason: null,
+    };
+    mocks.restoredSources = [restored];
+    return restored;
+  });
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByText(/needs missing sources: t3x\/weekly-goals @ 1.0.0/)).toBeVisible();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  expect(screen.getByRole('menuitem', { name: 'Edit YAML…' })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
+  expect(await screen.findByText(/Source release is unavailable/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
+  await waitFor(() =>
+    expect(mocks.previewInputs).toContainEqual({
+      candidateIds: ['restored'],
+      workspaceId: 'workspace_branch:main',
+      schemaEditCandidate: { candidateId: 'saved-weekly-goals', revision: 4 },
+    })
+  );
+  expect(mocks.restoreSource).toHaveBeenLastCalledWith({
+    sourceProjectId: source.projectId,
+    canonicalName: source.canonicalName,
+    version: source.version,
+    expectedHash: source.hash,
+  });
+  expect(screen.queryByText(/needs missing sources/)).not.toBeInTheDocument();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
+
 it('does not review another Workspace when the deep-linked target is missing', () => {
   mocks.query = 'candidate=provider&workspace=missing';
   render(<SchemaStudioExperience projectId="p" />);
@@ -1144,7 +1214,7 @@ it.each([
   render(<SchemaStudioExperience projectId="p" />);
   if (missing) {
     expect(screen.getByRole('alert')).toHaveTextContent('team/missing @ 1.0');
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Restore pinned sources' })).toBeVisible();
     expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
   } else {
     await waitFor(() => expect(screen.getByLabelText('Type chosen/title')).toBeVisible());
