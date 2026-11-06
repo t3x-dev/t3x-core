@@ -63,6 +63,18 @@ describe('formatUserFacingError', () => {
     );
   });
 
+  it('distinguishes API request throttling from provider capacity', () => {
+    expect(
+      formatUserFacingError({
+        code: 'RATE_LIMITED',
+        message: 'Too many requests. Please try again later.',
+      })
+    ).toBe('Too many requests. Please try again later.');
+    expect(
+      formatUserFacingError({ code: 'RATE_LIMITED', message: 'Provider quota exhausted' })
+    ).toBe('Provider rate limit reached. Wait a moment or choose a different configured provider.');
+  });
+
   it('maps hosted capacity codes preserved through command causes', () => {
     const error = Object.assign(new Error('project_persistence failed'), {
       cause: Object.assign(new Error('Private-project capacity is exhausted (3/3)'), {
