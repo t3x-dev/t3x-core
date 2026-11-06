@@ -145,6 +145,65 @@ export async function recoverCommittedSchema(
   return null;
 }
 
+export async function committedWorkspaceSchemaAtHead(
+  db: AnyDB,
+  projectId: string,
+  refName: string,
+  refHead: string | null,
+  fallback: WorkspaceSchemaDefinitionSnapshot
+): Promise<WorkspaceSchemaDefinitionSnapshot> {
+  if (refHead === null) return unboundWorkspaceSchema();
+  const committed = await getVerifiedTransitionCommitGraph(db, projectId, refHead);
+  if (!committed) throw new DraftAuthoringConflictError('The latest branch Commit is unavailable.');
+  const receipt = await findTransitionCommitReceipt(db, projectId, refHead);
+  const graph = receipt
+    ? await resolveTransitionProposalGraph(db, projectId, receipt.transitionId)
+    : null;
+  if (
+    graph &&
+    (graph.membership.proposalDigest !== describeTransitionObject(committed.proposal).digest ||
+      graph.membership.effectDigest !== describeTransitionObject(committed.effect).digest)
+  )
+    throw new DraftAuthoringConflictError(
+      'The committed Schema preparation does not match the branch Commit.'
+    );
+  const view = await getTransitionViewForCommit(db, { projectId, refName, commitId: refHead });
+  if (view?.mode !== 'transition')
+    throw new DraftAuthoringConflictError('The latest branch Commit could not be verified.');
+  const hashes = new Set(
+    view.checks.validation.runs.map((run) => run.predicate.schemaResource.digest)
+  );
+  const hasSchemaEvidence = hashes.size > 0;
+  const review = graph ? frozenWorkspaceSchemaReview(graph) : null;
+  const snapshot =
+    review?.draft ??
+    (await recoverCommittedSchema(db, projectId, refName, refHead, fallback, view)) ??
+    (hashes.size === 0 ? fallback : unboundWorkspaceSchema());
+  if (snapshot.status !== 'bound') {
+    if (hashes.size)
+      throw new DraftAuthoringConflictError(
+        'The branch Commit has Schema evidence but no recoverable Schema binding.'
+      );
+    return WorkspaceSchemaDefinitionSnapshotSchema.parse(snapshot);
+  }
+  const schema = snapshot.definition ? normalizeYSchemaObject(snapshot.definition) : null;
+  const schemaOnlyEvidence =
+    review &&
+    isSchemaOnlyWorkspaceReview(review) &&
+    (await hasSchemaReviewEvidence(committed.proposal, review));
+  if (
+    !schema ||
+    (await sha256CompositionValue(schema)) !== snapshot.schemaHash ||
+    (hasSchemaEvidence &&
+      !schemaOnlyEvidence &&
+      (hashes.size !== 1 || !hashes.has(snapshot.schemaHash as `sha256:${string}`)))
+  )
+    throw new DraftAuthoringConflictError(
+      'The exact Schema bound to the branch Commit failed verification.'
+    );
+  return WorkspaceSchemaDefinitionSnapshotSchema.parse(snapshot);
+}
+
 export const unboundWorkspaceSchema = (): WorkspaceSchemaDefinitionSnapshot => ({
   status: 'unbound',
   schemaHash: null,

@@ -1,4 +1,7 @@
-import { AssistantSchemaSettingsViewSchema } from '@t3x-dev/api-client';
+import {
+  AssistantSchemaSettingsViewSchema,
+  WorkspaceSchemaDefinitionSnapshotSchema,
+} from '@t3x-dev/api-client';
 import {
   compileDraftComposition,
   createDraftActionLedger,
@@ -27,10 +30,10 @@ import {
   findWorkspaceDraft,
   getTransitionProposalPreparation,
   getTransitionRefHead,
-  getTransitionViewForCommit,
   listTransitionProposalsForWorkspace,
   NotFoundError,
   transactWorkspaceAuthoring,
+  transactWorkspaceReconciliation,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
 import {
@@ -43,7 +46,7 @@ import { workspaceDocumentRootKey } from './workspace-schema-content';
 import {
   buildWorkspaceSchemaReview,
   captureWorkspaceSchema,
-  unboundWorkspaceSchema,
+  committedWorkspaceSchemaAtHead,
   workspaceSchemaReviewHasChanges,
 } from './workspace-schema-review';
 import { schemaRootKeyFromBinding } from './yschema-registry';
@@ -132,38 +135,160 @@ export async function assertWorkspaceAuthoringCommandBasis(
   return { draft, ...current };
 }
 
-/** Repair a stale root hint without guessing a Schema for an unbound Workspace. */
+/** Restore only the verified committed Schema; never guess from a UI default. */
 export async function ensureWorkspaceAuthoringSchema(
   db: AnyDB,
   input: { projectId: string; workspaceId: string; expectedRevision?: number }
 ): Promise<number | undefined> {
   const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
   const workspace = initial.workspace_state!;
-  if (!workspace.authoringLedger || !repairedSchemaBindings(workspace))
-    return input.expectedRevision;
+  if (!workspace.authoringLedger) return input.expectedRevision;
   const { basis } = workspaceAuthoringState(workspace);
+  const repairRoot = repairedSchemaBindings(workspace);
+  const restoreCommittedSchema =
+    basis.refHead !== null &&
+    (!Array.isArray(workspace.schemaBindings) || workspace.schemaBindings.length === 0) &&
+    !workspace.schemaEditCandidate &&
+    !workspace.schemaPending;
+  if (!repairRoot && !restoreCommittedSchema) return input.expectedRevision;
   const result = await transactWorkspaceAuthoring(
     db,
     { ...input, refName: basis.refName },
-    async (_tx, draft) => {
+    async (tx, draft) => {
       if (input.expectedRevision !== undefined && draft.revision !== input.expectedRevision)
         throw new ConflictError(draft.id, input.expectedRevision);
       const current = draft.workspace_state!;
-      workspaceAuthoringState(current);
+      const currentState = workspaceAuthoringState(current);
       if (draft.target_branch !== basis.refName)
         throw new DraftAuthoringConflictError('Target ref changed');
-      const schemaBindings = repairedSchemaBindings(current);
+      let schemaBindings = repairedSchemaBindings(current);
+      let workspaceSchemaBase = current.workspaceSchemaBase;
+      if (
+        currentState.basis.refHead !== null &&
+        (!Array.isArray(current.schemaBindings) || current.schemaBindings.length === 0) &&
+        !current.schemaEditCandidate &&
+        !current.schemaPending
+      ) {
+        const stored = current.workspaceSchemaBase as
+          | { refHead?: unknown; snapshot?: unknown }
+          | undefined;
+        const storedSnapshot =
+          stored?.refHead === currentState.basis.refHead && stored.snapshot !== undefined
+            ? WorkspaceSchemaDefinitionSnapshotSchema.parse(stored.snapshot)
+            : null;
+        const committed = await committedWorkspaceSchemaAtHead(
+          tx,
+          input.projectId,
+          currentState.basis.refName,
+          currentState.basis.refHead,
+          storedSnapshot ?? (await captureWorkspaceSchema(tx, input.projectId, current))
+        );
+        if (committed.status === 'bound') {
+          schemaBindings = structuredClone(committed.bindings);
+          workspaceSchemaBase = {
+            refHead: currentState.basis.refHead,
+            snapshot: structuredClone(committed),
+          };
+        }
+      }
       if (!schemaBindings) return { workspace: null, value: null };
       return {
         workspace: {
           ...current,
           schemaBindings,
+          ...(workspaceSchemaBase === undefined ? {} : { workspaceSchemaBase }),
         },
         value: null,
       };
     }
   );
   return result.draft.revision;
+}
+
+export async function synchronizeUninitializedWorkspace(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    requestId: string;
+    actor: DraftActionActor;
+    refName: string;
+    refHead: string;
+    expectedWorkspaceRevision: number;
+    initializationFacts?: string;
+  }
+) {
+  const facts =
+    input.initializationFacts ?? canonicalizeProtocolValue(JSON.parse(JSON.stringify(input)));
+  return transactWorkspaceReconciliation<
+    | { kind: 'pending' }
+    | { kind: 'reconciled'; basis: WorkspaceAuthoringBasis; ledger: DraftActionLedger }
+  >(db, input, async (tx, draft) => {
+    const workspace = draft.workspace_state;
+    if (!workspace) throw new NotFoundError(input.workspaceId);
+    if (draft.revision !== input.expectedWorkspaceRevision)
+      throw new ConflictError(draft.id, input.expectedWorkspaceRevision);
+    if (draft.target_branch !== input.refName)
+      throw new DraftAuthoringConflictError('Target ref changed');
+    const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
+    if (
+      operations?.length ||
+      draft.nodes?.length ||
+      draft.semantic_points?.length ||
+      workspace.schemaEditCandidate ||
+      workspace.schemaPending
+    )
+      return { workspace: null, value: { kind: 'pending' as const } };
+    const head = await getTransitionRefHead(tx, {
+      projectId: input.projectId,
+      refName: input.refName,
+    });
+    if (head.head !== input.refHead)
+      throw new DraftAuthoringConflictError('Branch changed again; refresh before syncing');
+    const document = head.state.value as DraftDocument;
+    const previousSchema = await captureWorkspaceSchema(tx, input.projectId, workspace);
+    const schema = await committedWorkspaceSchemaAtHead(
+      tx,
+      input.projectId,
+      input.refName,
+      input.refHead,
+      previousSchema
+    );
+    const ledger = createDraftActionLedger(document);
+    const basis: WorkspaceAuthoringBasis = {
+      schema: 't3x.application/workspace-authoring-basis/v1',
+      refName: input.refName,
+      refHead: input.refHead,
+      baseDigest: describeTransitionObject(createYOpsState(document)).digest,
+      initialization: { requestId: input.requestId, facts },
+    };
+    return {
+      workspace: {
+        ...workspace,
+        authoringLedger: ledger,
+        authoringBasis: basis,
+        baseCommitHash: input.refHead,
+        schemaBindings: structuredClone(schema.bindings),
+        workspaceSchemaBase: { refHead: input.refHead, snapshot: structuredClone(schema) },
+        authoringReconciliations: [
+          ...((workspace.authoringReconciliations ?? []) as unknown[]),
+          {
+            requestId: input.requestId,
+            facts,
+            reconciledAt: new Date().toISOString(),
+            actor: input.actor,
+            workspaceRevision: draft.revision,
+            basis: workspace.authoringBasis,
+            ledger: workspace.authoringLedger,
+            schemaBindings: workspace.schemaBindings,
+            workspaceSchemaBase: workspace.workspaceSchemaBase,
+            nextRefHead: input.refHead,
+          },
+        ],
+      },
+      value: { kind: 'reconciled' as const, basis, ledger },
+    };
+  });
 }
 
 /** Explicit migration starts truthful history; legacy client blobs never become fake past actions. */
@@ -184,6 +309,32 @@ export async function initializeWorkspaceAuthoring(
   );
   const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
   const refName = initial.target_branch ?? 'main';
+  if (!initial.workspace_state?.authoringLedger && input.legacyDocument === undefined) {
+    const head = await getTransitionRefHead(db, { projectId: input.projectId, refName });
+    if (head.head !== null && head.head !== input.expectedRefHead) {
+      const synchronized = await synchronizeUninitializedWorkspace(db, {
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+        requestId: input.actionId,
+        actor: input.actor,
+        refName,
+        refHead: head.head,
+        expectedWorkspaceRevision: input.expectedWorkspaceRevision,
+        initializationFacts: facts,
+      });
+      if (synchronized.value.kind === 'reconciled')
+        return {
+          ...synchronized,
+          value: {
+            basis: synchronized.value.basis,
+            ledger: synchronized.value.ledger,
+          },
+        };
+      throw new DraftAuthoringConflictError(
+        'Ref head changed; reconcile the existing Draft before importing it'
+      );
+    }
+  }
   return transactWorkspaceAuthoring(db, { ...input, refName }, async (tx, draft) => {
     const workspace = draft.workspace_state ?? {};
     if (workspace.authoringLedger) {
@@ -205,18 +356,20 @@ export async function initializeWorkspaceAuthoring(
     if (head.head !== input.expectedRefHead)
       throw new DraftAuthoringConflictError('Ref head changed');
     const base = head.format === 'empty' ? createYOpsState({}) : head.state;
-    const view =
+    const committedSchema =
       head.format === 'empty' || workspace.workspaceSchemaBase !== undefined
         ? null
-        : await getTransitionViewForCommit(tx, {
-            projectId: input.projectId,
+        : await committedWorkspaceSchemaAtHead(
+            tx,
+            input.projectId,
             refName,
-            commitId: head.head,
-          });
+            head.head,
+            await captureWorkspaceSchema(tx, input.projectId, workspace)
+          );
     const workspaceSchemaBase =
       workspace.workspaceSchemaBase ??
-      (view?.mode === 'transition' && view.checks.validation.runs.length === 0
-        ? { refHead: head.head, snapshot: unboundWorkspaceSchema() }
+      (committedSchema
+        ? { refHead: head.head, snapshot: structuredClone(committedSchema) }
         : undefined);
     const operations = (workspace.yopsDraft as { operations?: unknown[] } | undefined)?.operations;
     const hasLegacyEdits = Boolean(
@@ -257,6 +410,9 @@ export async function initializeWorkspaceAuthoring(
         ...workspace,
         authoringLedger: ledger,
         authoringBasis: basis,
+        ...(committedSchema === null
+          ? {}
+          : { schemaBindings: structuredClone(committedSchema.bindings) }),
         ...(workspaceSchemaBase === undefined ? {} : { workspaceSchemaBase }),
       },
       value: { basis, ledger },

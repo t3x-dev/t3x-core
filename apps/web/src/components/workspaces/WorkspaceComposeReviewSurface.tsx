@@ -254,6 +254,7 @@ export function WorkspaceComposeReviewSurface({
   onModeChange,
 }: WorkspaceComposeReviewSurfaceProps) {
   const composeControls = useRef<ComposeSurfaceControls | null>(null);
+  const reconciliationPreparationStarted = useRef(false);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -273,6 +274,7 @@ export function WorkspaceComposeReviewSurface({
   const workspaceTool =
     parseWorkspaceTool(routeParams.get('workspaceTool')) ??
     parseWorkspaceTool(routeParams.get('reviewPane'));
+  const reconciliationPage = routeParams.get('workspaceReconcile') === '1';
   const toolReturnTo =
     workspaceTool === 'delivery'
       ? checksReturnTo(routeParams.get('returnTo'), candidate.projectId, pathname)
@@ -288,6 +290,17 @@ export function WorkspaceComposeReviewSurface({
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
   const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
+
+  const setReconciliationPage = useCallback(
+    (open: boolean) => {
+      const params = new URLSearchParams(routeQuery);
+      if (open) params.set('workspaceReconcile', '1');
+      else params.delete('workspaceReconcile');
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, routeQuery, router]
+  );
 
   const writeWorkspaceSurfaceUrl = useCallback(
     (nextMode: WorkspaceSurfaceMode, nextPane?: ReviewPane) => {
@@ -393,6 +406,120 @@ export function WorkspaceComposeReviewSurface({
     preferredReviewPane,
   ]);
 
+  useEffect(() => {
+    if (!reconciliationPage) {
+      reconciliationPreparationStarted.current = false;
+      return;
+    }
+    if (
+      reconciliationPreparationStarted.current ||
+      !syncRequired ||
+      activity.reconciliationPreview ||
+      activity.reconciling ||
+      activity.reconciliationError
+    )
+      return;
+    reconciliationPreparationStarted.current = true;
+    void activity.prepareReconciliation();
+  }, [activity, reconciliationPage, syncRequired]);
+
+  if (reconciliationPage) {
+    const preview = activity.reconciliationPreview;
+    return (
+      <div
+        className={cn(
+          'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]',
+          composeStyles.workspaceTheme
+        )}
+      >
+        <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-panel)] px-4 py-5 lg:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+            <header className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-2">
+                <Button size="sm" variant="ghost" onClick={() => setReconciliationPage(false)}>
+                  <ArrowLeft aria-hidden="true" className="size-4" /> Back to Workspace
+                </Button>
+                <div>
+                  <h1 className="text-xl font-semibold">Resolve branch conflicts</h1>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    Compare only the fields changed by both sides, then choose one result for each
+                    conflict.
+                  </p>
+                </div>
+              </div>
+              {preview ? (
+                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--text-tertiary)]">
+                  <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                    Base {preview.baseHead?.slice(0, 12) ?? 'empty'}
+                  </span>
+                  <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                    Latest {preview.currentRefHead?.slice(0, 12) ?? 'empty'}
+                  </span>
+                  <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
+                    Draft revision {preview.workspaceRevision}
+                  </span>
+                </div>
+              ) : null}
+            </header>
+
+            {activity.reconciling ? (
+              <div className="rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-8 text-center text-sm text-[var(--text-secondary)]">
+                Preparing three-way comparison…
+              </div>
+            ) : null}
+
+            {activity.reconciliationError ? (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-4 text-sm text-[var(--status-error)]"
+                role="alert"
+              >
+                <span>{activity.reconciliationError}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void activity.prepareReconciliation()}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
+
+            {preview?.conflicts.length ? (
+              <WorkspaceReconciliationResolver
+                key={preview.preparationDigest}
+                preparation={preview}
+                disabled={activity.reconciliationDeciding}
+                onResolve={(resolutions) => {
+                  void activity.decideReconciliation('resolve', resolutions).then((resolved) => {
+                    if (resolved) setReconciliationPage(false);
+                  });
+                }}
+              />
+            ) : preview ? (
+              <section className="rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
+                <h2 className="font-semibold">No overlapping changes</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  Your Draft can be replayed safely on the latest branch.
+                </p>
+                <Button
+                  className="mt-4"
+                  disabled={activity.reconciliationDeciding}
+                  onClick={() => {
+                    void activity.decideReconciliation('adopt').then((resolved) => {
+                      if (resolved) setReconciliationPage(false);
+                    });
+                  }}
+                >
+                  Keep my edits and sync
+                </Button>
+              </section>
+            ) : null}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -433,89 +560,22 @@ export function WorkspaceComposeReviewSurface({
                   : 'The branch has new commits'
               }
               actions={
-                activity.reconciliationPreview ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={activity.reconciliationDeciding}
-                      onClick={() => void activity.decideReconciliation('cancel')}
-                    >
-                      Not now
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-[var(--status-error)]/30 text-[var(--status-error)] hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)]"
-                      disabled={activity.reconciliationDeciding}
-                      onClick={() => void activity.decideReconciliation('discard')}
-                    >
-                      Discard my edits
-                    </Button>
-                    {activity.reconciliationPreview.conflicts.length === 0 ? (
-                      <Button
-                        size="sm"
-                        disabled={activity.reconciliationDeciding}
-                        onClick={() => void activity.decideReconciliation('adopt')}
-                      >
-                        Keep my edits and sync
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={activity.reconciling}
-                    onClick={() => void activity.prepareReconciliation()}
-                  >
-                    {activity.reconciling ? 'Preparing…' : 'Preview branch changes'}
-                  </Button>
-                )
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={activity.reconciling}
+                  onClick={() => setReconciliationPage(true)}
+                >
+                  {activity.reconciliationPreview
+                    ? 'Review branch changes'
+                    : 'Preview branch changes'}
+                </Button>
               }
             >
-              {activity.reconciliationPreview ? (
-                activity.reconciliationPreview.conflicts.length ? (
-                  <div className="space-y-3 pt-1">
-                    <p className="max-w-3xl">
-                      Another collaborator updated this branch while you were editing. Compare the
-                      three versions below and choose the result you want to keep.
-                    </p>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-[var(--text-tertiary)]">
-                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
-                        Base {activity.reconciliationPreview.baseHead?.slice(0, 12) ?? 'empty'}
-                      </span>
-                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
-                        Latest{' '}
-                        {activity.reconciliationPreview.currentRefHead?.slice(0, 12) ?? 'empty'}
-                      </span>
-                      <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1">
-                        Draft revision {activity.reconciliationPreview.workspaceRevision}
-                      </span>
-                    </div>
-                    <WorkspaceReconciliationResolver
-                      key={activity.reconciliationPreview.preparationDigest}
-                      preparation={activity.reconciliationPreview}
-                      disabled={activity.reconciliationDeciding}
-                      onResolve={(resolutions) =>
-                        void activity.decideReconciliation('resolve', resolutions)
-                      }
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p>No overlapping changes were found.</p>
-                    <p className="text-xs">
-                      Your Draft can be safely replayed on the latest branch version.
-                    </p>
-                  </div>
-                )
-              ) : (
-                <p>
-                  Preview Base, your Draft and the latest branch before choosing. Nothing is changed
-                  automatically.
-                </p>
-              )}
+              <p>
+                Preview Base, your Draft and the latest branch on a separate comparison page.
+                Nothing is changed automatically.
+              </p>
               {activity.reconciliationError ? (
                 <p role="alert">{activity.reconciliationError}</p>
               ) : null}

@@ -110,7 +110,10 @@ export function formatUserFacingError(
   }
 
   if (code === 'RATE_LIMITED') {
-    return 'Provider rate limit reached. Wait a moment or choose a different configured provider.';
+    if (/\b(provider|model|quota|hosted generation)\b/i.test(message)) {
+      return 'Provider rate limit reached. Wait a moment or choose a different configured provider.';
+    }
+    return message || 'Too many requests. Wait a moment and try again.';
   }
 
   if (code === 'PROVIDER_UNAVAILABLE') {

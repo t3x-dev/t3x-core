@@ -144,8 +144,13 @@ export function createRateLimitL1(store: RateLimitStore) {
   return async function rateLimitL1Middleware(c: Context<AppEnv>, next: Next) {
     c.set('rateLimitStore', store);
 
-    // Local source development intentionally remains auth-free and unthrottled.
-    if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') return next();
+    // Source development is machine-local; auth routes retain their own brute-force limits.
+    if (
+      process.env.AUTH_DISABLED?.toLowerCase() === 'true' ||
+      process.env.npm_lifecycle_event === 'dev'
+    ) {
+      return next();
+    }
 
     const pathname = new URL(c.req.url).pathname;
     // Probes must preserve their liveness/readiness semantics when storage is unavailable.
