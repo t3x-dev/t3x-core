@@ -39,9 +39,8 @@ export function ProjectChecksPage({
   const router = useRouter();
   const params = new URLSearchParams(query);
   const { current, refresh } = useProjectChecks(projectId, recordId, query);
-  const scoped = ['kind', 'workspace', 'pr', 'commit', 'cursor', 'q'].some((key) =>
-    params.has(key)
-  );
+  const scopeKeys = ['kind', 'workspace', 'pr', 'commit', 'cursor', 'q'];
+  const scoped = !recordId && scopeKeys.some((key) => params.get(key));
   const returnTo = checksReturnTo(params.get('returnTo'), projectId, pathname);
   const listParams = new URLSearchParams(query);
   listParams.delete('check');
@@ -195,9 +194,24 @@ export function ProjectChecksPage({
             ) : null}
           </nav>
         </>
+      ) : scoped ? (
+        <div className={styles.empty}>
+          <h2>No runs match this scope</h2>
+          <p>Clear the search and filters to see the newest run records.</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const next = new URLSearchParams(query);
+              for (const key of scopeKeys) next.delete(key);
+              router.push(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false });
+            }}
+          >
+            Clear filters
+          </Button>
+        </div>
       ) : (
         <div className={styles.empty}>
-          <h2>{scoped ? 'No runs match this scope' : 'No run records yet'}</h2>
+          <h2>No run records yet</h2>
           <p>
             Prepare a review in a Workspace or run checks from a pull request to record evidence.
           </p>
