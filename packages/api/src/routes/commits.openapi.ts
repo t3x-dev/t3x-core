@@ -51,6 +51,7 @@ import {
   TransitionScopeDeniedError,
   transitionApiKey,
 } from '../lib/transition-authority';
+import { synchronizeCleanBranchWorkspaces } from '../lib/workspace-reconciliation';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import {
   ErrorResponseSchema,
@@ -256,13 +257,6 @@ const CreateCommitRequestSchema = z.object({
 
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
-class SourceConversationAlreadyCommittedError extends Error {
-  constructor(readonly conversationId: string) {
-    super(`Conversation ${conversationId} has already been committed`);
-    this.name = 'SourceConversationAlreadyCommittedError';
-  }
-}
-
 const DigestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const CommitDescriptorSchema = z.object({
   kind: z.literal('commit'),
@@ -430,14 +424,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
           'source_conversation_id does not belong to the specified project'
         );
       }
-      if (sourceConversation.committedAs) {
-        return errorResponse(
-          c,
-          'ALREADY_COMMITTED',
-          `Conversation ${sourceConversationId} has already been committed`
-        );
-      }
-      inheritedParentHash = sourceConversation.parentCommitHash;
+      inheritedParentHash = sourceConversation.committedAs ?? sourceConversation.parentCommitHash;
       yopsLogIds = await findUncommittedYOpsIds(db, sourceConversationId, body.project_id);
     }
     const targetBranch = body.branch ?? 'main';
@@ -493,13 +480,19 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
         ...(evidence.length === 0 ? {} : { evidence }),
         ...(yopsLogIds.length === 0 ? {} : { yopsLogIds }),
       });
+      await synchronizeCleanBranchWorkspaces(tx, {
+        projectId: body.project_id,
+        refName: targetBranch,
+        refHead: created.commitDigest,
+        actor: writeAuthority.principal.actor,
+      });
       if (sourceConversationId) {
         const marked = await markConversationCommitted(
           tx,
           sourceConversationId,
           created.commitDigest
         );
-        if (!marked) throw new SourceConversationAlreadyCommittedError(sourceConversationId);
+        if (!marked) throw new Error(`Conversation ${sourceConversationId} not found`);
       }
     });
     if (created === undefined) throw new Error('CommitV2 transaction did not return a commit');
@@ -535,9 +528,6 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       return errorResponse(c, 'DECISION_NOT_PERMITTED', err.message, {
         failures: err.failures,
       });
-    }
-    if (err instanceof SourceConversationAlreadyCommittedError) {
-      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
     }
     if (err instanceof TransitionHeadConflictError) {
       return errorResponse(c, 'BRANCH_NOT_HEAD', err.message);

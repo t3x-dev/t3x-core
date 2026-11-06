@@ -39,12 +39,14 @@ import {
   deletionSubject,
   matchingDeletionAuthorization,
 } from './workspace-deletion-authorization';
+import { workspaceDocumentRootKey } from './workspace-schema-content';
 import {
   buildWorkspaceSchemaReview,
   captureWorkspaceSchema,
   unboundWorkspaceSchema,
   workspaceSchemaReviewHasChanges,
 } from './workspace-schema-review';
+import { schemaRootKeyFromBinding } from './yschema-registry';
 
 export interface WorkspaceAuthoringBasis {
   schema: 't3x.application/workspace-authoring-basis/v1';
@@ -70,6 +72,26 @@ async function requireWorkspace(db: AnyDB, projectId: string, workspaceId: strin
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   if (!draft?.workspace_state) throw new NotFoundError(workspaceId);
   return draft;
+}
+
+const bindingRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function repairedSchemaBindings(workspace: Record<string, unknown>): unknown[] | null {
+  const bindings = Array.isArray(workspace.schemaBindings) ? workspace.schemaBindings : [];
+  const { ledger } = workspaceAuthoringState(workspace);
+  const inferredRootKey = workspaceDocumentRootKey(currentComposition(ledger));
+  if (bindings.length === 0) return null;
+  const binding = bindings[0];
+  if (
+    bindings.length !== 1 ||
+    !inferredRootKey ||
+    !bindingRecord(binding) ||
+    (typeof binding.rootKey === 'string' && /^[a-z][a-z0-9_]*$/.test(binding.rootKey)) ||
+    schemaRootKeyFromBinding(binding) === inferredRootKey
+  )
+    return null;
+  return [{ ...binding, rootKey: inferredRootKey }];
 }
 
 /**
@@ -110,17 +132,14 @@ export async function assertWorkspaceAuthoringCommandBasis(
   return { draft, ...current };
 }
 
-/** Repair an unbound authoring Workspace without changing its immutable history. */
+/** Repair a stale root hint without guessing a Schema for an unbound Workspace. */
 export async function ensureWorkspaceAuthoringSchema(
   db: AnyDB,
   input: { projectId: string; workspaceId: string; expectedRevision?: number }
 ): Promise<number | undefined> {
   const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
   const workspace = initial.workspace_state!;
-  if (
-    !workspace.authoringLedger ||
-    (Array.isArray(workspace.schemaBindings) && workspace.schemaBindings.length > 0)
-  )
+  if (!workspace.authoringLedger || !repairedSchemaBindings(workspace))
     return input.expectedRevision;
   const { basis } = workspaceAuthoringState(workspace);
   const result = await transactWorkspaceAuthoring(
@@ -133,14 +152,12 @@ export async function ensureWorkspaceAuthoringSchema(
       workspaceAuthoringState(current);
       if (draft.target_branch !== basis.refName)
         throw new DraftAuthoringConflictError('Target ref changed');
-      if (Array.isArray(current.schemaBindings) && current.schemaBindings.length > 0)
-        return { workspace: null, value: null };
+      const schemaBindings = repairedSchemaBindings(current);
+      if (!schemaBindings) return { workspace: null, value: null };
       return {
         workspace: {
           ...current,
-          schemaBindings: [
-            { canonicalName: 't3x/prd', schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
-          ],
+          schemaBindings,
         },
         value: null,
       };

@@ -9,7 +9,6 @@ const SOURCE_DEV_DEFAULTS = {
 
 const WEBUI_SOURCE_DEV_DEFAULTS = {
   T3X_API_URL: 'http://localhost:8000',
-  NEXT_PUBLIC_AUTH_DISABLED: 'true',
 };
 
 export function applySourceDevDefaults(target, env) {
@@ -24,7 +23,7 @@ export function applySourceDevDefaults(target, env) {
   }
 
   if (target === 'webui' && nextEnv.NEXT_PUBLIC_AUTH_DISABLED === undefined) {
-    nextEnv.NEXT_PUBLIC_AUTH_DISABLED = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_AUTH_DISABLED;
+    nextEnv.NEXT_PUBLIC_AUTH_DISABLED = nextEnv.AUTH_DISABLED;
   }
 
   return nextEnv;

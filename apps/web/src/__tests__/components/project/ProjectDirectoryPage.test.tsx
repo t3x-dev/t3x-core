@@ -37,6 +37,7 @@ const createProject = vi.fn();
 const refreshProjects = vi.fn();
 const removeProject = vi.fn();
 const renameProject = vi.fn();
+const useProjectsArgs = vi.fn();
 let hookError: string | null = null;
 let hookLoading = false;
 let hookProjects: Project[] = [];
@@ -63,15 +64,18 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: () => ({
-    create: createProject,
-    error: hookError,
-    loading: hookLoading,
-    projects: hookProjects,
-    refresh: refreshProjects,
-    remove: removeProject,
-    rename: renameProject,
-  }),
+  useProjects: (...args: unknown[]) => {
+    useProjectsArgs(...args);
+    return {
+      create: createProject,
+      error: hookError,
+      loading: hookLoading,
+      projects: hookProjects,
+      refresh: refreshProjects,
+      remove: removeProject,
+      rename: renameProject,
+    };
+  },
 }));
 
 const projects: Project[] = [
@@ -128,6 +132,7 @@ describe('ProjectDirectoryPage', () => {
     refreshProjects.mockReset();
     removeProject.mockReset();
     renameProject.mockReset();
+    useProjectsArgs.mockReset();
     window.localStorage.clear();
     hookError = null;
     hookLoading = false;
@@ -227,6 +232,52 @@ describe('ProjectDirectoryPage', () => {
     for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
       expect(link).toHaveAttribute('href', '/lqw905/new');
     }
+  });
+
+  it('aggregates repositories the current user owns or can access', () => {
+    namespaceAccounts = [{ namespace: { slug: 'test-b3', namespace_id: 'b3-id' } }];
+    hookProjects = [
+      {
+        ...projects[0],
+        namespace: 'test-b3',
+        canonical_path: '/test-b3/prd-workflow',
+      },
+      {
+        ...projects[1],
+        namespace: 'test-a3',
+        canonical_path: '/test-a3/t3x-core',
+        can_edit: true,
+        can_delete: false,
+      },
+    ];
+
+    render(<ProjectDirectoryPage scope="accessible" />);
+
+    expect(useProjectsArgs).toHaveBeenLastCalledWith(100, undefined, true);
+    expect(screen.getByRole('heading', { name: /^Your repositories/ })).toBeInTheDocument();
+    expect(screen.getByText('Owner: test-a3')).toBeInTheDocument();
+    expect(screen.getByText('Editor access')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 't3x-core' })).toHaveAttribute(
+      'href',
+      '/test-a3/t3x-core'
+    );
+    expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
+      'href',
+      '/test-b3/new'
+    );
+    expect(screen.queryByRole('link', { name: 'Deleted repositories' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Namespace' })).not.toBeInTheDocument();
+    expect(selectNamespace).not.toHaveBeenCalled();
+
+    const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
+    expect(globalNavigation.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
+    expect(globalNavigation.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
   });
 
   it('shows recently opened repositories only from local recent-open state', () => {

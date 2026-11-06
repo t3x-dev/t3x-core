@@ -7,17 +7,22 @@ import {
   ListNamespaceMembersResponseSchema,
   ListProjectGuestsResponseSchema,
   ListProjectInvitationsResponseSchema,
+  ListReceivedCollaborationInvitationsResponseSchema,
+  SearchCollaborationUsersResponseSchema,
 } from '@t3x-dev/api-client';
 import {
   findNamespaceById,
+  findUserById,
   listNamespaceAccountFacts,
   listNamespaceInvitationViews,
   listNamespaceMemberViews,
   listProjectGrantViews,
   listProjectInvitationViews,
+  listReceivedInvitationViews,
   type StoredNamespaceMemberView,
   type StoredPrincipalProfile,
   type StoredProjectGrantView,
+  searchUserProfiles,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse } from '../lib/errors';
@@ -34,6 +39,7 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 export const collaborationReadRoutes = new OpenAPIHono();
 
 const IdParamSchema = z.object({ id: z.string().trim().min(1).max(200) });
+const UserSearchQuerySchema = z.object({ q: z.string().trim().min(2).max(64) });
 
 function principalView(profile: StoredPrincipalProfile): CollaborationPrincipalView {
   return profile.kind === 'human'
@@ -128,6 +134,95 @@ collaborationReadRoutes.openapi(listAccountsRoute, async (c) => {
           membership,
           credentialScope
         ),
+      })),
+    },
+  });
+});
+
+const searchUsersRoute = createRoute({
+  method: 'get',
+  path: '/v1/users/search',
+  tags: ['Collaboration'],
+  summary: 'Search registered users for collaboration',
+  request: { query: UserSearchQuerySchema },
+  responses: {
+    200: {
+      description: 'Safe collaborator search results',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(SearchCollaborationUsersResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationReadRoutes.openapi(searchUsersRoute, async (c) => {
+  const principal = getNamespacePrincipal(c);
+  if (!principal || principal.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
+  }
+  const { q } = c.req.valid('query');
+  const results = await searchUserProfiles(await getDB(), q, {
+    excludeUserId: principal.principal_id,
+    limit: 8,
+  });
+  return c.json({
+    success: true as const,
+    data: {
+      users: results.map((user) => ({
+        user_id: user.id,
+        username: user.username,
+        display_name: user.name,
+        avatar_url: user.avatarUrl,
+      })),
+    },
+  });
+});
+
+const listReceivedInvitationsRoute = createRoute({
+  method: 'get',
+  path: '/v1/invitations',
+  tags: ['Collaboration'],
+  summary: 'List invitations received by the current user',
+  responses: {
+    200: {
+      description: 'Pending invitations for the authenticated user',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ListReceivedCollaborationInvitationsResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationReadRoutes.openapi(listReceivedInvitationsRoute, async (c) => {
+  const principal = getNamespacePrincipal(c);
+  if (!principal || principal.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
+  }
+  const db = await getDB();
+  const user = await findUserById(db, principal.principal_id);
+  const invitations = await listReceivedInvitationViews(db, {
+    userId: principal.principal_id,
+    verifiedEmail: user?.email_verified ? user.email : null,
+  });
+  return c.json({
+    success: true as const,
+    data: {
+      invitations: invitations.map(({ invitation, namespace, project }) => ({
+        invitation,
+        namespace: { slug: namespace.slug, display_name: namespace.displayName },
+        project,
       })),
     },
   });

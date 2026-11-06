@@ -4,6 +4,21 @@ import { schemaRootKeyFromBinding } from './yschema-registry';
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const empty = (value: unknown) => record(value) && Object.keys(value).length === 0;
+const rootKey = (value: unknown): string | null =>
+  typeof value === 'string' && /^[a-z][a-z0-9_]*$/.test(value) ? value : null;
+
+/** Read the single authored root without guessing from a Schema name. */
+export function workspaceDocumentRootKey(value: unknown): string | null {
+  if (!record(value)) return null;
+  if (value.domain === 't3x.dev/semantic-content' && record(value.content)) {
+    const trees = value.content.trees;
+    return Array.isArray(trees) && trees.length === 1 && record(trees[0])
+      ? rootKey(trees[0].key)
+      : null;
+  }
+  const keys = Object.keys(value);
+  return keys.length === 1 ? rootKey(keys[0]) : null;
+}
 
 /** Only the empty document or its transport root; a named business node is content. */
 export function hasNoWorkspaceBusinessContent(value: unknown, rootKey: string): boolean {

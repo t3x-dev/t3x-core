@@ -46,6 +46,7 @@ import {
 } from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import { decideWorkspaceChange } from '../lib/workspace-change-decision';
+import { captureWorkspaceSchema } from '../lib/workspace-schema-review';
 import {
   decideWorkspaceTransition,
   reviewWorkspaceTransition,
@@ -867,6 +868,18 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
   if (missingTargetBranch) {
     return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${missingTargetBranch}`);
   }
+  if (
+    JSON.stringify((persistedWorkspace as Record<string, unknown>).schemaBindings ?? []) !==
+    JSON.stringify(storedWorkspace.schemaBindings ?? [])
+  ) {
+    try {
+      await captureWorkspaceSchema(db, projectId, persistedWorkspace);
+    } catch (error) {
+      if (error instanceof DraftAuthoringConflictError)
+        return errorResponse(c, 'CONFLICT', error.message);
+      throw error;
+    }
+  }
   const draft = await upsertWorkspaceDraft(
     db,
     {
@@ -970,6 +983,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
         actor,
         policyBinding: authority.policyBinding,
         yopsLogIds,
+        synchronizeWorkspaces: true,
         workspaceCommitOverride: validationOverride,
       });
       if (decided.commit === undefined || decided.workspace === undefined) {

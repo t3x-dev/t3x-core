@@ -92,7 +92,7 @@ describe('collaboration invitation commands', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipient: {
-          user_id: 'user_invitation_route_recipient',
+          user_id: null,
           email: 'Recipient@Example.com',
         },
         role: 'editor',
@@ -144,7 +144,7 @@ describe('collaboration invitation commands', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipient: { user_id: 'user_invitation_route_recipient', email: null },
+        recipient: { user_id: null, email: 'recipient@example.com' },
         role: 'viewer',
         expires_at: '2099-01-01T00:00:00.000Z',
       }),
@@ -166,15 +166,17 @@ describe('collaboration invitation commands', () => {
 
   it('resolves a project invitation username to the stable user id', async () => {
     const owner = appFor('user_invitation_route_owner');
-    const created = await owner.request(`/v1/projects/${projectId}/invitations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient: { username: 'TEST-B3' },
-        role: 'editor',
-        expires_at: '2099-01-01T00:00:00.000Z',
-      }),
-    });
+    const create = () =>
+      owner.request(`/v1/projects/${projectId}/invitations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: { username: 'TEST-B3' },
+          role: 'editor',
+          expires_at: '2099-01-01T00:00:00.000Z',
+        }),
+      });
+    const created = await create();
 
     expect(created.status, await created.clone().text()).toBe(201);
     const payload = await created.json();
@@ -182,15 +184,44 @@ describe('collaboration invitation commands', () => {
       user_id: 'user_invitation_route_username_recipient',
       email: null,
     });
+    expect(payload.data.delivery).toEqual({ mode: 'inbox', token: null });
+    const duplicate = await create();
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({
+      error: {
+        code: 'HASH_CONFLICT',
+        message: 'This user already has a pending invitation. Revoke it before creating a new one.',
+      },
+    });
     const accepted = await appFor('user_invitation_route_username_recipient').request(
-      '/v1/invitations/accept',
+      `/v1/invitations/${payload.data.invitation.invitation_id}/accept`,
+      { method: 'POST' }
+    );
+    expect(accepted.status, await accepted.clone().text()).toBe(200);
+  });
+
+  it('lets the exact recipient decline an inbox invitation', async () => {
+    const created = await appFor('user_invitation_route_owner').request(
+      `/v1/projects/${projectId}/invitations`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: payload.data.delivery.token }),
+        body: JSON.stringify({
+          recipient: { user_id: 'user_invitation_route_outsider', email: null },
+          role: 'viewer',
+          expires_at: '2099-01-01T00:00:00.000Z',
+        }),
       }
     );
-    expect(accepted.status, await accepted.clone().text()).toBe(200);
+    const invitationId = (await created.json()).data.invitation.invitation_id as string;
+    const declined = await appFor('user_invitation_route_outsider').request(
+      `/v1/invitations/${invitationId}/decline`,
+      { method: 'POST' }
+    );
+    expect(declined.status).toBe(200);
+    expect(await declined.json()).toMatchObject({
+      data: { kind: 'invitation.revoke', outcome: 'applied' },
+    });
   });
 
   it('revokes an exact invitation idempotently and denies outsiders', async () => {

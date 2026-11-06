@@ -216,6 +216,7 @@ export interface DecideWorkspaceTransitionInput {
   decisionReason?: string;
   precondition: WorkspaceTransitionPrecondition;
   yopsLogIds?: readonly string[];
+  synchronizeWorkspaces?: boolean;
   workspaceCommitOverride?: {
     kind: 'schema_review';
     reason: string;
@@ -1023,6 +1024,7 @@ export async function decideWorkspaceTransition(
       requestId: compatibilityRequestId('commit', commitFacts),
       decisionDigest: decided.decisionDigest,
       expectedHead: input.precondition.refHead,
+      synchronizeWorkspaces: input.synchronizeWorkspaces,
       workspaceProjection: {
         requestFacts: projectionFacts,
         ...(input.yopsLogIds === undefined ? {} : { yopsLogIds: input.yopsLogIds }),

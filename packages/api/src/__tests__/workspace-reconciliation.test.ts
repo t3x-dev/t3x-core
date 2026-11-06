@@ -7,6 +7,7 @@ import {
   getTransitionRefHead,
   insertBranch,
   insertProject,
+  saveWorkspaceSchemaPreparation,
   transactWorkspaceReconciliation,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
@@ -25,6 +26,7 @@ import {
   prepareWorkspaceReconciliation,
   reconcileDocuments,
   reconcileWorkspaceAuthoring,
+  reconcileWorkspaceSchemas,
   synchronizeCleanBranchWorkspaces,
   WorkspaceReconciliationConflictError,
   WorkspaceReconciliationValidationError,
@@ -65,7 +67,7 @@ describe('Workspace branch reconciliation', () => {
       workspace_state: {
         targetBranch: 'main',
         sourceBundle: [{ id: 'source:keep' }],
-        schemaBindings: [{ canonicalName: 'test' }],
+        schemaBindings: [],
       },
     });
     const init = await initializeWorkspaceAuthoring(setup.db, {
@@ -103,7 +105,27 @@ describe('Workspace branch reconciliation', () => {
     expect(reconcileDocuments(dangerous, {}, dangerous).current).toEqual({});
   });
 
-  it('synchronizes a clean Workspace without a Commit and permits the next edit', async () => {
+  it('inherits a branch Schema and requires an explicit choice for simultaneous Schema edits', () => {
+    const unbound = { status: 'unbound' as const, bindings: [] };
+    const branch = {
+      status: 'bound' as const,
+      bindings: [{ canonicalName: 'product', version: '1' }],
+      schemaHash: 'sha256:branch',
+      definition: { root: 'product' },
+    };
+    expect(
+      reconcileWorkspaceSchemas({ base: unbound, ours: unbound, theirs: branch })
+    ).toMatchObject({ merged: branch, conflict: null });
+
+    const ours = { ...branch, schemaHash: 'sha256:ours' };
+    const theirs = { ...branch, schemaHash: 'sha256:theirs' };
+    expect(reconcileWorkspaceSchemas({ base: branch, ours, theirs })).toMatchObject({
+      merged: ours,
+      conflict: { scope: 'schema', kind: 'schema', path: '/schema' },
+    });
+  });
+
+  it('synchronizes a clean Workspace after a Commit and permits the next edit', async () => {
     const f = await fixture();
     const next = await f.advance({ product: { title: 'remote', status: 'live' }, keep: 1 });
     expect((await readWorkspaceAuthoring(setup.db, f)).synchronization.required).toBe(true);
@@ -138,6 +160,40 @@ describe('Workspace branch reconciliation', () => {
     expect(
       (await getTransitionRefHead(setup.db, { projectId: f.projectId, refName: 'main' })).head
     ).toBe(next.commitDigest);
+  });
+
+  it('initializes an untouched Workspace from the latest committed Content and Schema', async () => {
+    const f = await fixture();
+    const workspaceId = 'workspace_branch:main:human:other';
+    await upsertWorkspaceDraft(setup.db, {
+      project_id: f.projectId,
+      workspace_id: workspaceId,
+      title: 'Other collaborator',
+      target_branch: 'main',
+      parent_commit_hash: f.base.commitDigest,
+      workspace_state: { targetBranch: 'main', schemaBindings: [] },
+    });
+    const next = await f.advance({ product: { title: 'shared', status: 'live' }, keep: 2 });
+
+    await synchronizeCleanBranchWorkspaces(setup.db, {
+      projectId: f.projectId,
+      refName: 'main',
+      refHead: next.commitDigest,
+      actor,
+    });
+
+    const saved = (await findWorkspaceDraft(setup.db, f.projectId, workspaceId))!;
+    const state = workspaceAuthoringState(saved.workspace_state!);
+    expect(state.basis.refHead).toBe(next.commitDigest);
+    expect(currentComposition(state.ledger)).toEqual({
+      product: { title: 'shared', status: 'live' },
+      keep: 2,
+    });
+    expect(saved.parent_commit_hash).toBe(next.commitDigest);
+    expect(saved.workspace_state?.workspaceSchemaBase).toMatchObject({
+      refHead: next.commitDigest,
+      snapshot: { status: 'unbound', schemaHash: null, bindings: [] },
+    });
   });
 
   it('leaves dirty Workspaces intact during merge and explicitly carries edits forward with an immutable archive', async () => {
@@ -175,6 +231,27 @@ describe('Workspace branch reconciliation', () => {
     await expect(
       reconcileWorkspaceAuthoring(setup.db, { ...input, expectedRefHead: null })
     ).rejects.toThrow('different facts');
+  });
+
+  it('leaves a Schema-only Draft pending instead of blocking another Commit', async () => {
+    const f = await fixture();
+    const before = (await f.read())!;
+    const dirty = await saveWorkspaceSchemaPreparation(setup.db, {
+      projectId: f.projectId,
+      workspaceId: f.workspaceId,
+      expectedRevision: before.revision,
+      schemaEditCandidate: { candidateId: 'schema-draft', revision: 1 },
+    });
+    const next = await f.advance({ product: { title: 'remote', status: 'live' }, keep: 1 });
+
+    await synchronizeCleanBranchWorkspaces(setup.db, {
+      projectId: f.projectId,
+      refName: 'main',
+      refHead: next.commitDigest,
+      actor,
+    });
+
+    expect(await f.read()).toEqual(dirty);
   });
 
   it('rejects overlapping edits, stale Workspace revisions and changed heads without losing anything', async () => {
@@ -413,7 +490,6 @@ describe('Workspace branch reconciliation', () => {
           {
             canonicalName: 't3x/prd',
             schemaName: 'Candidate Schema',
-            rootKey: 'candidate',
             version: 'v2',
           },
         ],

@@ -233,8 +233,7 @@ const toApiConversation = (
     ? {}
     : {
         turns_count: turnsCount,
-        has_pending_changes:
-          conv.commitTrackingStartedAt !== null && conv.committedAs === null && turnsCount > 0,
+        has_pending_changes: conv.commitTrackingStartedAt !== null && turnsCount > 0,
       }),
 });
 
@@ -473,10 +472,7 @@ conversationRoutes.openapi(getConversationRoute, async (c) => {
       parent_commit_hash: conversation.parentCommitHash,
       committed_as: conversation.committedAs,
       committed_at: conversation.committedAt?.toISOString() ?? null,
-      has_pending_changes:
-        conversation.commitTrackingStartedAt !== null &&
-        conversation.committedAs === null &&
-        turnsCount > 0,
+      has_pending_changes: conversation.commitTrackingStartedAt !== null && turnsCount > 0,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),

@@ -39,6 +39,24 @@ vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaIntroduction: () => ({ loading: false }),
 }));
 
+vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
+  useProjectYSchemaVersions: () => ({
+    error: undefined,
+    pending: false,
+    refresh: vi.fn(),
+    versions: [],
+  }),
+}));
+
+vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+  useProjectMaterials: () => ({
+    error: null,
+    loading: false,
+    materials: [],
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({
     embedded,
