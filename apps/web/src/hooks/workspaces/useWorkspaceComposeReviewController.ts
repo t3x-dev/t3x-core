@@ -15,7 +15,6 @@ import {
 } from '@/domain/workspaces/authoringReview';
 import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
 import {
-  DEFAULT_WORKSPACE_SCHEMA_BINDING,
   rebindWorkspaceCandidate,
   workspaceSchemaBindingsEqual,
 } from '@/domain/workspaces/schemaBindings';
@@ -260,22 +259,10 @@ export function useWorkspaceComposeReviewController({
   );
 
   const ensureSaved = useCallback(async () => {
-    const needsSchema = workingCandidate.schemaBindings.length === 0;
-    if (
-      workingCandidate.authoringLedger ||
-      (workingCandidate.revision !== undefined && !needsSchema)
-    )
+    if (workingCandidate.authoringLedger || workingCandidate.revision !== undefined)
       return workingCandidate;
     if (!onDraftCommand) throw new Error('Workspace saving is unavailable.');
-    return persistCandidate(
-      needsSchema
-        ? {
-            ...workingCandidate,
-            schemaBindings: [DEFAULT_WORKSPACE_SCHEMA_BINDING],
-          }
-        : workingCandidate,
-      'authoring.initialize'
-    );
+    return persistCandidate(workingCandidate, 'authoring.initialize');
   }, [workingCandidate, onDraftCommand, persistCandidate]);
 
   const resolveCollaborationConflict = useCallback(async () => {

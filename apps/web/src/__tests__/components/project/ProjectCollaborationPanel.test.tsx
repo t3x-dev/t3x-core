@@ -22,7 +22,6 @@ import { ProjectCollaborationPanel } from '@/components/project/ProjectCollabora
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
 
 const NOW = '2026-08-31T00:00:00.000Z';
-const TOKEN = `t3xi_v1_${'a'.repeat(43)}`;
 const guest: ProjectGrant = {
   grant_id: 'pg_1',
   project_id: 'proj_1',
@@ -72,8 +71,8 @@ const invitations: ListProjectInvitationsResponse = {
 
 function mockCollaboration(error: unknown = null) {
   const createInvitation = vi.fn().mockResolvedValue({
-    invitation,
-    delivery: { mode: 'manual', token: TOKEN },
+    invitation: { ...invitation, recipient: { user_id: 'user_test_b3', email: null } },
+    delivery: { mode: 'inbox', token: null },
     mutation: {
       request_id: 'req_1',
       kind: 'invitation.create',
@@ -81,6 +80,14 @@ function mockCollaboration(error: unknown = null) {
       evaluated_at: NOW,
     },
   } satisfies CreateCollaborationInvitationResponse);
+  const searchUsers = vi.fn().mockResolvedValue([
+    {
+      user_id: 'user_test_b3',
+      username: 'test-b3',
+      display_name: 'Test B3',
+      avatar_url: null,
+    },
+  ]);
   const value = {
     guestsQuery: { data: error ? undefined : guests, isLoading: false, error, refetch: vi.fn() },
     invitationsQuery: {
@@ -93,6 +100,7 @@ function mockCollaboration(error: unknown = null) {
     updateGuestRole: vi.fn(),
     revokeGuest: vi.fn(),
     createInvitation,
+    searchUsers,
     revokeInvitation: vi.fn(),
   } as ReturnType<typeof useProjectCollaboration>;
   vi.mocked(useProjectCollaboration).mockReturnValue(value);
@@ -116,21 +124,20 @@ describe('ProjectCollaborationPanel', () => {
     expect(screen.getByText('pending@example.com · editor')).toBeInTheDocument();
   });
 
-  it('creates a fragment-protected project invitation link', async () => {
+  it('searches partial usernames and creates an inbox invitation', async () => {
     const collaboration = mockCollaboration();
     render(<ProjectCollaborationPanel projectId="proj_1" />);
 
-    fireEvent.change(screen.getByLabelText('Project invitee username or email'), {
-      target: { value: 'test-b3' },
+    fireEvent.click(screen.getByRole('button', { name: 'Add people' }));
+    fireEvent.change(screen.getByLabelText('Search users'), {
+      target: { value: 'test' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Test B3.*test-b3/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add @test-b3' }));
 
     await waitFor(() =>
-      expect(collaboration.createInvitation).toHaveBeenCalledWith('test-b3', 'editor')
+      expect(collaboration.createInvitation).toHaveBeenCalledWith('user_test_b3', 'editor')
     );
-    expect(
-      await screen.findByText(`http://localhost:3000/invite#token=${TOKEN}`)
-    ).toBeInTheDocument();
   });
 
   it('stays hidden when the server denies project guest management', () => {

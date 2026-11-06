@@ -20,6 +20,7 @@ const upsertProjectGuest = vi.fn();
 const revokeProjectGuest = vi.fn();
 const createProjectInvitation = vi.fn();
 const revokeCollaborationInvitation = vi.fn();
+const searchCollaborationUsers = vi.fn();
 
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({
@@ -29,6 +30,7 @@ vi.mock('@/infrastructure/sharedApiClient', () => ({
     revokeProjectGuest,
     createProjectInvitation,
     revokeCollaborationInvitation,
+    searchCollaborationUsers,
   }),
 }));
 
@@ -99,6 +101,7 @@ describe('useProjectCollaboration', () => {
     revokeProjectGuest.mockResolvedValue({});
     createProjectInvitation.mockResolvedValue(invitationResponse);
     revokeCollaborationInvitation.mockResolvedValue({});
+    searchCollaborationUsers.mockResolvedValue({ users: [] });
   });
 
   it('uses project-qualified keys and waits for server authorization before listing invitations', async () => {
@@ -125,7 +128,7 @@ describe('useProjectCollaboration', () => {
     await act(async () => {
       await result.current.updateGuestRole(guest, 'editor');
       await result.current.revokeGuest('pg_1');
-      await result.current.createInvitation('new@example.com', 'editor');
+      await result.current.createInvitation('user_new', 'editor');
       await result.current.revokeInvitation('inv_1');
     });
 
@@ -136,7 +139,7 @@ describe('useProjectCollaboration', () => {
     });
     expect(revokeProjectGuest).toHaveBeenCalledWith('proj_1', 'pg_1');
     expect(createProjectInvitation).toHaveBeenCalledWith('proj_1', {
-      recipient: { user_id: null, email: 'new@example.com' },
+      recipient: { user_id: 'user_new', email: null },
       role: 'editor',
       expires_at: '2026-09-07T00:00:00.000Z',
     });

@@ -13,7 +13,7 @@
  * in background, and hides until a session exists.
  */
 
-import { LogOut, Settings, User } from 'lucide-react';
+import { Inbox, LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
@@ -237,6 +237,12 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           </DropdownMenuItem>
         ) : (
           <>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/invitations">
+                <Inbox className="h-4 w-4" />
+                Invitations
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
               <Link href="/settings/profile">
                 <User className="h-4 w-4" />

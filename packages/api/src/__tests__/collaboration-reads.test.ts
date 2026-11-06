@@ -53,6 +53,7 @@ describe('collaboration read routes', () => {
     await mockDB.insert(users).values([
       {
         id: 'user_collaboration_reader_owner',
+        username: 'reader-owner',
         email: 'owner@example.com',
         emailVerified: true,
         name: 'Owner',
@@ -60,11 +61,12 @@ describe('collaboration read routes', () => {
       },
       {
         id: 'user_collaboration_reader_guest',
+        username: 'grace-guest',
         email: 'guest@example.com',
         emailVerified: true,
         name: 'Guest',
       },
-      { id: 'user_collaboration_reader_outsider', emailVerified: true },
+      { id: 'user_collaboration_reader_outsider', username: 'outside-reader' },
     ]);
     const namespace = await insertPersonalNamespace(mockDB, {
       slug: 'collaboration-reader',
@@ -120,6 +122,18 @@ describe('collaboration read routes', () => {
         createdByPrincipalId: 'user_collaboration_reader_owner',
         expiresAt: new Date('2099-01-01T00:00:00.000Z'),
       },
+      {
+        invitationId: 'inv_collaboration_reader_received',
+        namespaceId,
+        projectId,
+        recipientUserId: 'user_collaboration_reader_guest',
+        role: 'editor',
+        tokenHash: 'sha256:received-inbox-token',
+        status: 'pending',
+        createdByPrincipalKind: 'human',
+        createdByPrincipalId: 'user_collaboration_reader_owner',
+        expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      },
     ]);
   });
 
@@ -168,6 +182,42 @@ describe('collaboration read routes', () => {
     expect(invitationPayloads).not.toContain('must-never-leave-storage');
     expect(invitationPayloads).toContain('inv_collaboration_reader_namespace');
     expect(invitationPayloads).toContain('inv_collaboration_reader_project');
+  });
+
+  it('supports partial collaborator search without exposing private identity fields', async () => {
+    const response = await appFor('user_collaboration_reader_owner').request(
+      '/v1/users/search?q=grace'
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      data: {
+        users: [
+          {
+            user_id: 'user_collaboration_reader_guest',
+            username: 'grace-guest',
+            display_name: 'Guest',
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(payload)).not.toContain('guest@example.com');
+  });
+
+  it('lists pending invitations received by the authenticated user', async () => {
+    const response = await appFor('user_collaboration_reader_guest').request('/v1/invitations');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: {
+        invitations: [
+          {
+            invitation: { invitation_id: 'inv_collaboration_reader_received', role: 'editor' },
+            namespace: { slug: 'collaboration-reader' },
+            project: { name: 'Collaboration-read-project' },
+          },
+        ],
+      },
+    });
   });
 
   it('fails closed for a principal outside the namespace', async () => {

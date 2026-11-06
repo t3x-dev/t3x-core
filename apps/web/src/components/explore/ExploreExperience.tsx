@@ -178,7 +178,7 @@ export function ExploreExperience() {
                     <h1>Find a starting point.</h1>
                     <p>Discover schemas to shape your next project, and projects to learn from.</p>
                   </div>
-                  <Link href="/" className={styles.textLink}>
+                  <Link href="/repositories" className={styles.textLink}>
                     Your repositories <ArrowRight size={15} />
                   </Link>
                 </div>

@@ -392,7 +392,7 @@ describe('Conversations Storage', () => {
   });
 
   describe('markProjectConversationsCommitted', () => {
-    it('marks open project sources together and leaves existing commit links unchanged', async () => {
+    it('records the latest commit and closes every source pending window', async () => {
       const first = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'First source' })
@@ -412,12 +412,24 @@ describe('Conversations Storage', () => {
         commitHash
       );
 
-      expect(marked).toEqual([first.conversationId]);
+      expect(marked).toHaveLength(2);
+      expect(marked).toEqual(expect.arrayContaining([first.conversationId, second.conversationId]));
       await expect(findConversationById(db, first.conversationId)).resolves.toMatchObject({
         committedAs: commitHash,
+        commitTrackingStartedAt: null,
       });
       await expect(findConversationById(db, second.conversationId)).resolves.toMatchObject({
-        committedAs: existingHash,
+        committedAs: commitHash,
+        commitTrackingStartedAt: null,
+      });
+
+      await insertTurn(
+        db,
+        testData.turn(testProjectId, second.conversationId, { content: 'Next draft' })
+      );
+      await expect(findConversationById(db, second.conversationId)).resolves.toMatchObject({
+        committedAs: commitHash,
+        commitTrackingStartedAt: expect.any(Date),
       });
     });
   });

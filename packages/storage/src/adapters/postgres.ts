@@ -1817,7 +1817,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       FOR EACH ROW EXECUTE FUNCTION t3x_trg_events_notify();
   `);
 
-  // ── Schema v45: committed conversation lock ──
+  // ── Schema v45: conversation commit provenance and pending-window tracking ──
   await sql.unsafe(`
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_as TEXT;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;

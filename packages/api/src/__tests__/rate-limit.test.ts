@@ -19,6 +19,7 @@ import {
 } from '../middleware/rate-limit';
 
 const originalAuthDisabled = process.env.AUTH_DISABLED;
+const originalNpmLifecycleEvent = process.env.npm_lifecycle_event;
 
 class MemoryRateLimitStore implements RateLimitStore {
   private readonly counters = new Map<string, number>();
@@ -83,9 +84,22 @@ describe('Rate Limit Middleware', () => {
     delete process.env.TRUST_PROXY;
     if (originalAuthDisabled === undefined) delete process.env.AUTH_DISABLED;
     else process.env.AUTH_DISABLED = originalAuthDisabled;
+    if (originalNpmLifecycleEvent === undefined) delete process.env.npm_lifecycle_event;
+    else process.env.npm_lifecycle_event = originalNpmLifecycleEvent;
   });
 
   describe('L1 — IP-based rate limiting', () => {
+    it('stays out of the way during source development', async () => {
+      process.env.npm_lifecycle_event = 'dev';
+      const store: RateLimitStore = {
+        consume: async () => {
+          throw new Error('source development should not consume a rate-limit bucket');
+        },
+      };
+
+      expect((await createL1TestApp(store).request('/test')).status).toBe(200);
+    });
+
     it('uses the Node socket address instead of untrusted proxy headers', async () => {
       process.env.TRUST_PROXY = '0';
       const app = new Hono();

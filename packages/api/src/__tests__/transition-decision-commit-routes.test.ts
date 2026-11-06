@@ -1223,7 +1223,7 @@ describe('Transition Decision and Commit routes', () => {
     expect(workspace?.workspace_state?.status).toBe('committed');
   });
 
-  it('qualifies r5/r6/r7-style Web CLI and MCP Commit contention without mutating losers', async () => {
+  it('qualifies Web CLI and MCP Commit contention and syncs clean losers to the winner', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Mixed Commit gate' }));
     await ensureMainBranch(mockDB, project.projectId);
     await bindPolicy(project.projectId, 'mixed-commit-gate/v1');
@@ -1318,9 +1318,17 @@ describe('Transition Decision and Commit routes', () => {
         code: 'CONFLICT',
         details: { protocol_code: 'STALE_BASE' },
       });
-      await expect(
-        findWorkspaceDraft(mockDB, project.projectId, loser.entry.workspaceId)
-      ).resolves.toEqual(loser.entry.before);
+      const synced = await findWorkspaceDraft(mockDB, project.projectId, loser.entry.workspaceId);
+      expect(synced).toMatchObject({
+        parent_commit_hash: winnerPayload.data.commit_digest,
+        revision: expect.any(Number),
+        workspace_state: {
+          baseCommitHash: winnerPayload.data.commit_digest,
+          targetBranch: 'main',
+        },
+      });
+      expect(synced?.revision).toBeGreaterThan(loser.entry.before?.revision ?? 0);
+      expect(synced?.workspace_state?.lastCommitHash).toBeUndefined();
     }
 
     const winner = winners[0]!.entry;

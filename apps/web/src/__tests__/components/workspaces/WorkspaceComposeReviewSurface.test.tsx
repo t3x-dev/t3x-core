@@ -644,6 +644,84 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     } as unknown as ReturnType<typeof useComposeActivity>;
   }
 
+  it('opens branch reconciliation on a separate comparison page', () => {
+    enableComposeActivity();
+    activityMocks.value!.newActivity = {
+      synchronization: { required: true, currentRefHead: 'sha256:latest' },
+    } as NonNullable<ReturnType<typeof useComposeActivity>['newActivity']>;
+    activityMocks.value!.prepareReconciliation = vi.fn();
+
+    renderCompose();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview branch changes' }));
+
+    expect(navigationMocks.push).toHaveBeenCalledWith(
+      '/t3x-dev/test-project/workspaces?workspaceReconcile=1',
+      { scroll: false }
+    );
+    expect(activityMocks.value!.prepareReconciliation).not.toHaveBeenCalled();
+  });
+
+  it('shows only conflicts on the three-way page and resolves each with one choice', async () => {
+    enableComposeActivity();
+    const decideReconciliation = vi.fn().mockResolvedValue(true);
+    activityMocks.value!.newActivity = {
+      synchronization: { required: true, currentRefHead: 'sha256:latest' },
+    } as NonNullable<ReturnType<typeof useComposeActivity>['newActivity']>;
+    activityMocks.value!.reconciliationPreview = {
+      schema: 't3x.application/workspace-reconciliation-preparation/v1',
+      preparationDigest: `sha256:${'a'.repeat(64)}`,
+      workspaceRevision: 4,
+      refName: 'main',
+      baseHead: `sha256:${'b'.repeat(64)}`,
+      currentRefHead: `sha256:${'c'.repeat(64)}`,
+      base: {},
+      ours: {},
+      theirs: {},
+      merged: {},
+      conflicts: [
+        {
+          id: `sha256:${'d'.repeat(64)}`,
+          path: '/candidate/product/title',
+          scope: 'content',
+          kind: 'value',
+          base: { source: 'base', present: true, value: 'AI assistant' },
+          ours: { source: 'workspace_draft', present: true, value: 'Study assistant' },
+          theirs: { source: 'branch', present: true, value: 'AI learning assistant' },
+        },
+      ],
+    };
+    activityMocks.value!.reconciliationDeciding = false;
+    activityMocks.value!.reconciling = false;
+    activityMocks.value!.reconciliationError = null;
+    activityMocks.value!.prepareReconciliation = vi.fn();
+    activityMocks.value!.decideReconciliation = decideReconciliation;
+    navigationMocks.searchParams = new URLSearchParams('workspaceReconcile=1');
+
+    renderCompose();
+
+    expect(screen.getByRole('heading', { name: 'Resolve branch conflicts' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Chat', exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText('Base')).toBeVisible();
+    expect(screen.getByText('Your Draft')).toBeVisible();
+    expect(screen.getByText('Latest branch')).toBeVisible();
+    const apply = screen.getByRole('button', { name: 'Validate and apply resolutions' });
+    expect(apply).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep my value' }));
+    fireEvent.click(apply);
+
+    await waitFor(() =>
+      expect(decideReconciliation).toHaveBeenCalledWith('resolve', [
+        { conflict_id: `sha256:${'d'.repeat(64)}`, choice: 'ours' },
+      ])
+    );
+    await waitFor(() =>
+      expect(navigationMocks.push).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', {
+        scroll: false,
+      })
+    );
+  });
+
   it('identifies the fallback count as operations before the content projection is available', () => {
     enableComposeActivity();
     activityMocks.value!.view = null;
@@ -1497,6 +1575,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         actions: [action],
         selected: { action, cards },
         current: { rollout: { allocation: 25, channel: 'stable' } },
+        synchronization: { required: true, currentRefHead: 'sha256:latest' },
         netDiff: cards,
         node: null,
         nextBeforeSequence: null,
@@ -1539,6 +1618,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview branch changes' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved Content changes' })).toBeVisible();
+    expect(navigationMocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing', exact: true }));
+
     fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     expect(screen.getByRole('dialog', { name: 'Unsaved Content changes' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing', exact: true }));

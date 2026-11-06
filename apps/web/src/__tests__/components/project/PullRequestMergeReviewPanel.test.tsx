@@ -110,7 +110,7 @@ it('keeps Schema choices editable and blocks publication until the exact edits a
   });
   fireEvent.click(screen.getByRole('button', { name: 'Save & recheck Schema and content' }));
   await waitFor(() => expect(rerun).toHaveBeenCalledTimes(1));
-  expect(saveState).toHaveBeenLastCalledWith('saved');
+  await waitFor(() => expect(saveState).toHaveBeenLastCalledWith('saved'));
   expect(save.mock.calls.at(-1)).toEqual([
     'draft-2',
     expect.objectContaining({
