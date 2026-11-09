@@ -1,8 +1,9 @@
 # AGENTS.md
 
 This file is the general guide for AI coding agents working in this repository.
-`CLAUDE.md` may contain Claude-specific or deeper architecture notes, but this
-file is the short cross-agent source for day-to-day development behavior.
+This file is the short cross-agent source for day-to-day development behavior.
+For WebUI-specific guidance, follow `apps/web/AGENTS.md` and the architecture
+and business documents indexed by `apps/web/README.md`.
 
 ## Project Frame
 
@@ -210,6 +211,7 @@ The pre-push hook runs `pnpm check` and `pnpm build`. It runs tests only when
 
 - Product overview: `README.md`
 - General docs index: `docs/README.md`
+- WebUI development and contracts: `apps/web/README.md`, `apps/web/AGENTS.md`
 - Release surface: `RELEASE.md`, `release/surface.yaml`
 - Alpha limitations: `docs/limitations.md`
 - Deployment/evaluation: `docs/deployment.md`

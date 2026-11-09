@@ -87,7 +87,7 @@ export function WorkspaceSchemaDiagnostics({
             <DialogDescription>
               {frozen
                 ? 'Recorded before content adaptation. These reports explain the Schema changes; the Review checks determine whether the final snapshot can be committed.'
-                : 'Read-only checks for the selected Schema and Draft content. Preparing Review may require content adjustments.'}
+                : 'These checks apply to the Schema preview and its Draft revision. A fixed snapshot has its own checks.'}
             </DialogDescription>
           </DialogHeader>
           {frozen ? (

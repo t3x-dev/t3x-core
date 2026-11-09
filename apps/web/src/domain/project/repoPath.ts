@@ -33,7 +33,7 @@ export function getProjectIdHistoryPath(
   options: {
     branch?: string | null;
     commit?: string | null;
-    view?: 'list' | 'canvas';
+    view?: 'list';
     returnTo?: string | null;
   } = {}
 ): string {

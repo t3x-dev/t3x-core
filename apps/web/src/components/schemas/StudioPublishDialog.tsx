@@ -18,7 +18,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { studioPublicationBlocker } from '@/domain/schemas/studioPublication';
 import { usePublishStudioSchema } from '@/hooks/schemas/usePublishStudioSchema';
+import { SchemaDefinitionTree } from './SchemaDefinitionTree';
 import { SchemaEditorSelect } from './SchemaEditorSelect';
 
 export function StudioPublishDialog({
@@ -42,6 +44,7 @@ export function StudioPublishDialog({
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [showValidation, setShowValidation] = useState(false);
   const [result, setResult] = useState<StudioPublishResult>();
   const [name, setName] = useState(`projects/${projectId}/my-schema`);
   const [version, setVersion] = useState('1.0.0');
@@ -52,14 +55,27 @@ export function StudioPublishDialog({
     useState<NonNullable<import('@t3x-dev/api-client').StudioPublishInput['license']>>(
       'Apache-2.0'
     );
-  const canPublish =
-    preview.reviewHash === currentReviewHash &&
-    preview.report.valid &&
-    preview.adoption.allowed &&
-    preview.impact?.canPublish === true &&
-    !!preview.freshness.candidateId &&
-    !!preview.freshness.candidateRevision &&
-    !!preview.workspace;
+  const blocker =
+    preview.reviewHash !== currentReviewHash
+      ? 'This preview is stale. Check the current candidate again before publishing.'
+      : studioPublicationBlocker(preview, candidateIds);
+  const parsed = StudioPublishInputSchema.safeParse({
+    visibility: 'community',
+    candidateIds,
+    schemaEditCandidate: {
+      candidateId: preview.freshness.candidateId,
+      revision: preview.freshness.candidateRevision,
+    },
+    ifRevision: preview.workspace?.revision,
+    reviewHash: preview.reviewHash,
+    canonicalName: name,
+    version,
+    title,
+    description,
+    releaseNotes: notes,
+    license,
+  });
+  const issues = showValidation && !parsed.success ? parsed.error.flatten().fieldErrors : {};
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -68,25 +84,14 @@ export function StudioPublishDialog({
   }, []);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (submitting.current || !canPublish) return;
-    const parsed = StudioPublishInputSchema.safeParse({
-      visibility: 'community',
-      candidateIds,
-      schemaEditCandidate: {
-        candidateId: preview.freshness.candidateId,
-        revision: preview.freshness.candidateRevision,
-      },
-      ifRevision: preview.workspace?.revision,
-      reviewHash: preview.reviewHash,
-      canonicalName: name,
-      version,
-      title,
-      description,
-      releaseNotes: notes,
-      license,
-    });
+    if (submitting.current || blocker) return;
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid release metadata.');
+      setShowValidation(true);
+      setError(
+        parsed.error.issues.find(
+          (issue) => !['canonicalName', 'version', 'title'].includes(String(issue.path[0]))
+        )?.message
+      );
       return;
     }
     submitting.current = true;
@@ -141,7 +146,17 @@ export function StudioPublishDialog({
             </Button>
           </section>
         ) : (
-          <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+          <form className="grid gap-3" noValidate onSubmit={(event) => void submit(event)}>
+            <p className="text-sm">
+              Schema candidate r{preview.freshness.candidateRevision} · Workspace r
+              {preview.workspace?.revision}
+            </p>
+            {preview.schema ? (
+              <details>
+                <summary className="text-sm underline">View checked definition</summary>
+                <SchemaDefinitionTree schema={preview.schema} />
+              </details>
+            ) : null}
             <label htmlFor={`${id}-name`} className="grid gap-1 text-sm">
               Schema identifier
               <Input
@@ -149,9 +164,20 @@ export function StudioPublishDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 disabled={busy}
+                aria-invalid={!!issues.canonicalName}
+                aria-describedby={issues.canonicalName ? `${id}-name-error` : undefined}
                 required
               />
             </label>
+            {issues.canonicalName ? (
+              <p
+                id={`${id}-name-error`}
+                role="alert"
+                className="text-xs text-[var(--status-error)]"
+              >
+                Enter a lowercase Schema identifier, such as projects/{projectId}/my-schema.
+              </p>
+            ) : null}
             <label htmlFor={`${id}-version`} className="grid gap-1 text-sm">
               Version
               <Input
@@ -159,9 +185,20 @@ export function StudioPublishDialog({
                 value={version}
                 onChange={(event) => setVersion(event.target.value)}
                 disabled={busy}
+                aria-invalid={!!issues.version}
+                aria-describedby={issues.version ? `${id}-version-error` : undefined}
                 required
               />
             </label>
+            {issues.version ? (
+              <p
+                id={`${id}-version-error`}
+                role="alert"
+                className="text-xs text-[var(--status-error)]"
+              >
+                Enter a version such as 1.0.0 or 1.0.0-beta.1.
+              </p>
+            ) : null}
             <label htmlFor={`${id}-title`} className="grid gap-1 text-sm">
               Display name
               <Input
@@ -169,10 +206,21 @@ export function StudioPublishDialog({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 disabled={busy}
+                aria-invalid={!!issues.title}
+                aria-describedby={issues.title ? `${id}-title-error` : undefined}
                 required
                 maxLength={80}
               />
             </label>
+            {issues.title ? (
+              <p
+                id={`${id}-title-error`}
+                role="alert"
+                className="text-xs text-[var(--status-error)]"
+              >
+                Enter a display name of up to 80 characters.
+              </p>
+            ) : null}
             <label htmlFor={`${id}-description`} className="grid gap-1 text-sm">
               Description
               <Textarea
@@ -217,12 +265,7 @@ export function StudioPublishDialog({
             <p className="break-all text-xs text-[var(--text-secondary)]">
               Reviewed Schema Hash: {preview.schemaHash}
             </p>
-            {!canPublish ? (
-              <p role="alert">
-                Save and check the current candidate, and resolve content impact before publishing.
-                This preview may be stale.
-              </p>
-            ) : null}
+            {blocker ? <p role="alert">{blocker}</p> : null}
             {error ? (
               <p role="alert" className="text-sm text-[var(--status-error)]">
                 {error}
@@ -237,7 +280,7 @@ export function StudioPublishDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy || !canPublish}>
+              <Button type="submit" disabled={busy || !!blocker}>
                 {busy ? 'Publishing…' : 'Publish publicly'}
               </Button>
             </div>

@@ -35,6 +35,8 @@ repository.
 
 ## Related Root Files
 
+- [`WebUI documentation`](../apps/web/README.md) indexes frontend architecture,
+  core business contracts and agent guidance.
 - [`README.md`](../README.md) is the first-stop product overview and quickstart.
 - [`AGENTS.md`](../AGENTS.md) gives cross-agent development guidance.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) covers contributor basics.

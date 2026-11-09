@@ -2,6 +2,7 @@ import type {
   PublishWorkspaceAuthoringInput,
   WorkspaceAuthoringAction,
   WorkspaceAuthoringCard,
+  WorkspaceAuthoringOutcome,
   WorkspaceAuthoringView,
   WorkspaceReconciliationPreparation,
   WorkspaceReconciliationResolution,
@@ -62,7 +63,6 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [cards, setCards] = useState<Record<string, WorkspaceAuthoringCard[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(enabled);
-  const [retry, setRetry] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [cursor, setCursor] = useState<number | null>(null);
   const [node, setNode] = useState<WorkspaceAuthoringView['node']>(null);
@@ -70,6 +70,13 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [nodeError, setNodeError] = useState<string | null>(null);
   const [nodeCursor, setNodeCursor] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [publishReceipt, setPublishReceipt] = useState<{
+    outcome: WorkspaceAuthoringOutcome;
+    refreshed: boolean;
+  } | null>(null);
+  const latestPublish = useRef<{ scope: typeof scope; outcome: WorkspaceAuthoringOutcome } | null>(
+    null
+  );
   const [newActivity, setNewActivity] = useState<WorkspaceAuthoringView | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
@@ -95,6 +102,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     setNodeError(null);
     setNodeCursor(null);
     setNotice(null);
+    setPublishReceipt(null);
     setNewActivity(null);
     setReconciling(false);
     setReconciliationError(null);
@@ -107,85 +115,117 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       ++scope.epoch;
     };
   }, [scope]);
-  const load = useCallback(async () => {
-    const isActive = captureScope();
-    if (!enabled || !isActive()) return;
-    const token = ++scope.read;
-    const isCurrent = () => isActive() && token === scope.read;
-    setLoading(true);
-    setError(null);
-    try {
-      const api = getSharedApiClient().workspaces.authoring;
-      const first = await api.read(candidate.projectId, candidate.id);
-      if (!isCurrent()) return;
-      const all = [...first.actions];
-      let before = first.nextBeforeSequence;
-      for (let page = 1; page < pageCount && before !== null; page++) {
-        const older = await api.read(candidate.projectId, candidate.id, {
-          before_sequence: before,
-        });
-        if (!isCurrent()) return;
-        if (older.workspaceRevision !== first.workspaceRevision)
-          throw new Error('Draft changed. Refresh activity to load a consistent history.');
-        all.push(...older.actions);
-        before = older.nextBeforeSequence;
-      }
-      const details: Record<string, WorkspaceAuthoringCard[]> = {};
-      if (first.selected)
-        details[first.selected.action.actionId] = composeObjectChangeCards(
-          first.selected.cards,
-          first.selected.before,
-          first.selected.after
-        );
-      const missing = all.filter((a) => !details[a.actionId]);
-      for (let i = 0; i < missing.length; i += 4) {
-        await Promise.all(
-          missing.slice(i, i + 4).map(async (action) => {
-            const result = await api.read(candidate.projectId, candidate.id, {
-              action_id: action.actionId,
-            });
-            if (!isCurrent()) return;
-            if (result.selected?.action.actionId !== action.actionId)
-              throw new Error('Event details are unavailable. Refresh activity to retry.');
-            if (result.workspaceRevision !== first.workspaceRevision)
-              throw new Error('Draft changed. Refresh activity to load a consistent history.');
-            details[action.actionId] = composeObjectChangeCards(
-              result.selected.cards,
-              result.selected.before,
-              result.selected.after
-            );
-          })
-        );
-        if (!isCurrent()) return;
-      }
-      setView(first);
-      setActions(all);
-      setCards(details);
-      setCursor(before);
-      setNewActivity(null);
+  const load = useCallback(
+    async (preserveInspected = false) => {
+      const isActive = captureScope();
+      if (!enabled || !isActive()) return;
+      const token = ++scope.read;
+      const isCurrent = () => isActive() && token === scope.read;
+      setLoading(true);
       setError(null);
-      return first;
-    } catch (error) {
-      if (!isCurrent()) return;
-      setError(error instanceof Error ? error.message : 'Cannot load activity');
-      throw error;
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  }, [candidate.id, candidate.projectId, enabled, pageCount, captureScope, scope]);
+      try {
+        const api = getSharedApiClient().workspaces.authoring;
+        const first = await api.read(candidate.projectId, candidate.id);
+        if (!isCurrent()) return;
+        const receipt =
+          latestPublish.current?.scope === scope ? latestPublish.current.outcome : null;
+        if (
+          receipt &&
+          (first.workspaceRevision < receipt.workspaceRevision ||
+            first.compositionRevision < receipt.compositionRevision)
+        ) {
+          throw new Error('The refreshed Draft is older than the confirmed save.');
+        }
+        const inspected = viewRef.current;
+        const matchesReceipt =
+          receipt &&
+          first.workspaceRevision === receipt.workspaceRevision &&
+          first.compositionRevision === receipt.compositionRevision;
+        if (
+          preserveInspected &&
+          inspected &&
+          !(matchesReceipt && inspected.workspaceRevision < first.workspaceRevision) &&
+          (first.workspaceRevision !== inspected.workspaceRevision ||
+            first.compositionRevision !== inspected.compositionRevision ||
+            first.basis?.refHead !== inspected.basis?.refHead ||
+            first.synchronization?.currentRefHead !== inspected.synchronization?.currentRefHead)
+        ) {
+          setNewActivity(first);
+          return;
+        }
+        const all = [...first.actions];
+        let before = first.nextBeforeSequence;
+        for (let page = 1; page < pageCount && before !== null; page++) {
+          const older = await api.read(candidate.projectId, candidate.id, {
+            before_sequence: before,
+          });
+          if (!isCurrent()) return;
+          if (older.workspaceRevision !== first.workspaceRevision)
+            throw new Error('Draft changed. Refresh activity to load a consistent history.');
+          all.push(...older.actions);
+          before = older.nextBeforeSequence;
+        }
+        const details: Record<string, WorkspaceAuthoringCard[]> = {};
+        if (first.selected)
+          details[first.selected.action.actionId] = composeObjectChangeCards(
+            first.selected.cards,
+            first.selected.before,
+            first.selected.after
+          );
+        const missing = all.filter((a) => !details[a.actionId]);
+        for (let i = 0; i < missing.length; i += 4) {
+          await Promise.all(
+            missing.slice(i, i + 4).map(async (action) => {
+              const result = await api.read(candidate.projectId, candidate.id, {
+                action_id: action.actionId,
+              });
+              if (!isCurrent()) return;
+              if (result.selected?.action.actionId !== action.actionId)
+                throw new Error('Event details are unavailable. Refresh activity to retry.');
+              if (result.workspaceRevision !== first.workspaceRevision)
+                throw new Error('Draft changed. Refresh activity to load a consistent history.');
+              details[action.actionId] = composeObjectChangeCards(
+                result.selected.cards,
+                result.selected.before,
+                result.selected.after
+              );
+            })
+          );
+          if (!isCurrent()) return;
+        }
+        setView(first);
+        setPublishReceipt((receipt) =>
+          receipt && !receipt.refreshed ? { ...receipt, refreshed: true } : receipt
+        );
+        setActions(all);
+        setCards(details);
+        setCursor(before);
+        setNewActivity(null);
+        setError(null);
+        return first;
+      } catch (error) {
+        if (!isCurrent()) return;
+        setError(error instanceof Error ? error.message : 'Cannot load activity');
+        throw error;
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
+    },
+    [candidate.id, candidate.projectId, enabled, pageCount, captureScope, scope]
+  );
 
   useEffect(() => {
     if (!enabled) {
       setLoading(false);
       return;
     }
-    void load().catch(() => {
+    void load(true).catch(() => {
       /* load owns the current error state. */
     });
     return () => {
       ++scope.read;
     };
-  }, [enabled, candidate.revision, retry, load, scope]);
+  }, [enabled, candidate.revision, load, scope]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -202,6 +242,8 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
             readVersion === scope.read &&
             viewRef.current &&
             (next.workspaceRevision !== viewRef.current.workspaceRevision ||
+              next.compositionRevision !== viewRef.current.compositionRevision ||
+              next.basis?.refHead !== viewRef.current.basis?.refHead ||
               next.synchronization?.currentRefHead !==
                 viewRef.current.synchronization?.currentRefHead)
           )
@@ -513,10 +555,12 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
 
   const publish = useCallback(
     async (
-      input: Omit<
-        PublishWorkspaceAuthoringInput,
-        'expected_workspace_revision' | 'expected_revision' | 'expected_ref_head'
-      >
+      input:
+        | PublishWorkspaceAuthoringInput
+        | Omit<
+            PublishWorkspaceAuthoringInput,
+            'expected_workspace_revision' | 'expected_revision' | 'expected_ref_head'
+          >
     ) => {
       const isCurrent = captureScope();
       if (!view || !ownsState || !isCurrent()) throw new Error('Draft activity is not ready');
@@ -524,24 +568,31 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       const outcome = await getSharedApiClient().workspaces.authoring.publish(
         candidate.projectId,
         candidate.id,
-        {
-          ...input,
-          expected_workspace_revision: view.workspaceRevision,
-          expected_revision: view.compositionRevision,
-          expected_ref_head: view.basis.refHead,
-        }
+        'expected_revision' in input
+          ? input
+          : {
+              ...input,
+              expected_workspace_revision: view.workspaceRevision,
+              expected_revision: view.compositionRevision,
+              expected_ref_head: view.basis.refHead,
+            }
       );
-      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
-      await load();
-      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
+      if (!isCurrent()) return outcome;
+      latestPublish.current = { scope, outcome };
+      setPublishReceipt({ outcome, refreshed: false });
       setNotice(
         outcome.kind === 'no_change'
           ? 'The current Draft already has this value. No action was added.'
-          : 'Saved as a new Draft action. Earlier history is unchanged.'
+          : outcome.kind === 'reused'
+            ? 'The original Draft save was confirmed.'
+            : 'Saved as a new Draft action.'
       );
+      void load(true).catch(() => {
+        // The write is confirmed. The read owns its separate error and retry.
+      });
       return outcome;
     },
-    [candidate.id, candidate.projectId, load, view, ownsState, captureScope]
+    [candidate.id, candidate.projectId, load, view, ownsState, captureScope, scope]
   );
 
   const createAssistantConversation = useCallback(async () => {
@@ -633,6 +684,8 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     nodeError: ownsState ? nodeError : null,
     nodeCursor: ownsState ? nodeCursor : null,
     notice: ownsState ? notice : null,
+    savedWorkspaceRevision: ownsState ? publishReceipt?.outcome.workspaceRevision : undefined,
+    awaitingPublishRefresh: ownsState && publishReceipt?.refreshed === false,
     newActivity: ownsState ? newActivity : null,
     reconciling: ownsState ? reconciling : false,
     reconciliationError: ownsState ? reconciliationError : null,
@@ -644,7 +697,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     compositionRevision: ownsState ? view?.compositionRevision : undefined,
     workspaceRevision: ownsState ? view?.workspaceRevision : undefined,
     basis: ownsState ? view?.basis : undefined,
-    refresh: () => setRetry((value) => value + 1),
+    refresh: () => void load().catch(() => {}),
     loadOlder: () => setPageCount((value) => value + 1),
     loadLatest: load,
     inspectNode,

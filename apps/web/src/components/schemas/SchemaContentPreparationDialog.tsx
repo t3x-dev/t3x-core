@@ -46,11 +46,27 @@ const summaryClass =
   'flex cursor-pointer list-none select-none items-center gap-2 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] [&::-webkit-details-marker]:hidden';
 const chevronClass = 'size-3.5 shrink-0 transition-transform group-open:rotate-90';
 
+function assertInspectedDraft(
+  preview: SchemaPreparationPreview,
+  inspected: { compositionRevision: number; refHead: string | null } | undefined,
+  revision: number
+) {
+  if (
+    inspected &&
+    (preview.workspaceRevision !== revision ||
+      preview.compositionRevision !== inspected.compositionRevision ||
+      preview.refHead !== inspected.refHead)
+  ) {
+    throw new Error('The Draft or branch changed. Reopen the latest Draft before applying Schema.');
+  }
+}
+
 /** Shared Studio/Workspace preparation surface. A preview belongs to one exact form and revision. */
 export function SchemaContentPreparationDialog({
   projectId,
   workspaceId,
   revision,
+  inspectedDraft,
   target,
   open,
   onOpenChange,
@@ -61,6 +77,7 @@ export function SchemaContentPreparationDialog({
   projectId: string;
   workspaceId: string;
   revision: number;
+  inspectedDraft?: { compositionRevision: number; refHead: string | null };
   target: SchemaPreparationTarget;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -86,6 +103,7 @@ export function SchemaContentPreparationDialog({
     requestId: string;
   }>();
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -96,6 +114,7 @@ export function SchemaContentPreparationDialog({
     setConfirmedChanges([]);
     setContext(undefined);
     setReview(undefined);
+    setSaved(false);
     setError(undefined);
     if (!open) return;
     setBusy(true);
@@ -112,6 +131,10 @@ export function SchemaContentPreparationDialog({
         ifRevision,
         commands: [],
         confirmedChanges: [],
+      })
+      .then((data) => {
+        assertInspectedDraft(data, inspectedDraft, ifRevision);
+        return data;
       })
       .then(
         (data) => {
@@ -135,12 +158,12 @@ export function SchemaContentPreparationDialog({
     return () => {
       ++epoch.current;
     };
-  }, [scope, open, preparation.preview]);
+  }, [scope, open, preparation.preview, inspectedDraft]);
 
   useEffect(() => {
     if (!open) return;
     const invalidate = () => {
-      if (saving.current) return;
+      if (saving.current || saved) return;
       ++epoch.current;
       setReview(undefined);
       setStale(true);
@@ -149,7 +172,7 @@ export function SchemaContentPreparationDialog({
     };
     window.addEventListener('focus', invalidate);
     return () => window.removeEventListener('focus', invalidate);
-  }, [open]);
+  }, [open, saved]);
 
   function changeCommands(value: PreparationChange[]) {
     ++epoch.current;
@@ -173,6 +196,7 @@ export function SchemaContentPreparationDialog({
       });
       const data = await preparation.preview(input);
       if (epoch.current !== token) return;
+      assertInspectedDraft(data, inspectedDraft, revision);
       setContext(data);
       setStale(false);
       setReview({ data, input, requestId: `schema-preparation:${crypto.randomUUID()}` });
@@ -183,20 +207,27 @@ export function SchemaContentPreparationDialog({
     }
   }
   async function prepare() {
-    if (!review?.data.canPrepare || busy) return;
+    if (busy || saving.current || (!saved && !review?.data.canPrepare)) return;
     const token = ++epoch.current;
     saving.current = true;
     setBusy(true);
     setError(undefined);
     try {
-      await preparation.prepare({
-        ...review.input,
-        previewHash: review.data.previewHash,
-        requestId: review.requestId,
-      });
+      if (!saved && review) {
+        await preparation.prepare({
+          ...review.input,
+          previewHash: review.data.previewHash,
+          requestId: review.requestId,
+        });
+      }
       if (epoch.current !== token) return;
-      await onPrepared();
-      if (epoch.current === token) onOpenChange(false);
+      setSaved(true);
+      try {
+        await onPrepared();
+        if (epoch.current === token) onOpenChange(false);
+      } catch {
+        if (epoch.current === token) setError('Draft saved. Refresh to see the updated Draft.');
+      }
     } catch (cause) {
       if (epoch.current === token) {
         setError(cause instanceof Error ? cause.message : 'Preparation failed.');
@@ -631,15 +662,19 @@ export function SchemaContentPreparationDialog({
         <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
           {embedded ? 'Back to editing' : 'Cancel'}
         </Button>
-        <Button variant="outline" disabled={busy} onClick={() => void preview()}>
+        <Button variant="outline" disabled={busy || saved} onClick={() => void preview()}>
           Preview changes
         </Button>
         <Button
-          disabled={busy || !review?.data.canPrepare}
+          disabled={busy || (!saved && !review?.data.canPrepare)}
           onClick={() => void prepare()}
           variant="commit"
         >
-          {continueToReview ? 'Save and continue to review' : 'Save prepared Draft'}
+          {saved
+            ? 'Refresh Draft'
+            : continueToReview
+              ? 'Save and continue to review'
+              : 'Save prepared Draft'}
         </Button>
       </div>
     </PreparationShell>

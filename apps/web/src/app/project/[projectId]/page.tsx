@@ -35,7 +35,6 @@ import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -140,10 +139,6 @@ export function ProjectDetailPageContent({
   const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
   const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
   const projectBase = projectFromStore ?? fetchedProject;
-  const liveSchemaBindings = useProjectWorkspaceSchemaBindingsStore(
-    (state) => state.bindingsByProjectId[projectId]
-  );
-  const schemaBindings = liveSchemaBindings;
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
@@ -471,15 +466,9 @@ export function ProjectDetailPageContent({
       case 'schemas':
       case 'discover':
       case 'browse':
-        return (
-          <ProjectSchemasTab
-            projectId={projectId}
-            schemaBindings={schemaBindings}
-            tab={activeTab}
-          />
-        );
+        return <ProjectSchemasTab projectId={projectId} tab={activeTab} />;
       case 'workspaces':
-        return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
+        return <ProjectWorkspacesTab projectId={projectId} />;
       case 'reviews':
         return (
           <ProjectReviewsTab

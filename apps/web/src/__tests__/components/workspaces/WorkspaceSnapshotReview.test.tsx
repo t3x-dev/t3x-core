@@ -4,7 +4,6 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
-import { useReviewedFieldChanges } from '@/hooks/workspaces/useReviewedFieldChanges';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 
 const replace = vi.hoisted(() => vi.fn());
@@ -21,18 +20,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/workspaces/useWorkspaceReviewSnapshot', () => ({
   useWorkspaceReviewSnapshot: vi.fn(),
-}));
-
-vi.mock('@/hooks/workspaces/useReviewedFieldChanges', () => ({
-  useReviewedFieldChanges: vi.fn(() => [
-    {
-      id: 'release',
-      label: 'Reduce device log volume',
-      breadcrumb: null,
-      kind: 'changed',
-      fields: [{ name: 'Title', before: null, after: 'Reduce device log volume', kind: 'added' }],
-    },
-  ]),
 }));
 
 vi.mock('@/components/workspaces/ChangeReviewChanges', () => ({
@@ -124,6 +111,36 @@ describe('WorkspaceSnapshotReview', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps loading and unavailable snapshots out of the empty-change state', () => {
+    const controller = {
+      decide: vi.fn(),
+      load: vi.fn(),
+      overrideReason: '',
+      setOverrideReason: vi.fn(),
+      state: { data: null, deciding: false, error: null, loading: true },
+    };
+    vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue(controller);
+    const snapshot = (
+      <WorkspaceSnapshotReview
+        projectId="proj_1"
+        snapshotId="rvs_88888888888888888888888888888888"
+        workspaceId="workspace_prd_handoff"
+      />
+    );
+    const { rerender } = render(snapshot);
+    expect(screen.getByText('Loading change review…')).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
+    vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+      ...controller,
+      state: { ...controller.state, loading: false, error: 'Offline', latestUnavailable: true },
+    });
+    rerender(<div>{snapshot}</div>);
+    expect(screen.getByRole('alert', { name: 'Fixed Review unavailable' })).toHaveTextContent(
+      'Use Refresh to try loading this fixed snapshot again.'
+    );
+    expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
+  });
+
   it('loads a stored ReviewSnapshot into the Changes decision view', async () => {
     const decide = vi.fn();
     const load = vi.fn();
@@ -147,7 +164,9 @@ describe('WorkspaceSnapshotReview', () => {
       'href',
       '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewPane=yaml'
     );
-    expect(await screen.findByRole('heading', { name: /^Review ·/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Review · Fixed snapshot · Workspace r3' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Review' })).toHaveAttribute('aria-selected', 'true');
     const checks = new URL(
       screen.getByRole('link', { name: 'View run' }).getAttribute('href')!,
@@ -163,10 +182,9 @@ describe('WorkspaceSnapshotReview', () => {
       '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=compose&branch=feature%2Frelease'
     );
     const summary = screen.getByRole('region', { name: 'Change summary' });
-    expect(summary).toHaveTextContent('Reduce device log volume');
-    expect(summary).toHaveTextContent('1 field · 2 operations into feature/release');
+    expect(summary).toHaveTextContent('2 operations into feature/release');
     expect(summary).toHaveTextContent('Cut log noise');
-    expect(useReviewedFieldChanges).toHaveBeenCalledWith('proj_1', 'workspace_prd_handoff', 3);
+    expect(screen.getAllByText('Unavailable for this revision.')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
     expect(decide).toHaveBeenCalledWith('accepted', undefined);
     expect(useWorkspaceReviewSnapshot).toHaveBeenCalledWith(
@@ -291,11 +309,26 @@ it('keeps the complete frozen Schema and content visible without loading a newer
     />
   );
   expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
-  expect(useReviewedFieldChanges).toHaveBeenLastCalledWith(
-    'proj_1',
-    'workspace_prd_handoff',
-    undefined
+});
+
+it('shows loading instead of a confirmed empty Review before the snapshot arrives', () => {
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: { data: null, deciding: false, loading: true, error: null },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId="rvs_1"
+    />
   );
+  expect(screen.getByText('Loading change review…')).toBeVisible();
+  expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
+  expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
 });
 
 it('keeps recovery explicit on a stale decision and disables actions during refresh', () => {
@@ -320,6 +353,7 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
     />
   );
   expect(screen.getByRole('alert')).toHaveTextContent('Workspace revision changed');
+  expect(screen.getByText('Checking for a decision update…')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
   const recovery = new URL(
     screen
@@ -329,6 +363,40 @@ it('keeps recovery explicit on a stale decision and disables actions during refr
   );
   expect(recovery.searchParams.get('workspace')).toBe('workspace_prd_handoff');
   expect(recovery.searchParams.has('reviewSnapshot')).toBe(false);
+});
+
+it('keeps the fixed Review visible and offers refresh when its decision update fails', () => {
+  const data = snapshotResponse();
+  const load = vi.fn();
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load,
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: {
+      data: data as never,
+      deciding: false,
+      loading: false,
+      latestUnavailable: true,
+      error: 'Offline',
+    },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId="proj_1"
+      workspaceId="workspace_prd_handoff"
+      snapshotId={data.snapshot_id}
+    />
+  );
+  expect(
+    screen.getByRole('heading', { name: 'Review · Fixed snapshot · Workspace r3' })
+  ).toBeVisible();
+  expect(
+    screen.getByRole('alert', { name: 'Could not refresh decision status' })
+  ).toHaveTextContent('You can still read this snapshot and its recorded checks.');
+  expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  expect(load).toHaveBeenCalledOnce();
 });
 
 it('reviews Schema and content in one Workspace snapshot after a decision', () => {
@@ -415,11 +483,12 @@ it('restores the same Workspace view preference in a snapshot and respects an ex
     'aria-current',
     'page'
   );
+  const replacePane = vi.spyOn(window.history, 'replaceState');
   fireEvent.click(screen.getByRole('button', { name: 'Preview', exact: true }));
   expect(localStorage.getItem(key)).toBe('rendered');
-  expect(replace).toHaveBeenLastCalledWith(expect.stringContaining('reviewPane=rendered'), {
-    scroll: false,
-  });
+  const [, , url] = replacePane.mock.lastCall!;
+  expect((url as URL).searchParams.get('reviewPane')).toBe('rendered');
+  replacePane.mockRestore();
   rendered.unmount();
   route.query = '';
   render(ui);

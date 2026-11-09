@@ -15,6 +15,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 const hookMocks = vi.hoisted(() => ({
   branchHeads: {} as Record<string, string | null>,
   branchesLoading: false,
+  branchesError: null as string | null,
   nativeView: null as unknown,
   committedSchema: { loading: false, snapshot: null, retry: vi.fn() } as CommittedSchemaState,
   createBranch: vi.fn(),
@@ -109,6 +110,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branches: ['main', 'feature/prd-audience'],
     create: hookMocks.createBranch,
     loading: hookMocks.branchesLoading,
+    error: hookMocks.branchesError,
     refresh: hookMocks.refreshBranches,
   }),
 }));
@@ -225,7 +227,7 @@ const PRD_COMMIT: ApiCommit = {
     ],
     relations: [],
   },
-  hash: 'sha256:cb5813f30e0e6a525000000000000000000000000000000000000000000000000',
+  hash: `sha256:cb5813f30e0e6a525${'0'.repeat(47)}`,
   message: 'PRD audience handoff committed',
   parents: ['sha256:base-prd'],
   project_id: 'proj_test',
@@ -486,6 +488,7 @@ function setupHookMocks() {
   hookMocks.committedSchema = { loading: false, snapshot: null, retry: vi.fn() };
   hookMocks.branchHeads = {};
   hookMocks.branchesLoading = false;
+  hookMocks.branchesError = null;
   hookMocks.loadCommit.mockResolvedValue(PRD_COMMIT);
   hookMocks.createBranch.mockResolvedValue({
     branch_id: 'branch_feature_checkout_retry',
@@ -646,7 +649,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview', exact: true }));
     expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'History', exact: true })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'History', exact: true })).toHaveLength(1);
     expect(screen.getByTestId('state-page-footer')).toHaveTextContent('Test Project');
   });
 
@@ -808,9 +811,7 @@ describe('ProjectStateTab', () => {
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-    expect(screen.getByRole('link', { name: 'Commit history' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'History canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
@@ -852,9 +853,11 @@ describe('ProjectStateTab', () => {
     fireEvent.change(screen.getByPlaceholderText('Find or create branch'), {
       target: { value: 'restore/historical-state' },
     });
+    expect(screen.getByText(/Create from commit/)).toBeVisible();
+    expect(screen.queryByText(/Create from the latest commit/)).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('menuitem', {
-        name: /Create branch restore\/historical-state from main/,
+        name: /Create branch restore\/historical-state from commit/,
       })
     );
     await waitFor(() =>
@@ -979,14 +982,9 @@ describe('ProjectStateTab', () => {
     expect(screen.getByPlaceholderText('Find a field or value...')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
-    fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-    expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
-    );
-    expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
-      'href',
-      '/t3x-dev/test-project?view=canvas'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
@@ -1605,6 +1603,9 @@ describe('ProjectStateTab', () => {
     expect(codeScrollArea).toHaveAttribute('data-scroll-axes', 'both');
     expect(codeView.querySelector('code')).toBeInTheDocument();
     expect(within(codeView).getByText('problem:').parentElement).toHaveClass('whitespace-pre');
+    expect(within(codeView).getByRole('heading', { name: 'State tree projection' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Export', exact: true }));
+    expect(screen.getByRole('dialog', { name: 'Export State' })).toHaveTextContent(PRD_COMMIT.hash);
   });
 
   it('opens Canvas as a separate State mode without leaving the repository route', async () => {
@@ -1879,13 +1880,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-    expect(screen.getByRole('link', { name: 'Commit history' })).toHaveTextContent(
-      'Commit history'
-    );
-    expect(screen.getByRole('link', { name: 'History canvas' })).toHaveTextContent(
-      'History canvas'
-    );
+    expect(screen.getByRole('link', { name: 'History' })).toHaveTextContent('History');
     expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
     expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
 
@@ -1950,14 +1945,9 @@ describe('ProjectStateTab', () => {
         100
       );
     });
-    fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-    expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
-    );
-    expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
-      'href',
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
     );
   });
 
@@ -1992,14 +1982,21 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('Loading state')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open commit' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-    expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
     );
-    expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute(
-      'href',
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience&view=canvas'
+  });
+
+  it('shows branch load failure with retry instead of falling back to empty State', async () => {
+    hookMocks.branchesError = 'Branch service offline';
+    renderStateTab();
+    expect(screen.getByText(/Branch list unavailable/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+    expect(hookMocks.refreshBranches).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getAllByText(/Branch service offline/).length).toBeGreaterThan(0)
     );
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
   });
 });

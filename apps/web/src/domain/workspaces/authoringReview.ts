@@ -4,11 +4,6 @@ import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
 
-export const EMPTY_AUTHORING_SEMANTIC_CONTENT: SemanticContent = Object.freeze({
-  trees: [],
-  relations: [],
-});
-
 export function authoringSemanticContent(value: unknown): SemanticContent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const document = value as Record<string, unknown>;
@@ -57,12 +52,9 @@ export function authoringReviewDocuments(
       relations: [],
     };
   };
+  const baseline = project(view.selected?.before ?? view.base);
   const current = project(view.selected?.after ?? view.current);
-  if (!current) return null;
-  return {
-    baseline: project(view.selected?.before ?? view.base) ?? EMPTY_AUTHORING_SEMANTIC_CONTENT,
-    current,
-  };
+  return baseline && current ? { baseline, current } : null;
 }
 
 export function authoringVisibleCards(cards: readonly WorkspaceAuthoringCard[]) {

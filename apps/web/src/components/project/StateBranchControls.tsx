@@ -24,6 +24,7 @@ interface StateBranchControlsProps {
   canCreateFromSearch?: boolean;
   disabled?: boolean;
   headCommitHash: string | null;
+  sourceCommitHash?: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch?: (name: string, fromBranch: string) => Promise<void>;
   showCreate?: boolean;
@@ -36,6 +37,7 @@ export function StateBranchControls({
   branchOptions,
   disabled = false,
   headCommitHash,
+  sourceCommitHash,
   onBranchChange,
   onCreateBranch,
   canCreateFromSearch: allowSearchCreation = true,
@@ -54,6 +56,10 @@ export function StateBranchControls({
   const normalizedName = normalizeBranchName(name);
   const validationError = getBranchNameError(normalizedName, branchOptions);
   const baseLabel = headCommitHash ? commitHashLabel(headCommitHash) : 'empty state';
+  const sourceLabel = sourceCommitHash
+    ? `commit ${commitHashLabel(sourceCommitHash)}`
+    : `the latest commit on ${branch}`;
+  const menuSourceLabel = sourceCommitHash ? sourceLabel : branch;
   const filteredBranches = useMemo(() => {
     const search = query.trim().toLowerCase();
     const matches = branchOptions.filter((option) => option.toLowerCase().includes(search));
@@ -266,7 +272,7 @@ export function StateBranchControls({
                   >
                     <Plus aria-hidden="true" />
                     <span>
-                      Create branch <b>{createCandidate}</b> from {branch}
+                      Create branch <b>{createCandidate}</b> from {menuSourceLabel}
                     </span>
                   </button>
                 )}
@@ -275,7 +281,7 @@ export function StateBranchControls({
               </div>
               {canCreateFromSearch && (
                 <p className={navigationStyles.hint}>
-                  Create from the latest commit on {branch}. Your draft stays on {branch}.
+                  Create from {sourceLabel}. Your draft stays on {branch}.
                 </p>
               )}
               <div className={navigationStyles.hint}>
@@ -309,8 +315,8 @@ export function StateBranchControls({
             <DialogHeader>
               <DialogTitle>Create a new branch</DialogTitle>
               <DialogDescription>
-                Start from the latest commit on {branch}, including its content and Schema. Your
-                current draft stays on {branch}.
+                Start from {sourceLabel}, including its content and Schema. Your current draft stays
+                on {branch}.
               </DialogDescription>
             </DialogHeader>
 
@@ -338,8 +344,8 @@ export function StateBranchControls({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
                   <span className="font-mono font-bold text-[var(--text-primary)]">{branch}</span>
-                  <span>latest commit</span>
-                  {headCommitHash && (
+                  <span>{sourceCommitHash ? sourceLabel : 'latest commit'}</span>
+                  {!sourceCommitHash && headCommitHash && (
                     <span className="font-mono text-xs">Last seen {baseLabel}</span>
                   )}
                 </div>

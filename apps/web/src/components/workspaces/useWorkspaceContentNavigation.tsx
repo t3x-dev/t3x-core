@@ -10,18 +10,44 @@ import {
 } from '@/components/ui/dialog';
 
 /** Local cards survive tool switches; leaving Compose requires an explicit disposition. */
-export function useWorkspaceContentNavigation(dirty: boolean, discard: () => void) {
+export function useWorkspaceContentNavigation({
+  dirty,
+  unapplied,
+  busy,
+  canSave,
+  retryOriginal,
+  error,
+  save,
+  discard,
+}: {
+  dirty: boolean;
+  unapplied: boolean;
+  busy: boolean;
+  canSave: boolean;
+  retryOriginal: boolean;
+  error?: string | null;
+  save: () => Promise<boolean>;
+  discard: () => void;
+}) {
   const pending = useRef<(() => void) | null>(null);
   const [open, setOpen] = useState(false);
-  const current = useRef({ dirty, discard });
-  current.current = { dirty, discard };
+  const [saveIncomplete, setSaveIncomplete] = useState(false);
+  const current = useRef({ dirty, busy });
+  current.current = { dirty, busy };
   const skip = useRef(false);
   const skipTraversal = useRef(false);
   const requestNavigation = useCallback((navigate: () => void) => {
-    if (!current.current.dirty) return navigate();
+    if (!current.current.dirty && !current.current.busy) return navigate();
     pending.current = navigate;
+    setSaveIncomplete(false);
     setOpen(true);
   }, []);
+  const continueNavigation = () => {
+    const navigate = pending.current;
+    pending.current = null;
+    setOpen(false);
+    navigate?.();
+  };
   useEffect(() => {
     if (!dirty) return;
     const unload = (event: BeforeUnloadEvent) => {
@@ -91,32 +117,62 @@ export function useWorkspaceContentNavigation(dirty: boolean, discard: () => voi
   return {
     requestNavigation,
     dialog: (
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (busy) return;
+          if (!next) pending.current = null;
+          setOpen(next);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Unsaved Content changes</DialogTitle>
             <DialogDescription>
-              Save the selected local changes in Changes before continuing. They are not included in
-              a Review yet.
+              {unapplied
+                ? 'Return to the editor to apply your input, or discard it with any other local changes.'
+                : 'Save the selected changes, discard local changes, or keep editing.'}
+              {retryOriginal
+                ? ' Discard only removes local edits. The original save may have completed.'
+                : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Keep editing
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                pending.current = null;
+                setOpen(false);
+              }}
+            >
+              {unapplied ? 'Return to editor to apply' : 'Keep editing'}
             </Button>
             <Button
               variant="ghost"
+              disabled={busy}
               onClick={() => {
-                current.current.discard();
-                setOpen(false);
-                const navigate = pending.current;
-                pending.current = null;
-                navigate?.();
+                discard();
+                continueNavigation();
               }}
             >
               Discard local changes and continue
             </Button>
+            {!unapplied ? (
+              <Button
+                disabled={busy || !canSave}
+                onClick={async () => {
+                  if (await save()) continueNavigation();
+                  else setSaveIncomplete(true);
+                }}
+              >
+                {retryOriginal ? 'Retry original save and continue' : 'Save selected and continue'}
+              </Button>
+            ) : null}
           </DialogFooter>
+          {saveIncomplete ? (
+            <output>{error ?? 'Local changes remain. Save them before continuing.'}</output>
+          ) : null}
         </DialogContent>
       </Dialog>
     ),

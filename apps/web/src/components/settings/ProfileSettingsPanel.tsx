@@ -70,6 +70,7 @@ export function ProfileSettingsPanel() {
     !authDisabled
   );
   const [draft, setDraft] = useState<ProfileSettings | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -106,6 +107,7 @@ export function ProfileSettingsPanel() {
       toast.success('Local profile name saved in this browser');
       return;
     }
+    setSaveError(null);
     try {
       await save({
         name: draft.name?.trim() || 'User',
@@ -114,7 +116,7 @@ export function ProfileSettingsPanel() {
       });
       toast.success('Profile saved');
     } catch (cause) {
-      toast.error(formatUserFacingError(cause, 'Failed to save profile.'));
+      setSaveError(formatUserFacingError(cause, 'Failed to save profile.'));
     }
   }
 
@@ -262,6 +264,11 @@ export function ProfileSettingsPanel() {
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
+              {saveError && (
+                <p className="mt-2 break-words text-sm text-[var(--status-error)]" role="alert">
+                  {saveError}
+                </p>
+              )}
             </section>
 
             {draft.linked_accounts.length ? (

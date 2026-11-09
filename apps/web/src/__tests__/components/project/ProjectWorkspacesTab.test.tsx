@@ -9,6 +9,7 @@ import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates'
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
+  branchesError: null as string | null,
   userId: 'user_test_a',
   query: 'tab=workspaces',
   workspaces: [] as WorkspaceCandidate[],
@@ -48,6 +49,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: mocks.branchHeads,
     branches: Object.keys(mocks.branchHeads),
     loading: false,
+    error: mocks.branchesError,
     refresh: mocks.refresh,
     create: mocks.create,
   }),
@@ -85,6 +87,7 @@ function draft(id: string, branch = 'main'): WorkspaceCandidate {
 describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.branchesError = null;
     mocks.userId = 'user_test_a';
     mocks.query = 'tab=workspaces';
     mocks.workspaces = [];
@@ -328,4 +331,44 @@ it('refuses a stale branch creation callback before sending a request', async ()
   });
   expect(mocks.create).not.toHaveBeenCalled();
   expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it('offers retry without starting a Workspace from unknown branch metadata', () => {
+  mocks.branchesError = 'Offline';
+  mocks.branchHeads = {};
+  mocks.workspaces = [];
+  mocks.query = 'tab=workspaces&branch=main';
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Branch list unavailable');
+  expect(screen.queryByRole('button', { name: 'View State' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+  expect(mocks.refresh).toHaveBeenCalled();
+  mocks.branchesError = null;
+});
+
+it('keeps an existing Workspace mounted during a failed branch refresh', () => {
+  mocks.query = 'tab=workspaces&branch=main&workspace=existing';
+  mocks.branchHeads = { main: 'sha256:base' };
+  mocks.workspaces = [draft('existing')];
+  mocks.branchesError = 'Offline';
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Previously loaded branches may be out of date'
+  );
+  expect(mocks.props.viewState).toBe('ready');
+  expect(mocks.props.selectedWorkspaceId).toBe('existing');
+  mocks.branchesError = null;
+});
+
+it('does not navigate to a branch after its inventory refresh fails', async () => {
+  mocks.query = 'tab=workspaces&branch=main';
+  mocks.branchHeads = { main: null };
+  mocks.workspaces = [];
+  mocks.replace.mockClear();
+  mocks.refresh.mockResolvedValueOnce(undefined).mockResolvedValueOnce(false);
+  render(<ProjectWorkspacesTab projectId="proj_test" />);
+  await act(async () => {
+    await mocks.props.onWorkspaceBranchChange?.('feature/new');
+  });
+  expect(mocks.replace).not.toHaveBeenCalled();
 });

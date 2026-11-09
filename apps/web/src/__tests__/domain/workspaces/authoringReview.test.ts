@@ -137,6 +137,10 @@ describe('authoringReview', () => {
       'version',
     ]);
   });
+  it('keeps a missing or unreadable Before distinct from an empty Base', () => {
+    expect(authoringReviewDocuments({ current })).toBeNull();
+    expect(authoringReviewDocuments({ base: null, current })).toBeNull();
+  });
 
   it('keeps the authoring review projection when the recorded base is empty', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');

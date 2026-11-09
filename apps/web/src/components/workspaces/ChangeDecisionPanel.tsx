@@ -55,6 +55,9 @@ export function ChangeDecisionPanel({
   const [reasonError, setReasonError] = useState(false);
   const checks = changeCheckRows(view, contentValidation);
   const blockers = changeDecisionBlockers(view);
+  const baseValueWarnings = view.checks.runner.runs
+    .flatMap((run) => run.predicate.findings)
+    .filter((finding) => finding.severity === 'warning' && finding.code === 'BASE_VALUE_CONFLICT');
   const decided = view.decision.observation === 'supplied';
   const acceptAllowed = !commitBlocker && view.capabilities.accept.disposition === 'allowed';
   const overrideAllowed =
@@ -133,6 +136,24 @@ export function ChangeDecisionPanel({
               </p>
             </div>
           ))}
+        </section>
+      ) : null}
+
+      {baseValueWarnings.length > 0 ? (
+        <section aria-label="Review warnings" className="flex gap-2 px-4 pt-3">
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-[var(--status-warning)]"
+          />
+          <div>
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Base value conflict warnings ({baseValueWarnings.length})
+            </p>
+            <p className="mt-0.5 text-xs leading-5 text-[var(--text-secondary)]">
+              Earlier generated actions changed existing values. See Runner in Run for the affected
+              paths.
+            </p>
+          </div>
         </section>
       ) : null}
 

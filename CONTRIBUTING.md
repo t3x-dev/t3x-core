@@ -102,9 +102,10 @@ docs: update API reference for v4 endpoints
 
 ## Architecture Overview
 
-Start with [AGENTS.md](./AGENTS.md) for cross-agent development guidance. See
-[CLAUDE.md](./CLAUDE.md) for deeper architecture notes, including package
-dependency graph, data formats, ID conventions, and testing patterns.
+Start with [AGENTS.md](./AGENTS.md) for cross-agent development guidance and the
+[documentation index](./docs/README.md) for maintained system contracts.
+[WebUI documentation](./apps/web/README.md) indexes frontend architecture,
+business contracts and development instructions.
 
 ## Questions?
 

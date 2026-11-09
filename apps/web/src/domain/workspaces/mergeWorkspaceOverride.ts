@@ -13,7 +13,9 @@ export function mergeWorkspaceOverride(
     ...draft,
     outputTargets: candidate.outputTargets,
     schemaBindings:
-      candidate.schemaBindings.length > 0 ? candidate.schemaBindings : override.schemaBindings,
+      (override.revision ?? -1) > (candidate.revision ?? -1)
+        ? override.schemaBindings
+        : candidate.schemaBindings,
     sourceBundle: mergeWorkspaceSourceBundles(candidate.sourceBundle, override.sourceBundle),
   };
 

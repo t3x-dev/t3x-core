@@ -1,8 +1,9 @@
-import type {
-  ChangeProjectionV1,
-  ReviewSnapshotV1,
-  WorkspaceAuthoringView,
-  WorkspaceFullSchemaReview,
+import {
+  type ChangeProjectionV1,
+  type ReviewSnapshotV1,
+  T3xApiError,
+  type WorkspaceAuthoringView,
+  type WorkspaceFullSchemaReview,
 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
@@ -28,7 +29,6 @@ import type {
 } from '@/infrastructure/workspaces';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '@/queries/workspaces';
 import { usePinsStore } from '@/store/pinsStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { Material } from '@/types/api';
 import type {
   SourceBundleItem,
@@ -46,6 +46,9 @@ export interface WorkspacePreparationOptions {
 
 type WorkspaceDraftCommand = string;
 export type WorkspaceDraftCommandName = WorkspaceDraftCommand;
+
+export const REVIEW_DRAFT_CHANGED =
+  'The Draft or branch changed. Load the latest Draft and inspect it before preparing Review.';
 
 export interface WorkspaceReviewSessionState {
   changeProjection: ChangeProjectionV1 | null;
@@ -225,7 +228,7 @@ export function useWorkspaceComposeReviewController({
     async (nextCandidate: WorkspaceCandidate, command: WorkspaceDraftCommand) => {
       assertActive();
       const isCurrent = captureScope();
-      setWorkingCandidate(nextCandidate);
+      if (command !== 'schema.bind' || !onDraftCommand) setWorkingCandidate(nextCandidate);
       if (command !== 'review.prepare') {
         reviewGenerationRef.current += 1;
         setReview(EMPTY_REVIEW);
@@ -405,12 +408,18 @@ export function useWorkspaceComposeReviewController({
   );
 
   const prepareReview = useCallback(
-    async (onPrepared?: (snapshot: ReviewSnapshotV1) => void) => {
+    async (
+      onPrepared?: (snapshot: ReviewSnapshotV1) => void,
+      inspected?: Pick<
+        WorkspaceAuthoringView,
+        'workspaceRevision' | 'compositionRevision' | 'basis' | 'currentSchema'
+      >
+    ) => {
       const isCurrent = captureScope();
       if (!isCurrent() || busyActionRef.current) return false;
       const generation = reviewGenerationRef.current + 1;
       reviewGenerationRef.current = generation;
-      setReview(EMPTY_REVIEW);
+      if (!inspected) setReview(EMPTY_REVIEW);
       setBusyAction('review.prepare');
       setLocalError(null);
       setNotice('Preparing the exact deterministic result…');
@@ -422,17 +431,41 @@ export function useWorkspaceComposeReviewController({
             workingCandidate.id
           );
         } catch (error) {
-          if (workingCandidate.authoringLedger) throw error;
+          if (inspected || workingCandidate.authoringLedger) throw error;
           authoringView = null;
         }
-        if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
+        if (!isCurrent()) return false;
+        if (generation !== reviewGenerationRef.current) {
+          if (inspected) setLocalError(REVIEW_DRAFT_CHANGED);
+          return false;
+        }
+        const expectedRevision = inspected?.workspaceRevision ?? workingCandidate.revision;
+        if (
+          authoringView?.synchronization?.required ||
+          (authoringView &&
+            expectedRevision !== undefined &&
+            authoringView.workspaceRevision !== expectedRevision) ||
+          (inspected &&
+            (!authoringView ||
+              authoringView.compositionRevision !== inspected.compositionRevision ||
+              authoringView.basis.refName !== inspected.basis.refName ||
+              authoringView.basis.refHead !== inspected.basis.refHead ||
+              authoringView.basis.baseDigest !== inspected.basis.baseDigest ||
+              authoringView.currentSchema?.schemaHash !== inspected.currentSchema?.schemaHash ||
+              authoringView.currentSchema?.status !== inspected.currentSchema?.status))
+        ) {
+          throw new Error(REVIEW_DRAFT_CHANGED);
+        }
         if (authoringView?.hasChanges === false) {
           throw new Error(EMPTY_WORKSPACE_REVIEW);
+        }
+        if (inspected && authoringView?.currentSchema?.status === 'unbound') {
+          throw new Error('Choose and save a Schema in Compose before preparing Review.');
         }
         const documents = authoringReviewDocuments(
           authoringView ? { ...authoringView, selected: null } : null
         );
-        if (workingCandidate.authoringLedger && !documents) {
+        if ((inspected || workingCandidate.authoringLedger) && !documents) {
           throw new Error('The complete Authoring Draft is unavailable. Retry Workspace Review.');
         }
         if (authoringView && documents) {
@@ -441,9 +474,9 @@ export function useWorkspaceComposeReviewController({
             workingCandidate.id,
             {
               request_id: crypto.randomUUID(),
-              expected_workspace_revision: authoringView.workspaceRevision,
-              expected_revision: authoringView.compositionRevision,
-              expected_ref_head: authoringView.basis.refHead,
+              expected_workspace_revision: (inspected ?? authoringView).workspaceRevision,
+              expected_revision: (inspected ?? authoringView).compositionRevision,
+              expected_ref_head: (inspected ?? authoringView).basis.refHead,
               reason: `Review ${authoringView.netDiff.length} authoring Workspace changes.`,
             }
           );
@@ -469,6 +502,14 @@ export function useWorkspaceComposeReviewController({
             return false;
           if (!latest?.snapshot)
             throw new Error('The saved review snapshot is unavailable. Prepare Review again.');
+          if (
+            inspected &&
+            (latest.snapshot.review.precondition.workspaceRevision !==
+              inspected.workspaceRevision ||
+              latest.snapshot.review.precondition.refHead !== inspected.basis.refHead)
+          ) {
+            throw new Error(REVIEW_DRAFT_CHANGED);
+          }
           setReview({
             changeProjection: latest?.change_projection ?? null,
             content: documents.current,
@@ -543,8 +584,14 @@ export function useWorkspaceComposeReviewController({
         return true;
       } catch (error) {
         if (!isCurrent() || generation !== reviewGenerationRef.current) return false;
-        setReview(EMPTY_REVIEW);
-        setLocalError(formatUserFacingError(error, 'Workspace review preparation failed.'));
+        if (!inspected) setReview(EMPTY_REVIEW);
+        setLocalError(
+          inspected &&
+            error instanceof T3xApiError &&
+            (error.code === 'DRAFT_CONFLICT' || error.code === 'STALE_REVIEW')
+            ? REVIEW_DRAFT_CHANGED
+            : formatUserFacingError(error, 'Workspace review preparation failed.')
+        );
         setNotice(null);
         return false;
       } finally {
@@ -643,19 +690,25 @@ export function useWorkspaceComposeReviewController({
 
   const bindSchema = useCallback(
     async (binding: WorkspaceSchemaBinding) => {
+      const isCurrent = captureScope();
+      if (!isCurrent() || busyActionRef.current) return;
       if (workspaceSchemaBindingsEqual(workingCandidate.schemaBindings[0], binding)) {
         return workingCandidate;
       }
       const next = rebindWorkspaceCandidate(workingCandidate, binding, new Date().toISOString());
-      const saved = await persistCandidate(next, 'schema.bind');
-      useProjectWorkspaceSchemaBindingsStore.getState().bindSchema({
-        binding: saved.schemaBindings[0] ?? binding,
-        projectId: saved.projectId,
-        workspaceId: saved.id,
-      });
-      return saved;
+      setBusyAction('schema.bind');
+      setLocalError(null);
+      try {
+        return await persistCandidate(next, 'schema.bind');
+      } catch (error) {
+        if (isCurrent()) {
+          setLocalError(formatUserFacingError(error, 'Could not change the Workspace Schema.'));
+        }
+      } finally {
+        if (isCurrent()) setBusyAction(null);
+      }
     },
-    [persistCandidate, workingCandidate]
+    [captureScope, persistCandidate, setBusyAction, workingCandidate]
   );
 
   const viewCommit = useCallback(() => {
@@ -691,19 +744,24 @@ export function useWorkspaceComposeReviewController({
     [scenarioOptions]
   );
 
-  const refreshFromServer = useCallback(async () => {
-    const isCurrent = captureScope();
-    if (!isCurrent()) return;
-    const workspaceId = workingCandidate.id;
-    const saved = await getSharedApiClient().workspaces.get(
-      workingCandidate.projectId,
-      workspaceId
-    );
-    if (!isCurrent()) return;
-    reviewGenerationRef.current += 1;
-    setWorkingCandidate(saved.workspace as unknown as WorkspaceCandidate);
-    setReview(EMPTY_REVIEW);
-  }, [workingCandidate.projectId, workingCandidate.id, captureScope]);
+  const refreshFromServer = useCallback(
+    async (minimumRevision?: number) => {
+      const isCurrent = captureScope();
+      if (!isCurrent()) return;
+      const workspaceId = workingCandidate.id;
+      const saved = await getSharedApiClient().workspaces.get(
+        workingCandidate.projectId,
+        workspaceId
+      );
+      if (!isCurrent()) return;
+      if (minimumRevision !== undefined && (saved.workspace.revision ?? -1) < minimumRevision)
+        throw new Error('The refreshed Workspace is older than the confirmed save.');
+      reviewGenerationRef.current += 1;
+      setWorkingCandidate(saved.workspace as unknown as WorkspaceCandidate);
+      setReview(EMPTY_REVIEW);
+    },
+    [workingCandidate.projectId, workingCandidate.id, captureScope]
+  );
 
   return {
     refreshFromServer,
@@ -712,6 +770,7 @@ export function useWorkspaceComposeReviewController({
     assistantPrefill,
     candidate: workingCandidate,
     clearAssistantPrefill: () => setAssistantPrefill(null),
+    clearPreparationError: () => setLocalError(null),
     copyReceipt,
     ensureSaved,
     decide,

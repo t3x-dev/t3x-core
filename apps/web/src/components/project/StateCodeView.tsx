@@ -107,7 +107,7 @@ export function StateCodeView({
     <div className={`${styles.card} ${renderLayout ? styles.embeddedCard : ''}`}>
       <header className={styles.toolbar}>
         <div className={styles.titleGroup}>
-          <h2>State source</h2>
+          <h2>State tree projection</h2>
         </div>
 
         <div className={styles.controls}>
@@ -265,7 +265,10 @@ export function StateCodeView({
         <span className={styles.infoIcon}>
           <Info aria-hidden="true" />
         </span>
-        <span>Plain YAML shows the same YAML without syntax highlighting.</span>
+        <span>
+          This view and its copies show the field tree for <code>{commitHash}</code>. Use Export for
+          the complete State, including relations.
+        </span>
       </div>
     </div>
   );

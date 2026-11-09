@@ -68,10 +68,31 @@ describe('Repository Checks', () => {
     mocks.list.mockResolvedValue({ records: [record], next_cursor: 'older' });
     mocks.detail.mockResolvedValue(record);
   });
+  it('clears the empty result scope and retains the Run tab and source navigation', async () => {
+    mocks.pathname = '/project/p';
+    mocks.query =
+      'tab=checks&q=missing&kind=review&workspace=w&pr=p&commit=c&cursor=older&returnTo=%2Fsource';
+    mocks.list.mockResolvedValue({ records: [], next_cursor: null });
+    render(<ProjectChecksPage projectId="p" />);
+    expect(await screen.findByRole('heading', { name: 'No runs match this scope' })).toBeVisible();
+    expect(screen.queryByText(/Prepare a review/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(mocks.push).toHaveBeenCalledWith('/project/p?tab=checks&returnTo=%2Fsource', {
+      scroll: false,
+    });
+  });
+  it('offers a Workspace entry when the unfiltered repository has no records', async () => {
+    mocks.query = 'q=&kind=';
+    mocks.list.mockResolvedValue({ records: [], next_cursor: null });
+    render(<ProjectChecksPage projectId="p" />);
+    expect(await screen.findByRole('heading', { name: 'No run records yet' })).toBeVisible();
+    expect(screen.getByText(/Prepare a review/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
   it('opens the exact record and preserves list filters in its return link', async () => {
     mocks.query = 'workspace=ws%3Amain&kind=review';
     render(<ProjectChecksPage projectId="p" />);
-    const link = await screen.findByRole('link', { name: /Workspace review · revision 12/ });
+    const link = await screen.findByRole('link', { name: /Snapshot r12/ });
     const url = new URL(link.getAttribute('href') ?? '', 'http://localhost');
     expect(url.pathname).toBe('/project/p/checks/review%3Ar12');
     expect(url.searchParams.get('returnTo')).toBe(
@@ -86,6 +107,38 @@ describe('Repository Checks', () => {
       '/owner/repo/checks?workspace=ws%3Amain&kind=review&cursor=older',
       { scroll: false }
     );
+  });
+  it('groups only review snapshots with the same Workspace and revision on the page', async () => {
+    const committed = {
+      ...record,
+      id: 'review:second',
+      payload: {
+        ...record.payload,
+        snapshot_id: 'second',
+        transition_id: 'trn_different',
+        snapshot: {
+          ...(record.payload.snapshot as object),
+          objects: { commit: { digest: 'sha256:commit' } },
+          review: { precondition: { workspaceRevision: 12, refName: 'main' } },
+        },
+      },
+    };
+    const other = {
+      ...record,
+      id: 'review:other',
+      payload: { ...record.payload, workspace_id: 'ws:other', snapshot_id: 'other' },
+    };
+    mocks.list.mockResolvedValue({ records: [committed, other, record], next_cursor: 'older' });
+    render(<ProjectChecksPage projectId="p" />);
+    const heading = await screen.findByText('ws:main · r12');
+    const group = heading.closest('details');
+    expect(group).toHaveAttribute('open');
+    expect(group).toHaveTextContent('2 snapshots on this page');
+    expect(group).toHaveTextContent('Committed');
+    expect(group).toHaveTextContent('No decision recorded');
+    expect(group).toHaveTextContent('Transition differen');
+    expect(group).not.toHaveTextContent('Snapshot other');
+    expect(screen.getByText('ws:other · r12')).toBeVisible();
   });
   it('reads immutable evidence, shows its gaps, and separates current editing from saved content', async () => {
     mocks.pathname += '/review%3Ar12';

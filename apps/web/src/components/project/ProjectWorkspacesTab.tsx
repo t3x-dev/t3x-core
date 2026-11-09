@@ -10,22 +10,18 @@ import {
   repairLeakedWorkspacePreviewCandidate,
 } from '@/data/workspaceCandidates';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
-import {
-  applyProjectWorkspaceSchemaBindings,
-  type ProjectWorkspaceSchemaBindings,
-} from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useSession } from '@/hooks/shared/useSession';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import { BranchLoadError } from './BranchLoadError';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
-  schemaBindings?: ProjectWorkspaceSchemaBindings;
 }
 
-export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+export function ProjectWorkspacesTab({ projectId }: ProjectWorkspacesTabProps) {
   const params = useSearchParams();
   if (params.get('reviewPane') === 'checks')
     return <WorkspaceChecksRedirect projectId={projectId} />;
@@ -47,10 +43,10 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       />
     );
   }
-  return <ProjectWorkspacesContent projectId={projectId} schemaBindings={schemaBindings} />;
+  return <ProjectWorkspacesContent projectId={projectId} />;
 }
 
-function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
+function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,6 +80,7 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
     branchHeads,
     branches,
     loading: branchesLoading,
+    error: branchesError,
     refresh: refreshBranches,
     create: createBranch,
   } = useBranches(projectId, true);
@@ -99,16 +96,9 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
       ),
     [branch, branchHead, projectId, projectMaterials.materials, sessionUserId]
   );
-  const workspaceCandidates = useMemo(
+  const candidates = useMemo(
     () => mergePersistedWorkspaceCandidates(starterCandidate, projectWorkspaces.workspaces),
     [projectWorkspaces.workspaces, starterCandidate]
-  );
-  const candidates = useMemo(
-    () =>
-      schemaBindings
-        ? applyProjectWorkspaceSchemaBindings(workspaceCandidates, schemaBindings)
-        : workspaceCandidates,
-    [workspaceCandidates, schemaBindings]
   );
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
@@ -142,8 +132,8 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
     async (nextBranch: string, requestNavigation?: (navigate: () => void) => void) => {
       const isCurrent = captureNavigation();
       if (!isCurrent()) return;
-      await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
-      if (!isCurrent()) return;
+      const [, branchesReady] = await Promise.all([projectWorkspaces.refresh(), refreshBranches()]);
+      if (!isCurrent() || branchesReady === false) return;
       const params = new URLSearchParams(routeQuery);
       params.set('branch', nextBranch);
       params.delete('workspace');
@@ -187,27 +177,32 @@ function ProjectWorkspacesContent({ projectId, schemaBindings }: ProjectWorkspac
   );
 
   return (
-    <WorkspaceWorkbench
-      branchOptions={branches}
-      candidates={visibleCandidates}
-      errorMessage={navigationError ?? undefined}
-      projectId={projectId}
-      selectedWorkspaceId={selectedWorkspaceId}
-      viewState={
-        (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
-        (Boolean(branch) && branchesLoading && branches.length === 0)
-          ? 'loading'
-          : navigationError
-            ? 'error'
-            : 'ready'
-      }
-      onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
-      onSourceMaterialUploaded={projectMaterials.refresh}
-      onViewCommitInState={handleViewCommitInState}
-      onWorkspacesRefresh={projectWorkspaces.refresh}
-      onWorkspaceBranchChange={handleWorkspaceBranchChange}
-      onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
-    />
+    <div className="flex h-full min-h-0 flex-col">
+      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refreshBranches} />
+      {!(branchesError && !branches.length && !projectWorkspaces.workspaces.length) && (
+        <WorkspaceWorkbench
+          branchOptions={branches}
+          candidates={visibleCandidates}
+          errorMessage={navigationError ?? undefined}
+          projectId={projectId}
+          selectedWorkspaceId={selectedWorkspaceId}
+          viewState={
+            (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+            (Boolean(branch) && branchesLoading && branches.length === 0)
+              ? 'loading'
+              : navigationError
+                ? 'error'
+                : 'ready'
+          }
+          onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
+          onSourceMaterialUploaded={projectMaterials.refresh}
+          onViewCommitInState={handleViewCommitInState}
+          onWorkspacesRefresh={projectWorkspaces.refresh}
+          onWorkspaceBranchChange={handleWorkspaceBranchChange}
+          onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
+        />
+      )}
+    </div>
   );
 }
 

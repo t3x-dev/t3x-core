@@ -62,4 +62,20 @@ describe('Invitations inbox page', () => {
       '/test-a3/three-party-demo'
     );
   });
+
+  it.each([
+    ['Accept invitation', acceptCollaborationInvitationById],
+    ['Decline', declineCollaborationInvitation],
+  ] as const)('keeps a failed %s action visible on its invitation', async (label, command) => {
+    command.mockRejectedValueOnce(new Error('Invitation action unavailable'));
+    render(<InvitationsPageContent />);
+
+    fireEvent.click(await screen.findByRole('button', { name: label }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invitation action unavailable');
+    expect(screen.getByText('test-a3/three-party-demo')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(await screen.findByText('No pending invitations')).toBeInTheDocument();
+  });
 });

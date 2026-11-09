@@ -23,6 +23,33 @@ const groups = [
 ];
 
 describe('ChangeReviewChanges', () => {
+  it('renders the exact before and after relation endpoints', () => {
+    render(
+      <ChangeReviewChanges
+        groups={[
+          {
+            id: 'relations',
+            label: 'Relations',
+            breadcrumb: null,
+            kind: 'changed',
+            fields: [
+              {
+                name: 'Relations',
+                before: [{ from: 'a', to: 'b' }],
+                after: [{ from: 'a', to: 'c' }],
+                kind: 'changed',
+              },
+            ],
+          },
+        ]}
+        operations={[]}
+        operationsAsDetails
+      />
+    );
+    expect(screen.getByText('[{"from":"a","to":"b"}]')).toBeVisible();
+    expect(screen.getByText('[{"from":"a","to":"c"}]')).toBeVisible();
+  });
+
   it('lets field changes grow with the Review page', () => {
     render(
       <ChangeReviewChanges

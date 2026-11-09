@@ -6,16 +6,19 @@ import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { deferred } from './deferred';
 
-const { read, reconcile, prepareReconciliation, decideReconciliation } = vi.hoisted(() => ({
-  read: vi.fn(),
-  reconcile: vi.fn(),
-  prepareReconciliation: vi.fn(),
-  decideReconciliation: vi.fn(),
-}));
+const { read, publish, reconcile, prepareReconciliation, decideReconciliation } = vi.hoisted(
+  () => ({
+    read: vi.fn(),
+    publish: vi.fn(),
+    reconcile: vi.fn(),
+    prepareReconciliation: vi.fn(),
+    decideReconciliation: vi.fn(),
+  })
+);
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({
     workspaces: {
-      authoring: { read, reconcile, prepareReconciliation, decideReconciliation },
+      authoring: { read, publish, reconcile, prepareReconciliation, decideReconciliation },
     },
   }),
 }));
@@ -73,6 +76,29 @@ it('only the latest activity refresh can finish loading or update the projection
   expect(result.current.view?.workspaceRevision).toBe(2);
   expect(result.current.loading).toBe(false);
   unmount();
+});
+
+it('holds the inspected Review revision until the user loads the newer Draft', async () => {
+  read.mockReset();
+  const initial = {
+    actions: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+  };
+  read.mockResolvedValue(initial);
+  const workspace = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result, rerender } = renderHook(({ candidate }) => useComposeActivity(candidate, true), {
+    initialProps: { candidate: workspace },
+  });
+  await waitFor(() => expect(result.current.view).toEqual(initial));
+  const latest = { ...initial, workspaceRevision: 2 };
+  read.mockResolvedValue(latest);
+  rerender({ candidate: { ...workspace, revision: 2 } });
+  await waitFor(() => expect(result.current.newActivity).toEqual(latest));
+  expect(result.current.view).toEqual(initial);
+  await act(async () => result.current.loadLatest());
+  expect(result.current.view).toEqual(latest);
 });
 
 it('invalidates node pagination when a different node is selected', async () => {
@@ -312,7 +338,7 @@ it('sends every selected structured conflict to the explicit resolve decision', 
   unmount();
 });
 
-it('retains the visible projection during revision refreshes and resets on workspace switches', async () => {
+it('announces a newer revision without replacing the inspected Draft', async () => {
   const first = {
     actions: [],
     netDiff: [],
@@ -341,11 +367,56 @@ it('retains the visible projection during revision refreshes and resets on works
   await act(async () => {
     resolveRefresh({ ...first, workspaceRevision: 2 });
   });
+  expect(result.current.view).toBe(visible);
+  expect(result.current.newActivity?.workspaceRevision).toBe(2);
+  read.mockResolvedValueOnce({ ...first, workspaceRevision: 2 });
+  await act(async () => {
+    await result.current.loadLatest();
+  });
   expect(result.current.view?.workspaceRevision).toBe(2);
   read.mockImplementationOnce(() => new Promise(() => {}));
   rerender({ workspace: { ...candidate, id: 'ws-b' } });
   expect(result.current.view).toBeNull();
   unmount();
+});
+
+it('acknowledges a save before refresh and rejects a read older than the receipt', async () => {
+  const first = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 1,
+    basis: { refHead: null },
+  };
+  const refresh = deferred<unknown>();
+  const outcome = { kind: 'published', workspaceRevision: 2, compositionRevision: 2 };
+  read.mockReset().mockResolvedValueOnce(first).mockReturnValueOnce(refresh.promise);
+  publish.mockResolvedValueOnce(outcome);
+  const workspace = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const { result } = renderHook(() => useComposeActivity(workspace, true));
+  await waitFor(() => expect(result.current.view).toEqual(first));
+  await act(async () => {
+    await expect(result.current.publish({ request_id: 'save-1', operations: [] })).resolves.toEqual(
+      outcome
+    );
+  });
+  expect(result.current.awaitingPublishRefresh).toBe(true);
+  await act(async () => refresh.reject(new Error('Read failed')));
+  expect(result.current.error).toBe('Read failed');
+  expect(result.current.notice).toContain('Saved');
+  read.mockResolvedValueOnce(first);
+  await act(async () => {
+    await expect(result.current.loadLatest()).rejects.toThrow('older than the confirmed save');
+  });
+  expect(result.current.awaitingPublishRefresh).toBe(true);
+  read.mockResolvedValueOnce({ ...first, ...outcome });
+  await act(async () => {
+    await result.current.loadLatest();
+  });
+  expect(result.current.awaitingPublishRefresh).toBe(false);
+  expect(publish).toHaveBeenCalledTimes(1);
 });
 
 it('detects branch-head changes even when the composition revision stays at zero', async () => {

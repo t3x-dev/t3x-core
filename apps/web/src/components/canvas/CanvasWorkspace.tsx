@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { getBranchVisual } from '@/domain/canvas/branchVisuals';
 import { buildStateCanvasSvg } from '@/domain/canvas/stateCanvasExport';
-import { downloadTextFile } from '@/domain/history/historyCanvasExport';
 import {
   getProjectIdCanvasCommitPath,
   getProjectIdHistoryPath,
@@ -60,6 +59,7 @@ import { useProjectStore } from '@/store/projectStore';
 import type { Conversation } from '@/types/api';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
+import { downloadTextFile } from '@/utils/downloadTextFile';
 import { glass } from '@/utils/theme';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';

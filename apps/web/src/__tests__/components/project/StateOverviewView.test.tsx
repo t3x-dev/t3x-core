@@ -470,17 +470,14 @@ it('keeps History as sidebar links and omits the separate content preview', () =
       introductionSource="repository"
       commit={{ ...commit, message: 'Actual version' }}
       historyHref="/history?branch=main"
-      alternateHistoryHref="/canvas"
       reader={reader}
     />
   );
   const sidebar = screen.getByRole('complementary', { name: 'State information' });
-  fireEvent.click(within(sidebar).getByRole('button', { name: 'History' }));
-  expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
+  expect(within(sidebar).getByRole('link', { name: 'History' })).toHaveAttribute(
     'href',
     '/history?branch=main'
   );
-  expect(screen.getByRole('link', { name: 'History canvas' })).toHaveAttribute('href', '/canvas');
   expect(within(sidebar).getByRole('link', { name: 'Actual version' })).toHaveAttribute(
     'href',
     `/history?branch=main&commit=${encodeURIComponent(commit.hash)}`
