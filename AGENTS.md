@@ -72,6 +72,8 @@ This is a pnpm workspace with Turborepo:
 - `packages/transition` — leaf protocol contracts, Replay, identity, and
   integrity verification.
 - `packages/core` — engine layer for commits, diffs, merges, extraction, ylint.
+- `packages/application` — application commands, authorization inputs, idempotency,
+  and canonical application errors.
 - `packages/storage` — PostgreSQL persistence.
 - `packages/api` — Hono route library.
 - `packages/api-client` — TypeScript API client.
