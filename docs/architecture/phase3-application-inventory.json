@@ -212,7 +212,6 @@
     "apps/web/src/components/workspaces/SourceTransitionTab.tsx",
     "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
     "apps/web/src/components/workspaces/WorkspaceComposeReviewSurface.tsx",
-    "apps/web/src/components/workspaces/WorkspaceContentEditor.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
     "apps/web/src/domain/workspaces/reviewNavigation.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceComposeReviewController.ts",
