@@ -769,17 +769,27 @@ export function SchemaStudioExperience({
       : sourceId
         ? [...new Set([...selection, sourceId])]
         : [...selection];
+    const boundDefinition = basePreview.data?.workspace?.boundSchema;
+    // A prepared binding without source pins cannot establish which fields came from sources.
+    const hasUntrackedComposition =
+      currentBinding?.compositionId &&
+      !currentBinding.studioSources?.length &&
+      (!activeCandidate || savedEditUsesBinding);
     setSourceManagerOpen(true);
     setCompositionRequest({
       ids,
       revision: schemaEdit.candidate?.revision ?? 0,
       base: structuredClone(
-        editorBase?.schema ??
-          activeCandidate?.baseDefinition ??
-          basePreview.data?.workspace?.boundSchema ??
-          basePreview.data?.schema
+        hasUntrackedComposition
+          ? {}
+          : (editorBase?.schema ??
+              activeCandidate?.baseDefinition ??
+              boundDefinition ??
+              basePreview.data?.schema)
       ),
-      current: structuredClone(schemaDefinition ?? data?.schema),
+      current: structuredClone(
+        schemaDefinition ?? (hasSchemaEdit ? data?.schema : (boundDefinition ?? data?.schema))
+      ),
       choices:
         ids.length === selection.length && ids.every((id) => selection.includes(id))
           ? activeCandidate?.composition
