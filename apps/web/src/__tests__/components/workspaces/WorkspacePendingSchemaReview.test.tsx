@@ -66,10 +66,7 @@ it('offers retry after a read failure', async () => {
 it('keeps the inspected definition visible when a newer candidate preview arrives', async () => {
   requests.read.mockResolvedValue({ ...result, workspace: { revision: 9 } });
   render(
-    <WorkspacePendingSchemaReview
-      {...props}
-      inspectedSchema={<p>Inspected r8 definition</p>}
-    />
+    <WorkspacePendingSchemaReview {...props} inspectedSchema={<p>Inspected r8 definition</p>} />
   );
   expect(screen.getByText('Inspected r8 definition')).toBeVisible();
   expect(await screen.findByRole('alert')).toHaveTextContent('The Draft or saved Schema changed');

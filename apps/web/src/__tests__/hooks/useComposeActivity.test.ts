@@ -88,10 +88,9 @@ it('holds the inspected Review revision until the user loads the newer Draft', a
   };
   read.mockResolvedValue(initial);
   const workspace = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
-  const { result, rerender } = renderHook(
-    ({ candidate }) => useComposeActivity(candidate, true),
-    { initialProps: { candidate: workspace } }
-  );
+  const { result, rerender } = renderHook(({ candidate }) => useComposeActivity(candidate, true), {
+    initialProps: { candidate: workspace },
+  });
   await waitFor(() => expect(result.current.view).toEqual(initial));
   const latest = { ...initial, workspaceRevision: 2 };
   read.mockResolvedValue(latest);
