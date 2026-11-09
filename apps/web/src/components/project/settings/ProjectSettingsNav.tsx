@@ -7,6 +7,7 @@ import {
   Info,
   type LucideIcon,
   PackageOpen,
+  Shapes,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -24,6 +25,7 @@ export const PROJECT_SETTINGS_GROUPS: Array<{
     label: 'Repository',
     items: [
       { id: 'general', label: 'General', icon: Info },
+      { id: 'appearance', label: 'Appearance', icon: Shapes },
       { id: 'visibility', label: 'Visibility', icon: Eye },
       { id: 'access', label: 'Access', icon: Users },
       { id: 'branch-rules', label: 'Branch rules', icon: GitBranch },

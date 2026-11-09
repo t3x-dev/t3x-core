@@ -346,7 +346,11 @@ export async function updateProject(
   updates: {
     name?: string;
     metadata?: Record<string, unknown>;
-    repositoryProfile?: { readme?: string; tags?: string[] };
+    repositoryProfile?: {
+      readme?: string;
+      tags?: string[];
+      icon?: { key: string; color: string } | null;
+    };
     providerConfig?: string | null;
     defaultProvider?: string | null;
     defaultModel?: string | null;

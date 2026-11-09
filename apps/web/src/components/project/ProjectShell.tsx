@@ -1,3 +1,4 @@
+import type { RepositoryProfile } from '@t3x-dev/api-client';
 import type { ReactNode } from 'react';
 import {
   getProjectTabSegment,
@@ -23,6 +24,7 @@ export interface ProjectShellProject {
   branchesCount?: number;
   outputsCount?: number;
   visibility?: 'private' | 'unlisted' | 'public';
+  repositoryProfile?: RepositoryProfile;
   yschemaValidation?: YSchemaValidationSummary | null;
 }
 
@@ -86,6 +88,7 @@ export function ProjectShell({
         activeTab={activeTab === 'history' ? 'state' : activeTab}
         owner={actualOwner || undefined}
         projectName={project.name}
+        projectIdentity={{ id: project.id ?? repoPath, icon: project.repositoryProfile?.icon }}
         newProjectHref={newRepositoryHref}
         repoPath={repoPath}
         settingsHref={settingsHref}

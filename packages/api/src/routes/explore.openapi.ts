@@ -153,6 +153,7 @@ async function publicCard(
     description:
       typeof metadata?.description === 'string' ? metadata.description.slice(0, 4096) : '',
     tags: repository_profile.tags,
+    icon: repository_profile.icon,
     createdAt: project.createdAt.toISOString(),
     repositoryPath: access.allowed ? `/project/${encodeURIComponent(project.projectId)}` : null,
   };

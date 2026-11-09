@@ -7,6 +7,7 @@ import {
   findStatePresentation,
   insertPersonalNamespace,
   insertStatePresentation,
+  projects,
   transitionCommits,
   users,
 } from '@t3x-dev/storage';
@@ -16,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { projectGrants } from '../../../storage/src/schema-trees';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
 import { commitRoutes } from '../routes/commits.openapi';
+import { exploreRoutes } from '../routes/explore.openapi';
 import { projectRoutes } from '../routes/projects.openapi';
 import { setupTestDB } from './setup';
 
@@ -34,6 +36,7 @@ function appFor(userId = 'profile-owner') {
   });
   app.route('/', projectRoutes);
   app.route('/', commitRoutes);
+  app.route('/', exploreRoutes);
   return app;
 }
 const request = (method: string, body: unknown) => ({
@@ -161,20 +164,57 @@ describe('project-scoped repository information', () => {
     const responses = await Promise.all([
       put(p.project_id, { repository_profile: { readme: '# Concurrent' } }),
       put(p.project_id, { repository_profile: { tags: ['并发'] } }),
+      put(p.project_id, { repository_profile: { icon: { key: 'flask', color: 'violet' } } }),
       put(p.project_id, {
         metadata: { description: 'Concurrent description' },
         name: 'Concurrent-renamed',
       }),
       put(p.project_id, { provider_config: { roles: [] } }),
     ]);
-    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200]);
     expect(await read(p.project_id)).toMatchObject({
       name: 'Concurrent-renamed',
       metadata: { description: 'Concurrent description', untouched: 1 },
-      repository_profile: { readme: '# Concurrent', tags: ['并发'] },
+      repository_profile: {
+        readme: '# Concurrent',
+        tags: ['并发'],
+        icon: { key: 'flask', color: 'violet' },
+      },
       provider_config: { roles: [] },
     });
     expect(await businessSnapshot(p.project_id)).toEqual(before);
+  });
+
+  it('projects saved icons to repository lists and public Explore, and clears them independently', async () => {
+    const p = await create({ name: 'Appearance', tags: ['rules'], initialize_readme: true });
+    const id = p.project_id;
+    const icon = { key: 'flask', color: 'violet' };
+    expect((await read(id)).repository_profile).not.toHaveProperty('icon');
+    expect((await put(id, { repository_profile: { icon } })).status).toBe(200);
+    expect((await read(id)).repository_profile).toEqual({ ...p.repository_profile, icon });
+    const list = await appFor().request('/v1/projects');
+    expect((await list.json()).data.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          project_id: id,
+          repository_profile: {
+            ...p.repository_profile,
+            icon,
+          },
+        }),
+      ])
+    );
+    const outsider = appFor('profile-outsider');
+    expect((await outsider.request(`/v1/explore/projects/${id}`)).status).toBe(404);
+    await db.update(projects).set({ visibility: 'public' }).where(eq(projects.projectId, id));
+    const explore = await outsider.request('/v1/explore/projects?tag=rules');
+    expect((await explore.json()).data.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ projectId: id, icon })])
+    );
+    const detail = await outsider.request(`/v1/explore/projects/${id}`);
+    expect((await detail.json()).data).toMatchObject({ icon, repositoryPath: null });
+    expect((await put(id, { repository_profile: { icon: null } })).status).toBe(200);
+    expect((await read(id)).repository_profile).toEqual({ ...p.repository_profile, icon: null });
   });
 
   it('enforces existing read/edit permissions on direct requests', async () => {
@@ -195,7 +235,7 @@ describe('project-scoped repository information', () => {
       (
         await put(
           p.project_id,
-          { repository_profile: { readme: 'Denied' } },
+          { repository_profile: { icon: { key: 'flask', color: 'violet' } } },
           appFor('profile-viewer')
         )
       ).status
@@ -231,6 +271,9 @@ describe('project-scoped repository information', () => {
       { tags: null },
       { readme: null },
       { resources: [] },
+      { icon: { key: 'unknown', color: 'violet' } },
+      { icon: { key: 'flask', color: 'red' } },
+      { icon: { key: 'flask', color: 'violet', url: 'https://example.invalid/icon.svg' } },
     ])
       expect((await put(p.project_id, { repository_profile })).status).toBe(400);
     expect(

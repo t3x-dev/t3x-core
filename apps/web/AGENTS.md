@@ -8,10 +8,10 @@ point; detailed contracts live in `docs/`.
 - Read the relevant sections of [architecture](docs/architecture.md) before
   changing module responsibilities or data flow, and [business contracts](docs/business.md)
   before changing State, Schema or Workspace behavior.
-- Keep frontend tasks scoped to WebUI. Report backend defects in the team's
-  external `Record-backend.md`; do not implement backend fixes as part of a
-  frontend task. Include reproduction conditions, evidence, impact and unknowns
-  so the backend team can act without additional narration.
+- Scope work by the requested feature. Implement the required WebUI and backend
+  changes in their owning packages, preserving transport, authorization,
+  application, storage, and protocol boundaries. Record unresolved gaps with
+  reproduction conditions, evidence, impact, and unknowns.
 - Follow the frontend contracts A-01 through A-05 and B-01 through B-07. Keep
   normative requirements distinct from implementation descriptions; existing code
   and passing tests do not certify compliance.

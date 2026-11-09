@@ -165,7 +165,7 @@ function ProjectRow({
 }) {
   return (
     <article className={styles.repositoryRow}>
-      <RepositoryMark id={project.id} />
+      <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
       <div className={styles.rowContent}>
         <div className={styles.rowHeading}>
           <Link
@@ -661,7 +661,7 @@ function ProjectDirectoryContent({
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
                         onClick={() => recordRecentProjectOpen(project.id)}
                       >
-                        <RepositoryMark id={project.id} />
+                        <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
                         <span>
                           <strong>{project.name}</strong>
                           <span>{project.namespace ?? ownerSlug}</span>

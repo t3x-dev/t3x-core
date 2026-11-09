@@ -40,18 +40,21 @@ import { ProjectGeneralSettings } from '@/components/project/settings/ProjectGen
 import generalStyles from '@/components/project/settings/ProjectGeneralSettings.module.css';
 import { ProjectIntegritySettings } from '@/components/project/settings/ProjectIntegritySettings';
 import { ProjectSettingsNav } from '@/components/project/settings/ProjectSettingsNav';
+import { RepositoryIconSettings } from '@/components/project/settings/RepositoryIconSettings';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
 import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
+import { useRepositoryProfile } from '@/hooks/projects/useRepositoryProfile';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import {
   fetchProjectProviderConfig,
   fetchProviderRoles,
   fetchProviders,
 } from '@/queries/providers';
+import { useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -243,6 +246,8 @@ function ProjectSettingsPageContent() {
   const searchParams = useSearchParams();
   const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
   const settings = useProjectSettings(projectId);
+  const saveRepositoryProfile = useRepositoryProfile(projectId);
+  const repositoryProfile = useProjectStore((state) => state.details[projectId]?.repositoryProfile);
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
@@ -444,11 +449,21 @@ function ProjectSettingsPageContent() {
             {settings.error ?? 'Repository not found.'}
           </p>
         ) : (
-          <ProjectGeneralSettings
-            key={`${project.name}:${projectDescription(project)}`}
-            onSave={settings.saveGeneral}
-            project={project}
-          />
+          <>
+            <ProjectGeneralSettings
+              key={`${project.name}:${projectDescription(project)}`}
+              onSave={settings.saveGeneral}
+              project={project}
+            />
+            <RepositoryIconSettings
+              key={projectId}
+              projectId={projectId}
+              name={project.name}
+              icon={(repositoryProfile ?? project.repository_profile)?.icon}
+              canEdit={project.can_edit === true}
+              onSave={(icon) => saveRepositoryProfile({ icon })}
+            />
+          </>
         )}
 
         <ProjectVisibilitySettings projectId={projectId} />

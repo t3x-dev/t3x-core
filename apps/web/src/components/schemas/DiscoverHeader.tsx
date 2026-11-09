@@ -1,5 +1,6 @@
 'use client';
 
+import type { RepositoryIcon } from '@t3x-dev/api-client';
 import {
   BookOpen,
   Boxes,
@@ -26,6 +27,7 @@ import {
   type ProjectTabId,
   projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
+import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
@@ -54,6 +56,7 @@ export function DiscoverHeader({
   activeTab = 'schemas',
   owner,
   projectName,
+  projectIdentity,
   newProjectHref,
   namespaceTab,
   exploreNavigation,
@@ -75,6 +78,7 @@ export function DiscoverHeader({
   activeTab?: ProjectTabId;
   owner?: string;
   projectName?: string;
+  projectIdentity?: { id: string; icon?: RepositoryIcon | null };
   newProjectHref?: string;
   repositoriesNavigation?: boolean;
 }) {
@@ -157,6 +161,9 @@ export function DiscoverHeader({
                   /
                 </span>
                 <Link href={repoPath || '/'} className={styles.repository}>
+                  {projectIdentity && (
+                    <RepositoryMark {...projectIdentity} className={styles.repositoryMark} />
+                  )}
                   <h1>{projectName}</h1>
                 </Link>
               </>

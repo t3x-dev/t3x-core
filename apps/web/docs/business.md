@@ -270,9 +270,9 @@ a generic fix-fields or retry instruction must not stand in for a missing
 capability. Preserve independent failures when one is resolved. If no supported
 recovery action is available, state that limitation and investigate ownership
 of the capability gap. An unconnected existing API or missing frontend entry is
-a frontend gap; record a confirmed backend defect in the team's external
-`Record-backend.md`. Do not fabricate an action or promise it will unblock the
-workflow.
+a frontend gap. Fix a confirmed backend defect in its owning package when the
+requested feature depends on it. Record unresolved defects with evidence and
+keep feedback aligned with the recovery actions the product supports.
 
 **Acceptance:** a confirmed write stays confirmed after a failed read; a lost
 response cannot produce a different retry; recovery addresses the reported

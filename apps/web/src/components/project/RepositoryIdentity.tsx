@@ -1,25 +1,98 @@
 'use client';
 
-import { FolderGit2, Globe, Link2, LockKeyhole, Tag, X } from 'lucide-react';
+import {
+  type RepositoryIcon,
+  RepositoryIconColorSchema,
+  type RepositoryIconSelection,
+  RepositoryIconSelectionSchema,
+} from '@t3x-dev/api-client';
+import {
+  BookOpen,
+  Bot,
+  Boxes,
+  Braces,
+  ChartNoAxesCombined,
+  Cloud,
+  Cpu,
+  Database,
+  FileCodeCorner,
+  FlaskConical,
+  FolderGit2,
+  GitBranch,
+  GitPullRequest,
+  Globe,
+  Layers,
+  Link2,
+  ListChecks,
+  LockKeyhole,
+  type LucideIcon,
+  Network,
+  Package,
+  ShieldCheck,
+  Tag,
+  Terminal,
+  Workflow,
+  Wrench,
+  X,
+  Zap,
+} from 'lucide-react';
 import { cn } from '@/utils/cn';
 import styles from './RepositoryIdentity.module.css';
 
+export const repositoryGlyphs = {
+  flask: FlaskConical,
+  repository: FolderGit2,
+  database: Database,
+  workflow: Workflow,
+  boxes: Boxes,
+  braces: Braces,
+  code: FileCodeCorner,
+  book: BookOpen,
+  shield: ShieldCheck,
+  branch: GitBranch,
+  'pull-request': GitPullRequest,
+  layers: Layers,
+  network: Network,
+  package: Package,
+  terminal: Terminal,
+  chip: Cpu,
+  chart: ChartNoAxesCombined,
+  bot: Bot,
+  cloud: Cloud,
+  globe: Globe,
+  lock: LockKeyhole,
+  bolt: Zap,
+  tools: Wrench,
+  checklist: ListChecks,
+} satisfies Record<RepositoryIconSelection['key'], LucideIcon>;
+
 // Identity colors are presentation only. Preserve exact tag identity (including case and #).
 function identityTone(identity: string) {
+  const tones = RepositoryIconColorSchema.options;
   let hash = 2166136261;
   for (const character of identity)
     hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619);
-  return (hash >>> 0) % 6;
+  return tones[(hash >>> 0) % tones.length];
 }
 
-export function RepositoryMark({ id, className }: { id: string; className?: string }) {
+export function RepositoryMark({
+  id,
+  icon,
+  className,
+}: {
+  id: string;
+  icon?: RepositoryIcon | null;
+  className?: string;
+}) {
+  const selection = icon ? RepositoryIconSelectionSchema.safeParse(icon).data : undefined;
+  const Icon = selection ? repositoryGlyphs[selection.key] : FolderGit2;
   return (
     <span
       aria-hidden="true"
-      data-tone={identityTone(id)}
+      data-tone={selection?.color ?? identityTone(id)}
       className={cn(styles.identity, styles.mark, className)}
     >
-      <FolderGit2 size={19} strokeWidth={1.7} />
+      <Icon size={19} strokeWidth={1.7} />
     </span>
   );
 }

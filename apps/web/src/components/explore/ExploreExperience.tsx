@@ -6,7 +6,6 @@ import {
   BookOpen,
   Braces,
   Check,
-  FolderGit2,
   Grid2X2,
   Layers,
   List,
@@ -19,6 +18,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import { RepositoryMark, RepositoryTag } from '@/components/project/RepositoryIdentity';
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { CatalogLogo } from '@/components/schemas/CatalogLogo';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
@@ -575,24 +575,11 @@ function ProjectCard({
   row?: boolean;
   onOpen: () => void;
 }) {
-  const tone = Array.from(item.name).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 4;
   return (
-    <article
-      className={`${styles.card} ${styles.projectCard} ${row ? styles.row : ''}`}
-      data-tone={tone}
-    >
-      {!row && (
-        <div className={styles.projectPattern} aria-hidden="true">
-          <span />
-          <span />
-          <FolderGit2 size={32} />
-        </div>
-      )}
+    <article className={`${styles.card} ${row ? styles.row : ''}`}>
       <div className={styles.cardBody}>
         <div className={styles.cardHead}>
-          <span className={styles.projectIcon}>
-            <FolderGit2 size={22} />
-          </span>
+          <RepositoryMark id={item.projectId} icon={item.icon} className={styles.projectIcon} />
           <div className={styles.titleBlock}>
             <button type="button" className={styles.title} onClick={onOpen}>
               {item.name}
@@ -604,9 +591,9 @@ function ProjectCard({
         <p className={styles.description}>
           {item.description || 'Explore this public project and its introduction.'}
         </p>
-        <div className={styles.tags}>
+        <div className={styles.projectTags}>
           {item.tags.slice(0, 3).map((tag) => (
-            <span key={tag}>{tag}</span>
+            <RepositoryTag key={tag} name={tag} />
           ))}
         </div>
         <div className={styles.cardFoot}>
@@ -735,17 +722,17 @@ function PublicProjectReading({
         {project && (
           <>
             <header className={styles.projectHero}>
-              <div className={styles.projectHeroArt}>
-                <FolderGit2 size={64} />
-              </div>
               <span className={styles.eyebrow}>
                 PUBLIC PROJECT · {project.namespace || 'COMMUNITY'}
               </span>
-              <h1>{project.name}</h1>
+              <div className={styles.projectHeroHeading}>
+                <RepositoryMark id={project.projectId} icon={project.icon} />
+                <h1>{project.name}</h1>
+              </div>
               <p>{project.description}</p>
-              <div className={styles.tags}>
+              <div className={styles.projectTags}>
                 {project.tags.map((tag) => (
-                  <span key={tag}>{tag}</span>
+                  <RepositoryTag key={tag} name={tag} />
                 ))}
               </div>
               {project.repositoryPath ? (

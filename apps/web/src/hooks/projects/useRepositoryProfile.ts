@@ -26,16 +26,20 @@ export function useRepositoryProfile(projectId: string) {
     async (patch: RepositoryProfilePatch) => {
       const profile = RepositoryProfilePatchSchema.parse(patch);
       const updated = await updateProject(projectId, { repository_profile: profile });
-      if (!updated.repository_profile)
+      if (
+        !updated.repository_profile ||
+        (profile.icon !== undefined && updated.repository_profile.icon === undefined)
+      )
         throw new Error('The server did not return saved repository information.');
       const store = useProjectStore.getState();
       const current = store.details[projectId] ?? store.getProject(projectId);
-      // A later response for README must not roll back a Tags save in this tab.
+      // Apply only the fields written by this request, even if responses arrive out of order.
       store.updateProject(projectId, {
         repositoryProfile: {
           ...(current?.repositoryProfile ?? { readme: '', tags: [] }),
           ...(profile.readme !== undefined ? { readme: updated.repository_profile.readme } : {}),
           ...(profile.tags !== undefined ? { tags: updated.repository_profile.tags } : {}),
+          ...(profile.icon !== undefined ? { icon: updated.repository_profile.icon } : {}),
         },
       });
     },
