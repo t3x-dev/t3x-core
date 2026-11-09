@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { safeExploreReturn } from '@/domain/project/exploreLocation';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useRepositorySetup } from '@/hooks/projects/useRepositorySetup';
@@ -85,7 +86,7 @@ export function NewRepositoryPage() {
       <DiscoverHeader
         owner={owner}
         namespaceTab="repositories"
-        settingsHref={`/settings/provider-credentials?owner=${encodeURIComponent(owner)}`}
+        settingsHref={namespaceSettingsHref(owner, `/${encodeURIComponent(owner)}`)}
       />
       <div className={management.content}>
         <main className={cn(management.scope, styles.page)}>

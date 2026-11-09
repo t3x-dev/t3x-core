@@ -7,8 +7,19 @@ import {
   type UpdatePersonalModelPreferences,
   updatePersonalModelPreferences,
 } from '@/infrastructure/auth';
+import { ApiError } from '@/infrastructure/core';
 
 export type { PersonalModelPreferences } from '@/infrastructure/auth';
+
+export function getPersonalModelRecovery(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.code === 'UNAUTHORIZED') {
+      return error.details?.reason === 'local_auth_disabled' ? 'local' : 'sign-in';
+    }
+    if (error.code === 'FORBIDDEN') return 'forbidden';
+  }
+  return 'read';
+}
 
 export function usePersonalModelPreferences() {
   const [data, setData] = useState<PersonalModelPreferences | null>(null);

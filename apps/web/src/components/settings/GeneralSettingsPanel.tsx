@@ -4,13 +4,14 @@ import { Building2, Check, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useSettingsNamespace } from '@/hooks/settings/useSettingsNamespace';
 import styles from './GeneralSettingsPanel.module.css';
+import { NamespaceSettingsRecovery } from './NamespaceSettingsRecovery';
 
 export function GeneralSettingsPanel() {
-  const { activeAccount, error, isLoading } = useNamespaceAccounts();
+  const context = useSettingsNamespace();
   const [copied, setCopied] = useState(false);
-  const namespace = activeAccount?.namespace;
+  const namespace = context.account?.namespace;
   const namespacePath = namespace ? `/${encodeURIComponent(namespace.slug)}` : '';
 
   async function copyNamespaceUrl() {
@@ -31,7 +32,7 @@ export function GeneralSettingsPanel() {
     <div className={styles.page}>
       <div className={styles.inner}>
         <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
-          <Link href="/settings">Settings</Link>
+          <Link href={context.generalHref}>Settings</Link>
           <span>/</span>
           <strong>General</strong>
         </nav>
@@ -45,10 +46,7 @@ export function GeneralSettingsPanel() {
           )}
         </header>
 
-        {error ? <p role="alert">Could not load namespace details.</p> : null}
-        {!namespace && !error ? (
-          <p>{isLoading ? 'Loading namespace…' : 'No active namespace is available.'}</p>
-        ) : null}
+        {!namespace && <NamespaceSettingsRecovery context={context} />}
         {namespace ? (
           <>
             <p>

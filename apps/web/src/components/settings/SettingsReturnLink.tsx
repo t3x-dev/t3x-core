@@ -10,6 +10,12 @@ export function SettingsReturnLink() {
   const { refresh } = useDeploymentCapabilities();
   const returnTo = safeInternalReturnTo(params.get('returnTo'), '');
   if (!returnTo) return null;
+  const pathname = returnTo.split(/[?#]/, 1)[0];
+  const label = pathname.endsWith('/workspaces')
+    ? 'Return to Workspace'
+    : pathname.startsWith('/deploy/eval/')
+      ? 'Return to evaluation'
+      : 'Back to previous page';
   return (
     <div className="mx-auto w-full max-w-[1120px] px-5 pt-6 sm:px-8 lg:px-12">
       <Link
@@ -20,7 +26,7 @@ export function SettingsReturnLink() {
           window.dispatchEvent(new Event('t3x:provider-configuration-changed'));
         }}
       >
-        Return to Workspace
+        {label}
       </Link>
     </div>
   );

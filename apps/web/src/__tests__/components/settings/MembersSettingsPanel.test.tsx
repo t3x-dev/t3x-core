@@ -124,6 +124,23 @@ function arrange() {
 describe('MembersSettingsPanel', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('offers recovery without presenting a missing namespace as an empty invitation list', () => {
+    arrange();
+    vi.mocked(useNamespaceAccounts).mockReturnValue({
+      ...vi.mocked(useNamespaceAccounts)(),
+      accounts: [],
+      activeAccount: null,
+    });
+    render(<MembersSettingsPanel />);
+
+    expect(screen.getByRole('link', { name: 'Browse repositories' })).toHaveAttribute(
+      'href',
+      '/repositories'
+    );
+    expect(screen.queryByText('No pending invitations.')).not.toBeInTheDocument();
+    expect(screen.queryByText('taylor@orbit-labs.com')).not.toBeInTheDocument();
+  });
+
   it('renders the organization members and filters them by search', () => {
     arrange();
     render(<MembersSettingsPanel />);

@@ -15,6 +15,11 @@ vi.mock('@/hooks/access/useAccessSettings', () => ({
   useAccessSettings: vi.fn(),
 }));
 
+let canAdminister = false;
+vi.mock('@/components/deployment/DeploymentCapabilitiesProvider', () => ({
+  useDeploymentCapabilities: () => ({ canAdministerProviderCredentials: canAdminister }),
+}));
+
 import { AccessSettingsPanel } from '@/components/settings/AccessSettingsPanel';
 import { useAccessSettings } from '@/hooks/access/useAccessSettings';
 
@@ -58,6 +63,7 @@ describe('AccessSettingsPanel', () => {
   }
 
   beforeEach(() => {
+    canAdminister = false;
     vi.clearAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -169,6 +175,7 @@ describe('AccessSettingsPanel', () => {
   });
 
   it('lists T3X API keys separately from provider credentials', async () => {
+    canAdminister = true;
     const listApiKeys = vi.fn().mockResolvedValue([
       {
         id: 'ak_webui',
@@ -191,7 +198,17 @@ describe('AccessSettingsPanel', () => {
     expect(await screen.findByText('WebUI session')).toBeInTheDocument();
     expect(screen.getByText('t3xk_web')).toBeInTheDocument();
     expect(screen.getByText('User-level key')).toBeInTheDocument();
-    expect(screen.getByText('Provider keys stay in Settings / Providers.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open deployment provider credentials' })
+    ).toHaveAttribute('href', '/settings/provider-credentials?returnTo=%2Fsettings%2Faccess');
+  });
+
+  it('hides deployment credential administration without operator access', () => {
+    mockAccessSettings();
+    render(<AccessSettingsPanel />);
+    expect(
+      screen.queryByRole('link', { name: 'Open deployment provider credentials' })
+    ).not.toBeInTheDocument();
   });
 
   it('creates a T3X API key and shows the raw value only in the creation result', async () => {

@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
@@ -46,6 +47,7 @@ import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
+import { buildReturnTo } from '@/utils/navigationReturn';
 import {
   orderProjectsByRecentOpen,
   readRecentProjectIds,
@@ -484,11 +486,10 @@ function ProjectDirectoryContent({
         owner={accessible ? undefined : ownerSlug}
         namespaceTab={accessible ? undefined : 'repositories'}
         repositoriesNavigation={accessible}
-        settingsHref={
-          accessible
-            ? undefined
-            : `/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`
-        }
+        settingsHref={namespaceSettingsHref(
+          accessible ? null : ownerSlug,
+          buildReturnTo(pathname, searchParams)
+        )}
         contextLabel={accessible ? undefined : isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 

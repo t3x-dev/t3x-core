@@ -19,6 +19,7 @@ import {
   unlinkAccount,
   updateUser,
 } from '@t3x-dev/storage';
+import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { hasOperatorAccess } from '../lib/operator-access';
@@ -473,10 +474,19 @@ const personalModelPreferencesRoute = createRoute({
   },
 });
 
+function personalModelIdentityRequired(c: Context<AppEnv>) {
+  const local = getRequestPrincipal(c)?.credential.kind === 'local_dev';
+  return createError(
+    'UNAUTHORIZED',
+    'Personal model preferences require a signed-in account',
+    local ? { reason: 'local_auth_disabled' } : undefined
+  );
+}
+
 // @ts-expect-error - OpenAPI handler return type
 authMeRoutes.openapi(personalModelPreferencesRoute, async (c) => {
   const userId = getUserId(c);
-  if (!userId) return c.json(createError('UNAUTHORIZED', 'Not authenticated'), 401);
+  if (!userId) return c.json(personalModelIdentityRequired(c), 401);
   const db = await getDB();
   const stored =
     (await getGlobalSetting<StoredPersonalModelPreferences>(
@@ -527,7 +537,7 @@ const updatePersonalModelPreferencesRoute = createRoute({
 // @ts-expect-error - OpenAPI handler return type
 authMeRoutes.openapi(updatePersonalModelPreferencesRoute, async (c) => {
   const userId = getUserId(c);
-  if (!userId) return c.json(createError('UNAUTHORIZED', 'Not authenticated'), 401);
+  if (!userId) return c.json(personalModelIdentityRequired(c), 401);
   const body = c.req.valid('json');
   const validationError = validatePersonalModelPreferences(body);
   if (validationError) {
