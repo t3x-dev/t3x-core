@@ -215,7 +215,7 @@ describe('History node navigation', () => {
     expect(screen.queryByRole('button', { name: /Update title/ })).not.toBeInTheDocument();
   });
 
-  it('restores filters from a permalink and preserves them through detail, State and back', async () => {
+  it('restores filters from a permalink and preserves them when selecting a commit', async () => {
     mocks.search = new URLSearchParams({
       branch: 'main',
       view: 'list',
@@ -227,15 +227,9 @@ describe('History node navigation', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
     await screen.findByRole('heading', { name: 'Update title' });
     expect(new URLSearchParams(mocks.search).get('commit')).toBe(selected.hash);
-    const stateLink = new URL(
-      screen.getByRole('link', { name: 'View this version in State' }).getAttribute('href')!,
-      'http://localhost'
-    );
-    expect(stateLink.searchParams.get('commit')).toBe(selected.hash);
-    expect(stateLink.searchParams.get('branch')).toBe('main');
-    expect(stateLink.searchParams.get('returnTo')).toBe(
-      `/project/proj_test/history?${mocks.search}`
-    );
+    expect(
+      screen.queryByRole('link', { name: 'View this version in State' })
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search commits' })).toHaveValue('Update');
     expect(screen.getByRole('combobox', { name: 'Author filter' })).toHaveValue('Maya Chen');
     expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();

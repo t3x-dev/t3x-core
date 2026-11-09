@@ -146,10 +146,9 @@ export function CommitHistoryDiffCard({
   commit,
   parentCommit,
   parentError,
-  stateHref,
   onParentSelect,
   onListFocus,
-}: Omit<CommitHistoryDiffViewProps, 'onBack'> & {
+}: Pick<CommitHistoryDiffViewProps, 'commit' | 'parentCommit'> & {
   parentError?: string;
   onParentSelect: (hash: string) => void;
   onListFocus: () => void;
@@ -177,7 +176,6 @@ export function CommitHistoryDiffCard({
           <button className={listStyles.mobileListLink} type="button" onClick={onListFocus}>
             <ArrowUpRight aria-hidden="true" size={14} /> Commit list
           </button>
-          {stateHref && <Link href={stateHref}>View this version in State</Link>}
         </div>
         <h2>{commitTitle(commit.message)}</h2>
         <div className={listStyles.commitMeta}>

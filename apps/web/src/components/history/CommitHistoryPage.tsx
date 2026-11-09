@@ -475,20 +475,15 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     );
   }
 
-  const detailQuery = new URLSearchParams(query);
-  if (selectedCommit) detailQuery.set('commit', selectedCommit.hash);
-  const revisionHref = selectedCommit
-    ? withReturnTo(
-        `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
-          view: 'overview',
-          branch: selectedCommit.branch,
-          commit: selectedCommit.hash,
-        })}`,
-        buildReturnTo(pathname, detailQuery)
-      )
-    : undefined;
-
   if (legacyCanvas && selectedCommit && (!parentHash || parentCommit)) {
+    const revisionHref = withReturnTo(
+      `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
+        view: 'overview',
+        branch: selectedCommit.branch,
+        commit: selectedCommit.hash,
+      })}`,
+      buildReturnTo(pathname, query)
+    );
     return (
       <CommitHistoryDiffView
         key={selectedCommit.hash}
@@ -680,7 +675,6 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
               commit={selectedCommit}
               parentCommit={parentCommit}
               parentError={parentError}
-              stateHref={revisionHref}
               onParentSelect={handleNavOpen}
               onListFocus={() => {
                 const row =

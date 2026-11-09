@@ -251,10 +251,6 @@
   font-size: 12px;
 }
 
-.detailActions a {
-  margin-left: auto;
-}
-
 .commitId {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -264,13 +260,11 @@
   cursor: pointer;
 }
 
-.detailActions a,
 .textAction,
 .mobileListLink {
   color: var(--accent-commit);
 }
 
-.detailActions a:hover,
 .textAction:hover,
 .mobileListLink:hover {
   text-decoration: underline;
