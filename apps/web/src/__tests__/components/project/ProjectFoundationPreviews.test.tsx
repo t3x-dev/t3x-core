@@ -2,9 +2,13 @@
 
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
+import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
+import type { WorkspaceCandidate } from '@/types/workspaces';
+
+const mocks = vi.hoisted(() => ({ workspaces: [] as WorkspaceCandidate[] }));
 
 vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaCatalog: () => ({ data: { items: [], has_more: false }, loading: false }),
@@ -20,7 +24,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
   useProjectWorkspaces: () => ({
-    workspaces: [],
+    workspaces: mocks.workspaces,
     loading: false,
     error: null,
     refresh: vi.fn(),
@@ -28,6 +32,10 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 }));
 
 describe('project foundation previews', () => {
+  beforeEach(() => {
+    mocks.workspaces = [];
+  });
+
   it('renders a clean main Workspaces workbench for any project id during W1', async () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
@@ -48,21 +56,15 @@ describe('project foundation previews', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
-  it('reflects schema bindings from the schema tab in the workspace preview', async () => {
-    render(
-      <ProjectWorkspacesTab
-        projectId="proj_other"
-        schemaBindings={{
-          byWorkspaceId: {
-            'workspace_branch:main': {
-              schemaName: 'Docker Compose',
-              version: 'v2',
-              mode: 'pinned',
-            },
-          },
-        }}
-      />
-    );
+  it('shows the saved schema binding in the workspace preview', async () => {
+    mocks.workspaces = [
+      {
+        ...getProjectWorkspaceStarterCandidate('proj_other'),
+        revision: 1,
+        schemaBindings: [{ schemaName: 'Docker Compose', version: 'v2', mode: 'pinned' }],
+      },
+    ];
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
 
     expect((await screen.findAllByText('Docker Compose v2')).length).toBeGreaterThan(0);
   });
