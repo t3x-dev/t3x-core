@@ -59,6 +59,7 @@ const CreateComparisonRequest = z.object({
 const ComparisonIdParam = z.object({
   id: z.string().min(1),
 });
+const ComparisonProjectQuery = z.object({ project_id: z.string().min(1).optional() });
 
 const ListComparisonsQuery = z.object({
   project_id: z.string().optional(),
@@ -244,6 +245,7 @@ const getComparisonRoute = createRoute({
   summary: 'Get a saved comparison by ID',
   request: {
     params: ComparisonIdParam,
+    query: ComparisonProjectQuery,
   },
   responses: {
     200: {
@@ -261,11 +263,12 @@ const getComparisonRoute = createRoute({
 
 comparisonsRoutes.openapi(getComparisonRoute, async (c) => {
   const { id } = c.req.valid('param');
+  const { project_id } = c.req.valid('query');
 
   try {
     const db = await getDB();
     const row = await getComparison(db, id);
-    if (!row) {
+    if (!row || (project_id && row.projectId !== project_id)) {
       return errorResponse(c, 'NOT_FOUND', `Comparison not found: ${id}`);
     }
 
@@ -293,6 +296,7 @@ const deleteComparisonRoute = createRoute({
   summary: 'Delete a saved comparison',
   request: {
     params: ComparisonIdParam,
+    query: ComparisonProjectQuery,
   },
   responses: {
     200: {
@@ -312,11 +316,12 @@ const deleteComparisonRoute = createRoute({
 
 comparisonsRoutes.openapi(deleteComparisonRoute, async (c) => {
   const { id } = c.req.valid('param');
+  const { project_id } = c.req.valid('query');
 
   try {
     const db = await getDB();
     const existing = await getComparison(db, id);
-    if (!existing) {
+    if (!existing || (project_id && existing.projectId !== project_id)) {
       return errorResponse(c, 'NOT_FOUND', `Comparison not found: ${id}`);
     }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, ExternalLink, Loader2, Play, Rocket, XCircle } from 'lucide-react';
+import { ExternalLink, Loader2, Play, Rocket } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,12 +15,10 @@ import {
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useCreateEngineRun } from '@/hooks/shared/useCreateEngineRun';
 import type { DeployAgent } from '@/types/api';
-import { cn } from '@/utils/cn';
 
 /**
  * Prompt versions for E2E testing
- * V1: Initial version with room for improvement (intentionally lower score)
- * V2: Optimized version (intentionally higher score)
+ * V1 and V2 use the same weather question with different prompts.
  */
 const PROMPT_VERSIONS = {
   v1: {
@@ -36,8 +34,8 @@ Provide detailed, thorough responses with all available context.`,
     rulesRef: 'weather-agent-eval',
   },
   v2: {
-    label: 'V2 (Optimized)',
-    description: 'Optimized prompt - focused and efficient',
+    label: 'V2 (Variant)',
+    description: 'A shorter prompt that asks the agent to use the weather tool only',
     content: `You are a weather assistant.
 For weather questions, use ONLY the WeatherTool. Do not use SearchTool or CalculatorTool.
 Answer concisely in under 100 words.`,
@@ -48,29 +46,30 @@ Answer concisely in under 100 words.`,
 type PromptVersion = keyof typeof PROMPT_VERSIONS;
 
 interface E2ETestCardProps {
+  projectId: string;
   agents: DeployAgent[];
   runnerHealthy: boolean;
-  onRunComplete?: (runId: string) => void;
+  onRunCreated?: () => void;
 }
 
-export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCardProps) {
+export function E2ETestCard({ projectId, agents, runnerHealthy, onRunCreated }: E2ETestCardProps) {
   const [selectedVersion, setSelectedVersion] = useState<PromptVersion>('v1');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [isRunning, setIsRunning] = useState(false);
   const [lastRun, setLastRun] = useState<{
     runId: string;
     version: PromptVersion;
-    status: 'running' | 'completed' | 'failed';
+    status: string;
     timestamp: Date;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { create: createRun } = useCreateEngineRun();
 
   const selectedAgent = agents.find((a) => a.deploy_agent_id === selectedAgentId);
-  const canRun = runnerHealthy && selectedAgentId && !isRunning;
+  const canRun = runnerHealthy && selectedAgent?.project_id === projectId && !isRunning;
 
   const handleRunTest = async () => {
-    if (!selectedAgent) return;
+    if (!canRun || !selectedAgent) return;
 
     setIsRunning(true);
     setError(null);
@@ -79,11 +78,12 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
     try {
       const result = await createRun({
+        project_id: projectId,
         leaf: {
           id: `e2e-test-${selectedVersion}`,
           type: 'eval',
           content: promptConfig.content,
-          rules_ref: 'weather-agent-eval', // Use weather-agent specific evaluation rules
+          rules_ref: promptConfig.rulesRef,
         },
         inputs: {
           test: true,
@@ -108,14 +108,18 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
       setLastRun({
         runId: result.run_id,
         version: selectedVersion,
-        status: 'running',
+        status: result.status,
         timestamp: new Date(),
       });
 
-      onRunComplete?.(result.run_id);
+      if (result.warning || result.status === 'queued') {
+        setError(
+          'The run was saved, but Runner did not confirm it started. Open the run details to check its status.'
+        );
+      }
+      onRunCreated?.();
     } catch (err) {
       setError(formatUserFacingError(err, 'Failed to run test.'));
-      setLastRun((prev) => (prev ? { ...prev, status: 'failed' } : null));
     } finally {
       setIsRunning(false);
     }
@@ -130,6 +134,10 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-4 space-y-[var(--space-group)]">
+        <p className="text-sm text-muted-foreground">
+          Choose a project agent backed by a connected n8n workflow, then run both V1 and V2.
+          Finished runs appear in Compare once the Runner reports the model used.
+        </p>
         {/* Agent Selection */}
         <div className="space-y-[var(--space-item)]">
           <span className="text-sm font-medium">Agent</span>
@@ -138,7 +146,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
             onValueChange={setSelectedAgentId}
             disabled={!agents || agents.length === 0}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Agent">
               <SelectValue
                 placeholder={agents?.length ? 'Select an agent...' : 'No agents available'}
               />
@@ -160,7 +168,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
             value={selectedVersion}
             onValueChange={(v) => setSelectedVersion(v as PromptVersion)}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Prompt version">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -211,22 +219,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
           <div className="rounded-md border bg-muted/30 p-3 space-y-[var(--space-item)]">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Last Run</span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  lastRun.status === 'completed' &&
-                    'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]',
-                  lastRun.status === 'failed' &&
-                    'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]',
-                  lastRun.status === 'running' &&
-                    'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]'
-                )}
-              >
-                {lastRun.status === 'running' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                {lastRun.status === 'completed' && <CheckCircle className="mr-1 h-3 w-3" />}
-                {lastRun.status === 'failed' && <XCircle className="mr-1 h-3 w-3" />}
-                {lastRun.status}
-              </Badge>
+              <Badge variant="outline">Submitted as {lastRun.status}</Badge>
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
@@ -246,8 +239,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
         {/* Runner Status Warning */}
         {!runnerHealthy && (
           <div className="rounded-md bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/30 p-3 text-sm text-[var(--status-warning)]">
-            Runner is not available. Start it with{' '}
-            <code className="rounded bg-muted px-1">pnpm dev:runner</code>
+            The Runner must be connected before you can start this evaluation.
           </div>
         )}
       </CardContent>
