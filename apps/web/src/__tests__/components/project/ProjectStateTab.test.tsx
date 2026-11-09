@@ -999,8 +999,29 @@ describe('ProjectStateTab', () => {
       within(tree)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent)
-    ).toEqual(['Field', 'Value', 'Type']);
+    ).toEqual(['Field', 'Value', 'Last modified']);
+    const fieldTime = (path: string) =>
+      within(within(tree).getByRole('table')).getByTitle(path).closest('tr')?.querySelector('time');
+    await waitFor(() => {
+      expect(fieldTime('prd/summary/problem')).toHaveAttribute('datetime', PRD_COMMIT.committed_at);
+      expect(fieldTime('prd/summary/audience')).toHaveAttribute(
+        'datetime',
+        PARENT_COMMIT.committed_at
+      );
+    });
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+  });
+
+  it('leaves last modified unknown when the first parent is unavailable', async () => {
+    hookMocks.loadCommit.mockRejectedValue(new Error('Parent unavailable'));
+    renderStateTab();
+    const tree = await screen.findByRole('region', { name: 'State structure' });
+    expect(await within(tree).findByText('Parent commit unavailable.')).toBeInTheDocument();
+    const field = within(tree).getByTitle('prd/summary/problem').closest('tr')!;
+    expect(
+      within(field).getByRole('cell', { name: 'Last modified time unavailable' })
+    ).toHaveTextContent('—');
+    expect(field.querySelector('time')).toBeNull();
   });
 
   it('selects a state row and shows its change provenance', async () => {

@@ -185,7 +185,7 @@
 }
 .tree {
   --tree-indent: 22px;
-  --tree-columns: 280px minmax(0, 1fr) 72px;
+  --tree-columns: 280px minmax(0, 1fr) var(--tree-meta-width, 72px);
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -276,11 +276,21 @@
   color: var(--text-secondary);
   font-style: italic;
 }
-.ty {
+.modifiedTree {
+  --tree-meta-width: 100px;
+}
+.ty,
+.modifiedAt {
   justify-self: end;
-  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
+}
+.ty {
+  font-family: var(--font-mono);
+}
+.modifiedAt {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .tnote {
   display: flex;
@@ -406,7 +416,10 @@
 @container (max-width: 680px) {
   .tree {
     --tree-indent: 14px;
-    --tree-columns: minmax(0, 1.3fr) minmax(0, 1fr) 52px;
+    --tree-columns: minmax(0, 1.3fr) minmax(0, 1fr) var(--tree-meta-width, 52px);
+  }
+  .modifiedTree {
+    --tree-meta-width: 84px;
   }
   .th2,
   .rw {

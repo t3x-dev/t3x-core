@@ -39,7 +39,7 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { shortHash } from '@/domain/format/formatters';
+import { relativeTime, shortHash } from '@/domain/format/formatters';
 import {
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
@@ -70,6 +70,7 @@ import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { type CommittedSchemaState, useCommittedSchema } from '@/hooks/commits/useCommittedSchema';
+import { useStateFieldModifiedTimes } from '@/hooks/commits/useStateFieldModifiedTimes';
 import {
   useRepositoryDescription,
   useRepositoryProfile,
@@ -386,6 +387,10 @@ export function ProjectStateTab({
   const headCommit = snapshot.headCommit;
   const context = loadedContext?.commit === headCommit ? loadedContext : null;
   const contextLoading = Boolean(headCommit) && (!context || context.loading);
+  const modifiedTimes = useStateFieldModifiedTimes(
+    activeView === 'structure' ? headCommit : null,
+    context?.parentCommit ?? null
+  );
   useEffect(() => {
     if (!headCommit) return;
     let cancelled = false;
@@ -862,7 +867,8 @@ export function ProjectStateTab({
                     contextLoading={contextLoading}
                     contextError={context?.error}
                     headCommit={headCommit}
-                    modifiedLabel={formatRelativeTime(headCommit.committed_at)}
+                    modifiedLabel={relativeTime(headCommit.committed_at)}
+                    modifiedTimes={modifiedTimes}
                     pathQuery={pathQuery}
                     onPathQueryChange={setPathQuery}
                     rows={pointRows}
@@ -1085,6 +1091,7 @@ export function StateStructureView({
   diffChanges,
   headCommit,
   modifiedLabel,
+  modifiedTimes,
   onPathQueryChange,
   pathQuery,
   rows,
@@ -1119,6 +1126,7 @@ export function StateStructureView({
   diffChanges: StructuredDiffChange[];
   headCommit: ApiCommit;
   modifiedLabel: string;
+  modifiedTimes: ReadonlyMap<string, string>;
   onPathQueryChange?: (query: string) => void;
   pathQuery: string;
   rows: StatePointRow[];
@@ -1361,6 +1369,7 @@ export function StateStructureView({
       ) : (
         <StateFieldTable
           rows={visibleRows}
+          getModifiedAt={(row) => (row.virtualGroup ? undefined : modifiedTimes.get(row.path))}
           query={pathQuery}
           onQueryChange={(query) => onPathQueryChange?.(query)}
           selectedRowId={selectedRow?.id}
@@ -3579,21 +3588,6 @@ export function inferSchemaName(commit: ApiCommit | null): string {
     return 't3x/skill';
   }
   return rootKeys.has('prd') ? 't3x/prd' : 't3x/state';
-}
-
-function formatRelativeTime(value: string | undefined): string {
-  if (!value) return 'not committed';
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'recently';
-  const diffMs = Date.now() - timestamp;
-  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return String(diffMinutes) + ' min ago';
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 48) return String(diffHours) + ' hours ago';
-  const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 14) return String(diffDays) + ' days ago';
-  return new Date(timestamp).toLocaleDateString();
 }
 
 function formatError(error: unknown, fallback: string): string {

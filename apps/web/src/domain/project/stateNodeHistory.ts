@@ -16,13 +16,15 @@ export interface StateNodeHistoryEntry {
   after: StateNodeHistoryValue;
 }
 
+export function serializeStateNodeHistoryValue(value: unknown): string {
+  return yaml.dump(value, { sortKeys: true, noRefs: true, lineWidth: -1 }).trimEnd();
+}
+
 function valueAt(commit: ApiCommit | null, path: string): StateNodeHistoryValue {
   const node = commit ? readStatePointValue(commit.content, path) : { exists: false };
   return {
     exists: node.exists,
-    text: node.exists
-      ? yaml.dump(node.value, { sortKeys: true, noRefs: true, lineWidth: -1 }).trimEnd()
-      : '',
+    text: node.exists ? serializeStateNodeHistoryValue(node.value) : '',
   };
 }
 
