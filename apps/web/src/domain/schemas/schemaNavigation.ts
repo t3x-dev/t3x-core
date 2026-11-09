@@ -36,7 +36,7 @@ export function schemaWorkspaceHref(
   switching = false
 ) {
   const params = new URLSearchParams(query);
-  params.set('schemaView', 'studio');
+  params.delete('schemaView');
   params.set('workspace', workspace.id);
   params.set('branch', workspace.targetBranch);
   if (switching) {

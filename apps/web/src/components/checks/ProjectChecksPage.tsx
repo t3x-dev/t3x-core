@@ -48,6 +48,7 @@ export function ProjectChecksPage({
   const returnTo = checksReturnTo(params.get('returnTo'), projectId, pathname);
   const listParams = new URLSearchParams(query);
   listParams.delete('check');
+  listParams.delete('returnTo');
   const listHref = `${base}/checks${listParams.size ? `?${listParams}` : ''}`;
   const sourceHref = recordId ? (returnTo ?? listHref) : returnTo;
   function filter(name: string, value: string) {

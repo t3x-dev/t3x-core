@@ -28,7 +28,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
@@ -43,7 +43,11 @@ import { ProjectSettingsNav } from '@/components/project/settings/ProjectSetting
 import { RepositoryIconSettings } from '@/components/project/settings/RepositoryIconSettings';
 import { SettingsSection } from '@/components/project/settings/SettingsSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
-import { getDeletedRepositoriesPath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getDeletedRepositoriesPath,
+  getProjectIdRepoPath,
+} from '@/domain/project/repoPath';
 import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
@@ -58,7 +62,7 @@ import { useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
-import { safeInternalReturnTo } from '@/utils/navigationReturn';
+import { readRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
 
@@ -243,9 +247,31 @@ export default function ProjectSettingsPage() {
 function ProjectSettingsPageContent() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
+  const query = searchParams.toString();
+  const idPath = getProjectIdRepoPath(projectId);
+  const repositoryPath = getCanonicalRepositoryPath(pathname) ?? idPath;
   const settings = useProjectSettings(projectId);
+  // Resolve an ID bookmark before validating its legacy source against the repository address.
+  const awaitingAddress =
+    repositoryPath === idPath &&
+    (settings.project?.project_id !== projectId || Boolean(settings.project.canonical_path));
+  const [returnSource, setReturnSource] = useState<{ projectId: string; href: string }>();
+  const source = returnSource?.projectId === projectId ? returnSource.href : '';
+  const returnHref = source && source !== idPath ? source : repositoryPath;
+  useEffect(() => {
+    if (awaitingAddress) return;
+    const restore = () => {
+      const current = window.location;
+      if (current.pathname !== pathname || new URLSearchParams(current.search).toString() !== query)
+        return;
+      setReturnSource({ projectId, href: readRepositorySettingsReturn(projectId) });
+    };
+    restore();
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [awaitingAddress, pathname, projectId, query]);
   const saveRepositoryProfile = useRepositoryProfile(projectId);
   const repositoryProfile = useProjectStore((state) => state.details[projectId]?.repositoryProfile);
   const { saveProjectProviderConfig } = useProviderCommands();
@@ -418,15 +444,13 @@ function ProjectSettingsPageContent() {
 
       <div className={generalStyles.content}>
         <header className={generalStyles.pageHeading}>
-          {returnHref ? (
-            <Link
-              className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
-              href={returnHref}
-            >
-              <ArrowLeft aria-hidden="true" className="size-3.5" />
-              Back to previous page
-            </Link>
-          ) : null}
+          <Link
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
+            href={returnHref}
+          >
+            <ArrowLeft aria-hidden="true" className="size-3.5" />
+            {returnHref === repositoryPath ? 'Back to repository' : 'Back to previous page'}
+          </Link>
           {project ? (
             <span className={generalStyles.scope}>
               {project.namespace ? `${project.namespace} / ` : ''}

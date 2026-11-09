@@ -10,7 +10,7 @@ import {
 } from '@/domain/project/repositoryLocation';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
-import { buildReturnTo } from '@/utils/navigationReturn';
+import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import { ProjectShell } from './ProjectShell';
 import { resolveProjectRouteTab } from './projectTabModel';
 
@@ -76,8 +76,11 @@ export function ProjectRouteShell({
       return;
     const suffix = pathname.slice(base.length);
     if (!isSupportedRepositorySuffix(suffix)) return;
+    if (suffix === '/settings') {
+      carryRepositorySettingsReturn(projectId, `${resolvedProject.canonical_path}/settings`);
+    }
     router.replace(
-      repositoryLocation(resolvedProject.canonical_path, suffix, query, window.location.hash),
+      repositoryLocation(resolvedProject.canonical_path, suffix, query, window.location.hash, base),
       { scroll: false }
     );
   }, [resolvedProject?.canonical_path, pathname, query, projectId, router]);
@@ -110,7 +113,6 @@ export function ProjectRouteShell({
       pageTitle={resolvedProject ? pageTitle : null}
       project={project}
       projectIdNavigation={Boolean(projectId)}
-      settingsReturnTo={buildReturnTo(pathname, query)}
     >
       {children}
     </ProjectShell>

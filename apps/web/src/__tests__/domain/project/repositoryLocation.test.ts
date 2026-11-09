@@ -68,6 +68,19 @@ it('keeps the Schemas route available without a catalog view parameter', () => {
   );
 });
 
+it('drops the default Run return path and keeps filtered list context', () => {
+  expect(
+    repositoryLocation('/team/Repo', '/checks/review%3Ar12', 'returnTo=%2Fteam%2FRepo%2Fchecks')
+  ).toBe('/team/Repo/checks/review%3Ar12');
+  expect(
+    repositoryLocation(
+      '/team/Repo',
+      '/checks/review%3Ar12',
+      'returnTo=%2Fteam%2FRepo%2Fchecks%3Fkind%3Dreview'
+    )
+  ).toBe('/team/Repo/checks/review%3Ar12?returnTo=%2Fteam%2FRepo%2Fchecks%3Fkind%3Dreview');
+});
+
 it('only migrates explicitly supported nested routes', () => {
   for (const suffix of [
     '',

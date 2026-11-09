@@ -19,6 +19,7 @@ import {
 } from '@/domain/project/repositoryLocation';
 import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { useProjectStore } from '@/store/projectStore';
+import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner: string; repoPath?: string[] }>();
@@ -52,13 +53,19 @@ function OwnerRepoProjectPageContent() {
       ? repositoryLocation(
           address.canonical_path ?? getProjectIdRepoPath(address.project_id),
           suffix,
-          query
+          query,
+          '',
+          repositoryPath
         )
       : null;
   const canonicalizing = target !== null && target !== `${pathname}${query ? `?${query}` : ''}`;
   useEffect(() => {
-    if (canonicalizing) router.replace(`${target}${window.location.hash}`, { scroll: false });
-  }, [canonicalizing, router, target]);
+    if (!canonicalizing) return;
+    if (address && suffix === '/settings') {
+      carryRepositorySettingsReturn(address.project_id, target.split('?')[0], repositoryPath);
+    }
+    router.replace(`${target}${window.location.hash}`, { scroll: false });
+  }, [address, canonicalizing, repositoryPath, router, suffix, target]);
 
   if (!special && isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
   if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
@@ -73,7 +80,6 @@ function OwnerRepoProjectPageContent() {
         activeTab={resolveProjectRouteTab(segments[1] ?? null, new URLSearchParams(query))}
         branch={new URLSearchParams(query).get('branch')}
         pageTitle={null}
-        settingsReturnTo={`${pathname}${query ? `?${query}` : ''}`}
         project={knownProject}
       >
         {loading}

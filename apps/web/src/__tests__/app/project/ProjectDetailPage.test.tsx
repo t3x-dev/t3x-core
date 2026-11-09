@@ -249,6 +249,36 @@ describe('ProjectDetailPage — project-first shell states', () => {
   const renderProjectContent = () =>
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
+  it('uses the same Settings link on State and a specific PR', async () => {
+    const base = '/t3x-dev/test-project';
+    useProjectStore.setState({
+      projects: [{ id: 'proj_test', name: 'Test Project', canonical_path: base } as never],
+    });
+    vi.mocked(fetchProject).mockResolvedValue({
+      project_id: 'proj_test',
+      name: 'Test Project',
+      canonical_path: base,
+      created_at: '2026-05-28T00:00:00.000Z',
+    } as never);
+    routeParamsValue = {};
+    searchParamsValue = new URLSearchParams();
+    const view = render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+    expect(await screen.findByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${base}/settings`
+    );
+
+    pathnameValue = `${base}/pull-requests`;
+    searchParamsValue = new URLSearchParams('pr=7&prTab=checks');
+    view.rerender(
+      <ProjectDetailPageContent initialTabOverride="reviews" projectIdOverride="proj_test" />
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${base}/settings`
+    );
+  });
+
   it('keeps project ID routes independent of namespace directory access', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces&zoom=1.00&x=10&y=20');
     pathnameValue = '/project/proj_test';

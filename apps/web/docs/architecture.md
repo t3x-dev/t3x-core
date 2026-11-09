@@ -7,9 +7,10 @@ contracts WebUI consumes. Its scope includes browser UI and WebUI's Next.js
 transport bridge. It does not redefine application authority or the protocol.
 
 The inherited system boundaries and the frontend contracts A-01 through A-05
-are normative. Source and transport maps are descriptive references. These
-contracts define the target behavior for changes and reviews; they do not
-certify that existing code already conforms or authorize a broad rewrite.
+are normative. The source, navigation, and transport sections describe the
+current implementation. The contracts define the target behavior for changes
+and reviews. Conformance requires verification, and broad rewrites require
+separate authorization.
 
 Current behavior must be checked against these contracts and the
 [business contracts](business.md). Keep [implementation gap summaries](#current-implementation-gaps)
@@ -97,6 +98,38 @@ function signatures have callers: inspect them before changing an interface.
 
 Types, data and utility directories do not create an additional authority layer;
 [A-04](#a-04-module-responsibilities-and-exceptions) governs their responsibilities.
+
+## Repository navigation and browser titles
+
+This section records the current implementation. The
+[repository URL principles](#repository-url-principles) apply to the repository
+routes in scope. WebUI-wide URL and browser title conventions remain future work.
+
+- Repository navigation uses the resolved `/{owner}/{repo}` address when
+  available. The [repository location helper](../src/domain/project/repositoryLocation.ts)
+  converts supported legacy `tab` queries at the repository root. An explicit
+  section such as `/schemas` takes precedence over a conflicting `tab` query.
+  [Repository Addresses](../../../docs/repository-addresses.md#web-compatibility)
+  owns address resolution and compatibility. Fixed Review links follow
+  [A-02](#a-02-read-refresh-and-invalidation) for snapshot identity.
+- The [repository shell](../src/components/project/ProjectShell.tsx) sets the
+  browser title from the resolved repository. The State home shows the
+  repository name with its description when available. Other covered views
+  include the section and repository name, with the number on a pull request
+  detail page. Your repositories and Explore set titles at their own routes.
+- Repository Settings links use the plain Settings path. Same-tab navigation
+  keeps the source on the Settings history entry so the return link can restore
+  it after a refresh. A direct visit or a new tab defaults to the repository
+  home. Old Settings links can supply `returnTo`. Opening the link consumes the
+  parameter and accepts a supported view of the same repository or the main
+  repository directory.
+  Settings section navigation uses a fragment such as `#autopilot` and restores
+  the addressed section when a direct link loads.
+  Run details likewise default to the Run list and carry `returnTo` when the
+  source has additional context, such as list filters.
+- The short `/schemas` entry selects a Workspace when it opens. Background
+  refreshes keep that selection for the open editor. Legacy links keep any
+  explicit branch or Workspace when dropping the redundant Studio view flag.
 
 ## Transport and local access
 
@@ -330,11 +363,38 @@ have already migrated or authorize deleting them in a documentation change.
 historical object; supported writes obey the same guards; unsupported writes
 are explicit; retirement keeps history readable.
 
+#### Repository URL principles
+
+Apply these rules when adding or changing links within a repository.
+
+- Use the [resolved repository address](../../../docs/repository-addresses.md#web-compatibility)
+  for new links when it is available. Use the project-ID entry for repositories
+  awaiting an address. An explicit section path selects the destination.
+  Supported legacy `tab` parameters can still select a view at the repository
+  root. Preserve the object, relevant query parameters, and fragment when
+  adapting a supported old address.
+- Use the path to identify the destination, the query for context the link
+  needs to restore, and the fragment for a section within the page. Encode
+  values at the boundary where they become URL components. Preserve the
+  encoding of an existing path segment during address normalization. Fixed
+  Review and Commit identity follows [A-02](#a-02-read-refresh-and-invalidation).
+- Give the return link a destination it can derive from the current page when
+  there is an unambiguous default. Keep same-tab Settings return context on
+  the browser history entry and use a clean Settings link. Use `returnTo`
+  where the shareable link needs to restore its source, such as a Run opened
+  from a filtered list. Use the source's supported path and relevant query.
+  Validate an explicit return target within the receiving route's allowed
+  scope and fall back to the default if validation fails.
+
+**Verify** generated links, direct opening and refresh, supported old links,
+and the return trip. Check that default returns produce short URLs, contextual
+returns restore the same view and filters, and a retained fragment reaches its
+section once it is available.
+
 ## Current implementation gaps
 
 | Contract | Observed behavior |
 | --- | --- |
-| A-02 | The [Review loader](../src/hooks/workspaces/useWorkspaceReviewSnapshot.ts) verifies that a later snapshot belongs to the same Transition and reviewed subject, then makes it active. The [fixed Review page](../src/components/workspaces/WorkspaceSnapshotReview.tsx) uses that snapshot's ID in the URL, Checks record and return links in place of the requested ID. The [component test](../src/__tests__/components/workspaces/WorkspaceSnapshotReview.test.tsx) expects the URL replacement. |
 | A-01, A-03 | The [Decision recovery record](../src/hooks/workspaces/useWorkspaceReviewSnapshot.ts) is keyed by project, Workspace and Transition. Its key omits the authenticated session and principal, and [session cleanup](../src/infrastructure/session.ts) leaves the recovery record in browser storage. |
 | A-04 | A relative import of the same module can bypass checks that match its alias. The app allowlist also records module imports rather than operations. The project page's allowed [YSchema validation query module](../src/queries/yschemaValidation.ts) exposes both a read and a write. |
 | A-05 | When a legacy `workspaceTool=edit` or `reviewPane=edit` URL specifies a branch but no explicit Workspace, the [Workspace entry](../src/components/project/ProjectWorkspacesTab.tsx) can select a candidate from the branch and [open its editor](../src/components/workspaces/WorkspaceComposeReviewSurface.tsx) automatically. If authoring is inactive, opening the editor can [start Draft initialization](../src/hooks/workspaces/useWorkspaceAuthoringBootstrap.ts) for that inferred candidate. |

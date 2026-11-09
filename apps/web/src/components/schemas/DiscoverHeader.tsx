@@ -49,6 +49,7 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
 export function DiscoverHeader({
   repoPath,
   settingsHref = '/settings',
+  onSettingsNavigate,
   projectIdNavigation = false,
   branch,
   workspaceId,
@@ -71,6 +72,7 @@ export function DiscoverHeader({
   namespaceTab?: 'repositories' | 'settings';
   repoPath?: string;
   settingsHref?: string;
+  onSettingsNavigate?: () => void;
   projectIdNavigation?: boolean;
   branch?: string | null;
   workspaceId?: string | null;
@@ -247,6 +249,7 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tabHref(tab.id)}
+                    onNavigate={tab.id === 'settings' && !selected ? onSettingsNavigate : undefined}
                     scroll={false}
                     className={styles.tab}
                     aria-label={tab.label}

@@ -143,7 +143,7 @@ describe('ProjectRouteShell', () => {
     '/project/proj_test/history',
     '/team/Test-Project/history',
     '/team/Test-Project/diff',
-  ])('owns %s in State and preserves the exact Settings return destination', async (pathname) => {
+  ])('owns %s in State and links to plain repository Settings', async (pathname) => {
     navigation.pathname = pathname;
     navigation.search = 'branch=feature%2Frelease&view=list&commit=sha256%3Aabc&q=fix';
     render(
@@ -154,11 +154,10 @@ describe('ProjectRouteShell', () => {
     expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
     await waitFor(() => {
-      const settings = new URL(
-        screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
-        'http://localhost'
+      expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+        'href',
+        '/team/Test-Project/settings'
       );
-      expect(settings.searchParams.get('returnTo')).toBe(`${pathname}?${navigation.search}`);
       expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
         'href',
         '/team/Test-Project?branch=feature%2Frelease'
@@ -177,7 +176,7 @@ describe('ProjectRouteShell', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      `${navigation.pathname}?${navigation.search}`
+      '/project/proj_test/settings'
     );
     expect(screen.getByRole('link', { name: 'State' })).not.toHaveAttribute('aria-current');
   });

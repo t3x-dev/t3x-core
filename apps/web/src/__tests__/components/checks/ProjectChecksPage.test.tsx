@@ -108,6 +108,18 @@ describe('Repository Checks', () => {
       { scroll: false }
     );
   });
+  it('opens an unfiltered Run record without encoding the default return path', async () => {
+    const { rerender } = render(<ProjectChecksPage projectId="p" />);
+    const path = '/owner/repo/checks/review%3Ar12';
+    expect(await screen.findByRole('link', { name: /Snapshot r12/ })).toHaveAttribute('href', path);
+
+    mocks.pathname = path;
+    rerender(<ProjectChecksPage projectId="p" recordId="review%3Ar12" />);
+    expect(screen.getByRole('link', { name: 'Run', exact: true })).toHaveAttribute(
+      'href',
+      '/owner/repo/checks'
+    );
+  });
   it('groups only review snapshots with the same Workspace and revision on the page', async () => {
     const committed = {
       ...record,

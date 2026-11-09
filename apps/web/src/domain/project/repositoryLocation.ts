@@ -22,7 +22,13 @@ export function isRetiredRepositoryLocation(
   );
 }
 
-export function repositoryLocation(base: string, suffix: string, query: string, hash = ''): string {
+export function repositoryLocation(
+  base: string,
+  suffix: string,
+  query: string,
+  hash = '',
+  sourceBase = base
+): string {
   const params = new URLSearchParams(query);
   let tail = suffix === '/state' ? '' : suffix;
   if ((!tail || tail === '/') && params.has('tab')) {
@@ -55,6 +61,14 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
         params.delete('schemaView');
       }
     }
+  }
+  const returnTo = params.get('returnTo');
+  if (
+    /^\/checks\/[^/]+\/?$/.test(tail) &&
+    (returnTo === `${base}/checks` || returnTo === `${sourceBase}/checks`) &&
+    [...params.keys()].every((key) => key === 'returnTo' || key === 'check')
+  ) {
+    params.delete('returnTo');
   }
   return `${base}${tail}${params.size ? `?${params}` : ''}${hash}`;
 }

@@ -218,12 +218,14 @@ export function checksHref(
     returnTo?: string;
   } = {}
 ): string {
+  const listPath = `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/checks`;
   const params = new URLSearchParams();
   if (options.workspace) params.set('workspace', options.workspace);
   if (options.pr) params.set('pr', String(options.pr));
   if (options.commit) params.set('commit', options.commit);
-  if (options.returnTo) params.set('returnTo', options.returnTo);
-  return `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/checks${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
+  const usesDefaultReturn = options.recordId && params.size === 0 && options.returnTo === listPath;
+  if (options.returnTo && !usesDefaultReturn) params.set('returnTo', options.returnTo);
+  return `${listPath}${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
 }
 
 /** Only a path within this repository (canonical or ID address) can be a return target. */

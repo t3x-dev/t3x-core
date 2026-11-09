@@ -182,6 +182,19 @@ it('uses the namespace returned by the backend after a transfer', async () => {
     )
   );
 });
+it('forwards a legacy Settings return source and fragment to the resolved Settings page', async () => {
+  mocks.params.repoPath = ['Old', 'settings'];
+  mocks.query = 'returnTo=%2Falice%2FRepo%2Fcommunity';
+  window.location.hash = '#autopilot';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
+      '/alice/Repo/settings?returnTo=%2Falice%2FRepo%2Fcommunity#autopilot',
+      { scroll: false }
+    )
+  );
+});
+
 it('opens canonical settings and nested changes without bouncing to an ID URL', async () => {
   mocks.params.repoPath = ['Repo', 'settings'];
   render(<OwnerRepoProjectPage />);

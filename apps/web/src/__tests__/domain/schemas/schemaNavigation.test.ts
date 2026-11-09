@@ -36,7 +36,6 @@ it('switches both Workspace and branch without reusing the previous candidate', 
   expect(Object.fromEntries(url.searchParams)).toEqual({
     workspace: 'feature-draft',
     branch: 'feature/test',
-    schemaView: 'studio',
     returnTo: '/explore?q=care',
   });
 });

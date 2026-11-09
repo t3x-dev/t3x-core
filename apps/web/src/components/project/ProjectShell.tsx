@@ -2,15 +2,11 @@
 
 import type { RepositoryProfile } from '@t3x-dev/api-client';
 import { type ReactNode, useEffect } from 'react';
-import {
-  getProjectTabLabel,
-  getProjectTabSegment,
-  type ProjectTabId,
-  projectTabKeepsWorkspace,
-} from '@/components/project/projectTabModel';
+import { getProjectTabLabel, type ProjectTabId } from '@/components/project/projectTabModel';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
+import { rememberRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import workbench from './RepositoryWorkbench.module.css';
 import { repositoryWorkbenchTracks } from './repositoryWorkbenchLayout';
 
@@ -41,7 +37,6 @@ export interface ProjectShellProps {
   children: ReactNode;
   project: ProjectShellProject;
   workspaceId?: string | null;
-  settingsReturnTo?: string;
   pageTitle?: string | null;
 }
 
@@ -54,7 +49,6 @@ export function ProjectShell({
   ownerSlug,
   pullRequestNumber,
   workspaceId,
-  settingsReturnTo,
   pageTitle,
 }: ProjectShellProps) {
   const visibilityLabel =
@@ -65,23 +59,7 @@ export function ProjectShell({
         : 'Private';
   const repoPath = getProjectRepoPath(project);
   const idNavigation = !project.canonical_path;
-  const returnParams = new URLSearchParams();
-  if (activeTab !== 'state' && activeTab !== 'settings') {
-    returnParams.set('tab', getProjectTabSegment(activeTab));
-  }
-  if (branch) returnParams.set('branch', branch);
-  if (workspaceId && projectTabKeepsWorkspace(activeTab)) {
-    returnParams.set('workspace', workspaceId);
-  }
-  if (pullRequestNumber && activeTab === 'reviews') {
-    returnParams.set('pr', String(pullRequestNumber));
-  }
-  const returnQuery = returnParams.toString();
-  const returnTo = settingsReturnTo ?? (returnQuery ? `${repoPath}?${returnQuery}` : repoPath);
-  const settingsHref =
-    activeTab === 'settings' && settingsReturnTo
-      ? settingsReturnTo
-      : `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
+  const settingsHref = `${repoPath}/settings`;
   const actualOwner = project.namespace ?? ownerSlug;
   const repositoryName = actualOwner ? `${actualOwner}/${project.name}` : project.name;
   const sectionTitle =
@@ -120,6 +98,9 @@ export function ProjectShell({
         newProjectHref={newRepositoryHref}
         repoPath={repoPath}
         settingsHref={settingsHref}
+        onSettingsNavigate={() => {
+          if (project.id) rememberRepositorySettingsReturn(project.id, settingsHref);
+        }}
         projectIdNavigation={idNavigation}
         branch={branch}
         workspaceId={workspaceId}

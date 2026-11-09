@@ -53,6 +53,7 @@ import {
   readRecentProjectIds,
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
+import { rememberRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import { DeletedRepositoriesView } from './DeletedRepositoriesView';
 import styles from './ProjectDirectoryPage.module.css';
 import {
@@ -125,7 +126,10 @@ function ProjectActions({
               Rename
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href={`${path}/settings`}>
+              <Link
+                href={`${path}/settings`}
+                onNavigate={() => rememberRepositorySettingsReturn(project.id, `${path}/settings`)}
+              >
                 <Settings aria-hidden="true" size={15} />
                 Repository settings
               </Link>
