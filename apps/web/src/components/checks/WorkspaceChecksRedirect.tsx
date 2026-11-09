@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { checksHref } from '@/domain/project/checks';
+import { getCanonicalRepositoryPath } from '@/domain/project/repoPath';
 
 /** Resolve legacy bookmarks without mounting the authoring workbench. */
 export function WorkspaceChecksRedirect({
@@ -20,6 +21,7 @@ export function WorkspaceChecksRedirect({
   params.set('workspaceMode', 'review');
   const snapshotId = params.get('reviewSnapshot');
   const href = checksHref(projectId, {
+    repositoryPath: getCanonicalRepositoryPath(pathname),
     recordId: snapshotId ? `review:${snapshotId}` : undefined,
     workspace: workspaceId ?? params.get('workspace') ?? undefined,
     returnTo: `${pathname}?${params}`,

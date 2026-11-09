@@ -511,12 +511,14 @@ function toCompareCandidate(
 
 export function ProjectReviewsTab({
   projectId,
+  repositoryPath,
   initialPullRequestNumber,
   initialDetailTab,
   onDetailTabChange,
   onPullRequestNumberChange,
 }: {
   projectId?: string;
+  repositoryPath?: string;
   initialPullRequestNumber?: number;
   initialDetailTab?: string;
   onDetailTabChange?: (tab: PullRequestDetailTab) => void;
@@ -1291,6 +1293,7 @@ export function ProjectReviewsTab({
         onRerun={() => rerunReadiness(selectedPullRequest)}
         projectId={projectId}
         pullRequest={selectedPullRequest}
+        repositoryPath={repositoryPath}
         readinessError={readinessError}
         resolutionError={resolutionError}
         rerunning={rerunningId === selectedPullRequest.id}
@@ -2167,6 +2170,7 @@ function PullRequestDetailView({
   projectId,
   pullRequest,
   readinessError,
+  repositoryPath,
   resolutionError,
   rerunning,
   saveMergeDecision,
@@ -2193,6 +2197,7 @@ function PullRequestDetailView({
   projectId?: string;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
+  repositoryPath?: string;
   resolutionError: string | null;
   rerunning: boolean;
   saveMergeDecision: PullRequestMergeReviewPanelProps['saveMergeDecision'];
@@ -2406,8 +2411,9 @@ function PullRequestDetailView({
                       <Link
                         className="inline-flex items-center gap-2 underline"
                         href={checksHref(projectId, {
+                          repositoryPath,
                           recordId: `pull-request:${pullRequest.id}`,
-                          returnTo: `/project/${encodeURIComponent(projectId)}?tab=pull-requests&pr=${pullRequest.number}&prTab=checks`,
+                          returnTo: `${repositoryPath ? `${repositoryPath}/pull-requests?` : `/project/${encodeURIComponent(projectId)}?tab=pull-requests&`}pr=${pullRequest.number}&prTab=checks`,
                         })}
                       >
                         Open check details <ArrowRight size={14} />

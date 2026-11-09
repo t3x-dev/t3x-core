@@ -13,14 +13,16 @@ import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import {
-  getProjectTabSegment,
   type ProjectTabId,
   parseProjectTab,
   resolveProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
-import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
-import { repositoryLocation } from '@/domain/project/repositoryLocation';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  getProjectRepoPath,
+} from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -57,28 +59,6 @@ function isNotFoundError(error: Error | null): boolean {
   if (!error) return false;
   const normalized = error.message.toLowerCase();
   return normalized.includes('404') || normalized.includes('not found');
-}
-
-function withCurrentQuery(path: string, searchParams: { toString: () => string }) {
-  const params = new URLSearchParams(searchParams.toString());
-  params.delete('tab');
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
-}
-
-function getProjectCanonicalPath(
-  project: { id?: string; name: string },
-  searchParams: URLSearchParams,
-  ownerSlug?: string,
-  hash = ''
-) {
-  const next = new URLSearchParams(searchParams);
-  next.set('tab', getProjectTabSegment(parseProjectTab(next.get('tab'))));
-  return repositoryLocation(getProjectRepoPath(project, ownerSlug), '', next.toString(), hash);
-}
-
-function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
-  return searchParams.has('tab');
 }
 
 export function ProjectDetailPageContent({
@@ -175,22 +155,6 @@ export function ProjectDetailPageContent({
     if (!isCanvasActive || !showIntroDemo) return;
     closeNodeModal();
   }, [closeNodeModal, isCanvasActive, showIntroDemo]);
-
-  useEffect(() => {
-    if (routeProjectId || isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
-    if (searchParams.has('tab') && !project) return;
-
-    const nextPath =
-      project && searchParams.has('tab')
-        ? getProjectCanonicalPath(
-            project,
-            new URLSearchParams(searchParams.toString()),
-            ownerSlugOverride,
-            window.location.hash
-          )
-        : withCurrentQuery(pathname, searchParams);
-    router.replace(nextPath, { scroll: false });
-  }, [isCanvasSurface, ownerSlugOverride, pathname, project, routeProjectId, router, searchParams]);
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -485,9 +449,12 @@ export function ProjectDetailPageContent({
               if (number) next.set('pr', String(number));
               else next.delete('pr');
               const query = next.toString();
-              router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+              const href = query ? `${pathname}?${query}` : pathname;
+              if (number) router.push(href, { scroll: false });
+              else router.replace(href, { scroll: false });
             }}
             projectId={projectId}
+            repositoryPath={getCanonicalRepositoryPath(pathname)}
           />
         );
       case 'community':

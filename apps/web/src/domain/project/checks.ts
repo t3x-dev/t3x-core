@@ -210,6 +210,7 @@ export function checkRecordView(record: CheckRecord) {
 export function checksHref(
   projectId: string,
   options: {
+    repositoryPath?: string;
     recordId?: string;
     workspace?: string;
     pr?: number;
@@ -222,7 +223,7 @@ export function checksHref(
   if (options.pr) params.set('pr', String(options.pr));
   if (options.commit) params.set('commit', options.commit);
   if (options.returnTo) params.set('returnTo', options.returnTo);
-  return `${getProjectIdRepoPath(projectId)}/checks${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
+  return `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/checks${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
 }
 
 /** Only a path within this repository (canonical or ID address) can be a return target. */

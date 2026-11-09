@@ -47,23 +47,24 @@ function OwnerRepoProjectPageContent() {
   const { current, retry } = useRepositoryAddress(owner, name, !special);
   const address = current?.address;
   const supported = isSupportedRepositorySuffix(suffix);
+  const target =
+    address && supported
+      ? repositoryLocation(
+          address.canonical_path ?? getProjectIdRepoPath(address.project_id),
+          suffix,
+          query
+        )
+      : null;
+  const canonicalizing = target !== null && target !== `${pathname}${query ? `?${query}` : ''}`;
   useEffect(() => {
-    if (!address || !supported) return;
-    const target = repositoryLocation(
-      address.canonical_path ?? getProjectIdRepoPath(address.project_id),
-      suffix,
-      query,
-      window.location.hash
-    );
-    const here = `${pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-    if (target !== here) router.replace(target, { scroll: false });
-  }, [address, supported, suffix, pathname, query, router]);
+    if (canonicalizing) router.replace(`${target}${window.location.hash}`, { scroll: false });
+  }, [canonicalizing, router, target]);
 
   if (!special && isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
   if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
-  if (!current) {
+  if (!current || canonicalizing) {
     const loading = <LoadingSpinner message="Loading repository..." />;
     // Keep only the known header during navigation; repository content still
     // waits for a fresh address lookup and its access checks.

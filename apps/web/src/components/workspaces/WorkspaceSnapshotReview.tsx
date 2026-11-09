@@ -3,11 +3,14 @@
 import type { TransitionViewV1 } from '@t3x-dev/core';
 import { Box, GitBranch, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { checksHref } from '@/domain/project/checks';
-import { getProjectIdHistoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdHistoryPath,
+  getProjectIdRepoPath,
+} from '@/domain/project/repoPath';
 import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
 import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
@@ -44,8 +47,9 @@ export function WorkspaceSnapshotReview({
   workspaceId: string;
 }) {
   const router = useRouter();
+  const repositoryPath = getCanonicalRepositoryPath(usePathname());
   const rawPane = useSearchParams().get('reviewPane');
-  const [preferredPane, rememberPane, paneReady] = useViewPreference(
+  const [preferredPane, rememberPane] = useViewPreference(
     workspaceReviewPreferenceKey(projectId, workspaceId),
     WORKSPACE_REVIEW_VIEWS,
     'changes'
@@ -73,28 +77,49 @@ export function WorkspaceSnapshotReview({
     schemaReview?.baseContent !== undefined && schemaReview.draftContent !== undefined
       ? fieldChangeGroups(schemaReview.baseContent, schemaReview.draftContent)
       : null;
-  const commit = snapshot?.objects?.commit?.digest;
+  const laterSnapshot = state.laterResult?.snapshot;
+  const outcomeSnapshot = laterSnapshot ?? snapshot;
+  const outcomeView = outcomeSnapshot?.transition;
+  const rejected =
+    outcomeView?.mode === 'transition' &&
+    outcomeView.decision?.observation === 'supplied' &&
+    outcomeView.decision.outcome === 'rejected';
+  const commit = outcomeSnapshot?.objects?.commit?.digest;
   const branch = snapshot?.review.precondition.refName;
-  const activeSnapshotId = snapshot?.snapshotId ?? snapshotId;
-  const workspaceHref = workspaceReviewHref(projectId, workspaceId, { branch, pane });
+  const workspaceHref = workspaceReviewHref(projectId, workspaceId, {
+    branch,
+    pane,
+    repositoryPath,
+  });
   const reviewHref = workspaceReviewHref(projectId, workspaceId, {
     branch,
     pane,
-    snapshotId: activeSnapshotId,
+    repositoryPath,
+    snapshotId,
   });
-  const composeHref = workspaceReviewHref(projectId, workspaceId, { branch, mode: 'compose' });
-  const historyHref = getProjectIdHistoryPath(projectId, { branch, commit, returnTo: reviewHref });
+  const laterHref = laterSnapshot
+    ? workspaceReviewHref(projectId, workspaceId, {
+        branch,
+        pane,
+        repositoryPath,
+        snapshotId: laterSnapshot.snapshotId,
+      })
+    : null;
+  const composeHref = workspaceReviewHref(projectId, workspaceId, {
+    branch,
+    mode: 'compose',
+    repositoryPath,
+  });
+  const historyHref = getProjectIdHistoryPath(projectId, {
+    branch,
+    commit,
+    repositoryPath,
+    returnTo: reviewHref,
+  });
   const stateHref =
     commit && branch
-      ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
+      ? `${repositoryPath ?? getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
       : null;
-
-  useEffect(() => {
-    if (!paneReady) return;
-    if (snapshot && snapshot.snapshotId !== snapshotId) {
-      router.replace(reviewHref, { scroll: false });
-    }
-  }, [snapshot, snapshotId, reviewHref, router, paneReady]);
 
   const errorHeading = state.recovery
     ? 'Decision result unconfirmed'
@@ -147,6 +172,7 @@ export function WorkspaceSnapshotReview({
     <ChangeDecisionPanel
       embedded
       contentValidation={schemaReview?.contentValidation}
+      historical={Boolean(laterSnapshot)}
       branch={branch ?? null}
       busy={
         state.deciding ||
@@ -161,7 +187,8 @@ export function WorkspaceSnapshotReview({
       view={view}
       commitBlocker={workspaceCommitBlocker(schemaReview, view)}
       checksHref={checksHref(projectId, {
-        recordId: `review:${activeSnapshotId}`,
+        repositoryPath,
+        recordId: `review:${snapshotId}`,
         returnTo: reviewHref,
       })}
     />
@@ -202,11 +229,22 @@ export function WorkspaceSnapshotReview({
           </>
         }
         status={
-          view && state.loading ? (
+          laterHref ? (
+            <>
+              {commit
+                ? 'A later snapshot records the commit.'
+                : rejected
+                  ? 'A later snapshot records the rejection.'
+                  : 'A newer Review snapshot is available.'}{' '}
+              <Link className="underline" href={laterHref}>
+                {commit || rejected ? 'View result snapshot' : 'View newer snapshot'}
+              </Link>
+            </>
+          ) : view && state.loading ? (
             <output>Checking for a decision update…</output>
           ) : commit ? (
             'Committed. This snapshot stays available for reference.'
-          ) : view?.decision?.observation === 'supplied' && view.decision.outcome === 'rejected' ? (
+          ) : rejected ? (
             'Rejected. The Draft is retained for editing; the branch was not changed.'
           ) : (
             'Content, Schema and check results belong to this fixed snapshot.'
@@ -267,7 +305,7 @@ export function WorkspaceSnapshotReview({
               </output>
             ) : null}
             <WorkspaceSchemaDiagnostics
-              key={activeSnapshotId}
+              key={snapshotId}
               projectId={projectId}
               workspaceId={workspaceId}
               frozen
@@ -287,7 +325,7 @@ export function WorkspaceSnapshotReview({
             <>
               <dl>
                 <dt>Snapshot</dt>
-                <dd>{activeSnapshotId}</dd>
+                <dd>{snapshotId}</dd>
                 {schemaReview ? (
                   <>
                     <dt>Base Schema</dt>
@@ -298,7 +336,11 @@ export function WorkspaceSnapshotReview({
                 ) : null}
                 <dd>
                   <Link
-                    href={checksHref(projectId, { workspace: workspaceId, returnTo: reviewHref })}
+                    href={checksHref(projectId, {
+                      repositoryPath,
+                      workspace: workspaceId,
+                      returnTo: reviewHref,
+                    })}
                   >
                     Workspace check history
                   </Link>
@@ -308,6 +350,7 @@ export function WorkspaceSnapshotReview({
                     <Link
                       href={workspaceReviewHref(projectId, workspaceId, {
                         branch,
+                        repositoryPath,
                         tool: 'delivery',
                         returnTo: reviewHref,
                       })}
@@ -352,7 +395,7 @@ export function WorkspaceSnapshotReview({
               review={schemaReview}
               branch={branch ?? 'main'}
               frozen
-              versionLabel={activeSnapshotId}
+              versionLabel={snapshotId}
             />
           ) : pane === 'rendered' ? (
             <WorkspaceReviewContentPreview value={schemaReview?.draftContent} frozen />
@@ -362,7 +405,7 @@ export function WorkspaceSnapshotReview({
               result={schemaReview?.draftContent}
               branch={branch ?? 'main'}
               subject="Content"
-              versionLabel={activeSnapshotId}
+              versionLabel={snapshotId}
               frozen
             />
           ) : (

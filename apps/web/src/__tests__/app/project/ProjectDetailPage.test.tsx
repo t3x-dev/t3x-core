@@ -265,51 +265,6 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
-  it.each([
-    { schemaView: '', hash: '', tab: 'schemas' },
-    { schemaView: '&schemaView=browse', hash: '#releases', tab: 'browse' },
-  ])('normalizes legacy $tab links under the actual repository owner', async ({
-    schemaView,
-    hash,
-    tab,
-  }) => {
-    searchParamsValue = new URLSearchParams(
-      `tab=schemas&branch=feature%2Frelease&workspace=workspace_7${schemaView}`
-    );
-    window.history.replaceState({}, '', `/${hash}`);
-    pathnameValue = '/orbit-labs/test-project';
-    useProjectStore.setState({
-      details: {},
-      projects: [
-        {
-          id: 'proj_test',
-          name: 'Test Project',
-          canonical_path: '/orbit-labs/test-project',
-          namespace: 'orbit-labs',
-        } as never,
-      ],
-    });
-    vi.mocked(fetchProject).mockResolvedValue({
-      project_id: 'proj_test',
-      name: 'Test Project',
-      canonical_path: '/orbit-labs/test-project',
-      namespace: 'orbit-labs',
-      created_at: '2026-01-01T00:00:00Z',
-    } as never);
-    routeParamsValue = {};
-
-    render(
-      <ProjectDetailPageContent ownerSlugOverride="orbit-labs" projectIdOverride="proj_test" />
-    );
-
-    await waitFor(() =>
-      expect(replaceMock).toHaveBeenCalledWith(
-        `/orbit-labs/test-project/${tab}?branch=feature%2Frelease&workspace=workspace_7${hash}`,
-        { scroll: false }
-      )
-    );
-  });
-
   it('redirects the legacy project settings query without rendering the old settings panel', () => {
     searchParamsValue = new URLSearchParams('tab=settings');
     pathnameValue = '/project/proj_test';

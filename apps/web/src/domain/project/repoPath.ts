@@ -28,9 +28,15 @@ export function getProjectIdRepoPath(projectId: string): string {
   return `/project/${encodeURIComponent(projectId)}`;
 }
 
+/** Call from a resolved repository route, where the first two segments are the address. */
+export function getCanonicalRepositoryPath(pathname: string): string | undefined {
+  return pathname.startsWith('/project/') ? undefined : pathname.split('/').slice(0, 3).join('/');
+}
+
 export function getProjectIdHistoryPath(
   projectId: string,
   options: {
+    repositoryPath?: string;
     branch?: string | null;
     commit?: string | null;
     view?: 'list';
@@ -42,7 +48,7 @@ export function getProjectIdHistoryPath(
   if (options.commit) params.set('commit', options.commit);
   if (options.view) params.set('view', options.view);
   if (options.returnTo) params.set('returnTo', options.returnTo);
-  return `${getProjectIdRepoPath(projectId)}/history${params.size ? `?${params}` : ''}`;
+  return `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/history${params.size ? `?${params}` : ''}`;
 }
 
 export function getProjectIdCanvasPath(projectId: string): string {

@@ -43,9 +43,9 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
       ].includes(tab)
     ) {
       tail = tab === 'state' ? '' : `/${tab}`;
-      params.delete('tab');
     }
   }
+  params.delete('tab');
   if (/^\/schemas\/?$/.test(tail)) {
     tail = '/schemas';
     const tab = getSchemaProjectTab(params.get('schemaView'));

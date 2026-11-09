@@ -22,7 +22,7 @@ import {
   object,
   textValue,
 } from '@/domain/project/checks';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import { useProjectChecks } from '@/hooks/projects/useProjectChecks';
 import styles from './ProjectChecksPage.module.css';
@@ -36,6 +36,9 @@ export function ProjectChecksPage({
 }) {
   const recordId = decodeCheckRecordId(routeRecordId);
   const pathname = usePathname();
+  const repositoryPath = getCanonicalRepositoryPath(pathname);
+  const base = repositoryPath ?? getProjectIdRepoPath(projectId);
+  const workspacesHref = repositoryPath ? `${repositoryPath}/workspaces` : `${base}?tab=workspaces`;
   const query = useSearchParams().toString();
   const router = useRouter();
   const params = new URLSearchParams(query);
@@ -45,7 +48,7 @@ export function ProjectChecksPage({
   const returnTo = checksReturnTo(params.get('returnTo'), projectId, pathname);
   const listParams = new URLSearchParams(query);
   listParams.delete('check');
-  const listHref = `${getProjectIdRepoPath(projectId)}/checks${listParams.size ? `?${listParams}` : ''}`;
+  const listHref = `${base}/checks${listParams.size ? `?${listParams}` : ''}`;
   const sourceHref = recordId ? (returnTo ?? listHref) : returnTo;
   function filter(name: string, value: string) {
     const next = new URLSearchParams(query);
@@ -122,7 +125,7 @@ export function ProjectChecksPage({
               </button>
             ) : null
           )}
-          <Link href={`${getProjectIdRepoPath(projectId)}?tab=workspaces`}>
+          <Link href={workspacesHref}>
             Open Workspaces <ArrowRight size={14} />
           </Link>
         </div>
@@ -141,6 +144,7 @@ export function ProjectChecksPage({
         <CheckDetails
           record={current.records[0]}
           projectId={projectId}
+          repositoryPath={repositoryPath}
           selectedCheck={params.get('check')}
           onSelect={(id) => {
             const next = new URLSearchParams(query);
@@ -153,6 +157,7 @@ export function ProjectChecksPage({
           <RunRecords
             records={current.records}
             projectId={projectId}
+            repositoryPath={repositoryPath}
             returnTo={`${pathname}${query ? `?${query}` : ''}`}
           />
           <nav className={styles.pagination} aria-label="Run pagination">
@@ -195,7 +200,7 @@ export function ProjectChecksPage({
           <p>
             Prepare a review in a Workspace or run checks from a pull request to record evidence.
           </p>
-          <Link href={`${getProjectIdRepoPath(projectId)}?tab=workspaces`}>Open Workspaces</Link>
+          <Link href={workspacesHref}>Open Workspaces</Link>
         </div>
       )}
     </div>
@@ -205,10 +210,12 @@ export function ProjectChecksPage({
 function RunRecords({
   records,
   projectId,
+  repositoryPath,
   returnTo,
 }: {
   records: CheckRecord[];
   projectId: string;
+  repositoryPath?: string;
   returnTo: string;
 }) {
   const groups = new Map<string, { heading?: string; records: CheckRecord[] }>();
@@ -244,7 +251,7 @@ function RunRecords({
             <Link
               className={styles.row}
               key={record.id}
-              href={checksHref(projectId, { recordId: record.id, returnTo })}
+              href={checksHref(projectId, { repositoryPath, recordId: record.id, returnTo })}
             >
               <Status status={view.status} />
               <div className={styles.rowMain}>
@@ -319,11 +326,13 @@ function RunRecords({
 function CheckDetails({
   record,
   projectId,
+  repositoryPath,
   selectedCheck,
   onSelect,
 }: {
   record: CheckRecord;
   projectId: string;
+  repositoryPath?: string;
   selectedCheck: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -333,7 +342,7 @@ function CheckDetails({
     view.items.find((item) => item.id === selectedCheck) ??
     view.items.find((item) => !['passed', 'skipped', 'not_applicable'].includes(item.status)) ??
     view.items[0];
-  const base = getProjectIdRepoPath(projectId);
+  const base = repositoryPath ?? getProjectIdRepoPath(projectId);
   const snapshot = object(p.snapshot);
   const precondition = object(object(snapshot.review).precondition);
   const metadata =
@@ -362,7 +371,9 @@ function CheckDetails({
             Environment: p.environment_hash,
             Schema: p.schema_hash,
           };
-  const workspaceQuery = new URLSearchParams({ tab: 'workspaces', workspace: view.workspace });
+  const workspaceQuery = new URLSearchParams();
+  if (!repositoryPath) workspaceQuery.set('tab', 'workspaces');
+  workspaceQuery.set('workspace', view.workspace);
   if (view.branch) workspaceQuery.set('branch', view.branch);
   return (
     <>
@@ -384,6 +395,7 @@ function CheckDetails({
           {view.snapshot ? (
             <Link
               href={workspaceReviewHref(projectId, view.workspace, {
+                repositoryPath,
                 snapshotId: view.snapshot,
                 branch: view.branch,
               })}
@@ -393,28 +405,30 @@ function CheckDetails({
           ) : null}
           {view.workspace ? (
             <Link
-              href={`${workspaceReviewHref(projectId, view.workspace, { snapshotId: view.snapshot || undefined, branch: view.branch })}&schemaDiagnostics=1`}
+              href={`${workspaceReviewHref(projectId, view.workspace, { repositoryPath, snapshotId: view.snapshot || undefined, branch: view.branch })}&schemaDiagnostics=1`}
             >
               Schema checks & impact <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.workspace ? (
-            <Link href={`${base}?${workspaceQuery}`}>
+            <Link href={`${base}${repositoryPath ? '/workspaces' : ''}?${workspaceQuery}`}>
               Open current Workspace <ArrowRight size={14} />
             </Link>
           ) : null}
           {record.kind === 'pull-request' ? (
-            <Link href={`${base}?tab=pull-requests&pr=${p.number}&prTab=checks`}>
+            <Link
+              href={`${base}${repositoryPath ? '/pull-requests?' : '?tab=pull-requests&'}pr=${p.number}&prTab=checks`}
+            >
               Open PR checks <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.commit ? (
-            <Link href={checksHref(projectId, { commit: view.commit })}>
+            <Link href={checksHref(projectId, { repositoryPath, commit: view.commit })}>
               Commit runs <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.workspace ? (
-            <Link href={checksHref(projectId, { workspace: view.workspace })}>
+            <Link href={checksHref(projectId, { repositoryPath, workspace: view.workspace })}>
               Workspace run history <ArrowRight size={14} />
             </Link>
           ) : null}
@@ -506,6 +520,7 @@ function CheckDetails({
           {textValue(p.supersedes_snapshot_id) ? (
             <Link
               href={checksHref(projectId, {
+                repositoryPath,
                 recordId: `review:${textValue(p.supersedes_snapshot_id)}`,
               })}
             >

@@ -121,7 +121,6 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', 'workspaces');
       params.set('workspace', workspaceId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },

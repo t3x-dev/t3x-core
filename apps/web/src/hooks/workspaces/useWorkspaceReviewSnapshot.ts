@@ -32,6 +32,7 @@ export interface WorkspaceReviewDecisionRecovery {
 
 export interface WorkspaceReviewSnapshotState {
   data: WorkspaceTransitionReviewSnapshotResponse | null;
+  laterResult?: WorkspaceTransitionReviewSnapshotResponse;
   deciding: boolean;
   error: string | null;
   loading: boolean;
@@ -143,7 +144,8 @@ export function useWorkspaceReviewSnapshot(
         setStored({
           scope,
           value: {
-            data: { ...latest, schema_review: fixed.schema_review ?? latest.schema_review },
+            data: pinned,
+            laterResult: latest.snapshot.snapshotId === snapshotId ? undefined : latest,
             deciding: false,
             error: pendingDecision.current ? recoveryMessage : null,
             loading: false,
@@ -158,6 +160,7 @@ export function useWorkspaceReviewSnapshot(
           scope,
           value: {
             data: (current.scope === scope ? current.value.data : null) ?? fixed,
+            laterResult: current.scope === scope ? current.value.laterResult : undefined,
             deciding: false,
             error: error instanceof Error ? error.message : 'Unable to load the change review.',
             loading: false,
@@ -211,7 +214,8 @@ export function useWorkspaceReviewSnapshot(
         fail('Load the immutable ReviewSnapshot before making a decision.');
         return null;
       }
-      if (isFinalSnapshot(data)) return null;
+      if (isFinalSnapshot(data) || (state.laterResult && isFinalSnapshot(state.laterResult)))
+        return null;
       const decisionReason = optionalText(decisionReasonInput);
       const previous = pendingDecision.current;
       if (
@@ -222,7 +226,7 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
       if (!previous) {
-        if (state.latestUnavailable) {
+        if (state.latestUnavailable || state.laterResult) {
           fail('Refresh the latest result before making a decision.');
           return null;
         }
@@ -261,7 +265,8 @@ export function useWorkspaceReviewSnapshot(
         setStored({
           scope,
           value: {
-            data: { ...latest, schema_review: data.schema_review ?? latest.schema_review },
+            data,
+            laterResult: latest.snapshot.snapshotId === snapshot.snapshotId ? undefined : latest,
             deciding: false,
             error: null,
             loading: false,

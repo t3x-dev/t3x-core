@@ -94,13 +94,13 @@ describe('Repository Checks', () => {
     render(<ProjectChecksPage projectId="p" />);
     const link = await screen.findByRole('link', { name: /Snapshot r12/ });
     const url = new URL(link.getAttribute('href') ?? '', 'http://localhost');
-    expect(url.pathname).toBe('/project/p/checks/review%3Ar12');
+    expect(url.pathname).toBe('/owner/repo/checks/review%3Ar12');
     expect(url.searchParams.get('returnTo')).toBe(
       '/owner/repo/checks?workspace=ws%3Amain&kind=review'
     );
     expect(screen.getByRole('link', { name: 'Open Workspaces' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces'
+      '/owner/repo/workspaces'
     );
     fireEvent.click(screen.getByRole('button', { name: /Older records/ }));
     expect(mocks.push).toHaveBeenCalledWith(
@@ -148,15 +148,15 @@ describe('Repository Checks', () => {
     expect(screen.getByText('summary/audience')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Review snapshot' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12'
+      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12'
     );
     expect(screen.getByRole('link', { name: 'Open current Workspace' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&branch=main'
+      '/owner/repo/workspaces?workspace=ws%3Amain&branch=main'
     );
     expect(screen.getByRole('link', { name: 'Schema checks & impact' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
+      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
     );
     expect(mocks.detail).toHaveBeenCalledWith('p', 'review:r12', expect.any(AbortSignal));
     expect(mocks.list).not.toHaveBeenCalled();
@@ -199,6 +199,7 @@ describe('Repository Checks', () => {
         checks: [],
       },
     });
+    mocks.pathname = '/project/p/checks/pull-request%3Apr1';
     render(<ProjectChecksPage projectId="p" recordId="pull-request:pr1" />);
     expect(await screen.findByText(/Rerunning replaces these results/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open PR checks' })).toHaveAttribute(
