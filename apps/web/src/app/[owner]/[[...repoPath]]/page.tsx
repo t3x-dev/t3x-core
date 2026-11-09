@@ -72,6 +72,7 @@ function OwnerRepoProjectPageContent() {
       <ProjectShell
         activeTab={resolveProjectRouteTab(segments[1] ?? null, new URLSearchParams(query))}
         branch={new URLSearchParams(query).get('branch')}
+        pageTitle={null}
         settingsReturnTo={`${pathname}${query ? `?${query}` : ''}`}
         project={knownProject}
       >

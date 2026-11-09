@@ -14,6 +14,36 @@ const project = {
 };
 
 describe('ProjectShell', () => {
+  it('updates the browser title for the repository and current section, then releases it', () => {
+    const previousTitle = document.title;
+    document.title = 'Your repositories · T3X';
+    const repository = { ...project, namespace: 'team', description: 'A versioned project' };
+    const view = render(
+      <ProjectShell activeTab="state" project={repository}>
+        State
+      </ProjectShell>
+    );
+    try {
+      expect(document.title).toBe('team/Test Project: A versioned project');
+      view.rerender(
+        <ProjectShell activeTab="reviews" project={repository} pullRequestNumber={42}>
+          Pull request
+        </ProjectShell>
+      );
+      expect(document.title).toBe('Pull request #42 · team/Test Project · T3X');
+      view.rerender(
+        <ProjectShell activeTab="workspaces" pageTitle="Review" project={repository}>
+          Review
+        </ProjectShell>
+      );
+      expect(document.title).toBe('Review · team/Test Project · T3X');
+      view.unmount();
+      expect(document.title).toBe('Your repositories · T3X');
+    } finally {
+      document.title = previousTitle;
+    }
+  });
+
   it('keeps the shared two-row shell across project tabs', () => {
     const view = render(
       <ProjectShell activeTab="state" project={project}>

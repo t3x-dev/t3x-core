@@ -1,6 +1,9 @@
+'use client';
+
 import type { RepositoryProfile } from '@t3x-dev/api-client';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import {
+  getProjectTabLabel,
   getProjectTabSegment,
   type ProjectTabId,
   projectTabKeepsWorkspace,
@@ -39,6 +42,7 @@ export interface ProjectShellProps {
   project: ProjectShellProject;
   workspaceId?: string | null;
   settingsReturnTo?: string;
+  pageTitle?: string | null;
 }
 
 export function ProjectShell({
@@ -51,6 +55,7 @@ export function ProjectShell({
   pullRequestNumber,
   workspaceId,
   settingsReturnTo,
+  pageTitle,
 }: ProjectShellProps) {
   const visibilityLabel =
     project.visibility === 'public'
@@ -78,6 +83,29 @@ export function ProjectShell({
       ? settingsReturnTo
       : `${repoPath}/settings?returnTo=${encodeURIComponent(returnTo)}`;
   const actualOwner = project.namespace ?? ownerSlug;
+  const repositoryName = actualOwner ? `${actualOwner}/${project.name}` : project.name;
+  const sectionTitle =
+    pageTitle ??
+    (activeTab === 'reviews' &&
+    pullRequestNumber &&
+    Number.isSafeInteger(pullRequestNumber) &&
+    pullRequestNumber > 0
+      ? `Pull request #${pullRequestNumber}`
+      : getProjectTabLabel(activeTab));
+  const description = typeof project.description === 'string' ? project.description.trim() : '';
+  let title = `${repositoryName} · T3X`;
+  if (activeTab !== 'state' || pageTitle) title = `${sectionTitle} · ${title}`;
+  else if (description) title = `${repositoryName}: ${description}`;
+  useEffect(() => {
+    if (pageTitle === null) return;
+    // The repository identity is resolved by the client route after access checks.
+    const previousTitle = document.title;
+    document.title = title;
+    return () => {
+      if (document.title === title) document.title = previousTitle;
+    };
+  }, [pageTitle, title]);
+
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div

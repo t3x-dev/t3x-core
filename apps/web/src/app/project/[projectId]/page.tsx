@@ -471,6 +471,9 @@ export function ProjectDetailPageContent({
         branch={searchParams.get('branch')}
         immersive={isSchemaStudio || isSchemaRelease}
         ownerSlug={project.namespace ?? ownerSlugOverride}
+        pageTitle={
+          activeTab === 'workspaces' && searchParams.get('reviewSnapshot') ? 'Review' : undefined
+        }
         project={project}
         projectIdNavigation={!!routeProjectId}
         pullRequestNumber={Number(searchParams.get('pr')) || undefined}
