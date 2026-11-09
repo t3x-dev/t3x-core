@@ -21,6 +21,7 @@ export {
 } from './deployment-capabilities.js';
 export * from './explore.js';
 export * from './merge-workspace';
+export * from './recipe-triggers.js';
 export * from './repository-profile.js';
 export * from './schema-catalog.js';
 export {

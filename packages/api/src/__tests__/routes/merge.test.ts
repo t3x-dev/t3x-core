@@ -184,6 +184,11 @@ describe('CommitV2 merge routes', () => {
     ).resolves.toMatchObject({
       effect: { driver: { protocol: 't3x.dev/yops-semantic-merge' } },
     });
+    expect(mockDispatch).toHaveBeenCalledWith(
+      'merge.completed',
+      expect.objectContaining({ project_id: projectId, commit_hash: body.data.hash }),
+      projectId
+    );
   });
 
   it('rejects a client preparation that hides a server-recomputed conflict', async () => {
@@ -244,6 +249,11 @@ describe('CommitV2 merge routes', () => {
       parents: [target.commitDigest, source.commitDigest],
     });
     expect((await getMergeDraft(mockDB, draft.draftId))?.status).toBe('committed');
+    expect(mockDispatch).toHaveBeenCalledWith(
+      'merge.completed',
+      expect.objectContaining({ project_id: projectId, commit_hash: body.data.hash }),
+      projectId
+    );
     await expect(
       getTransitionRefHead(mockDB, { projectId, refName: 'main' })
     ).resolves.toMatchObject({ head: body.data.hash });
