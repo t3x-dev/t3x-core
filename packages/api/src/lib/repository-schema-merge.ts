@@ -127,6 +127,16 @@ export function mergeSchemaDefinitions(
 }
 
 export class RepositorySchemaMergeError extends Error {}
+
+export class RepositorySchemaMigrationRequiredError extends RepositorySchemaMergeError {
+  constructor(readonly missingSide: 'source' | 'target') {
+    super(
+      'Schema removal or missing branch contract requires an explicit migration before merging.'
+    );
+  }
+}
+
+export class RepositorySchemaEvidenceError extends RepositorySchemaMergeError {}
 interface CommittedSchema {
   schema: YSchema;
   rootKey: string;
@@ -148,7 +158,7 @@ async function committedSchema(
     graph.commit.decision.digest
   );
   if (!audit)
-    throw new RepositorySchemaMergeError(
+    throw new RepositorySchemaEvidenceError(
       'Schema source Commit has no verified repository authority.'
     );
   const view = await getTransitionViewForCommit(db, {
@@ -171,23 +181,25 @@ async function committedSchema(
     (prepared.membership.proposalDigest !== describeTransitionObject(graph.proposal).digest ||
       prepared.membership.effectDigest !== describeTransitionObject(graph.effect).digest)
   )
-    throw new RepositorySchemaMergeError('Schema preparation does not match its exact Commit.');
+    throw new RepositorySchemaEvidenceError('Schema preparation does not match its exact Commit.');
   const frozen = prepared ? frozenWorkspaceSchemaReview(prepared)?.draft : undefined;
   if (!hashes.size) {
     if (frozen?.status === 'bound')
-      throw new RepositorySchemaMergeError('Committed Schema validation evidence is missing.');
+      throw new RepositorySchemaEvidenceError('Committed Schema validation evidence is missing.');
     return null;
   }
   if (hashes.size !== 1)
-    throw new RepositorySchemaMergeError('Committed Schema validation evidence is ambiguous.');
+    throw new RepositorySchemaEvidenceError('Committed Schema validation evidence is ambiguous.');
   const snapshot: WorkspaceSchemaDefinitionSnapshot | null =
     frozen ??
     (await recoverCommittedSchema(db, projectId, audit.refName, digest, unboundWorkspaceSchema()));
   if (snapshot?.status !== 'bound' || !snapshot.definition || !hashes.has(snapshot.schemaHash!))
-    throw new RepositorySchemaMergeError('The exact committed Schema snapshot is unavailable.');
+    throw new RepositorySchemaEvidenceError('The exact committed Schema snapshot is unavailable.');
   const schema = normalizeYSchemaObject(snapshot.definition);
   if ((await sha256CompositionValue(schema)) !== snapshot.schemaHash)
-    throw new RepositorySchemaMergeError('The committed Schema snapshot failed hash verification.');
+    throw new RepositorySchemaEvidenceError(
+      'The committed Schema snapshot failed hash verification.'
+    );
   const binding = snapshot.bindings[0];
   let sources = Array.isArray(binding?.studioSources)
     ? (binding.studioSources as Record<string, unknown>[])
@@ -208,7 +220,7 @@ async function committedSchema(
       (await sha256CompositionValue(normalizeYSchemaObject(stored.schemaJson))) !==
         snapshot.schemaHash
     )
-      throw new RepositorySchemaMergeError(
+      throw new RepositorySchemaEvidenceError(
         'The committed Schema binding failed snapshot verification.'
       );
     if (!sources.length && Array.isArray(stored.manifestJson.sources))
@@ -262,9 +274,7 @@ export async function prepareRepositorySchemaMerge(input: {
   ]);
   if (!base && !source && !target) return null; // Explicitly unbound repositories retain their existing content-only path.
   if (base && (!source || !target))
-    throw new RepositorySchemaMergeError(
-      'Schema removal or missing branch contract requires an explicit migration before merging.'
-    );
+    throw new RepositorySchemaMigrationRequiredError(!source ? 'source' : 'target');
   const roots = new Set(
     [source, target].filter((item) => item !== null).map((item) => item.rootKey)
   );
