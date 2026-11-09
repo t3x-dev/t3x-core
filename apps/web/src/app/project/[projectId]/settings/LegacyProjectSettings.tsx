@@ -506,7 +506,7 @@ function ProjectSettingsPageContent() {
       <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
         <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Autopilot</h1>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Configure automatic knowledge commit rules for this project.
+          Review extraction threshold suggestions for this project.
         </p>
         <AutopilotSettings projectId={projectId} />
       </div>

@@ -567,7 +567,7 @@ function ProjectSettingsPageContent() {
         </SettingsSection>
 
         <SettingsSection
-          description="Commit extracted state automatically once it meets these thresholds."
+          description="Review extraction threshold suggestions for this project."
           icon={Bot}
           id="autopilot"
           title="Autopilot"
