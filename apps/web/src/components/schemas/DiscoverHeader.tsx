@@ -21,6 +21,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import Link from 'next/link';
+import { T3XMark } from '@/components/layout/T3XMark';
 import {
   getProjectTabSegment,
   PROJECT_TABS,
@@ -124,16 +125,7 @@ export function DiscoverHeader({
       <div className={styles.topRow}>
         <div className={styles.identity}>
           <Link className={styles.brand} href={homeHref} aria-label="T3X home">
-            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
-              <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
-              <path
-                d="M7 8.5h12M13 8.5v10"
-                stroke="var(--surface-card)"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-commit)" />
-            </svg>
+            <T3XMark />
             <span>T3X</span>
           </Link>
           <span className={styles.separator} aria-hidden="true">

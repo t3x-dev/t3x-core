@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, CircleCheck, CircleX, Github, LockKeyhole } from 'lucide-react';
+import { CircleCheck, CircleX } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { formatUserFacingError } from '@/domain/format/errors';
 import { usePersonalNamespace } from '@/hooks/namespaces/usePersonalNamespace';
 import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
+import { AccountEntry } from './AccountEntry';
 
 const RESERVED_NAMESPACES = new Set([
   'api',
@@ -61,31 +62,7 @@ function getValidationMessage(namespace: string, validation: NamespaceValidation
   if (!validation.characters) return 'Use lowercase letters, numbers, or hyphens only.';
   if (!validation.shape) return 'A namespace cannot begin, end, or repeat a hyphen.';
   if (RESERVED_NAMESPACES.has(namespace)) return `“${namespace}” is reserved by T3X.`;
-  return 'This namespace looks available.';
-}
-
-function ValidationRule({ children, passed }: { children: React.ReactNode; passed: boolean }) {
-  return (
-    <li
-      className={cn(
-        'flex items-center gap-2.5 text-[13px] transition-colors',
-        passed ? 'text-[var(--text-secondary)]' : 'text-[var(--text-tertiary)]'
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-          passed
-            ? 'border-[color-mix(in_srgb,var(--status-success)_35%,transparent)] bg-[var(--status-success-muted)] text-[var(--status-success)]'
-            : 'border-[var(--stroke-strong)] text-transparent'
-        )}
-      >
-        <Check className="size-3.5" strokeWidth={2} />
-      </span>
-      {children}
-    </li>
-  );
+  return 'This namespace format is valid.';
 }
 
 export function PersonalNamespaceOnboarding({
@@ -132,136 +109,120 @@ export function PersonalNamespaceOnboarding({
   }
 
   return (
-    <div className="flex min-h-full flex-1 overflow-y-auto bg-[var(--surface-app)]">
-      <main className="mx-auto w-full max-w-[860px] px-5 py-10 sm:px-8 sm:py-14 lg:py-16">
-        <h1 className="max-w-[680px] text-[38px] font-bold leading-[1.04] tracking-[-0.045em] text-[var(--text-primary)] sm:text-[48px]">
-          Choose your namespace
-        </h1>
-        <p className="mt-4 max-w-[720px] text-[15px] leading-7 text-[var(--text-secondary)] sm:text-base">
-          Your public identity and personal project home on T3X.
-        </p>
-
-        <form
-          className="mt-8 rounded-[var(--radius-xl)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-5 shadow-[var(--fx-shadow-lg)] sm:mt-10 sm:p-7"
-          onSubmit={handleSubmit}
-        >
-          <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-            <label className="text-sm font-bold text-[var(--text-primary)]" htmlFor="namespace">
-              Personal namespace
-            </label>
-            {suggestion && (
-              <button
-                className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-alt)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
-                onClick={() => setNamespace(suggestion)}
-                type="button"
-              >
-                <Github className="size-3.5" />
-                Use @{suggestion}
-              </button>
-            )}
-          </div>
-
-          <div
-            className={cn(
-              'flex h-[58px] overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)] transition-[border-color,box-shadow] focus-within:border-[var(--accent-commit)] focus-within:ring-2 focus-within:ring-[var(--accent-commit-soft)]',
-              hasValue && !validation.valid
-                ? 'border-[var(--status-error)]'
-                : 'border-[var(--stroke-strong)]'
-            )}
-          >
-            <span className="flex shrink-0 items-center border-r border-[var(--stroke-default)] px-3 font-mono text-xs text-[var(--text-tertiary)] sm:px-4 sm:text-sm">
-              t3x.app/
-            </span>
-            <input
-              aria-describedby="namespace-status namespace-rules"
-              aria-invalid={hasValue && !validation.valid}
-              autoCapitalize="none"
-              autoComplete="off"
-              className="min-w-0 flex-1 bg-transparent px-3 font-mono text-sm font-bold text-[var(--text-primary)] outline-none sm:px-4 sm:text-base"
-              id="namespace"
-              maxLength={39}
-              onChange={(event) => {
-                setNamespace(normalizeNamespace(event.target.value));
+    <AccountEntry
+      kind="namespace"
+      title="Choose your namespace"
+      description="This is the first part of your repository URLs."
+    >
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="text-sm font-medium" htmlFor="namespace">
+            Personal namespace
+          </label>
+          {suggestion && (
+            <Button
+              className="h-auto min-h-9 max-w-full whitespace-normal break-all text-xs"
+              disabled={saving}
+              onClick={() => {
+                setNamespace(suggestion);
                 setSubmitError(null);
               }}
-              spellCheck={false}
-              value={namespace}
-            />
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Use @{suggestion}
+            </Button>
+          )}
+        </div>
+
+        <div
+          className={cn(
+            'flex h-9 overflow-hidden pointer-coarse:h-11 rounded-md border focus-within:ring-2 focus-within:ring-[var(--ring)]',
+            hasValue && !validation.valid
+              ? 'border-[var(--status-error)]'
+              : 'border-[var(--stroke-strong)]'
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="flex shrink-0 items-center border-r border-[var(--stroke-divider)] bg-[var(--management-control-bg)] px-3 font-mono text-sm text-[var(--text-secondary)]"
+          >
+            /
+          </span>
+          <input
+            aria-describedby="namespace-status"
+            aria-invalid={hasValue && !validation.valid}
+            autoCapitalize="none"
+            autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent px-3 font-mono text-base outline-none sm:text-sm"
+            disabled={saving}
+            id="namespace"
+            maxLength={39}
+            onChange={(event) => {
+              setNamespace(normalizeNamespace(event.target.value));
+              setSubmitError(null);
+            }}
+            spellCheck={false}
+            value={namespace}
+          />
+          {hasValue && (
             <span
               aria-hidden="true"
               className={cn(
-                'flex w-12 shrink-0 items-center justify-center',
-                validation.valid
-                  ? 'text-[var(--status-success)]'
-                  : hasValue
-                    ? 'text-[var(--status-error)]'
-                    : 'text-[var(--text-tertiary)]'
+                'flex w-10 shrink-0 items-center justify-center',
+                validation.valid ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
               )}
             >
               {validation.valid ? (
-                <CircleCheck className="size-[19px]" />
-              ) : hasValue ? (
-                <CircleX className="size-[19px]" />
-              ) : null}
+                <CircleCheck className="size-4" />
+              ) : (
+                <CircleX className="size-4" />
+              )}
             </span>
-          </div>
-
-          <output
-            aria-live="polite"
-            className={cn(
-              'mt-3.5 flex min-h-5 items-center gap-2 text-[13px]',
-              validation.valid
-                ? 'font-semibold text-[var(--status-success)]'
-                : hasValue
-                  ? 'font-semibold text-[var(--status-error)]'
-                  : 'text-[var(--text-tertiary)]'
-            )}
-            id="namespace-status"
-          >
-            {validation.valid ? (
-              <CircleCheck className="size-4" />
-            ) : hasValue ? (
-              <CircleX className="size-4" />
-            ) : null}
-            <span>{message}</span>
-          </output>
-
-          <ul
-            className="mt-5 grid list-none grid-cols-1 gap-x-10 gap-y-3 p-0 sm:grid-cols-2"
-            id="namespace-rules"
-          >
-            <ValidationRule passed={validation.length}>2–39 characters</ValidationRule>
-            <ValidationRule passed={validation.characters}>
-              Letters, numbers, or hyphens
-            </ValidationRule>
-            <ValidationRule passed={validation.shape}>No leading or double hyphens</ValidationRule>
-            <ValidationRule passed={validation.unique}>
-              Unique across people and organizations
-            </ValidationRule>
-          </ul>
-
-          {submitError && (
-            <p className="mt-5 text-sm font-semibold text-[var(--status-error)]" role="alert">
-              {submitError}
-            </p>
           )}
+        </div>
 
-          <div className="mt-7 flex flex-col-reverse items-stretch justify-between gap-5 border-t border-[var(--stroke-divider)] pt-6 sm:flex-row sm:items-center">
-            <p className="flex items-center justify-center gap-2 text-xs text-[var(--text-tertiary)] sm:justify-start">
-              <LockKeyhole className="size-4" />
-              Your sign-in account stays unchanged.
-            </p>
-            <Button
-              className="h-12 min-w-[142px] rounded-[var(--radius-lg)] px-5 text-[15px] font-bold shadow-[var(--shadow-glow)]"
-              disabled={!validation.valid || saving}
-              type="submit"
-            >
-              {saving ? 'Creating...' : 'Continue'}
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </form>
-      </main>
-    </div>
+        <output
+          aria-live="polite"
+          className={cn(
+            'block text-xs leading-5',
+            hasValue && !validation.valid
+              ? 'text-[var(--status-error)]'
+              : 'text-[var(--text-secondary)]'
+          )}
+          id="namespace-status"
+        >
+          {message}
+        </output>
+
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md bg-[var(--management-control-bg)] px-2.5 py-2 text-xs text-[var(--text-secondary)]">
+          <span>Repository path</span>
+          <code className="min-w-0 [overflow-wrap:anywhere] text-[var(--text-primary)]">
+            /{validation.valid ? namespace : 'namespace'}/my-repo
+          </code>
+        </div>
+
+        {submitError && (
+          <p
+            className="rounded-md bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]"
+            role="alert"
+          >
+            {submitError}
+          </p>
+        )}
+
+        <Button
+          className="h-9 w-full pointer-coarse:h-11"
+          disabled={!validation.valid || saving}
+          type="submit"
+        >
+          {saving ? 'Creating…' : 'Continue'}
+        </Button>
+        <p className="text-xs leading-5 text-[var(--text-secondary)]">
+          T3X checks availability when you continue. Your sign-in account stays unchanged.
+        </p>
+      </form>
+    </AccountEntry>
   );
 }
