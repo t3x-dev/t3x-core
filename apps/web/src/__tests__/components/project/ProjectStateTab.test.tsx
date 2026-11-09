@@ -647,7 +647,7 @@ describe('ProjectStateTab', () => {
       'Office workers'
     );
     expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview', exact: true }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Overview', exact: true }), { button: 0 });
     expect(screen.getAllByTestId('state-page-footer')).toHaveLength(1);
     expect(screen.getAllByRole('link', { name: 'History', exact: true })).toHaveLength(1);
     expect(screen.getByTestId('state-page-footer')).toHaveTextContent('Test Project');
@@ -771,7 +771,7 @@ describe('ProjectStateTab', () => {
     if (change === 'unmount') view.unmount();
     else if (change === 'view') {
       fireEvent.click(screen.getByRole('button', { name: 'Close branch switcher' }));
-      fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+      fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     } else {
       navigationMocks.search = '?branch=feature%2Fprd-audience';
       view.rerender(
@@ -816,7 +816,19 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tab', { name: /Snapshot/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByRole('tab', { name: /Render/ })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: /Structure/ }));
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const structure = screen.getByRole('tab', { name: 'Structure' });
+    expect(screen.getByRole('tabpanel', { name: 'Overview' }).id).toBe(
+      overview.getAttribute('aria-controls')
+    );
+    act(() => overview.focus());
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    await waitFor(() => expect(structure).toHaveFocus());
+    expect(overview).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(structure, { key: 'Enter' });
+    expect(screen.getByRole('tabpanel', { name: 'Structure' }).id).toBe(
+      structure.getAttribute('aria-controls')
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'Code', exact: true }));
     expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
       expect.stringContaining(`commit=${encodeURIComponent(PRD_COMMIT.hash)}`),
@@ -1264,7 +1276,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByRole('region', { name: 'State structure' });
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
 
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
     expect(screen.getByText('Executive summary')).toBeInTheDocument();
@@ -1405,7 +1417,7 @@ describe('ProjectStateTab', () => {
 
     renderStateTab();
     await screen.findByRole('region', { name: 'State structure' });
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
 
     expect(screen.getByRole('link', { name: 'View schemas' })).toHaveAttribute(
       'href',
@@ -1506,7 +1518,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
     expect(screen.getAllByText('t3x/skill').length).toBeGreaterThan(0);
     expect(screen.queryByText('adapter skill.document')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(screen.getByRole('region', { name: 'Skill schema render' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'review-code' })).toBeInTheDocument();
   });
@@ -1538,7 +1550,7 @@ describe('ProjectStateTab', () => {
 
     await screen.findByText('Add extract requirements Prompt');
     expect(screen.getAllByText('t3x/prompt').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(screen.getByRole('region', { name: 'Prompt schema render' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByText('messages/system_policy/template')).not.toHaveLength(0);
@@ -1575,7 +1587,7 @@ describe('ProjectStateTab', () => {
     renderStateTab(null);
 
     await screen.findByText('Add device state');
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(screen.getByText('Structured reader')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /^Render/ })).toBeNull();
   });
@@ -1592,7 +1604,7 @@ describe('ProjectStateTab', () => {
       '/project/proj_test?branch=main&tab=workspaces'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(await screen.findByText('No commits yet')).toBeInTheDocument();
   });
 
@@ -1600,7 +1612,7 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     await screen.findByRole('region', { name: 'State structure' });
-    fireEvent.click(screen.getByRole('tab', { name: /Structure/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Structure/ }), { button: 0 });
     fireEvent.click(await screen.findByRole('button', { name: 'Code', exact: true }));
 
     const codeView = screen.getByRole('region', { name: 'State structure' });

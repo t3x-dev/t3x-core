@@ -3,6 +3,7 @@
 import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { StateExportButton } from '@/components/shared/StateExportButton';
+import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
@@ -21,7 +22,6 @@ export function StatePageToolbar({
   historyHref,
   onBranchChange,
   onCreateBranch,
-  onViewChange,
   workspaceHref,
   historical,
 }: {
@@ -35,7 +35,6 @@ export function StatePageToolbar({
   historyHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
-  onViewChange: (view: ProjectSnapshotView) => void;
   workspaceHref: string;
 }) {
   const commitHref = headCommit
@@ -81,7 +80,7 @@ export function StatePageToolbar({
           </div>
         </div>
         <div className={inspectionStyles.viewNavigation}>
-          <div className={overviewStyles.viewTabs} role="tablist" aria-label="State views">
+          <TabsList aria-label="State views" className={overviewStyles.viewTabs}>
             {(
               [
                 { id: 'overview', label: 'Overview', icon: Eye },
@@ -90,21 +89,13 @@ export function StatePageToolbar({
             ).map((view) => {
               const Icon = view.icon;
               return (
-                <button
-                  key={view.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={
-                    view.id === 'overview' ? activeView === 'overview' : activeView !== 'overview'
-                  }
-                  onClick={() => onViewChange(view.id)}
-                >
+                <TabsTrigger key={view.id} value={view.id}>
                   <Icon aria-hidden="true" />
                   {view.label}
-                </button>
+                </TabsTrigger>
               );
             })}
-          </div>
+          </TabsList>
         </div>
         {headCommit && activeView !== 'overview' ? (
           <div className={inspectionStyles.commitSummary}>

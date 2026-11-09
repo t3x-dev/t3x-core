@@ -80,6 +80,9 @@
   height: 14px;
 }
 .viewTabs {
+  height: auto;
+  padding: 0;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   gap: 0;
@@ -92,11 +95,14 @@
   min-height: 36px;
   padding: 6px 12px;
   font-size: 14px;
+  flex: none;
+  border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   color: var(--text-secondary);
 }
 .viewTabs button[aria-selected="true"] {
+  background: transparent;
   border-bottom-color: var(--accent-commit);
   color: var(--text-primary);
   font-weight: 600;

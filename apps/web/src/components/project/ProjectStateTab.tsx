@@ -33,6 +33,7 @@ import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Tabs } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   buildStructuredStateDiff,
@@ -651,6 +652,7 @@ export function ProjectStateTab({
     : lastCheckedAt
       ? 'Just now'
       : 'Not checked';
+  const statePanel = activeView === 'overview' ? 'overview' : 'structure';
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
@@ -665,7 +667,15 @@ export function ProjectStateTab({
 
       <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
+        <Tabs
+          activationMode="manual"
+          className="flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden bg-[var(--surface-card)]"
+          role="main"
+          value={statePanel}
+          onValueChange={(value) =>
+            updateActiveView(value === 'overview' ? 'overview' : 'structure')
+          }
+        >
           {activeView !== 'canvas' ? (
             <>
               <StatePageToolbar
@@ -680,7 +690,6 @@ export function ProjectStateTab({
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
-                onViewChange={updateActiveView}
                 workspaceHref={workspaceHref}
               />
               {focusedCommitHash ? (
@@ -733,7 +742,11 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              <StatePageFrame projectName={projectName} branch={branchFocus || 'main'}>
+              <StatePageFrame
+                projectName={projectName}
+                branch={branchFocus || 'main'}
+                view={statePanel}
+              >
                 {activeView !== 'overview' &&
                 (snapshot.primaryError || snapshot.loading || !headCommit) ? (
                   <section
@@ -891,7 +904,7 @@ export function ProjectStateTab({
               stateHref={snapshotHref}
             />
           )}
-        </main>
+        </Tabs>
       </div>
     </section>
   );
