@@ -1,29 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { buildHistoryCanvasSvg, downloadTextFile } from '@/domain/history/historyCanvasExport';
+import { downloadTextFile } from '@/utils/downloadTextFile';
 
-describe('historyCanvasExport', () => {
-  it('embeds commit cards and connectors in a downloadable SVG', () => {
-    const svg = buildHistoryCanvasSvg({
-      edges: [{ d: 'M 10 10 L 40 40', feature: false }],
-      nodes: [
-        {
-          hash: 'sha256:abcd1234',
-          message: 'Pin <schema>',
-          branch: 'de-v',
-          left: 60,
-          top: 80,
-          width: 220,
-          height: 120,
-        },
-      ],
-    });
-
-    expect(svg).toContain('M 10 10 L 40 40');
-    expect(svg).toContain('Pin &lt;schema&gt;');
-    expect(svg).toContain('abcd123 · de-v');
-  });
-
+describe('downloadTextFile', () => {
   it('starts a browser download for the exported file', () => {
     const click = vi.fn();
     const createObjectURL = vi.fn(() => 'blob:history');

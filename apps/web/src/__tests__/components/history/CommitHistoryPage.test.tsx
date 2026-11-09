@@ -170,7 +170,7 @@ describe('History node navigation', () => {
     expect(screen.queryByText(/Empty state →/)).not.toBeInTheDocument();
   });
 
-  it('filters the list and links to the repository State evolution canvas', async () => {
+  it('filters the list by search text and author', async () => {
     mocks.loadCommits.mockResolvedValue([selected, root]);
     render(<CommitHistoryPage projectId="proj_test" />);
 
@@ -186,10 +186,6 @@ describe('History node navigation', () => {
     expect(screen.getByRole('button', { name: /Update title/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'State evolution' })).toHaveAttribute(
-      'href',
-      '/project/proj_test?view=canvas&branch=main'
-    );
     expect(mocks.loadCommits).toHaveBeenCalledTimes(1);
   });
 
@@ -276,15 +272,18 @@ describe('History node navigation', () => {
     expect(await screen.findByText('"Revised"', { exact: true })).toBeInTheDocument();
   });
 
-  it('returns to the graph with the selected commit focused', async () => {
-    mocks.search = 'branch=main&view=canvas';
+  it('uses the split History view for old canvas links and keeps the selected commit', async () => {
+    mocks.search = new URLSearchParams({
+      branch: 'main',
+      view: 'canvas',
+      commit: root.hash,
+    }).toString();
     render(<CommitHistoryPage projectId="proj_test" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Inspect Initial state' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View Diff Changes' }));
-    await screen.findByRole('region', { name: 'Commit YAML' });
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+
     expect(await screen.findByRole('heading', { name: 'Initial state' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'History Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Commit list' })).toBeInTheDocument();
+    expect(screen.getByText('Empty base · initial commit')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'State evolution' })).not.toBeInTheDocument();
   });
 
   it('falls back to State for an unsafe return link and keeps branch filtering', async () => {
@@ -302,18 +301,17 @@ describe('History node navigation', () => {
     );
   });
 
-  it.each([
-    ['list', 'History branch filter'],
-    ['canvas', 'Canvas branch filter'],
-  ])('shows a branch read failure and retries it in %s view', async (view, filter) => {
-    mocks.search = `branch=all&view=${view}`;
+  it('shows a branch read failure and retries it', async () => {
+    mocks.search = 'branch=all';
     mocks.loadBranches
       .mockRejectedValueOnce(new Error('Branch service unavailable'))
       .mockResolvedValueOnce({ branches: [{ branch_id: 'feature', name: 'feature' }] });
     render(<CommitHistoryPage projectId="proj_test" />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Branch service unavailable');
-    expect(await screen.findByRole('combobox', { name: filter })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('combobox', { name: 'History branch filter' })
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
     expect(await screen.findByRole('option', { name: 'feature' })).toBeInTheDocument();

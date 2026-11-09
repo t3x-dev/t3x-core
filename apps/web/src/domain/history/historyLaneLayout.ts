@@ -9,9 +9,6 @@ export const HISTORY_LANE_LAYOUT = Object.freeze({
   nodeHeight: 132,
 });
 
-/** Small graphs render every card; larger ones only render what the viewport shows. */
-export const HISTORY_VIRTUALIZE_AFTER = 40;
-
 const LANE_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#0ea5e9', '#8b5cf6'];
 
 export interface HistoryLane {

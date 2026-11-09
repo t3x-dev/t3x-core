@@ -14,18 +14,15 @@
 
 import {
   ArrowLeft,
-  ArrowUpRight,
   ChevronDown,
   GitBranch,
   GitCommit,
-  GitFork,
   History,
   Keyboard,
   Loader2,
   Search,
   UserRound,
 } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -43,10 +40,9 @@ import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';
-import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
-import { CommitHistoryDiffCard, CommitHistoryDiffView } from './CommitHistoryDiffView';
+import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { CommitHistoryDiffCard } from './CommitHistoryDiffView';
 import { CommitHistoryRow } from './CommitHistoryRow';
-import { HistoryCanvas } from './HistoryCanvas';
 import styles from './HistoryList.module.css';
 
 // ============================================================================
@@ -120,11 +116,6 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const queryRef = useRef(query);
   queryRef.current = query;
   const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
-  const legacyCanvas = searchParams.get('view') === 'canvas';
-  const canvasHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
-    view: 'canvas',
-    ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}),
-  })}`;
   const stateHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ view: 'overview', ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}) }).toString()}`;
   const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), stateHref);
   const stateLocation = returnHref.split('?')[0];
@@ -214,7 +205,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const selectedCommit =
     listedCommit ??
     selectedResult?.commit ??
-    (!selectedCommitHash && !loading && !legacyCanvas ? visibleCommits[0]?.commit : null);
+    (!selectedCommitHash && !loading ? visibleCommits[0]?.commit : null);
   const selectedError = selectedResult?.error;
   const parentHash = selectedCommit?.parents[0];
   const listedParent = commits.find(
@@ -245,7 +236,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleBranchChange = useCallback(
     (branch: string) => {
-      updateQuery({ branch: branch === 'all' ? null : branch, commit: null, focus: null });
+      updateQuery({ branch: branch === 'all' ? null : branch, commit: null });
     },
     [updateQuery]
   );
@@ -410,16 +401,16 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleNavOpen = useCallback(
     (hash: string) => {
-      if (!legacyCanvas && window.matchMedia?.('(max-width: 760px)').matches) {
+      if (window.matchMedia?.('(max-width: 760px)').matches) {
         if (hash === selectedCommitHash) detailRef.current?.focus();
         else focusDetail.current = true;
       }
       if (hash !== selectedCommitHash) {
-        updateQuery({ commit: hash, ...(legacyCanvas ? { focus: hash } : {}) }, true);
+        updateQuery({ commit: hash }, true);
       }
       setTourOpen(false);
     },
-    [legacyCanvas, selectedCommitHash, updateQuery]
+    [selectedCommitHash, updateQuery]
   );
 
   useEffect(() => {
@@ -435,7 +426,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       }
     },
     onAction: handleNavOpen,
-    enabled: !loading && (!legacyCanvas || !selectedCommitHash),
+    enabled: !loading,
   });
 
   useEffect(() => {
@@ -459,59 +450,16 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     />
   );
 
-  if (!loading && !error && !selectedCommitHash && commits.length > 0 && legacyCanvas) {
-    return (
-      <HistoryCanvas
-        branches={branches}
-        branchFeedback={branchFeedback}
-        commits={commits}
-        selectedBranch={selectedBranch}
-        focusedCommitHash={searchParams.get('focus')}
-        onBack={returnHref ? () => router.push(returnHref) : undefined}
-        onBranchChange={handleBranchChange}
-        onListView={() => updateQuery({ view: 'list', focus: null })}
-        onViewDiff={handleNavOpen}
-      />
-    );
-  }
-
-  if (legacyCanvas && selectedCommit && (!parentHash || parentCommit)) {
-    const revisionHref = withReturnTo(
-      `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
-        view: 'overview',
-        branch: selectedCommit.branch,
-        commit: selectedCommit.hash,
-      })}`,
-      buildReturnTo(pathname, query)
-    );
-    return (
-      <CommitHistoryDiffView
-        key={selectedCommit.hash}
-        commit={selectedCommit}
-        parentCommit={parentCommit}
-        onBack={closeCommit}
-        stateHref={revisionHref}
-      />
-    );
-  }
-
   return (
     <div className={styles.page}>
       <header className={styles.header} data-intro-target="history-header">
-        <div className={styles.headingGroup}>
-          <h1
-            className={styles.title}
-            data-intro-target="history-keyboard"
-            title="j / k: navigate · o: open · Esc: deselect"
-          >
-            History
-          </h1>
-          <Link className={styles.canvasButton} href={canvasHref}>
-            <GitFork size={16} aria-hidden="true" />
-            State evolution
-            <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
-        </div>
+        <h1
+          className={styles.title}
+          data-intro-target="history-keyboard"
+          title="j / k: navigate · o: open · Esc: deselect"
+        >
+          History
+        </h1>
         {returnHref ? (
           <button
             className={styles.backButton}

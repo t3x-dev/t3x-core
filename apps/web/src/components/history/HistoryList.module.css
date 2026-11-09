@@ -14,7 +14,6 @@
 }
 
 .header,
-.headingGroup,
 .commitMeta,
 .detailActions,
 .changesHeading {
@@ -35,7 +34,6 @@
   line-height: 1.2;
 }
 
-.canvasButton,
 .backButton,
 .filterControl,
 .searchControl {
@@ -51,7 +49,6 @@
   font-size: 12px;
 }
 
-.canvasButton:hover,
 .backButton:hover,
 .diffFormats button:hover {
   background: var(--hover-bg);
