@@ -33,6 +33,7 @@ vi.mock('@/hooks/projects/usePullRequestChangePreview', () => ({
 }));
 
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
+import { ApiError } from '@/infrastructure/core';
 
 const realCompareCandidate = {
   id: 'compare_real_feature',
@@ -921,6 +922,17 @@ describe('ProjectReviewsTab', () => {
     pullRequestApi.fetchPullRequest.mockResolvedValue({
       ...blockedPullRequestDetail,
       status: 'ready',
+      readiness_current: false,
+      checks: Array.from({ length: 6 }, (_, index) => ({
+        id: `historical_${index}`,
+        pull_request_id: blockedPullRequest.id,
+        kind: 'review_requirement' as const,
+        status: 'passed' as const,
+        title: `Historical check ${index + 1}`,
+        message: null,
+        started_at: null,
+        completed_at: null,
+      })),
     });
     if (state === 'loading') pullRequestApi.fetchMergeReview.mockReturnValue(new Promise(() => {}));
     else if (state === 'failed')
@@ -932,12 +944,87 @@ describe('ProjectReviewsTab', () => {
       });
     render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
     await screen.findByRole('heading', { name: blockedPullRequest.title });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByText('6 of 6 passed')).toBeVisible();
+    expect(screen.getByText('Checks outdated')).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled());
     if (state !== 'loading')
-      await screen.findAllByText(/Merge is blocked until the comparison is available/);
+      await screen.findAllByText(/Recorded checks apply to old branch versions/);
     expect(screen.queryByText('Ready to merge')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
     expect(pullRequestApi.mergePullRequest).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Rerun readiness' })).toBeEnabled();
+  });
+
+  it('links a blocked Schema migration to the affected branch Workspace', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      source_branch: 'dev',
+      status: 'blocked',
+      merge_draft_id: null,
+      readiness_current: true,
+      required_action: { kind: 'schema_migration', branch: 'dev' },
+      checks: [
+        {
+          ...blockedPullRequestDetail.checks[0],
+          kind: 'schema_compatibility',
+          title: 'Schema migration required',
+          message: 'Missing branch contract requires an explicit migration.',
+        },
+      ],
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: blockedPullRequest.title });
+    expect(screen.getAllByText(/Schema migration required on dev/)[0]).toBeVisible();
+    expect(screen.getByRole('link', { name: /Open dev Workspace/ })).toHaveAttribute(
+      'href',
+      '/project/proj_real?tab=workspaces&branch=dev'
+    );
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+  });
+
+  it('links a current historical comparison to migration before checks are rerun', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      status: 'ready',
+      readiness_current: true,
+      required_action: null,
+    });
+    pullRequestApi.fetchMergeReview.mockRejectedValue(
+      new ApiError('SCHEMA_MIGRATION_REQUIRED', 'Explicit migration required.', { branch: 'dev' })
+    );
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: blockedPullRequest.title });
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    expect(await screen.findByRole('link', { name: 'Open dev Workspace' })).toHaveAttribute(
+      'href',
+      '/project/proj_real?tab=workspaces&branch=dev'
+    );
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
+  });
+
+  it('marks a stored ready PR outdated in the list when either branch moved', async () => {
+    pullRequestApi.fetchPullRequests.mockResolvedValue({
+      pull_requests: [{ ...blockedPullRequest, status: 'ready', readiness_current: false }],
+      counts: { active: 1, merged: 0 },
+    });
+    render(<ProjectReviewsTab projectId="proj_real" />);
+    const row = await screen.findByRole('button', { name: /View PR #1:/ });
+    expect(row).toHaveTextContent('Checks outdated');
+    expect(row).not.toHaveTextContent('Ready to merge');
+  });
+
+  it('replaces the migration action with rerun guidance after the source branch moves', async () => {
+    pullRequestApi.fetchPullRequest.mockResolvedValue({
+      ...blockedPullRequestDetail,
+      status: 'blocked',
+      readiness_current: false,
+      required_action: { kind: 'schema_migration', branch: 'dev' },
+    });
+    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    await screen.findByRole('heading', { name: blockedPullRequest.title });
+    expect(screen.getByText('Checks outdated')).toBeVisible();
+    expect(screen.queryByRole('link', { name: /Open dev Workspace/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rerun readiness' })).toBeEnabled();
   });
 

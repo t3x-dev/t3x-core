@@ -16,7 +16,11 @@ import type {
   SemanticContent,
 } from '@t3x-dev/core';
 import type { TransitionPolicyBinding } from '@t3x-dev/storage';
-import { RepositorySchemaMergeError } from '../lib/repository-schema-merge';
+import {
+  RepositorySchemaEvidenceError,
+  RepositorySchemaMergeError,
+  RepositorySchemaMigrationRequiredError,
+} from '../lib/repository-schema-merge';
 import {
   commitRepositoryYOpsMerge,
   prepareRepositoryYOpsMerge,
@@ -37,6 +41,12 @@ export interface MergePrepareOutput {
 }
 
 function mapMergeServiceError(error: unknown): never {
+  if (error instanceof RepositorySchemaMigrationRequiredError)
+    throw new MergeError('SCHEMA_MIGRATION_REQUIRED', error.message, {
+      missing_side: error.missingSide,
+    });
+  if (error instanceof RepositorySchemaEvidenceError)
+    throw new MergeError('SCHEMA_EVIDENCE_INVALID', error.message);
   if (error instanceof RepositoryMergeCommitNotFoundError) {
     throw new MergeError('NOT_FOUND', error.message);
   }
@@ -172,7 +182,8 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
 export class MergeError extends Error {
   constructor(
     public readonly code: string,
-    message: string
+    message: string,
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'MergeError';

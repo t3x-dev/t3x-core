@@ -38,6 +38,7 @@ export interface MergeReviewLoadState {
   review: ApiPullRequestMergeReview | null;
   loading: boolean;
   error: string | null;
+  requiredAction?: { kind: 'schema_migration'; branch: string } | null;
 }
 export type MergeDecisionSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -92,6 +93,8 @@ export function PullRequestMergeReviewPanel({
 }: PullRequestMergeReviewPanelProps) {
   const [review, setReview] = useState<ApiPullRequestMergeReview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [requiredAction, setRequiredAction] =
+    useState<MergeReviewLoadState['requiredAction']>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [choices, setChoices] = useState<MergeChoices>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -120,6 +123,7 @@ export function PullRequestMergeReviewPanel({
     if (!draftId) return;
     let cancelled = false;
     setLoadError(null);
+    setRequiredAction(null);
     setReview(null);
     fetchMergeReview(projectId, pullRequest.number)
       .then((loaded) => {
@@ -147,8 +151,22 @@ export function PullRequestMergeReviewPanel({
         );
       })
       .catch((error) => {
-        if (!cancelled)
+        if (!cancelled) {
+          const details =
+            error && typeof error === 'object' && 'details' in error ? error.details : null;
+          const branch =
+            details && typeof details === 'object' && 'branch' in details ? details.branch : null;
+          setRequiredAction(
+            error &&
+              typeof error === 'object' &&
+              'code' in error &&
+              error.code === 'SCHEMA_MIGRATION_REQUIRED' &&
+              typeof branch === 'string'
+              ? { kind: 'schema_migration', branch }
+              : null
+          );
           setLoadError(error instanceof Error ? error.message : 'Could not load the merge review.');
+        }
       });
     return () => {
       cancelled = true;
@@ -168,8 +186,9 @@ export function PullRequestMergeReviewPanel({
       review,
       loading: Boolean(draftId && !review && !loadError),
       error: loadError,
+      requiredAction,
     });
-  }, [draftId, review, loadError, onReviewChange]);
+  }, [draftId, review, loadError, requiredAction, onReviewChange]);
   useEffect(() => {
     onSaveStateChange?.(saveState);
   }, [saveState, onSaveStateChange]);
