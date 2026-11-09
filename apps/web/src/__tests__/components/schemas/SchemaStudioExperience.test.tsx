@@ -631,6 +631,46 @@ it('does not offer the selected candidate as its own comparison', () => {
   expect(screen.getByRole('button', { name: 'Combine selected…' })).toBeDisabled();
 });
 
+it('preserves a prepared definition with no source pins when combining sources', async () => {
+  const workspace = boundWorkspace();
+  workspace.schemaBindings = [
+    { schemaName: 'prepared', version: '1', mode: 'draft_override', compositionId: 'prepared' },
+  ];
+  mocks.workspaces = [workspace];
+  const incoming = {
+    yschema: '0.1',
+    nodes: { items: { slots: { task: { type: 'string', minLength: 1 } } } },
+  };
+  const boundSchema = {
+    yschema: '0.1',
+    nodes: {
+      items: { slots: { task: { type: 'string', minLength: 2 } } },
+      item2: { slots: {} },
+    },
+  };
+  mocks.previewResult = (input) => ({
+    ...(mocks.data as object),
+    schema: incoming,
+    report: { valid: true, issues: [] },
+    ...((input as { workspaceId?: string }).workspaceId
+      ? { workspace: { id: workspace.id, revision: workspace.revision, boundSchema, changes: [] } }
+      : {}),
+  });
+  render(<SchemaStudioExperience projectId="p" />);
+  await screen.findByRole('textbox', { name: 'Name item2' });
+  openSources();
+  const dialog = within(screen.getByRole('dialog', { name: 'Schema sources' }));
+  fireEvent.click(dialog.getByRole('button', { name: 'Combine selected…' }));
+  expect(await dialog.findByText(/nodes\/items\/slots\/task\/minLength/)).toBeVisible();
+  fireEvent.click(dialog.getByRole('button', { name: 'Keep my changes' }));
+  fireEvent.click(dialog.getByRole('button', { name: 'Save combined draft' }));
+  await waitFor(() =>
+    expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ schemaDefinition: boundSchema })
+    )
+  );
+});
+
 it('opens source composition without applying or discarding the current candidate', () => {
   mocks.workspaces = [boundWorkspace()];
   render(
