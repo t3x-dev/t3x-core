@@ -9,6 +9,10 @@ import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
   WorkspaceDeliveryResultSchema,
+  type WorkspaceDeploymentInput,
+  type WorkspaceDeploymentResult,
+  WorkspaceDeploymentResultSchema,
+  type WorkspaceRollbackInput,
 } from './workspace-delivery.js';
 /**
  * T3X API Client
@@ -980,6 +984,36 @@ export class T3xClient {
       undefined,
       undefined,
       WorkspaceDeliveryResultSchema
+    );
+  }
+
+  async deployWorkspaceArtifact(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceDeploymentInput
+  ): Promise<WorkspaceDeploymentResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deployments`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeploymentResultSchema
+    );
+  }
+
+  async rollbackWorkspaceArtifact(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceRollbackInput
+  ): Promise<WorkspaceDeploymentResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deployments/rollback`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeploymentResultSchema
     );
   }
 

@@ -1,8 +1,10 @@
 import type { WorkspaceDeliveryInput, WorkspaceDeliveryList } from '@t3x-dev/api-client';
 import { useEffect, useRef, useState } from 'react';
 import {
+  deployWorkspaceArtifact,
   getWorkspaceDeliveries,
   prepareWorkspaceDelivery,
+  rollbackWorkspaceArtifact,
 } from '@/infrastructure/workspaceDelivery';
 
 export function useWorkspaceDelivery(projectId: string, workspaceId: string, revision?: number) {
@@ -80,5 +82,73 @@ export function useWorkspaceDelivery(projectId: string, workspaceId: string, rev
       setPending(false);
     }
   }
-  return { data, error, pending, notice, deliver, refresh: () => setRefreshKey((key) => key + 1) };
+
+  async function deploy(deliveryId: string) {
+    if (inflight.current) return;
+    inflight.current = true;
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const deployment = await deployWorkspaceArtifact(projectId, workspaceId, {
+        deliveryId,
+        environment: 'preview',
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              deployments: [deployment, ...current.deployments],
+              currentDeployment: deployment,
+            }
+          : current
+      );
+      setNotice('Preview now points to the fixed artifact.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not deploy the artifact');
+    } finally {
+      inflight.current = false;
+      setPending(false);
+    }
+  }
+
+  async function rollback(deploymentId: string) {
+    if (inflight.current) return;
+    inflight.current = true;
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const deployment = await rollbackWorkspaceArtifact(projectId, workspaceId, {
+        deploymentId,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              deployments: [deployment, ...current.deployments],
+              currentDeployment: deployment,
+            }
+          : current
+      );
+      setNotice('Preview rolled back to the selected fixed artifact.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not roll back the artifact');
+    } finally {
+      inflight.current = false;
+      setPending(false);
+    }
+  }
+  return {
+    data,
+    error,
+    pending,
+    notice,
+    deliver,
+    deploy,
+    rollback,
+    refresh: () => setRefreshKey((key) => key + 1),
+  };
 }

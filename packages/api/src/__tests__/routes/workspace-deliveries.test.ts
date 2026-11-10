@@ -115,6 +115,13 @@ const post = (body: ReturnType<typeof input>, project = projectId) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+const deploymentUrl = () => `/v1/projects/${projectId}/workspaces/${workspaceId}/deployments`;
+const postDeployment = (body: Record<string, unknown>) =>
+  app.request(deploymentUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 it('lists targets without execution or receipts and labels legacy targets', async () => {
   const response = await app.request(url());
   const { data } = await response.json();
@@ -221,6 +228,86 @@ it('persists sanitized failure and retries explicitly with linked attempts', asy
     attempt: 2,
     retryOf: failed.data.receipt.id,
   });
+});
+it('deploys only prepared portable artifacts and rolls back by fixed digest', async () => {
+  const firstReceipt = (
+    await (await post(input({ targetId: 't3x:portable-artifact', format: 'bundle' }))).json()
+  ).data.receipt;
+  const firstKey = randomUUID();
+  const first = await (
+    await postDeployment({
+      deliveryId: firstReceipt.id,
+      environment: 'preview',
+      idempotencyKey: firstKey,
+    })
+  ).json();
+  const replay = await (
+    await postDeployment({
+      deliveryId: firstReceipt.id,
+      environment: 'preview',
+      idempotencyKey: firstKey,
+    })
+  ).json();
+  expect(replay.data.deployment.id).toBe(first.data.deployment.id);
+  expect(first.data.deployment).toMatchObject({
+    kind: 'deploy',
+    adapter: 't3x.fixed-slot/v1',
+    desiredArtifactDigest: firstReceipt.artifactDigest,
+    actualArtifactDigest: firstReceipt.artifactDigest,
+  });
+
+  digest = (
+    await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId,
+      refName: 'main',
+      expectedHead: digest,
+      target: createYOpsState({ service: 'app:v2' }),
+      actor: { kind: 'human', id: 'delivery-test' },
+      intent: 'Second delivery source',
+    })
+  ).commitDigest;
+  revision = (
+    await upsertWorkspaceDraft(
+      mockDB,
+      {
+        project_id: projectId,
+        workspace_id: workspaceId,
+        title: 'Delivery v2',
+        workspace_state: workspace(),
+      },
+      revision
+    )
+  ).revision;
+  const secondReceipt = (
+    await (await post(input({ targetId: 't3x:portable-artifact', format: 'bundle' }))).json()
+  ).data.receipt;
+  const second = await (
+    await postDeployment({
+      deliveryId: secondReceipt.id,
+      environment: 'preview',
+      idempotencyKey: randomUUID(),
+    })
+  ).json();
+  expect(second.data.deployment.previousArtifactDigest).toBe(firstReceipt.artifactDigest);
+
+  const rollback = await (
+    await app.request(`${deploymentUrl()}/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deploymentId: first.data.deployment.id,
+        idempotencyKey: randomUUID(),
+      }),
+    })
+  ).json();
+  expect(rollback.data.deployment).toMatchObject({
+    kind: 'rollback',
+    previousArtifactDigest: secondReceipt.artifactDigest,
+    actualArtifactDigest: firstReceipt.artifactDigest,
+  });
+  const listing = await (await app.request(url())).json();
+  expect(listing.data.currentDeployment.id).toBe(rollback.data.deployment.id);
 });
 it('does not cross project or unauthenticated boundaries', async () => {
   const other = (await insertProject(mockDB, testData.project({ name: 'Other' }))).projectId;

@@ -22,7 +22,7 @@ another passed.
 | Gate | Required outcome | Tracking | Current status |
 | --- | --- | --- | --- |
 | 1. Concurrency correctness | Private principal Workspaces, unified authorized writes, CAS Commit, explicit reconciliation, and protected-ref/optional-PR enforcement across Web/CLI/MCP | [Milestone 2](https://github.com/t3x-dev/t3x-core/milestone/2), [Epic #1677](https://github.com/t3x-dev/t3x-core/issues/1677) | Tasks 02-07 and 09 are implemented in the working change; live browser plus actual CLI/MCP process release acceptance remains open |
-| 2. Fixed artifact/version | Prepare and later deploy a fixed Commit/Artifact with exact version tracing and rollback | [Epic #1706](https://github.com/t3x-dev/t3x-core/issues/1706) | Task 10 portable artifact is in progress; deployment and rollback remain separate Task 11 work |
+| 2. Fixed artifact/version | Prepare and deploy a fixed Commit/Artifact with exact version tracing and rollback | [Epic #1706](https://github.com/t3x-dev/t3x-core/issues/1706) | Tasks 10–11 provide deterministic portable receipts plus append-only preview deployment and rollback evidence; external runtime adapters remain later work |
 | 3. Offline recovery | Complete export/import/restore and recovery in a clean environment | Tasks 11-14 in the delivery matrix; GitHub Epic required before implementation | Not started; does not block Gate 1 implementation |
 
 ## Frozen behavior

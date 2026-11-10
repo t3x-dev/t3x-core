@@ -34,10 +34,48 @@ export const WorkspaceDeliveryResultSchema = z.object({
 export type WorkspaceDeliveryInput = z.infer<typeof WorkspaceDeliveryInputSchema>;
 export type WorkspaceDeliveryReceipt = z.infer<typeof WorkspaceDeliveryReceiptSchema>;
 export type WorkspaceDeliveryResult = z.infer<typeof WorkspaceDeliveryResultSchema>;
+export const WorkspaceDeploymentSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string(),
+  workspaceId: z.string(),
+  environment: z.string(),
+  kind: z.enum(['deploy', 'rollback']),
+  deliveryId: z.string().uuid(),
+  artifactDigest: z.string(),
+  previousArtifactDigest: z.string().nullable(),
+  idempotencyKey: z.string().uuid(),
+  requestDigest: z.string(),
+  adapter: z.literal('t3x.fixed-slot/v1'),
+  desiredArtifactDigest: z.string(),
+  actualArtifactDigest: z.string(),
+  createdAt: z.string(),
+});
+export const WorkspaceDeploymentInputSchema = z
+  .object({
+    deliveryId: z.string().uuid(),
+    environment: z.string().regex(/^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^[a-z]$/),
+    idempotencyKey: z.string().uuid(),
+  })
+  .strict();
+export const WorkspaceRollbackInputSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+    idempotencyKey: z.string().uuid(),
+  })
+  .strict();
+export const WorkspaceDeploymentResultSchema = z.object({
+  deployment: WorkspaceDeploymentSchema,
+});
+export type WorkspaceDeployment = z.infer<typeof WorkspaceDeploymentSchema>;
+export type WorkspaceDeploymentInput = z.infer<typeof WorkspaceDeploymentInputSchema>;
+export type WorkspaceRollbackInput = z.infer<typeof WorkspaceRollbackInputSchema>;
+export type WorkspaceDeploymentResult = z.infer<typeof WorkspaceDeploymentResultSchema>;
 export const WorkspaceDeliveryListSchema = z.object({
   workspaceRevision: z.number().int().positive(),
   commitDigest: z.string().nullable(),
   receipts: z.array(WorkspaceDeliveryReceiptSchema),
+  deployments: z.array(WorkspaceDeploymentSchema),
+  currentDeployment: WorkspaceDeploymentSchema.nullable(),
   targets: z.array(
     z.object({
       id: z.string(),

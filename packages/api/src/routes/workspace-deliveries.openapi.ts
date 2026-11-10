@@ -4,6 +4,9 @@ import {
   WorkspaceDeliveryInputSchema,
   WorkspaceDeliveryListSchema,
   WorkspaceDeliveryResultSchema,
+  WorkspaceDeploymentInputSchema,
+  WorkspaceDeploymentResultSchema,
+  WorkspaceRollbackInputSchema,
 } from '@t3x-dev/api-client';
 import {
   exportCommittedState,
@@ -15,10 +18,14 @@ import {
 import {
   findWorkspaceDelivery,
   findWorkspaceDeliveryById,
+  findWorkspaceDeployment,
+  findWorkspaceDeploymentById,
   findWorkspaceDraft,
   getVerifiedTransitionCommitGraph,
   insertWorkspaceDelivery,
+  insertWorkspaceDeployment,
   listWorkspaceDeliveries,
+  listWorkspaceDeployments,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -131,8 +138,159 @@ workspaceDeliveryRoutes.openapi(listDeliveriesRoute, async (c) => {
             }),
         ],
         receipts: (await listWorkspaceDeliveries(db, projectId, workspaceId)).map(serializeReceipt),
+        deployments: (await listWorkspaceDeployments(db, projectId, workspaceId)).map(
+          serializeDeployment
+        ),
+        currentDeployment: serializeDeployment(
+          (await listWorkspaceDeployments(db, projectId, workspaceId, 'preview'))[0] ?? null
+        ),
       },
     },
+    200
+  );
+});
+
+const deployRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/deployments',
+  tags: ['Workspaces'],
+  summary: 'Assign a prepared portable artifact to a fixed deployment slot',
+  request: {
+    params,
+    body: { content: { 'application/json': { schema: WorkspaceDeploymentInputSchema } } },
+  },
+  responses: {
+    ...errors,
+    200: {
+      description: 'Append-only desired and actual fixed artifact assignment',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(WorkspaceDeploymentResultSchema) },
+      },
+    },
+  },
+});
+workspaceDeliveryRoutes.openapi(deployRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  c.header('Cache-Control', 'private, no-store');
+  const requestDigest = createHash('sha256')
+    .update(JSON.stringify({ deliveryId: input.deliveryId, environment: input.environment }))
+    .digest('hex');
+  const existing = await findWorkspaceDeployment(
+    db,
+    projectId,
+    workspaceId,
+    input.environment,
+    input.idempotencyKey
+  );
+  if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
+    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
+  const receipt = await findWorkspaceDeliveryById(db, projectId, workspaceId, input.deliveryId);
+  if (
+    !receipt ||
+    receipt.status !== 'prepared' ||
+    receipt.adapter !== 't3x.portable/v1' ||
+    receipt.format !== 'bundle' ||
+    !receipt.artifactDigest
+  )
+    return errorResponse(c, 'NOT_FOUND', 'Prepared portable artifact not found');
+  const current = (
+    await listWorkspaceDeployments(db, projectId, workspaceId, input.environment)
+  )[0];
+  const deployment =
+    existing ??
+    (await insertWorkspaceDeployment(db, {
+      id: randomUUID(),
+      projectId,
+      workspaceId,
+      environment: input.environment,
+      kind: 'deploy',
+      deliveryId: receipt.id,
+      artifactDigest: receipt.artifactDigest,
+      previousArtifactDigest: current?.actualArtifactDigest ?? null,
+      idempotencyKey: input.idempotencyKey,
+      requestDigest,
+      adapter: 't3x.fixed-slot/v1',
+      desiredArtifactDigest: receipt.artifactDigest,
+      actualArtifactDigest: receipt.artifactDigest,
+    }));
+  if (deployment.requestDigest !== requestDigest)
+    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
+  return c.json(
+    { success: true as const, data: { deployment: serializeDeployment(deployment) } },
+    200
+  );
+});
+
+const rollbackRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/deployments/rollback',
+  tags: ['Workspaces'],
+  summary: 'Roll a deployment slot back to an earlier fixed artifact',
+  request: {
+    params,
+    body: { content: { 'application/json': { schema: WorkspaceRollbackInputSchema } } },
+  },
+  responses: {
+    ...errors,
+    200: {
+      description: 'Append-only rollback assignment',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(WorkspaceDeploymentResultSchema) },
+      },
+    },
+  },
+});
+workspaceDeliveryRoutes.openapi(rollbackRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  c.header('Cache-Control', 'private, no-store');
+  const target = await findWorkspaceDeploymentById(db, projectId, workspaceId, input.deploymentId);
+  if (!target) return errorResponse(c, 'NOT_FOUND', 'Deployment version not found');
+  const requestDigest = createHash('sha256')
+    .update(JSON.stringify({ deploymentId: input.deploymentId }))
+    .digest('hex');
+  const existing = await findWorkspaceDeployment(
+    db,
+    projectId,
+    workspaceId,
+    target.environment,
+    input.idempotencyKey
+  );
+  if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
+    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
+  const current = (
+    await listWorkspaceDeployments(db, projectId, workspaceId, target.environment)
+  )[0];
+  if (!existing && current?.actualArtifactDigest === target.actualArtifactDigest)
+    return errorResponse(c, 'CONFLICT', 'The selected artifact is already deployed');
+  const deployment =
+    existing ??
+    (await insertWorkspaceDeployment(db, {
+      id: randomUUID(),
+      projectId,
+      workspaceId,
+      environment: target.environment,
+      kind: 'rollback',
+      deliveryId: target.deliveryId,
+      artifactDigest: target.actualArtifactDigest,
+      previousArtifactDigest: current?.actualArtifactDigest ?? null,
+      idempotencyKey: input.idempotencyKey,
+      requestDigest,
+      adapter: 't3x.fixed-slot/v1',
+      desiredArtifactDigest: target.actualArtifactDigest,
+      actualArtifactDigest: target.actualArtifactDigest,
+    }));
+  if (deployment.requestDigest !== requestDigest)
+    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
+  return c.json(
+    { success: true as const, data: { deployment: serializeDeployment(deployment) } },
     200
   );
 });
@@ -289,4 +447,10 @@ workspaceDeliveryRoutes.openapi(prepareDeliveryRoute, async (c) => {
 
 function serializeReceipt(receipt: Awaited<ReturnType<typeof insertWorkspaceDelivery>>) {
   return { ...receipt, createdAt: receipt.createdAt.toISOString() };
+}
+
+function serializeDeployment(
+  deployment: Awaited<ReturnType<typeof insertWorkspaceDeployment>> | null
+) {
+  return deployment ? { ...deployment, createdAt: deployment.createdAt.toISOString() } : null;
 }

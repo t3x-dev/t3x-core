@@ -1,4 +1,4 @@
-import { Download, FileText, Loader2 } from 'lucide-react';
+import { Download, FileText, Loader2, Rocket, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate 
   );
 }
 function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }) {
-  const { data, pending, error, notice, deliver, refresh } = useWorkspaceDelivery(
+  const { data, pending, error, notice, deliver, deploy, rollback, refresh } = useWorkspaceDelivery(
     candidate.projectId,
     candidate.id,
     candidate.revision
@@ -153,6 +153,73 @@ function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }
                 )}
               </li>
             ))}
+          </ul>
+        </div>
+        <div className="rounded-md border border-[var(--stroke-divider)] p-4">
+          <h3 className="text-sm font-semibold">Fixed deployment · preview</h3>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+            Desired and actual versions are recorded by artifact digest. No branch or Draft is read.
+          </p>
+          {data?.currentDeployment ? (
+            <p className="mt-3 break-all font-mono text-xs">
+              Current: {data.currentDeployment.actualArtifactDigest}
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-[var(--text-secondary)]">Nothing deployed yet.</p>
+          )}
+          <ul className="mt-3 divide-y divide-[var(--stroke-divider)]">
+            {data?.receipts
+              .filter(
+                (receipt) => receipt.status === 'prepared' && receipt.adapter === 't3x.portable/v1'
+              )
+              .map((receipt) => (
+                <li key={receipt.id} className="flex items-center justify-between gap-3 py-3">
+                  <span className="min-w-0 truncate font-mono text-xs">
+                    {receipt.artifactDigest}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      pending ||
+                      data.currentDeployment?.actualArtifactDigest === receipt.artifactDigest
+                    }
+                    onClick={() => deploy(receipt.id)}
+                  >
+                    <Rocket className="size-4" />
+                    Deploy
+                  </Button>
+                </li>
+              ))}
+          </ul>
+          {data?.deployments.some(
+            (deployment) =>
+              deployment.actualArtifactDigest !== data.currentDeployment?.actualArtifactDigest
+          ) && <h4 className="mt-4 text-xs font-semibold">Previous versions</h4>}
+          <ul className="divide-y divide-[var(--stroke-divider)]">
+            {data?.deployments
+              .filter(
+                (deployment) =>
+                  deployment.actualArtifactDigest !== data.currentDeployment?.actualArtifactDigest
+              )
+              .map((deployment) => (
+                <li key={deployment.id} className="flex items-center justify-between gap-3 py-3">
+                  <span className="min-w-0 truncate font-mono text-xs">
+                    {deployment.actualArtifactDigest}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => rollback(deployment.id)}
+                  >
+                    <RotateCcw className="size-4" />
+                    Roll back
+                  </Button>
+                </li>
+              ))}
           </ul>
         </div>
       </div>

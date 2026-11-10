@@ -308,7 +308,7 @@ describe('PostgreSQL schema migrations', () => {
       "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
     );
     await setup.sql.unsafe(
-      'DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
+      'DROP TABLE workspace_deployments; DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
     );
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });

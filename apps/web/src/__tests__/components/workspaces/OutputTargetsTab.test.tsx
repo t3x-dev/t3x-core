@@ -5,10 +5,17 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), prepare: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  prepare: vi.fn(),
+  deploy: vi.fn(),
+  rollback: vi.fn(),
+}));
 vi.mock('@/infrastructure/workspaceDelivery', () => ({
   getWorkspaceDeliveries: mocks.get,
   prepareWorkspaceDelivery: mocks.prepare,
+  deployWorkspaceArtifact: mocks.deploy,
+  rollbackWorkspaceArtifact: mocks.rollback,
 }));
 const digest = `sha256:${'a'.repeat(64)}`;
 const candidate = { id: 'ws', projectId: 'project', revision: 1 } as WorkspaceCandidate;
@@ -16,6 +23,8 @@ const listing = {
   workspaceRevision: 1,
   commitDigest: digest,
   receipts: [],
+  deployments: [],
+  currentDeployment: null,
   targets: [
     {
       id: 't3x:committed-state',
@@ -45,15 +54,36 @@ const listing = {
 };
 const receipt = {
   id: 'receipt',
+  projectId: 'project',
+  workspaceId: 'ws',
   commitDigest: digest,
+  targetId: 't3x:committed-state',
   format: 'yaml',
+  adapter: 't3x.download/v1',
   artifactDigest: digest,
+  idempotencyKey: 'receipt-key',
   attempt: 1,
   status: 'prepared',
+};
+const deployment = {
+  id: 'deployment',
+  projectId: 'project',
+  workspaceId: 'ws',
+  environment: 'preview',
+  deliveryId: 'receipt',
+  actualArtifactDigest: digest,
+  desiredArtifactDigest: digest,
+  artifactDigest: digest,
+  previousArtifactDigest: null,
+  adapter: 't3x.fixed-slot/v1',
+  kind: 'deploy',
+  idempotencyKey: 'deployment-key',
 };
 beforeEach(() => {
   mocks.get.mockReset().mockResolvedValue(listing);
   mocks.prepare.mockReset().mockResolvedValue(receipt);
+  mocks.deploy.mockReset().mockResolvedValue(deployment);
+  mocks.rollback.mockReset().mockResolvedValue({ ...deployment, kind: 'rollback' });
 });
 it('loads without executing; legacy selection cannot generate a Leaf', async () => {
   render(<OutputTargetsTab candidate={candidate} />);
@@ -80,7 +110,12 @@ it('downloads the explicit exact commit and shows honest receipt status', async 
   expect(screen.getByText(/Browser save completion is not observable/)).toBeVisible();
 });
 it('prepares the fixed portable bundle without a format choice', async () => {
-  mocks.prepare.mockResolvedValueOnce({ ...receipt, format: 'bundle' });
+  mocks.prepare.mockResolvedValueOnce({
+    ...receipt,
+    targetId: 't3x:portable-artifact',
+    adapter: 't3x.portable/v1',
+    format: 'bundle',
+  });
   render(<OutputTargetsTab candidate={candidate} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Portable artifact' }));
   expect(screen.queryByLabelText('Delivery format')).not.toBeInTheDocument();
@@ -97,6 +132,29 @@ it('prepares the fixed portable bundle without a format choice', async () => {
       })
     )
   );
+});
+it('deploys a prepared portable artifact by receipt, not by branch', async () => {
+  mocks.get.mockResolvedValueOnce({
+    ...listing,
+    receipts: [
+      {
+        ...receipt,
+        targetId: 't3x:portable-artifact',
+        adapter: 't3x.portable/v1',
+        format: 'bundle',
+      },
+    ],
+  });
+  render(<OutputTargetsTab candidate={candidate} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }));
+  await waitFor(() =>
+    expect(mocks.deploy).toHaveBeenCalledWith(
+      'project',
+      'ws',
+      expect.objectContaining({ deliveryId: 'receipt', environment: 'preview' })
+    )
+  );
+  expect(await screen.findByText(/Current:/)).toHaveTextContent(digest);
 });
 it('reuses idempotency after unknown transport outcome and prevents duplicate clicks', async () => {
   mocks.prepare.mockRejectedValueOnce(new Error('Network interrupted'));

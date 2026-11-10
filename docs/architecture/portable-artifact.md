@@ -19,7 +19,12 @@ digest before starting the download.
 
 `t3x:portable-artifact` is an application delivery target with an immutable
 preparation receipt. A prepared receipt proves only which fixed bytes were
-created. It does not prove deployment, rollback, restoration, backup
-completeness or runtime compatibility. Those operations remain Task 11 or
-later Gate 2/3 work and must consume a fixed artifact digest rather than rebuild
-from a mutable ref.
+created.
+
+Task 11 adds the built-in `preview` deployment slot. A deployment consumes only
+a successful portable receipt and records the fixed artifact digest as both its
+desired and actual version. Every deploy and rollback appends a new record; a
+rollback selects an earlier recorded digest and never rebuilds from a branch or
+Draft. This is version assignment and audit evidence inside T3X, not proof that
+an external cloud runtime restored or started the artifact. External deployment,
+backup completeness and runtime compatibility remain later Gate 2/3 work.
