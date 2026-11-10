@@ -33,3 +33,6 @@ names are not guessed to be presentation resources. Exports are not full project
 backups (#1418), semantic subset exports, deployment adapters or validation
 certificates. Schema binding and validation resolution remain separate concerns
 and are not inferred from tags or the export format.
+
+For a fixed delivery unit that also carries the verified committed Schema, use
+the separate [portable artifact](portable-artifact.md) contract.

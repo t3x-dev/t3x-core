@@ -188,7 +188,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 83;
+export const POSTGRES_SCHEMA_VERSION = 84;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2639,6 +2639,18 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       ON workspace_deliveries(project_id, workspace_id, idempotency_key);
     CREATE INDEX IF NOT EXISTS workspace_deliveries_history
       ON workspace_deliveries(project_id, workspace_id, created_at);
+  `);
+
+  // Schema v84: the same immutable receipt can describe a portable State + Schema bundle.
+  await sql.unsafe(`
+    ALTER TABLE workspace_deliveries
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_adapter_check,
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_format_check;
+    ALTER TABLE workspace_deliveries
+      ADD CONSTRAINT workspace_deliveries_adapter_check
+        CHECK (adapter IN ('t3x.download/v1', 't3x.portable/v1')),
+      ADD CONSTRAINT workspace_deliveries_format_check
+        CHECK (format IN ('json', 'yaml', 'bundle'));
   `);
 
   // Versioned author sidecars: payload stays separate from protocol State.

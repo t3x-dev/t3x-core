@@ -4,7 +4,7 @@ import {
   WorkspaceDeliveryResultSchema,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
-import { downloadStateExport, verifyStateExport } from './stateExport';
+import { downloadArtifact, verifyDownloadArtifact } from './stateExport';
 
 function path(projectId: string, workspaceId: string) {
   return `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`;
@@ -40,8 +40,8 @@ export async function prepareWorkspaceDelivery(
   if (result.receipt.status === 'prepared') {
     if (!result.artifact || result.artifact.byteDigest !== result.receipt.artifactDigest)
       throw new Error('Delivery artifact does not match its receipt');
-    await verifyStateExport(result.artifact, input.commitDigest, input.format);
-    downloadStateExport(result.artifact);
+    await verifyDownloadArtifact(result.artifact, input.commitDigest, input.format);
+    downloadArtifact(result.artifact);
   }
   return result.receipt;
 }

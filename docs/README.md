@@ -28,6 +28,7 @@ repository.
 - [Stability policy](release/stability-policy.md)
 - [Transition application convergence](architecture/transition-application-convergence.md)
 - [Reliable Workspace Gate 1](architecture/reliable-workspace-gate-1.md)
+- [Fixed portable artifact](architecture/portable-artifact.md)
 - [Request principal migration baseline](architecture/request-principal-migration-baseline.md)
 - [Transition conformance](../packages/transition/conformance/README.md)
 - [Branch protection](contributing/branch-protection.md)

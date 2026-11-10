@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { StateExportArtifactSchema } from './state-export.js';
+import { DownloadArtifactSchema } from './state-export.js';
 export const WorkspaceDeliveryInputSchema = z
   .object({
     targetId: z.string().min(1).max(200),
     commitDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-    format: z.enum(['json', 'yaml']),
+    format: z.enum(['json', 'yaml', 'bundle']),
     workspaceRevision: z.number().int().positive(),
     idempotencyKey: z.string().uuid(),
     retryOf: z.string().uuid().optional(),
@@ -18,8 +18,8 @@ export const WorkspaceDeliveryReceiptSchema = z.object({
   commitDigest: z.string(),
   idempotencyKey: z.string().uuid(),
   requestDigest: z.string(),
-  adapter: z.literal('t3x.download/v1'),
-  format: z.enum(['json', 'yaml']),
+  adapter: z.enum(['t3x.download/v1', 't3x.portable/v1']),
+  format: z.enum(['json', 'yaml', 'bundle']),
   artifactDigest: z.string().nullable(),
   status: z.enum(['prepared', 'failed']),
   errorCode: z.string().nullable(),
@@ -29,7 +29,7 @@ export const WorkspaceDeliveryReceiptSchema = z.object({
 });
 export const WorkspaceDeliveryResultSchema = z.object({
   receipt: WorkspaceDeliveryReceiptSchema,
-  artifact: StateExportArtifactSchema.nullable(),
+  artifact: DownloadArtifactSchema.nullable(),
 });
 export type WorkspaceDeliveryInput = z.infer<typeof WorkspaceDeliveryInputSchema>;
 export type WorkspaceDeliveryReceipt = z.infer<typeof WorkspaceDeliveryReceiptSchema>;

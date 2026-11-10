@@ -63,7 +63,9 @@ function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }
             data && (
               <>
                 <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  Complete committed State · file download
+                  {effectiveFormat === 'bundle'
+                    ? 'Committed State + verified Schema binding · deterministic bundle'
+                    : 'Complete committed State · file download'}
                 </p>
                 <p className="mt-3 break-all font-mono text-xs">
                   {data.commitDigest ?? 'Commit this workspace before preparing a delivery.'}
@@ -89,11 +91,15 @@ function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }
                   disabled={
                     pending ||
                     !data.commitDigest ||
-                    (effectiveFormat !== 'json' && effectiveFormat !== 'yaml')
+                    (effectiveFormat !== 'json' &&
+                      effectiveFormat !== 'yaml' &&
+                      effectiveFormat !== 'bundle')
                   }
                   onClick={() =>
                     selected &&
-                    (effectiveFormat === 'yaml' || effectiveFormat === 'json') &&
+                    (effectiveFormat === 'yaml' ||
+                      effectiveFormat === 'json' ||
+                      effectiveFormat === 'bundle') &&
                     deliver(selected.id, effectiveFormat)
                   }
                 >
@@ -102,7 +108,11 @@ function WorkspaceDeliveryPanel({ candidate }: { candidate: WorkspaceCandidate }
                   ) : (
                     <Download className="size-4" />
                   )}
-                  {pending ? 'Preparing…' : 'Download State'}
+                  {pending
+                    ? 'Preparing…'
+                    : effectiveFormat === 'bundle'
+                      ? 'Download artifact'
+                      : 'Download State'}
                 </Button>
               </>
             )

@@ -30,7 +30,7 @@ export function useWorkspaceDelivery(projectId: string, workspaceId: string, rev
     };
   }, [projectId, workspaceId, revision, refreshKey]);
 
-  async function deliver(targetId: string, format: 'json' | 'yaml') {
+  async function deliver(targetId: string, format: 'json' | 'yaml' | 'bundle') {
     if (!data?.commitDigest || inflight.current) return;
     const previous = retry.current;
     const same =

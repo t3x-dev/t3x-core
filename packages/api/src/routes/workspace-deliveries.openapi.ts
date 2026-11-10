@@ -7,7 +7,9 @@ import {
 } from '@t3x-dev/api-client';
 import {
   exportCommittedState,
+  exportPortableArtifact,
   resolveWorkspaceDeliveryTarget,
+  WORKSPACE_PORTABLE_ARTIFACT_TARGET,
   WORKSPACE_STATE_DOWNLOAD_TARGET,
 } from '@t3x-dev/application';
 import {
@@ -21,6 +23,10 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import {
+  committedWorkspaceSchemaAtHead,
+  unboundWorkspaceSchema,
+} from '../lib/workspace-schema-review';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const workspaceDeliveryRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -96,12 +102,21 @@ workspaceDeliveryRoutes.openapi(listDeliveriesRoute, async (c) => {
             reason: null,
             configurable: true,
           },
+          {
+            id: WORKSPACE_PORTABLE_ARTIFACT_TARGET,
+            title: 'Portable artifact',
+            mode: 'download' as const,
+            format: 'bundle',
+            reason: null,
+            configurable: false,
+          },
           ...targets
             .filter(
               (target) =>
                 target &&
                 typeof target.id === 'string' &&
-                target.id !== WORKSPACE_STATE_DOWNLOAD_TARGET
+                target.id !== WORKSPACE_STATE_DOWNLOAD_TARGET &&
+                target.id !== WORKSPACE_PORTABLE_ARTIFACT_TARGET
             )
             .map((target) => {
               const resolved = resolveWorkspaceDeliveryTarget(target);
@@ -126,7 +141,7 @@ const prepareDeliveryRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries',
   tags: ['Workspaces'],
-  summary: 'Prepare an exact committed State download with an idempotent receipt',
+  summary: 'Prepare an exact committed artifact with an idempotent receipt',
   request: { params, body: { content: { 'application/json': { schema: requestSchema } } } },
   responses: {
     ...errors,
@@ -164,7 +179,13 @@ workspaceDeliveryRoutes.openapi(prepareDeliveryRoute, async (c) => {
         'CONFLICT',
         'Workspace changed. Refresh before preparing a new delivery.'
       );
-    if (input.targetId !== WORKSPACE_STATE_DOWNLOAD_TARGET) {
+    if (input.targetId === WORKSPACE_PORTABLE_ARTIFACT_TARGET) {
+      if (input.format !== 'bundle')
+        return errorResponse(c, 'CONFLICT', 'Portable artifact format changed');
+    } else if (input.targetId === WORKSPACE_STATE_DOWNLOAD_TARGET) {
+      if (input.format === 'bundle')
+        return errorResponse(c, 'CONFLICT', 'Committed State format changed');
+    } else {
       const targets = draft.workspace_state.outputTargets;
       const target = Array.isArray(targets) ? targets.find((t) => t?.id === input.targetId) : null;
       if (!target) return errorResponse(c, 'NOT_FOUND', 'Target does not belong to workspace');
@@ -201,14 +222,31 @@ workspaceDeliveryRoutes.openapi(prepareDeliveryRoute, async (c) => {
   // Project membership and graph integrity are verified again even on receipt replay.
   const graph = await getVerifiedTransitionCommitGraph(db, projectId, input.commitDigest);
   if (!graph) return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found in project');
-  let artifact: ReturnType<typeof exportCommittedState> | null = null;
+  let artifact:
+    | ReturnType<typeof exportCommittedState>
+    | Awaited<ReturnType<typeof exportPortableArtifact>>
+    | null = null;
   try {
-    artifact = exportCommittedState({
-      commitDigest: input.commitDigest,
-      commit: graph.commit,
-      state: graph.state,
-      format: input.format,
-    });
+    artifact =
+      input.targetId === WORKSPACE_PORTABLE_ARTIFACT_TARGET
+        ? await exportPortableArtifact({
+            commitDigest: input.commitDigest,
+            commit: graph.commit,
+            state: graph.state,
+            schema: await committedWorkspaceSchemaAtHead(
+              db,
+              projectId,
+              draft.target_branch?.trim() || 'main',
+              input.commitDigest,
+              unboundWorkspaceSchema()
+            ),
+          })
+        : exportCommittedState({
+            commitDigest: input.commitDigest,
+            commit: graph.commit,
+            state: graph.state,
+            format: input.format,
+          });
   } catch {
     // Persist a fixed failure code; never put adapter exceptions or payloads in evidence.
   }
@@ -222,7 +260,10 @@ workspaceDeliveryRoutes.openapi(prepareDeliveryRoute, async (c) => {
       commitDigest: input.commitDigest,
       idempotencyKey,
       requestDigest,
-      adapter: 't3x.download/v1',
+      adapter:
+        input.targetId === WORKSPACE_PORTABLE_ARTIFACT_TARGET
+          ? 't3x.portable/v1'
+          : 't3x.download/v1',
       format: input.format,
       artifactDigest: artifact?.byteDigest ?? null,
       status: artifact ? 'prepared' : 'failed',

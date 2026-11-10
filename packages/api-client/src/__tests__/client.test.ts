@@ -1739,6 +1739,53 @@ it('validates the delivery receipt response and sends the explicit idempotent re
   await expect(badClient.prepareWorkspaceDelivery('p', 'w', request)).rejects.toThrow();
 });
 
+it('accepts a prepared portable artifact delivery', async () => {
+  const request = {
+    targetId: 't3x:portable-artifact',
+    commitDigest: digest('a'),
+    format: 'bundle' as const,
+    workspaceRevision: 1,
+    idempotencyKey: 'a1234567-1234-4123-8123-123456789012',
+  };
+  const content = '{}\n';
+  const artifact = {
+    format: 'bundle',
+    scope: 'portable-commit',
+    mimeType: 'application/json',
+    filename: 'artifact.t3x.json',
+    content,
+    byteLength: 3,
+    byteDigest: digest('b'),
+    sourceCommit: descriptor('commit', 'a'),
+    sourceState: descriptor('state', 'c'),
+    schemaDigest: digest('d'),
+    serialization: 't3x.portable-artifact/v1',
+  };
+  const receipt = {
+    ...request,
+    id: 'b1234567-1234-4123-8123-123456789012',
+    projectId: 'p',
+    workspaceId: 'w',
+    adapter: 't3x.portable/v1',
+    artifactDigest: artifact.byteDigest,
+    status: 'prepared',
+    errorCode: null,
+    requestDigest: 'c'.repeat(64),
+    retryOf: null,
+    attempt: 1,
+    createdAt: new Date().toISOString(),
+  };
+  const client = createTestClient(mockFetch(successResponse({ receipt, artifact })));
+  const result = await client.prepareWorkspaceDelivery('p', 'w', request);
+  expect(result.receipt).toMatchObject({
+    adapter: 't3x.portable/v1',
+    format: 'bundle',
+    status: 'prepared',
+    artifactDigest: artifact.byteDigest,
+  });
+  expect(result.artifact).toEqual(artifact);
+});
+
 it('publishes and reads exact author content using the presentation runtime contract', async () => {
   const result = {
     commitDigest: digest('a'),

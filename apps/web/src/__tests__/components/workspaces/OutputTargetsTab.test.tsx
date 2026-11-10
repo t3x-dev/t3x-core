@@ -26,6 +26,14 @@ const listing = {
       reason: null,
     },
     {
+      id: 't3x:portable-artifact',
+      title: 'Portable artifact',
+      mode: 'download',
+      format: 'bundle',
+      configurable: false,
+      reason: null,
+    },
+    {
       id: 'legacy',
       title: 'Review brief',
       mode: 'legacy',
@@ -70,6 +78,25 @@ it('downloads the explicit exact commit and shows honest receipt status', async 
     })
   );
   expect(screen.getByText(/Browser save completion is not observable/)).toBeVisible();
+});
+it('prepares the fixed portable bundle without a format choice', async () => {
+  mocks.prepare.mockResolvedValueOnce({ ...receipt, format: 'bundle' });
+  render(<OutputTargetsTab candidate={candidate} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Portable artifact' }));
+  expect(screen.queryByLabelText('Delivery format')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Download artifact' }));
+  await waitFor(() =>
+    expect(mocks.prepare).toHaveBeenCalledWith(
+      'project',
+      'ws',
+      expect.objectContaining({
+        commitDigest: digest,
+        targetId: 't3x:portable-artifact',
+        workspaceRevision: 1,
+        format: 'bundle',
+      })
+    )
+  );
 });
 it('reuses idempotency after unknown transport outcome and prevents duplicate clicks', async () => {
   mocks.prepare.mockRejectedValueOnce(new Error('Network interrupted'));
