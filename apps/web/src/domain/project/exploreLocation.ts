@@ -1,3 +1,12 @@
+export type ExploreView = 'discover' | 'browse';
+
+export function exploreListHref(view: ExploreView, query?: URLSearchParams): string {
+  const params = new URLSearchParams(query);
+  params.delete('view');
+  const pathname = view === 'browse' ? '/explore/browse' : '/explore';
+  return `${pathname}${params.size ? `?${params}` : ''}`;
+}
+
 function releaseSegment(value: string) {
   return /^[a-z0-9._-]+$/i.test(value) && value !== '.' && value !== '..';
 }
@@ -13,7 +22,7 @@ export function exploreReleasePath(canonicalName: string, version: string): stri
 export function safeExploreReturn(value: string | null | undefined): string | undefined {
   if (!value || /[\\\r\n]/.test(value)) return undefined;
   const pathname = value.split(/[?#]/, 1)[0];
-  if (pathname === '/explore') return value;
+  if (pathname === '/explore' || pathname === '/explore/browse') return value;
   if (!pathname.startsWith('/explore/schemas/')) return undefined;
   const segments = pathname.split('/').slice(3);
   const version = segments.pop();
@@ -21,11 +30,7 @@ export function safeExploreReturn(value: string | null | undefined): string | un
     ? value
     : undefined;
 }
-export function legacyExploreLocation(
-  projectId: string,
-  tab: 'discover' | 'browse',
-  query: string
-): string {
+export function legacyExploreLocation(projectId: string, tab: ExploreView, query: string): string {
   const params = new URLSearchParams(query);
   if (params.get('schemaView') === 'active') {
     params.set('tab', 'schemas');
@@ -33,11 +38,10 @@ export function legacyExploreLocation(
     return `/project/${encodeURIComponent(projectId)}?${params}`;
   }
   params.delete('tab');
-  params.set('view', tab);
   params.set('type', 'schemas');
   params.set('studioTarget', projectId);
   if (params.has('catalogName') && !params.has('sourceProjectId'))
     params.set('catalogProjectId', projectId);
   if (params.get('schemaView') !== 'release') params.delete('schemaView');
-  return `/explore?${params}`;
+  return exploreListHref(tab, params);
 }

@@ -23,7 +23,11 @@ import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { CatalogLogo } from '@/components/schemas/CatalogLogo';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SchemaReleasePage } from '@/components/schemas/SchemaReleasePage';
-import { exploreReleasePath } from '@/domain/project/exploreLocation';
+import {
+  type ExploreView,
+  exploreListHref,
+  exploreReleasePath,
+} from '@/domain/project/exploreLocation';
 import {
   useExploreRelease,
   usePublicProject,
@@ -53,19 +57,26 @@ const releaseKeys = [
 ] as const;
 type ReleaseAddress = { canonicalName: string; version: string; pathname: string };
 
-function releaseLocation(pathname: string, params: URLSearchParams) {
+function releaseLocation(pathname: string, params: URLSearchParams, view: ExploreView) {
   const context = new URLSearchParams(params);
   for (const key of [...releaseKeys, 'project']) context.delete(key);
-  if (context.get('view') === 'discover') context.delete('view');
+  if (view === 'browse') context.set('view', 'browse');
+  else context.delete('view');
   return `${pathname}${context.size ? `?${context}` : ''}`;
 }
 
-export function ExploreExperience({ releaseAddress }: { releaseAddress?: ReleaseAddress } = {}) {
+export function ExploreExperience({
+  releaseAddress,
+  pageView,
+}: {
+  releaseAddress?: ReleaseAddress;
+  pageView?: ExploreView;
+} = {}) {
   const search = useSearchParams();
   const router = useRouter();
   const query = search.toString();
   const params = new URLSearchParams(query);
-  const view = params.get('view') === 'browse' ? 'browse' : 'discover';
+  const view = pageView ?? (params.get('view') === 'browse' ? 'browse' : 'discover');
   const type =
     params.get('type') === 'projects'
       ? 'projects'
@@ -74,6 +85,11 @@ export function ExploreExperience({ releaseAddress }: { releaseAddress?: Release
         : 'all';
   const layout = params.get('layout') === 'list' ? 'list' : 'grid';
   const release = releaseAddress || params.has('catalogName');
+  const legacyListHref = !release && params.has('view') ? exploreListHref(view, params) : undefined;
+  const { replace } = router;
+  useEffect(() => {
+    if (legacyListHref) replace(`${legacyListHref}${window.location.hash}`, { scroll: false });
+  }, [legacyListHref, replace]);
   const project = params.get('project');
   const [searchText, setSearchText] = useState(params.get('q') ?? '');
   const routeSearch = params.get('q') ?? '';
@@ -105,14 +121,15 @@ export function ExploreExperience({ releaseAddress }: { releaseAddress?: Release
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    router.push(`/explore${next.size ? `?${next}` : ''}`, { scroll: false });
+    const nextView = updates.view === 'browse' || updates.view === 'discover' ? updates.view : view;
+    router.push(exploreListHref(nextView, next), { scroll: false });
   }
   function openRelease(item: SchemaCatalogItem) {
     const pathname = !item.identity.ownerProjectId
       ? exploreReleasePath(item.identity.canonicalName, item.release.version)
       : undefined;
     if (pathname) {
-      router.push(releaseLocation(pathname, params), { scroll: false });
+      router.push(releaseLocation(pathname, params, view), { scroll: false });
       return;
     }
     navigate({
@@ -126,11 +143,10 @@ export function ExploreExperience({ releaseAddress }: { releaseAddress?: Release
   function back() {
     navigate(Object.fromEntries([...releaseKeys, 'project'].map((key) => [key, undefined])));
   }
-  function viewHref(nextView: 'discover' | 'browse') {
+  function viewHref(nextView: ExploreView) {
     const next = new URLSearchParams(query);
     for (const key of [...releaseKeys, 'project']) next.delete(key);
-    next.set('view', nextView);
-    return `/explore?${next}`;
+    return exploreListHref(nextView, next);
   }
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -142,8 +158,8 @@ export function ExploreExperience({ releaseAddress }: { releaseAddress?: Release
     );
   }
   const returnTo = releaseAddress
-    ? releaseLocation(releaseAddress.pathname, params)
-    : `/explore?${query}`;
+    ? releaseLocation(releaseAddress.pathname, params, view)
+    : exploreListHref(view, params);
   const viewLabel = view === 'browse' ? 'Browse' : 'Discover';
   const backLabel = `Back to ${viewLabel}`;
   return (
@@ -158,6 +174,7 @@ export function ExploreExperience({ releaseAddress }: { releaseAddress?: Release
       {release ? (
         <ExactRelease
           address={releaseAddress}
+          view={view}
           params={params}
           returnTo={returnTo}
           onBack={back}
@@ -677,12 +694,14 @@ function LoadMore({
 }
 function ExactRelease({
   address,
+  view,
   params,
   returnTo,
   onBack,
   backLabel,
 }: {
   address?: ReleaseAddress;
+  view: ExploreView;
   params: URLSearchParams;
   returnTo: string;
   onBack: () => void;
@@ -713,7 +732,7 @@ function ExactRelease({
     item.release.hash === query.get('expectedHash')
       ? exploreReleasePath(item.identity.canonicalName, item.release.version)
       : undefined;
-  const canonicalHref = canonicalPath ? releaseLocation(canonicalPath, params) : undefined;
+  const canonicalHref = canonicalPath ? releaseLocation(canonicalPath, params, view) : undefined;
   useEffect(() => {
     if (canonicalHref) replace(`${canonicalHref}${window.location.hash}`, { scroll: false });
   }, [canonicalHref, replace]);

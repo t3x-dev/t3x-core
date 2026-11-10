@@ -135,6 +135,9 @@ routes in scope. WebUI-wide URL and browser title conventions remain future work
   checks the stored content hash. Old public links with a hash are replaced
   only after that exact release is verified. Project-scoped links keep their
   existing access and hash checks.
+- Discover and Browse use `/explore` and `/explore/browse` respectively.
+  Legacy list links with `view=discover` or `view=browse` move to the matching
+  address and preserve filters and fragments.
 
 ## Transport and local access
 

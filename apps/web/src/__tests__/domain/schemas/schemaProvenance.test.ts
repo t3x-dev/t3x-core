@@ -83,7 +83,7 @@ describe('node provenance', () => {
 
   it('pins the release route and never treats a content hash as a Commit', () => {
     const destination = new URL(schemaSourceReleaseHref(pin), 'https://example.test');
-    expect(destination.pathname).toBe('/explore');
+    expect(destination.pathname).toBe('/explore/browse');
     expect(destination.searchParams.get('catalogHash')).toBe(pin.hash);
     expect(destination.searchParams.get('catalogVersion')).toBe(pin.version);
     expect(destination.searchParams.get('sourceProjectId')).toBe(pin.projectId);

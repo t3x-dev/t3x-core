@@ -1,11 +1,11 @@
-import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { exploreListHref, safeExploreReturn } from '@/domain/project/exploreLocation';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function schemaBrowseHref(projectId: string, workspace?: string, branch?: string) {
-  const params = new URLSearchParams({ view: 'browse', type: 'schemas', studioTarget: projectId });
+  const params = new URLSearchParams({ type: 'schemas', studioTarget: projectId });
   if (branch) params.set('branch', branch);
   if (workspace) params.set('workspace', workspace);
-  return `/explore?${params}`;
+  return exploreListHref('browse', params);
 }
 
 /** A source return keeps its exact release/filter, but uses the current adoption target. */

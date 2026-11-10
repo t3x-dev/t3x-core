@@ -112,12 +112,15 @@ it('sends filters to the schema server while keeping public project paging indep
     'http://local'
   );
   expect(Object.fromEntries(discover.searchParams)).toEqual({
-    view: 'discover',
     type: 'all',
     q: 'garden',
     publisher: 'alice',
     projectTag: 'plants',
   });
+  expect(mocks.replace).toHaveBeenCalledWith(
+    '/explore/browse?type=all&q=garden&publisher=alice&projectTag=plants',
+    { scroll: false }
+  );
   expect(screen.queryByRole('navigation', { name: 'Explore views' })).not.toBeInTheDocument();
 });
 it('resolves a release directly even when it is not on a loaded catalog page', async () => {
@@ -137,7 +140,7 @@ it('resolves a release directly even when it is not on a loaded catalog page', a
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
     'href',
-    '/explore?view=browse'
+    '/explore/browse'
   );
   expect(screen.getByRole('button', { name: 'Back to Discover' })).toBeInTheDocument();
 });
@@ -155,7 +158,7 @@ it('uses the short path identity and retains Browse context on the way back', as
   expect(await screen.findByRole('heading', { name: 'Care checklist' })).toBeInTheDocument();
   expect(mocks.release).toHaveBeenCalledWith('canonicalName=t3x%2Fcare-checklist&version=1.0.0');
   fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
-  expect(mocks.push).toHaveBeenCalledWith('/explore?view=browse&q=care', { scroll: false });
+  expect(mocks.push).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
 });
 it('never replaces a legacy URL whose requested hash does not match', async () => {
   mocks.query = 'catalogName=t3x%2Fcare-checklist&catalogVersion=1.0.0&catalogHash=sha256%3Aother';
@@ -172,8 +175,19 @@ it('shows a public introduction without inventing permission to open project con
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
     'href',
-    '/explore?view=browse&type=projects'
+    '/explore/browse?type=projects'
   );
   fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
-  expect(mocks.push).toHaveBeenCalledWith('/explore?view=browse&type=projects', { scroll: false });
+  expect(mocks.push).toHaveBeenCalledWith('/explore/browse?type=projects', { scroll: false });
+});
+it('uses Discover as the default URL and lets the Browse path override a stale view query', () => {
+  mocks.query = 'view=discover';
+  const discover = render(<ExploreExperience />);
+  expect(mocks.replace).toHaveBeenCalledWith('/explore', { scroll: false });
+  discover.unmount();
+  mocks.replace.mockClear();
+  mocks.query = 'view=discover&q=care';
+  render(<ExploreExperience pageView="browse" />);
+  expect(screen.getByRole('main', { name: 'Browse' })).toBeInTheDocument();
+  expect(mocks.replace).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
 });

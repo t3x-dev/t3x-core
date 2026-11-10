@@ -8,7 +8,7 @@ import {
 
 it('keeps browsing separate from returning to an exact release', () => {
   expect(schemaBrowseHref('project', 'feature-draft', 'feature')).toBe(
-    '/explore?view=browse&type=schemas&studioTarget=project&branch=feature&workspace=feature-draft'
+    '/explore/browse?type=schemas&studioTarget=project&branch=feature&workspace=feature-draft'
   );
   const href = schemaSourceHref(
     '/explore?catalogName=team%2Fbase&catalogHash=sha256%3Aabc&q=care&studioTarget=old&workspace=old&branch=main',

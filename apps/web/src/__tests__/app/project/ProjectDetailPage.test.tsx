@@ -632,7 +632,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   ])('redirects legacy catalog address %s to global Explore', (query, view) => {
     searchParamsValue = new URLSearchParams(query);
     renderProjectContent();
-    const destination = `/explore?view=${view}&type=schemas&studioTarget=proj_test`;
+    const destination = `${view === 'browse' ? '/explore/browse' : '/explore'}?type=schemas&studioTarget=proj_test`;
     expect(replaceMock).toHaveBeenCalledWith(destination);
     expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', destination);
     expect(screen.queryByRole('region', { name: 'Schema Studio' })).not.toBeInTheDocument();

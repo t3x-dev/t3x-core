@@ -61,11 +61,11 @@ describe('DiscoverHeader navigation', () => {
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',
-      '/explore?view=discover'
+      '/explore'
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
       'href',
-      '/explore?view=browse'
+      '/explore/browse'
     );
     expect(globalNavigation.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
       'href',
@@ -119,7 +119,7 @@ describe('DiscoverHeader navigation', () => {
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',
-      '/explore?view=discover'
+      '/explore'
     );
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'aria-current',
@@ -127,7 +127,7 @@ describe('DiscoverHeader navigation', () => {
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
       'href',
-      '/explore?view=browse'
+      '/explore/browse'
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).not.toHaveAttribute(
       'aria-current'

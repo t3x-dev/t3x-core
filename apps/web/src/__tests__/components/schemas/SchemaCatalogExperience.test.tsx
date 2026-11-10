@@ -36,8 +36,8 @@ it.each([
     </SchemaCatalogExperience>
   );
   const destination = new URL(mocks.replace.mock.calls[0][0], 'http://local');
-  expect(destination.pathname).toBe('/explore');
-  expect(destination.searchParams.get('view')).toBe(tab);
+  expect(destination.pathname).toBe(tab === 'browse' ? '/explore/browse' : '/explore');
+  expect(destination.searchParams.has('view')).toBe(false);
   expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
   expect(destination.searchParams.get('workspace')).toBe('workspace_branch:main');
   expect(destination.searchParams.get('studioTarget')).toBe('p');

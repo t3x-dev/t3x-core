@@ -87,8 +87,8 @@ export function DiscoverHeader({
 }) {
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
-  const discoverHref = exploreNavigation?.discoverHref ?? '/explore?view=discover';
-  const browseHref = exploreNavigation?.browseHref ?? '/explore?view=browse';
+  const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
+  const browseHref = exploreNavigation?.browseHref ?? '/explore/browse';
   const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
   const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
   const ownerHref = repositoriesNavigation

@@ -96,7 +96,7 @@ export function NewRepositoryPage() {
               {returnTo ? 'Back to Explore' : 'Back to repositories'}
             </Link>
             {!returnTo && (
-              <Link href="/explore?view=browse" className={management.backLink}>
+              <Link href="/explore/browse" className={management.backLink}>
                 Browse Schema sources <ArrowUpRight aria-hidden="true" size={14} />
               </Link>
             )}
