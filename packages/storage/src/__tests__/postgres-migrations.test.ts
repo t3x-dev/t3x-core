@@ -308,7 +308,7 @@ describe('PostgreSQL schema migrations', () => {
       "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
     );
     await setup.sql.unsafe(
-      'DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
+      'DROP TABLE workspace_deployments; DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
     );
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
@@ -330,9 +330,14 @@ describe('PostgreSQL schema migrations', () => {
     await expect(
       setup.sql.unsafe("UPDATE workspace_deliveries SET adapter = 'deploy' WHERE id = 'receipt'")
     ).rejects.toThrow();
+    await setup.sql.unsafe(`INSERT INTO workspace_deliveries
+      (id, project_id, workspace_id, target_id, commit_digest, idempotency_key, request_digest, adapter, format, artifact_digest, status, attempt)
+      VALUES ('portable-receipt', 'migration-delivery', 'ws', 'portable', 'commit', 'portable-key', 'portable-request', 't3x.portable/v1', 'bundle', 'portable-bytes', 'prepared', 1)`);
     expect(
-      await setup.sql.unsafe("SELECT id FROM workspace_deliveries WHERE id = 'receipt'")
-    ).toHaveLength(1);
+      await setup.sql.unsafe(
+        "SELECT id FROM workspace_deliveries WHERE id IN ('receipt', 'portable-receipt')"
+      )
+    ).toHaveLength(2);
   });
 
   it('serializes concurrent first-run schema initialization', async () => {

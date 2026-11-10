@@ -2,9 +2,12 @@ import {
   type WorkspaceDeliveryInput,
   WorkspaceDeliveryListSchema,
   WorkspaceDeliveryResultSchema,
+  type WorkspaceDeploymentInput,
+  WorkspaceDeploymentResultSchema,
+  type WorkspaceRollbackInput,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
-import { downloadStateExport, verifyStateExport } from './stateExport';
+import { downloadArtifact, verifyDownloadArtifact } from './stateExport';
 
 function path(projectId: string, workspaceId: string) {
   return `${API_V1}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`;
@@ -40,8 +43,62 @@ export async function prepareWorkspaceDelivery(
   if (result.receipt.status === 'prepared') {
     if (!result.artifact || result.artifact.byteDigest !== result.receipt.artifactDigest)
       throw new Error('Delivery artifact does not match its receipt');
-    await verifyStateExport(result.artifact, input.commitDigest, input.format);
-    downloadStateExport(result.artifact);
+    await verifyDownloadArtifact(result.artifact, input.commitDigest, input.format);
+    downloadArtifact(result.artifact);
   }
   return result.receipt;
+}
+
+export async function deployWorkspaceArtifact(
+  projectId: string,
+  workspaceId: string,
+  input: WorkspaceDeploymentInput
+) {
+  const result = WorkspaceDeploymentResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${path(projectId, workspaceId).replace('/deliveries', '')}/deployments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+  if (
+    result.deployment.projectId !== projectId ||
+    result.deployment.workspaceId !== workspaceId ||
+    result.deployment.deliveryId !== input.deliveryId ||
+    result.deployment.environment !== input.environment ||
+    result.deployment.idempotencyKey !== input.idempotencyKey
+  )
+    throw new Error('Deployment receipt does not match the request');
+  return result.deployment;
+}
+
+export async function rollbackWorkspaceArtifact(
+  projectId: string,
+  workspaceId: string,
+  input: WorkspaceRollbackInput
+) {
+  const result = WorkspaceDeploymentResultSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${path(projectId, workspaceId).replace('/deliveries', '')}/deployments/rollback`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      )
+    )
+  );
+  if (
+    result.deployment.projectId !== projectId ||
+    result.deployment.workspaceId !== workspaceId ||
+    result.deployment.idempotencyKey !== input.idempotencyKey
+  )
+    throw new Error('Rollback receipt does not match the request');
+  return result.deployment;
 }

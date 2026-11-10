@@ -1,4 +1,4 @@
-import { StateExportArtifactSchema } from '@t3x-dev/api-client';
+import { type DownloadArtifact, StateExportArtifactSchema } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export async function fetchStateExport(projectId: string, digest: string, format: 'json' | 'yaml') {
@@ -15,6 +15,15 @@ export async function verifyStateExport(
   digest: string,
   format: 'json' | 'yaml'
 ) {
+  await verifyDownloadArtifact(artifact, digest, format);
+  return artifact;
+}
+
+export async function verifyDownloadArtifact(
+  artifact: DownloadArtifact,
+  digest: string,
+  format: DownloadArtifact['format']
+) {
   if (artifact.sourceCommit.digest !== digest || artifact.format !== format) {
     throw new Error('Export does not match the selected revision');
   }
@@ -30,6 +39,10 @@ export async function verifyStateExport(
 }
 
 export function downloadStateExport(artifact: Awaited<ReturnType<typeof fetchStateExport>>) {
+  downloadArtifact(artifact);
+}
+
+export function downloadArtifact(artifact: DownloadArtifact) {
   const url = URL.createObjectURL(new Blob([artifact.content], { type: artifact.mimeType }));
   const link = document.createElement('a');
   link.href = url;
