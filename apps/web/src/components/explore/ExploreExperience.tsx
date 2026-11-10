@@ -23,6 +23,7 @@ import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { CatalogLogo } from '@/components/schemas/CatalogLogo';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SchemaReleasePage } from '@/components/schemas/SchemaReleasePage';
+import { exploreReleasePath } from '@/domain/project/exploreLocation';
 import {
   useExploreRelease,
   usePublicProject,
@@ -50,7 +51,16 @@ const releaseKeys = [
   'catalogProjectId',
   'schemaView',
 ] as const;
-export function ExploreExperience() {
+type ReleaseAddress = { canonicalName: string; version: string; pathname: string };
+
+function releaseLocation(pathname: string, params: URLSearchParams) {
+  const context = new URLSearchParams(params);
+  for (const key of [...releaseKeys, 'project']) context.delete(key);
+  if (context.get('view') === 'discover') context.delete('view');
+  return `${pathname}${context.size ? `?${context}` : ''}`;
+}
+
+export function ExploreExperience({ releaseAddress }: { releaseAddress?: ReleaseAddress } = {}) {
   const search = useSearchParams();
   const router = useRouter();
   const query = search.toString();
@@ -63,7 +73,7 @@ export function ExploreExperience() {
         ? 'schemas'
         : 'all';
   const layout = params.get('layout') === 'list' ? 'list' : 'grid';
-  const release = params.has('catalogName');
+  const release = releaseAddress || params.has('catalogName');
   const project = params.get('project');
   const [searchText, setSearchText] = useState(params.get('q') ?? '');
   const routeSearch = params.get('q') ?? '';
@@ -98,6 +108,13 @@ export function ExploreExperience() {
     router.push(`/explore${next.size ? `?${next}` : ''}`, { scroll: false });
   }
   function openRelease(item: SchemaCatalogItem) {
+    const pathname = !item.identity.ownerProjectId
+      ? exploreReleasePath(item.identity.canonicalName, item.release.version)
+      : undefined;
+    if (pathname) {
+      router.push(releaseLocation(pathname, params), { scroll: false });
+      return;
+    }
     navigate({
       catalogName: item.identity.canonicalName,
       catalogVersion: item.release.version,
@@ -124,7 +141,9 @@ export function ExploreExperience() {
       Object.fromEntries([...schemaFilters, 'projectTag', 'q'].map((key) => [key, undefined]))
     );
   }
-  const returnTo = `/explore?${query}`;
+  const returnTo = releaseAddress
+    ? releaseLocation(releaseAddress.pathname, params)
+    : `/explore?${query}`;
   const viewLabel = view === 'browse' ? 'Browse' : 'Discover';
   const backLabel = `Back to ${viewLabel}`;
   return (
@@ -137,7 +156,13 @@ export function ExploreExperience() {
         }}
       />
       {release ? (
-        <ExactRelease params={params} returnTo={returnTo} onBack={back} backLabel={backLabel} />
+        <ExactRelease
+          address={releaseAddress}
+          params={params}
+          returnTo={returnTo}
+          onBack={back}
+          backLabel={backLabel}
+        />
       ) : project ? (
         <PublicProjectReading projectId={project} onBack={back} backLabel={backLabel} />
       ) : (
@@ -651,30 +676,51 @@ function LoadMore({
   ) : null;
 }
 function ExactRelease({
+  address,
   params,
   returnTo,
   onBack,
   backLabel,
 }: {
+  address?: ReleaseAddress;
   params: URLSearchParams;
   returnTo: string;
   onBack: () => void;
   backLabel: string;
 }) {
+  const { replace } = useRouter();
   const query = new URLSearchParams({
-    canonicalName: params.get('catalogName') ?? '',
-    version: params.get('catalogVersion') ?? '',
-    expectedHash: params.get('catalogHash') ?? '',
+    canonicalName: address?.canonicalName ?? params.get('catalogName') ?? '',
+    version: address?.version ?? params.get('catalogVersion') ?? '',
   });
-  if (params.get('sourceProjectId')) query.set('sourceProjectId', params.get('sourceProjectId')!);
-  if (params.get('catalogProjectId'))
-    query.set('catalogProjectId', params.get('catalogProjectId')!);
-  const valid = !!params.get('catalogVersion') && !!params.get('catalogHash');
+  if (!address) {
+    for (const key of ['sourceProjectId', 'catalogProjectId'] as const) {
+      const value = params.get(key);
+      if (value) query.set(key, value);
+    }
+    const expectedHash = params.get('catalogHash');
+    if (expectedHash) query.set('expectedHash', expectedHash);
+  }
+  const valid = !!address || (!!query.get('version') && !!query.get('expectedHash'));
   const result = useExploreRelease(query.toString(), valid);
+  const item = result.data?.item;
+  const canonicalPath =
+    !address &&
+    !params.has('sourceProjectId') &&
+    !params.has('catalogProjectId') &&
+    item &&
+    !item.identity.ownerProjectId &&
+    item.release.hash === query.get('expectedHash')
+      ? exploreReleasePath(item.identity.canonicalName, item.release.version)
+      : undefined;
+  const canonicalHref = canonicalPath ? releaseLocation(canonicalPath, params) : undefined;
+  useEffect(() => {
+    if (canonicalHref) replace(`${canonicalHref}${window.location.hash}`, { scroll: false });
+  }, [canonicalHref, replace]);
   return (
     <div className={styles.detail}>
       <SchemaReleasePage
-        item={result.data?.item}
+        item={item}
         loading={result.loading}
         error={
           valid
@@ -685,7 +731,7 @@ function ExactRelease({
         targetProjectId={params.get('studioTarget') ?? undefined}
         workspaceId={params.get('workspace') ?? undefined}
         branch={params.get('branch') ?? undefined}
-        returnTo={returnTo}
+        returnTo={canonicalHref ?? returnTo}
         onBack={onBack}
         backLabel={backLabel}
       />

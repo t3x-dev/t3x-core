@@ -3,6 +3,7 @@ import {
   type StudioPreview,
   StudioSourceSchema,
 } from '@t3x-dev/api-client';
+import { exploreReleasePath } from '@/domain/project/exploreLocation';
 import { type SchemaFieldRow, schemaRecord } from './schemaFieldEditing';
 
 export type SchemaSourcePin = StudioPreview['sources'][number];
@@ -31,6 +32,10 @@ export function schemaSourceKey(source: SchemaSourcePin): string {
 }
 
 export function schemaSourceReleaseHref(source: SchemaSourcePin): string {
+  if (!source.projectId) {
+    const pathname = exploreReleasePath(source.canonicalName, source.version);
+    if (pathname) return pathname;
+  }
   const params = new URLSearchParams({
     view: 'browse',
     type: 'schemas',

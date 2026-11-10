@@ -1,7 +1,25 @@
+function releaseSegment(value: string) {
+  return /^[a-z0-9._-]+$/i.test(value) && value !== '.' && value !== '..';
+}
+
+export function exploreReleasePath(canonicalName: string, version: string): string | undefined {
+  const name = canonicalName.split('/');
+  const segments = [...name, version];
+  if (name.length < 2 || version === 'latest' || !segments.every(releaseSegment)) return undefined;
+  return `/explore/schemas/${segments.join('/')}`;
+}
+
 /** Only this internal destination can be carried through project creation and Studio. */
 export function safeExploreReturn(value: string | null | undefined): string | undefined {
-  if (!value || !/^\/explore(?:\?|$)/.test(value) || /[\\\r\n]/.test(value)) return undefined;
-  return value;
+  if (!value || /[\\\r\n]/.test(value)) return undefined;
+  const pathname = value.split(/[?#]/, 1)[0];
+  if (pathname === '/explore') return value;
+  if (!pathname.startsWith('/explore/schemas/')) return undefined;
+  const segments = pathname.split('/').slice(3);
+  const version = segments.pop();
+  return version && exploreReleasePath(segments.join('/'), version) === pathname
+    ? value
+    : undefined;
 }
 export function legacyExploreLocation(
   projectId: string,

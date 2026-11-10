@@ -130,6 +130,11 @@ routes in scope. WebUI-wide URL and browser title conventions remain future work
 - The short `/schemas` entry selects a Workspace when it opens. Background
   refreshes keep that selection for the open editor. Legacy links keep any
   explicit branch or Workspace when dropping the redundant Studio view flag.
+- Explore links to an exact public Schema release by canonical name and
+  version, for example `/explore/schemas/t3x/weekly-goals/1.0.0`. The server
+  checks the stored content hash. Old public links with a hash are replaced
+  only after that exact release is verified. Project-scoped links keep their
+  existing access and hash checks.
 
 ## Transport and local access
 

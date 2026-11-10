@@ -17,7 +17,8 @@ export function schemaSourceHref(
 ) {
   const safe = safeExploreReturn(returnTo);
   if (!safe) return undefined;
-  const params = new URLSearchParams(safe.split('?')[1]);
+  const target = new URL(safe, 'http://local');
+  const params = target.searchParams;
   params.set('studioTarget', projectId);
   for (const [key, value] of [
     ['workspace', workspace],
@@ -26,7 +27,7 @@ export function schemaSourceHref(
     if (value) params.set(key, value);
     else params.delete(key);
   }
-  return `/explore?${params}`;
+  return `${target.pathname}?${params}${target.hash}`;
 }
 
 export function schemaWorkspaceHref(

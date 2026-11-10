@@ -28,8 +28,10 @@ export async function fetchExploreRelease(query: string) {
     await handleResponse(await fetchWithTimeout(`${API_V1}/explore/schema-release?${query}`))
   );
   const params = new URLSearchParams(query);
+  const expectedHash = params.get('expectedHash');
   if (
-    result.artifactHash !== params.get('expectedHash') ||
+    (expectedHash !== null && result.artifactHash !== expectedHash) ||
+    (expectedHash === null && result.item.identity.ownerProjectId !== null) ||
     result.item.release.hash !== result.artifactHash ||
     result.item.identity.canonicalName !== params.get('canonicalName') ||
     result.item.release.version !== params.get('version') ||

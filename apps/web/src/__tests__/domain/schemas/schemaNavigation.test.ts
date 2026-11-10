@@ -24,6 +24,11 @@ it('keeps browsing separate from returning to an exact release', () => {
   expect(params.get('branch')).toBe('feature');
   expect(schemaSourceHref('https://external.example', 'project')).toBeUndefined();
 });
+it('returns to the short release path after selecting an adoption target', () => {
+  expect(
+    schemaSourceHref('/explore/schemas/team/base/1.0.0?view=browse&workspace=old', 'project', 'new')
+  ).toBe('/explore/schemas/team/base/1.0.0?view=browse&workspace=new&studioTarget=project');
+});
 it('switches both Workspace and branch without reusing the previous candidate', () => {
   const href = schemaWorkspaceHref(
     '/team/repo/schemas',
