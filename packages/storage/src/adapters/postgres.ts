@@ -81,8 +81,9 @@ async function activatePostgresStorage(
 
   try {
     if (mode === 'bootstrap') {
-      await initializeSchema(nextClient);
-      await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+      if (await initializeSchema(nextClient)) {
+        await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+      }
     } else {
       await validatePostgresSchema(nextClient);
     }
@@ -128,8 +129,9 @@ export async function migratePostgresStorage(
   const migrationDb = drizzle(migrationClient, { schema });
 
   try {
-    await initializeSchema(migrationClient);
-    await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    if (await initializeSchema(migrationClient)) {
+      await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    }
     return await inspectPostgresSchemaWithClient(migrationClient);
   } finally {
     await migrationClient.end().catch(() => {});
@@ -262,19 +264,17 @@ async function validatePostgresSchema(sql: postgres.Sql): Promise<PostgresSchema
   );
 }
 
-/**
- * Initialize database schema (skips if already at current version)
- */
-async function initializeSchema(sql: postgres.Sql): Promise<void> {
-  await sql.begin(async (transaction) => {
+/** Apply schema changes and return whether to refresh built-in templates. */
+async function initializeSchema(sql: postgres.Sql): Promise<boolean> {
+  return sql.begin(async (transaction) => {
     await transaction.unsafe(
       `SELECT pg_advisory_xact_lock(${SCHEMA_INIT_LOCK_NAMESPACE}, hashtext(current_database()))`
     );
-    await initializeSchemaWithLock(transaction);
+    return initializeSchemaWithLock(transaction);
   });
 }
 
-async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
+async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
   // Schema version gate — avoid re-running 900+ lines of idempotent SQL on every restart.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS _schema_version (
@@ -287,14 +287,20 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   const rows = await sql.unsafe<{ version: number }[]>(
     `SELECT version FROM _schema_version WHERE singleton = TRUE`
   );
+  const version = rows[0]?.version;
 
-  if (rows.length > 0) {
-    await ensureSourceTextRevisionsSchema(sql);
-    await ensurePullRequestsSchema(sql);
+  // v83 already supports one open draft per owner. Replaying the old
+  // per-branch deduplication would abandon another owner's draft.
+  if (version === 83 && POSTGRES_SCHEMA_VERSION === 84) {
+    await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+    await recordSchemaVersion(sql);
+    return false;
   }
 
-  if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
-    return;
+  if (version !== undefined) {
+    await ensureSourceTextRevisionsSchema(sql);
+    await ensurePullRequestsSchema(sql);
+    if (version >= POSTGRES_SCHEMA_VERSION) return true;
   }
 
   // First run or version bump — execute full schema init. v79 adds explicit
@@ -2856,9 +2862,13 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     END $$;
   `);
 
-  if ((rows[0]?.version ?? 0) < 84) await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+  if ((version ?? 0) < 84) await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
 
-  // Record schema version so subsequent startups skip the init SQL.
+  await recordSchemaVersion(sql);
+  return true;
+}
+
+async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())
