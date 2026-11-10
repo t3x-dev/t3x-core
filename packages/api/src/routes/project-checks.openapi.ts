@@ -13,6 +13,7 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 const Kind = z.enum(['review', 'validation', 'schema', 'pull-request']);
 const RecordSchema = z.object({
   id: z.string(),
+  address: z.string().nullable(),
   kind: Kind,
   created_at: z.string(),
   payload: z.record(z.string(), z.unknown()),

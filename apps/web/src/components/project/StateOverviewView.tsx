@@ -23,6 +23,7 @@ import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
 import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { historyCommitHref } from '@/domain/project/objectLocation';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
 import type { ApiCommit } from '@/types/api';
@@ -151,9 +152,7 @@ export function StateOverviewView({
   const structureRows = useMemo(() => (semantic ? buildStatePointRows(semantic) : []), [semantic]);
   const rootCount = structureRows.filter((row) => row.depth === 0).length;
   const commitHref =
-    historyHref && currentCommit
-      ? `${historyHref}${historyHref.includes('?') ? '&' : '?'}commit=${encodeURIComponent(currentCommit.hash)}`
-      : undefined;
+    historyHref && currentCommit ? historyCommitHref(historyHref, currentCommit) : undefined;
 
   const projectHeader = (
     <header className={styles.projectHeader}>

@@ -31,9 +31,11 @@ const Source = dynamic(() =>
 );
 
 export function RepositoryNestedPage({
+  commitHash,
   projectId,
   segments,
 }: {
+  commitHash?: string;
   projectId: string;
   segments: string[];
 }) {
@@ -63,7 +65,7 @@ export function RepositoryNestedPage({
       content = <Changes />;
       break;
     case 'history':
-      content = <History projectId={projectId} />;
+      content = <History projectId={projectId} commitHash={commitHash} />;
       break;
     case 'knowledge-graph':
       content = <Knowledge projectId={projectId} />;

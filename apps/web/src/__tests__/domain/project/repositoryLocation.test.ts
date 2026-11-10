@@ -15,7 +15,7 @@ it('keeps page context while collapsing historical/case/ID addresses in one step
       '#details'
     )
   ).toBe(
-    '/team/HoloCure_fishing_auto/workspaces?workspace=w&conversation=c&branch=release&pr=42#details'
+    '/team/HoloCure_fishing_auto/branches/release/workspaces?workspace=w&conversation=c&pr=42#details'
   );
   const location = repositoryLocation(
     '/team/Repo',
@@ -34,8 +34,21 @@ it.each(PROJECT_TABS)('accepts the public route generated for $label', ({ id }) 
   expect(isSupportedRepositorySuffix(`/${segment}`)).toBe(true);
   expect(isSupportedRepositorySuffix(`/${segment}/`)).toBe(true);
   expect(repositoryLocation('/team/Repo', '', `tab=${segment}&branch=main&pr=42`, '#details')).toBe(
-    `/team/Repo${id === 'state' ? '' : `/${segment}`}?branch=main&pr=42#details`
+    id === 'workspaces'
+      ? '/team/Repo/branches/main/workspaces?pr=42#details'
+      : `/team/Repo${id === 'state' ? '' : `/${segment}`}?branch=main&pr=42#details`
   );
+});
+
+it('preserves encoded branch identity and lets the path override a conflicting query', () => {
+  const suffix = '/branches/feature%2F100%25/workspaces';
+  expect(isSupportedRepositorySuffix(suffix)).toBe(true);
+  expect(repositoryLocation('/team/Repo', suffix, 'branch=other&reviewPane=yaml', '#draft')).toBe(
+    `/team/Repo${suffix}?reviewPane=yaml#draft`
+  );
+  expect(
+    repositoryLocation('/team/Repo', '/workspaces', 'branch=main&workspace=w&reviewSnapshot=r')
+  ).toBe('/team/Repo/workspaces?branch=main&workspace=w&reviewSnapshot=r');
 });
 
 it.each([

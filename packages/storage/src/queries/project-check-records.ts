@@ -4,6 +4,7 @@ import type { AnyDB } from '../adapters';
 export type ProjectCheckRecordKind = 'review' | 'validation' | 'schema' | 'pull-request';
 export interface ProjectCheckRecord extends Record<string, unknown> {
   id: string;
+  address: string | null;
   kind: ProjectCheckRecordKind;
   created_at: string;
   payload: Record<string, unknown>;
@@ -48,17 +49,25 @@ export async function listProjectCheckRecords(
       SELECT 'pull-request:' || p.pull_request_id, 'pull-request', p.updated_at,
         NULL::text, p.number, p.source_commit_hash, to_jsonb(p)
       FROM pull_requests p WHERE p.project_id = ${input.projectId}
+    ), addressed AS (
+      SELECT records.*,
+        CASE WHEN records.kind = 'pull-request' THEN 'pr-' || records.pr::text
+          ELSE records.kind || '-' || address.number::text END AS address
+      FROM records
+      LEFT JOIN repository_object_addresses address
+        ON address.project_id = ${input.projectId} AND address.kind = records.kind
+        AND address.object_id = substring(records.id FROM strpos(records.id, ':') + 1)
     )
-    SELECT id, kind, created_at::text, payload FROM records
+    SELECT id, kind, created_at::text, payload, address FROM addressed
     WHERE TRUE
-      ${input.id ? sql`AND id = ${input.id}` : sql``}
+      ${input.id ? sql`AND (id = ${input.id} OR address = ${input.id})` : sql``}
       ${input.kind ? sql`AND kind = ${input.kind}` : sql``}
       ${input.workspace ? sql`AND workspace = ${input.workspace}` : sql``}
       ${input.pr ? sql`AND pr = ${input.pr}` : sql``}
       ${input.commit ? sql`AND commit_hash = ${input.commit}` : sql``}
-      ${input.q ? sql`AND concat_ws(' ', id, workspace, commit_hash, pr::text, payload->>'title', payload->>'workflow_name', payload->>'schema_name') ILIKE ${`%${input.q.replace(/[\\%_]/g, '\\$&')}%`}` : sql``}
+      ${input.q ? sql`AND concat_ws(' ', address, id, workspace, commit_hash, pr::text, payload->>'title', payload->>'workflow_name', payload->>'schema_name') ILIKE ${`%${input.q.replace(/[\\%_]/g, '\\$&')}%`}` : sql``}
       ${input.before ? sql`AND (created_at, id) < (${input.before.createdAt}::timestamptz, ${input.before.id})` : sql``}
-    ORDER BY records.created_at DESC, id DESC
+    ORDER BY addressed.created_at DESC, id DESC
     LIMIT ${Math.max(1, Math.min(input.limit, 101))}
   `);
   return Array.isArray(result) ? result : (result as { rows: ProjectCheckRecord[] }).rows;

@@ -3,6 +3,7 @@ import { getProjectIdRepoPath } from './repoPath';
 export type CheckRecordKind = 'review' | 'validation' | 'schema' | 'pull-request';
 export interface CheckRecord {
   id: string;
+  address?: string | null;
   kind: CheckRecordKind;
   created_at: string;
   payload: Record<string, unknown>;

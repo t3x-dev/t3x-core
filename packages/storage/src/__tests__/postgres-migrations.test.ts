@@ -7,6 +7,8 @@ import {
   getPostgresClient,
   POSTGRES_SCHEMA_VERSION,
 } from '../adapters/postgres';
+import { findRepositoryObjectAddress } from '../queries/repository-object-addresses';
+import { createValidationRun } from '../queries/validation-runs';
 import { createTestDB } from './setup';
 
 let cleanup: (() => Promise<void>) | undefined;
@@ -17,6 +19,45 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('backfills stable project numbers and allocates new numbers concurrently without reuse', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('numbered', 'Numbered', 'ns_t3x_dev', NOW());
+      ALTER TABLE validation_runs DISABLE TRIGGER assign_validation_address;
+      UPDATE _schema_version SET version = 83;
+    `);
+    const create = (db = setup.db) =>
+      createValidationRun(db, {
+        project_id: 'numbered',
+        workspace_id: 'ws:main',
+        subject_hash: 'subject',
+        workflow_name: 'config',
+        workflow_hash: 'workflow',
+        input_hash: 'input',
+        validator_hash: 'validator',
+        provider: 'local',
+        status: 'passed',
+        gate_status: 'ready',
+      });
+    const original = await create();
+    await setup.sql.unsafe('ALTER TABLE validation_runs ENABLE TRIGGER assign_validation_address');
+    await closePostgresStorage();
+    const db = await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
+    const address = (number: string) =>
+      findRepositoryObjectAddress(db, 'numbered', 'validation', { number });
+    expect(await address('1')).toEqual({ id: original.id, number: '1' });
+
+    const later = await Promise.all([create(db), create(db)]);
+    expect([await address('2'), await address('3')].map((entry) => entry?.id).sort()).toEqual(
+      later.map(({ id }) => id).sort()
+    );
+    await setup.sql`DELETE FROM validation_runs WHERE id = ${original.id}`;
+    const next = await create(db);
+    expect(await address('4')).toEqual({ id: next.id, number: '4' });
+    expect(await address('1')).toEqual({ id: original.id, number: '1' });
+  });
   it('upgrades v82 identities to canonical values with account ownership enforced', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

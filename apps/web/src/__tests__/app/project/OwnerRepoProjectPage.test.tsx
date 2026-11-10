@@ -7,6 +7,7 @@ import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
+  resolveObject: vi.fn(),
   replace: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
   pathname: null as string | null,
@@ -24,18 +25,30 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/queries/projects', () => ({
   resolveRepository: (...args: unknown[]) => mocks.resolve(...args),
 }));
+vi.mock('@/queries/repositoryObjectAddresses', () => ({
+  getRepositoryObjectAddress: mocks.resolveObject,
+}));
 vi.mock('@/app/project/[projectId]/page', () => ({
   ProjectDetailPageContent: ({
     projectIdOverride,
     ownerSlugOverride,
     initialTabOverride,
+    commitAddress,
+    fixedReview,
+    workspaceBranch,
   }: {
     projectIdOverride: string;
     ownerSlugOverride: string;
     initialTabOverride: string;
+    commitAddress?: { id: string; number: string };
+    fixedReview?: { workspaceId: string; snapshotId: string; number: string };
+    workspaceBranch?: string;
   }) => (
     <div data-testid="detail">
       {projectIdOverride} {ownerSlugOverride} {initialTabOverride}
+      {workspaceBranch && ` branch=${workspaceBranch}`}
+      {commitAddress && ` commit=${commitAddress.id}`}
+      {fixedReview && ` review=${fixedReview.snapshotId} workspace=${fixedReview.workspaceId}`}
     </div>
   ),
 }));
@@ -75,6 +88,44 @@ it('resolves directly, without any list cache or pagination', async () => {
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
   expect(mocks.resolve).toHaveBeenCalledWith('alice', 'Repo');
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('opens a branch Workspace from a single encoded path segment', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'feature/release', 'workspaces'];
+  mocks.pathname = '/alice/Repo/branches/feature%2Frelease/workspaces';
+  mocks.query = 'workspaceMode=review&reviewPane=yaml';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent(
+    'workspaces branch=feature/release'
+  );
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+
+it('passes the exact stored object behind a numbered Review address to the review page', async () => {
+  const id = `rvs_${'2'.repeat(32)}`;
+  mocks.params.repoPath = ['Repo', 'reviews', '17'];
+  mocks.query = 'reviewPane=yaml';
+  mocks.resolveObject.mockResolvedValueOnce({
+    id,
+    number: '17',
+    workspaceId: 'workspace_branch:main',
+  });
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent(
+    `workspaces review=${id} workspace=workspace_branch:main`
+  );
+  expect(mocks.resolveObject).toHaveBeenCalledWith('proj_outside_list', 'review', '17');
+});
+
+it('does not convert a legacy fixed Review to another Workspace', async () => {
+  const id = `rvs_${'3'.repeat(32)}`;
+  mocks.params.repoPath = ['Repo', 'workspaces'];
+  mocks.query = new URLSearchParams({ workspace: 'wrong', reviewSnapshot: id }).toString();
+  mocks.resolveObject.mockResolvedValueOnce({ id, number: '17', workspaceId: 'expected' });
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.resolveObject).toHaveBeenCalledWith('proj_outside_list', 'review', id)
+  );
   expect(mocks.replace).not.toHaveBeenCalled();
 });
 it('canonicalizes historical/case addresses preserving child and query context', async () => {

@@ -30,6 +30,7 @@ import {
 } from '@/components/project/projectTabModel';
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
+import { workspaceLocation } from '@/domain/project/repoPath';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -113,6 +114,8 @@ export function DiscoverHeader({
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
     if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
+    if (tab === 'workspaces' && !projectIdNavigation)
+      return workspaceLocation(repoPath, branch ?? null, params);
     const path =
       projectIdNavigation || tab === 'state'
         ? repoPath
@@ -134,21 +137,24 @@ export function DiscoverHeader({
             /
           </span>
           <div className={styles.context}>
-            <Link
-              className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
-              href={isExplore ? (exploreView === 'browse' ? browseHref : discoverHref) : ownerHref}
-            >
-              {isExplore ? (
+            {isExplore ? (
+              <span className={`${styles.owner} ${styles.currentContext}`}>
                 <ExploreIcon aria-hidden="true" />
-              ) : repositoriesNavigation ? (
-                <FolderGit2 aria-hidden="true" />
-              ) : owner ? (
-                <OwnerIcon aria-hidden="true" />
-              ) : (
-                <FolderGit2 aria-hidden="true" />
-              )}
-              <span>{isExplore ? exploreLabel : owner || 'Repositories'}</span>
-            </Link>
+                <span>{exploreLabel}</span>
+              </span>
+            ) : (
+              <Link
+                className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
+                href={ownerHref}
+              >
+                {owner && !repositoriesNavigation ? (
+                  <OwnerIcon aria-hidden="true" />
+                ) : (
+                  <FolderGit2 aria-hidden="true" />
+                )}
+                <span>{owner || 'Repositories'}</span>
+              </Link>
+            )}
             {projectName ? (
               <>
                 <span className={styles.separator} aria-hidden="true">

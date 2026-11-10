@@ -87,7 +87,14 @@ export function ProjectRouteShell({
 
   const suffix = `/${pathname.split('/').slice(3).join('/')}`;
   const [, view = '', detail] = suffix.split('/');
-  const pageTitle = view === 'checks' && detail ? 'Run details' : DETAIL_PAGE_TITLES.get(view);
+  const pageTitle =
+    view === 'checks' && detail
+      ? /^(review|validation|schema|pr)-[1-9][0-9]*$/.test(detail)
+        ? `Run ${detail}`
+        : 'Run details'
+      : view === 'history' && /^[1-9][0-9]*$/.test(detail)
+        ? `Commit #${detail} · History`
+        : DETAIL_PAGE_TITLES.get(view);
   if (isRetiredRepositoryLocation(suffix, searchParams)) notFound();
 
   // The project index already owns ProjectShell because it also controls the

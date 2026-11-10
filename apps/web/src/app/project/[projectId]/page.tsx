@@ -18,6 +18,7 @@ import {
   resolveProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
+import { repositoryObjectHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
   getProjectIdRepoPath,
@@ -49,10 +50,13 @@ export default function ProjectDetailPage() {
 }
 
 interface ProjectDetailPageContentProps {
+  commitAddress?: { id: string; number: string };
+  fixedReview?: { workspaceId: string; snapshotId: string; number: string };
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
   ownerSlugOverride?: string;
   surface?: 'canvas' | 'repository';
+  workspaceBranch?: string | null;
 }
 
 function isNotFoundError(error: Error | null): boolean {
@@ -62,10 +66,13 @@ function isNotFoundError(error: Error | null): boolean {
 }
 
 export function ProjectDetailPageContent({
+  commitAddress,
+  fixedReview,
   initialTabOverride,
   projectIdOverride,
   ownerSlugOverride,
   surface = 'repository',
+  workspaceBranch,
 }: ProjectDetailPageContentProps = {}) {
   const params = useParams<{ projectId?: string }>();
   const pathname = usePathname();
@@ -387,7 +394,17 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          stateHref={`${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`}
+          focusedCommitHash={commitAddress?.id}
+          stateHref={
+            commitAddress && project.canonical_path
+              ? repositoryObjectHref(
+                  project.canonical_path,
+                  'commits',
+                  commitAddress.number,
+                  new URLSearchParams({ view: 'overview' })
+                )
+              : `${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`
+          }
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />
@@ -409,12 +426,14 @@ export function ProjectDetailPageContent({
         key={projectId}
         onRunValidation={handleRunYSchemaValidation}
         projectId={projectId}
+        commitAddress={commitAddress}
         projectName={project.name}
         projectDescription={project.description}
         projectOwner={project.owner}
         repositoryNamespace={project.namespace ?? ownerSlugOverride}
         projectVisibility={project.visibility}
         repositoryProfile={project.repositoryProfile}
+        repositoryPath={project.canonical_path ?? undefined}
         canEditRepository={project.canEdit}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
@@ -432,7 +451,13 @@ export function ProjectDetailPageContent({
       case 'browse':
         return <ProjectSchemasTab projectId={projectId} tab={activeTab} />;
       case 'workspaces':
-        return <ProjectWorkspacesTab projectId={projectId} />;
+        return (
+          <ProjectWorkspacesTab
+            projectId={projectId}
+            workspaceBranch={workspaceBranch}
+            fixedReview={fixedReview}
+          />
+        );
       case 'reviews':
         return (
           <ProjectReviewsTab
@@ -468,11 +493,19 @@ export function ProjectDetailPageContent({
     <>
       <ProjectShell
         activeTab={activeTab}
-        branch={searchParams.get('branch')}
+        branch={workspaceBranch ?? searchParams.get('branch')}
         immersive={isSchemaStudio || isSchemaRelease}
         ownerSlug={project.namespace ?? ownerSlugOverride}
         pageTitle={
-          activeTab === 'workspaces' && searchParams.get('reviewSnapshot') ? 'Review' : undefined
+          fixedReview
+            ? `Review #${fixedReview.number}`
+            : commitAddress
+              ? `Commit #${commitAddress.number}`
+              : activeTab === 'workspaces' && searchParams.get('reviewSnapshot')
+                ? 'Review'
+                : workspaceBranch
+                  ? `Workspace · ${workspaceBranch}`
+                  : undefined
         }
         project={project}
         projectIdNavigation={!!routeProjectId}

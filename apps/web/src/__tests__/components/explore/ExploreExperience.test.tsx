@@ -105,6 +105,13 @@ it('sends filters to the schema server while keeping public project paging indep
   expect(screen.getByRole('heading', { name: 'Schemas', exact: true })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Public projects', exact: true })).toBeInTheDocument();
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
+  expect(screen.getAllByRole('link', { name: 'Browse', exact: true })).toHaveLength(1);
+  expect(
+    within(screen.getByRole('group', { name: 'Catalog type' })).getByRole('button', {
+      name: 'All',
+      pressed: true,
+    })
+  ).toBeVisible();
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute('aria-current', 'page');
   expect(navigation.getByRole('link', { name: 'Discover' })).not.toHaveAttribute('aria-current');
   const discover = new URL(
@@ -112,13 +119,12 @@ it('sends filters to the schema server while keeping public project paging indep
     'http://local'
   );
   expect(Object.fromEntries(discover.searchParams)).toEqual({
-    type: 'all',
     q: 'garden',
     publisher: 'alice',
     projectTag: 'plants',
   });
   expect(mocks.replace).toHaveBeenCalledWith(
-    '/explore/browse?type=all&q=garden&publisher=alice&projectTag=plants',
+    '/explore/browse?q=garden&publisher=alice&projectTag=plants',
     { scroll: false }
   );
   expect(screen.queryByRole('navigation', { name: 'Explore views' })).not.toBeInTheDocument();

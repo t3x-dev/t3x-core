@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import type { CheckRecord } from '@/domain/project/checks';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
+import { useRunPagination } from '@/hooks/projects/useRunPagination';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -63,6 +64,7 @@ const record: CheckRecord = {
 describe('Repository Checks', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState(null, '', '/');
     mocks.query = '';
     mocks.pathname = '/owner/repo/checks';
     mocks.list.mockResolvedValue({ records: [record], next_cursor: 'older' });
@@ -103,10 +105,62 @@ describe('Repository Checks', () => {
       '/owner/repo/workspaces'
     );
     fireEvent.click(screen.getByRole('button', { name: /Older records/ }));
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/owner/repo/checks?workspace=ws%3Amain&kind=review&cursor=older',
-      { scroll: false }
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'kind=review&workspace=ws%3Amain&cursor=older',
+        expect.any(AbortSignal)
+      )
     );
+    expect(window.location.pathname).toBe('/owner/repo/checks');
+    expect(window.location.search).toBe('?workspace=ws%3Amain&kind=review');
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+  it('consumes a legacy cursor and restores it only on the same browser entry', async () => {
+    mocks.query = 'q=device&cursor=older';
+    const view = render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'cursor=older&q=device',
+        expect.any(AbortSignal)
+      )
+    );
+    expect(window.location.search).toBe('?q=device');
+    view.unmount();
+    mocks.query = 'q=device';
+    const refreshed = render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'cursor=older&q=device',
+        expect.any(AbortSignal)
+      )
+    );
+    refreshed.unmount();
+    window.history.replaceState(null, '', '/owner/repo/checks?q=device');
+    render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith('p', 'q=device', expect.any(AbortSignal))
+    );
+  });
+
+  it('returns from Run details to the previous same-tab page without a cursor in either address', () => {
+    const list = '/owner/repo/checks';
+    const detail = `${list}/review-12`;
+    window.history.replaceState(null, '', list);
+    const { result, rerender } = renderHook(
+      ({ pathname }) => useRunPagination(pathname, '', pathname !== list),
+      { initialProps: { pathname: list } }
+    );
+    act(() => result.current.openPage('older'));
+    result.current.rememberDetail(detail);
+    window.history.pushState(null, '', detail);
+    rerender({ pathname: detail });
+    expect(result.current.returnToPrevious).toBe(true);
+    act(() => result.current.replaceDetail(detail + '?check=evidence'));
+    expect(window.location.search).toBe('?check=evidence');
+    expect(result.current.returnToPrevious).toBe(true);
   });
   it('opens an unfiltered Run record without encoding the default return path', async () => {
     const { rerender } = render(<ProjectChecksPage projectId="p" />);

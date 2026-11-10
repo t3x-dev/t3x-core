@@ -45,8 +45,14 @@ describe('DiscoverHeader navigation', () => {
     for (const label of ['Schema', 'Workspace']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
-      expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}s`);
-      expect(target.searchParams.get('branch')).toBe('feature/release');
+      expect(target.pathname).toBe(
+        label === 'Workspace'
+          ? '/orbit/release/branches/feature%2Frelease/workspaces'
+          : '/orbit/release/schemas'
+      );
+      expect(target.searchParams.get('branch')).toBe(
+        label === 'Workspace' ? null : 'feature/release'
+      );
       expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
     }
     const pullRequests = new URL(

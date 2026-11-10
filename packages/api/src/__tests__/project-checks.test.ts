@@ -139,6 +139,7 @@ describe('Project checks read surface', () => {
     const res = await app.request(`/v1/projects/${projectId}/checks/validation%3A${runId}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: RecordData };
+    expect(body.data).toMatchObject({ address: 'validation-1' });
     expect(body.data.payload.details).toMatchObject({
       steps: [{ log_excerpt: 'bad field', log_truncated: true }],
       findings: [{ code: 'BAD_FIELD', state_path: 'device/name' }],
@@ -146,6 +147,10 @@ describe('Project checks read surface', () => {
     expect(
       (await app.request(`/v1/projects/${otherProjectId}/checks/validation%3A${runId}`)).status
     ).toBe(404);
+    const addressed = await app.request(`/v1/projects/${projectId}/checks/validation-1`);
+    expect((await addressed.json()).data).toEqual(body.data);
+    const foreignNumber = await app.request(`/v1/projects/${otherProjectId}/checks/validation-1`);
+    expect((await foreignNumber.json()).data.id).not.toBe(body.data.id);
   });
   it('searches record identifiers and names without treating wildcard characters as match-all', async () => {
     const matched = (await (
@@ -163,6 +168,7 @@ describe('Project checks read surface', () => {
     process.env.AUTH_DISABLED = 'false';
     try {
       expect((await app.request(`/v1/projects/${projectId}/checks`)).status).toBe(403);
+      expect((await app.request(`/v1/projects/${projectId}/checks/validation-1`)).status).toBe(403);
     } finally {
       process.env.AUTH_DISABLED = previous;
     }

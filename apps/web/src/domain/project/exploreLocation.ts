@@ -3,6 +3,7 @@ export type ExploreView = 'discover' | 'browse';
 export function exploreListHref(view: ExploreView, query?: URLSearchParams): string {
   const params = new URLSearchParams(query);
   params.delete('view');
+  if (params.get('type') === 'all') params.delete('type');
   const pathname = view === 'browse' ? '/explore/browse' : '/explore';
   return `${pathname}${params.size ? `?${params}` : ''}`;
 }

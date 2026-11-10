@@ -99,11 +99,12 @@ function signatures have callers: inspect them before changing an interface.
 Types, data and utility directories do not create an additional authority layer;
 [A-04](#a-04-module-responsibilities-and-exceptions) governs their responsibilities.
 
-## Repository navigation and browser titles
+<a id="repository-navigation-and-browser-titles"></a>
 
-This section records the current implementation. The
-[repository URL principles](#repository-url-principles) apply to the repository
-routes in scope. WebUI-wide URL and browser title conventions remain future work.
+## WebUI navigation and addresses
+
+The [URL and navigation rules](#url-and-navigation-rules) define the target for
+new and changed WebUI links. This section records the current entry points.
 
 - Repository navigation uses the resolved `/{owner}/{repo}` address when
   available. The [repository location helper](../src/domain/project/repositoryLocation.ts)
@@ -113,10 +114,8 @@ routes in scope. WebUI-wide URL and browser title conventions remain future work
   owns address resolution and compatibility. Fixed Review links follow
   [A-02](#a-02-read-refresh-and-invalidation) for snapshot identity.
 - The [repository shell](../src/components/project/ProjectShell.tsx) sets the
-  browser title from the resolved repository. The State home shows the
-  repository name with its description when available. Other covered views
-  include the section and repository name, with the number on a pull request
-  detail page. Your repositories and Explore set titles at their own routes.
+  browser title from the resolved repository and the selected section or object.
+  Explore uses route metadata for Discover, Browse and named Schema releases.
 - Repository Settings links use the plain Settings path. Same-tab navigation
   keeps the source on the Settings history entry so the return link can restore
   it after a refresh. A direct visit or a new tab defaults to the repository
@@ -125,8 +124,10 @@ routes in scope. WebUI-wide URL and browser title conventions remain future work
   repository directory.
   Settings section navigation uses a fragment such as `#autopilot` and restores
   the addressed section when a direct link loads.
-  Run details likewise default to the Run list and carry `returnTo` when the
-  source has additional context, such as list filters.
+- Run lists keep their older-record cursor in the browser history entry.
+  Legacy list links consume `cursor` after restoring that entry. A newly opened
+  list starts at the newest records for its filters. A Run detail opened from an
+  older page can return to that entry in the same tab.
 - The short `/schemas` entry selects a Workspace when it opens. Background
   refreshes keep that selection for the open editor. Legacy links keep any
   explicit branch or Workspace when dropping the redundant Studio view flag.
@@ -138,6 +139,22 @@ routes in scope. WebUI-wide URL and browser title conventions remain future work
 - Discover and Browse use `/explore` and `/explore/browse` respectively.
   Legacy list links with `view=discover` or `view=browse` move to the matching
   address and preserve filters and fragments.
+
+| Destination | Current address example |
+| --- | --- |
+| Browse Schema results | `/explore/browse?type=schemas` |
+| Workspace for an explicit branch | `/team/repo/branches/main/workspaces?workspaceMode=review&reviewPane=yaml` |
+| State at an exact Commit | `/team/repo/commits/42` |
+| History for the same Commit | `/team/repo/history/42` |
+| Fixed Review | `/team/repo/reviews/17?reviewPane=yaml` |
+| Run details | `/team/repo/checks/review-17`, `/team/repo/checks/validation-8`, `/team/repo/checks/schema-3`, or `/team/repo/checks/pr-12` |
+
+The storage migration assigns numbers to historical objects and allocates
+numbers for new objects in the write transaction. These numbers are scoped to
+the repository and object kind. The Run view uses the same number for a Review
+record and reuses the Pull request number for its current checks. Number
+resolution is read-only and uses the same project read permission as the
+underlying evidence. The existing readers verify the resolved exact object.
 
 ## Transport and local access
 
@@ -353,7 +370,7 @@ version identity, permission, readiness or recovery.
 | Workspace Content editing and verified proposal publication | Use the authoritative authoring Draft and guarded application capabilities, with the ownership and outcome rules above. |
 | Dedicated or inline Schema editing | Address the same explicit Workspace/candidate and exact definition; share the business rules in B-04. |
 | Exact-source configuration | May use its own supported source-transition capability; it must retain its exact-source semantics and the same application authority. |
-| Legacy `workspaceTool=edit` / `reviewPane=edit` editing addresses | Adapt or redirect to the canonical editing session. They must not maintain a separate current Draft reconstructed from legacy fields. |
+| Legacy `workspaceTool=edit` / `reviewPane=edit` editing addresses | Open Compose for the intended Workspace or branch. Starting the editor and initializing a Draft require an explicit user action. |
 | Historical Review, Commit and operation evidence | Keep exact-version reads available; historical data does not become current mutation authority. |
 
 A compatibility adapter is supported only when it can identify the exact current
@@ -371,33 +388,48 @@ have already migrated or authorize deleting them in a documentation change.
 historical object; supported writes obey the same guards; unsupported writes
 are explicit; retirement keeps history readable.
 
-#### Repository URL principles
+<a id="repository-url-principles"></a>
 
-Apply these rules when adding or changing links within a repository.
+#### URL and navigation rules
 
-- Use the [resolved repository address](../../../docs/repository-addresses.md#web-compatibility)
-  for new links when it is available. Use the project-ID entry for repositories
-  awaiting an address. An explicit section path selects the destination.
-  Supported legacy `tab` parameters can still select a view at the repository
-  root. Preserve the object, relevant query parameters, and fragment when
-  adapting a supported old address.
-- Use the path to identify the destination, the query for context the link
-  needs to restore, and the fragment for a section within the page. Encode
-  values at the boundary where they become URL components. Preserve the
-  encoding of an existing path segment during address normalization. Fixed
-  Review and Commit identity follows [A-02](#a-02-read-refresh-and-invalidation).
-- Give the return link a destination it can derive from the current page when
-  there is an unambiguous default. Keep same-tab Settings return context on
-  the browser history entry and use a clean Settings link. Use `returnTo`
-  where the shareable link needs to restore its source, such as a Run opened
-  from a filtered list. Use the source's supported path and relevant query.
-  Validate an explicit return target within the receiving route's allowed
-  scope and fall back to the default if validation fails.
+Apply these rules to new and changed WebUI links and controls.
 
-**Verify** generated links, direct opening and refresh, supported old links,
-and the return trip. Check that default returns produce short URLs, contextual
-returns restore the same view and filters, and a retained fragment reaches its
-section once it is available.
+- Put the destination and the selected object's identity in the path. Use the
+  resolved repository address. An explicitly selected branch belongs in the
+  path. A branch that only filters a list can be a query parameter. Keep the
+  project-ID entry for repositories awaiting a canonical address.
+- Keep shareable presentation and filter values in concise query parameters.
+  Numbered pagination may use `?page=2`. Keep opaque paging cursors in the
+  request or the current tab's history. An explicit view must take precedence
+  over a personal preference. Omit a default only when the address still
+  restores the intended result. Use a fragment to address a section on the page.
+- Use readable names, versions or stable project-scoped numbers in regular
+  user-facing addresses. Check project access before resolving a historical
+  number, then apply the existing checks to the exact object. Keep full
+  hashes and internal IDs available in technical evidence, API requests and
+  supported legacy links. Invitation and share credentials follow their own
+  access flows. Fixed Review and Commit identity follows
+  [A-02](#a-02-read-refresh-and-invalidation).
+- Generate the canonical address at the entry point. Treat supported old
+  paths and query forms as inputs to compatibility handling. Preserve the
+  original object, relevant view state and valid anchor. Encode each value once
+  as a URL component. If an exact object is missing or outside the current
+  scope, show that result. Opening a link can restore navigation and view
+  state. Draft initialization and writes require an explicit user action.
+- Derive the return destination when there is an unambiguous default. Keep
+  same-tab Settings return context and Run paging in history state. Use
+  `returnTo` when a shareable address needs to restore a supported source such
+  as a filtered list. Validate the destination within the receiving route's
+  allowed scope and use the default for an invalid target.
+- Use links for page navigation and mark the active destination. Use selection
+  controls for filters and accessible tabs for switching associated panels.
+  Browser titles identify the page and its object when a name, version or
+  number is available.
+
+**Verify** direct opening, refresh, copying to a new tab, browser back and
+forward, and supported old links. Check exact identity, authorization, and
+valid anchors during normalization. Confirm that reopening a navigation
+address leaves persisted data unchanged.
 
 ## Current implementation gaps
 
@@ -405,4 +437,4 @@ section once it is available.
 | --- | --- |
 | A-01, A-03 | The [Decision recovery record](../src/hooks/workspaces/useWorkspaceReviewSnapshot.ts) is keyed by project, Workspace and Transition. Its key omits the authenticated session and principal, and [session cleanup](../src/infrastructure/session.ts) leaves the recovery record in browser storage. |
 | A-04 | A relative import of the same module can bypass checks that match its alias. The app allowlist also records module imports rather than operations. The project page's allowed [YSchema validation query module](../src/queries/yschemaValidation.ts) exposes both a read and a write. |
-| A-05 | When a legacy `workspaceTool=edit` or `reviewPane=edit` URL specifies a branch but no explicit Workspace, the [Workspace entry](../src/components/project/ProjectWorkspacesTab.tsx) can select a candidate from the branch and [open its editor](../src/components/workspaces/WorkspaceComposeReviewSurface.tsx) automatically. If authoring is inactive, opening the editor can [start Draft initialization](../src/hooks/workspaces/useWorkspaceAuthoringBootstrap.ts) for that inferred candidate. |
+| A-05 | State branch selection still uses a query parameter. Diff, source evidence and project-scoped Schema releases still have routes or producers that carry internal identifiers. Some compatibility link builders still emit old forms when their caller only has an internal identifier. |

@@ -1,3 +1,6 @@
+import { numberedRepositoryObject, repositoryObjectHref } from './objectLocation';
+import { workspaceBranchFromSuffix, workspaceLocation } from './repoPath';
+
 export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'discover' | 'browse' {
   if (schemaView === 'discover') return 'discover';
   if (schemaView === 'browse' || schemaView === 'release') return 'browse';
@@ -6,8 +9,12 @@ export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'dis
 
 /** Only routes with an explicit owner/name adapter may migrate from ID links. */
 export function isSupportedRepositorySuffix(suffix: string): boolean {
-  return /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
-    suffix
+  return (
+    workspaceBranchFromSuffix(suffix) !== null ||
+    numberedRepositoryObject(suffix) !== null ||
+    /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
+      suffix
+    )
   );
 }
 
@@ -52,6 +59,13 @@ export function repositoryLocation(
     }
   }
   params.delete('tab');
+  const numbered = numberedRepositoryObject(tail);
+  if (numbered && !base.startsWith('/project/'))
+    return `${repositoryObjectHref(base, numbered.section, numbered.number, params)}${hash}`;
+  const pathBranch = workspaceBranchFromSuffix(tail);
+  if (pathBranch || /^\/workspaces\/?$/.test(tail)) {
+    return `${workspaceLocation(base, pathBranch ?? (params.get('branch')?.trim() || null), params)}${hash}`;
+  }
   if (/^\/schemas\/?$/.test(tail)) {
     tail = '/schemas';
     const tab = getSchemaProjectTab(params.get('schemaView'));

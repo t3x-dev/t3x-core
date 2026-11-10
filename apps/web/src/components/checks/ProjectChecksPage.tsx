@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   CHECK_KIND_LABELS,
@@ -25,6 +26,7 @@ import {
 import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import { useProjectChecks } from '@/hooks/projects/useProjectChecks';
+import { useRunPagination } from '@/hooks/projects/useRunPagination';
 import styles from './ProjectChecksPage.module.css';
 
 export function ProjectChecksPage({
@@ -42,11 +44,18 @@ export function ProjectChecksPage({
   const query = useSearchParams().toString();
   const router = useRouter();
   const params = new URLSearchParams(query);
-  const { current, refresh } = useProjectChecks(projectId, recordId, query);
-  const scopeKeys = ['kind', 'workspace', 'pr', 'commit', 'cursor', 'q'];
-  const scoped = !recordId && scopeKeys.some((key) => params.get(key));
+  const pagination = useRunPagination(pathname, query, Boolean(recordId));
+  const { current, refresh } = useProjectChecks(projectId, recordId, pagination.apiQuery);
+  const recordAddress = recordId ? current?.records[0]?.address : undefined;
+  useEffect(() => {
+    if (!repositoryPath || !recordAddress || recordAddress === recordId) return;
+    const href = checksHref(projectId, { repositoryPath, recordId: recordAddress });
+    router.replace(`${href}${query ? `?${query}` : ''}${window.location.hash}`, { scroll: false });
+  }, [projectId, query, recordAddress, recordId, repositoryPath, router]);
+  const scopeKeys = ['kind', 'workspace', 'pr', 'commit', 'q'];
+  const scoped = !recordId && (pagination.cursor || scopeKeys.some((key) => params.get(key)));
   const returnTo = checksReturnTo(params.get('returnTo'), projectId, pathname);
-  const listParams = new URLSearchParams(query);
+  const listParams = new URLSearchParams(pagination.cleanQuery);
   listParams.delete('check');
   listParams.delete('returnTo');
   const listHref = `${base}/checks${listParams.size ? `?${listParams}` : ''}`;
@@ -56,6 +65,10 @@ export function ProjectChecksPage({
     next.delete('cursor');
     if (value) next.set(name, value);
     else next.delete(name);
+    if (pagination.cursor && next.toString() === pagination.cleanQuery) {
+      pagination.openPage(null);
+      return;
+    }
     router.push(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false });
   }
   return (
@@ -63,7 +76,15 @@ export function ProjectChecksPage({
       <header className={styles.header}>
         <div>
           {sourceHref ? (
-            <Link className={styles.back} href={sourceHref}>
+            <Link
+              className={styles.back}
+              href={sourceHref}
+              onNavigate={(event) => {
+                if (!pagination.returnToPrevious) return;
+                event.preventDefault();
+                router.back();
+              }}
+            >
               <ArrowLeft size={15} /> {returnTo ? 'Back to source' : 'Run'}
             </Link>
           ) : null}
@@ -140,6 +161,11 @@ export function ProjectChecksPage({
           <Button variant="outline" onClick={() => refresh()}>
             Try again
           </Button>
+          {pagination.cursor ? (
+            <Button variant="outline" onClick={() => pagination.openPage(null)}>
+              Newest records
+            </Button>
+          ) : null}
         </div>
       ) : recordId && current.records[0] ? (
         <CheckDetails
@@ -150,7 +176,7 @@ export function ProjectChecksPage({
           onSelect={(id) => {
             const next = new URLSearchParams(query);
             next.set('check', id);
-            router.replace(`${pathname}?${next}`, { scroll: false });
+            pagination.replaceDetail(`${pathname}?${next}`);
           }}
         />
       ) : current.records.length ? (
@@ -159,22 +185,19 @@ export function ProjectChecksPage({
             records={current.records}
             projectId={projectId}
             repositoryPath={repositoryPath}
-            returnTo={`${pathname}${query ? `?${query}` : ''}`}
+            returnTo={listHref}
+            onNavigate={pagination.rememberDetail}
           />
           <nav className={styles.pagination} aria-label="Run pagination">
-            {params.has('cursor') ? (
-              <Button variant="outline" size="sm" onClick={() => filter('cursor', '')}>
+            {pagination.cursor ? (
+              <Button variant="outline" size="sm" onClick={() => pagination.openPage(null)}>
                 Newest records
               </Button>
             ) : (
               <span />
             )}
             {current.next ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => filter('cursor', current.next ?? '')}
-              >
+              <Button variant="outline" size="sm" onClick={() => pagination.openPage(current.next)}>
                 Older records <ArrowRight size={14} />
               </Button>
             ) : null}
@@ -187,8 +210,12 @@ export function ProjectChecksPage({
           <Button
             variant="outline"
             onClick={() => {
-              const next = new URLSearchParams(query);
+              const next = new URLSearchParams(pagination.cleanQuery);
               for (const key of scopeKeys) next.delete(key);
+              if (pagination.cursor && next.toString() === pagination.cleanQuery) {
+                pagination.openPage(null);
+                return;
+              }
               router.push(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false });
             }}
           >
@@ -213,11 +240,13 @@ function RunRecords({
   projectId,
   repositoryPath,
   returnTo,
+  onNavigate,
 }: {
   records: CheckRecord[];
   projectId: string;
   repositoryPath?: string;
   returnTo: string;
+  onNavigate: (href: string) => void;
 }) {
   const groups = new Map<string, { heading?: string; records: CheckRecord[] }>();
   for (const record of records) {
@@ -248,11 +277,17 @@ function RunRecords({
           const decision = textValue(object(object(snapshot.transition).decision).outcome);
           const snapshotId = view.snapshot || record.id.replace(/^review:/, '');
           const transition = textValue(record.payload.transition_id);
+          const href = checksHref(projectId, {
+            repositoryPath,
+            recordId: record.address ?? record.id,
+            returnTo,
+          });
           return (
             <Link
               className={styles.row}
               key={record.id}
-              href={checksHref(projectId, { repositoryPath, recordId: record.id, returnTo })}
+              href={href}
+              onNavigate={() => onNavigate(href)}
             >
               <Status status={view.status} />
               <div className={styles.rowMain}>
@@ -346,6 +381,13 @@ function CheckDetails({
   const base = repositoryPath ?? getProjectIdRepoPath(projectId);
   const snapshot = object(p.snapshot);
   const precondition = object(object(snapshot.review).precondition);
+  const snapshotNumber = /^review-([1-9][0-9]*)$/.exec(record.address ?? '')?.[1];
+  const reviewHref = workspaceReviewHref(projectId, view.workspace, {
+    repositoryPath,
+    snapshotId: view.snapshot || undefined,
+    snapshotNumber,
+    branch: view.branch,
+  });
   const metadata =
     record.kind === 'review'
       ? {
@@ -386,7 +428,7 @@ function CheckDetails({
         </div>
         <p>{view.notice}</p>
         <div className={styles.identifier}>
-          <code>{record.id}</code>
+          <code title={record.id}>{record.address ?? record.id}</code>
           <time dateTime={record.created_at}>
             {record.kind === 'pull-request' ? 'Updated ' : 'Recorded '}
             {formatDate(record.created_at)}
@@ -394,20 +436,12 @@ function CheckDetails({
         </div>
         <div className={styles.actions}>
           {view.snapshot ? (
-            <Link
-              href={workspaceReviewHref(projectId, view.workspace, {
-                repositoryPath,
-                snapshotId: view.snapshot,
-                branch: view.branch,
-              })}
-            >
+            <Link href={reviewHref}>
               Open Review snapshot <ArrowRight size={14} />
             </Link>
           ) : null}
           {view.workspace ? (
-            <Link
-              href={`${workspaceReviewHref(projectId, view.workspace, { repositoryPath, snapshotId: view.snapshot || undefined, branch: view.branch })}&schemaDiagnostics=1`}
-            >
+            <Link href={`${reviewHref}${reviewHref.includes('?') ? '&' : '?'}schemaDiagnostics=1`}>
               Schema checks & impact <ArrowRight size={14} />
             </Link>
           ) : null}

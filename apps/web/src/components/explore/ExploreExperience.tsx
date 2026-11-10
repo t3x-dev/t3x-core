@@ -85,7 +85,10 @@ export function ExploreExperience({
         : 'all';
   const layout = params.get('layout') === 'list' ? 'list' : 'grid';
   const release = releaseAddress || params.has('catalogName');
-  const legacyListHref = !release && params.has('view') ? exploreListHref(view, params) : undefined;
+  const legacyListHref =
+    !release && (params.has('view') || params.get('type') === 'all')
+      ? exploreListHref(view, params)
+      : undefined;
   const { replace } = router;
   useEffect(() => {
     if (legacyListHref) replace(`${legacyListHref}${window.location.hash}`, { scroll: false });
@@ -199,18 +202,18 @@ export function ExploreExperience({
                   <ArrowRight size={17} />
                 </button>
               </form>
-              <nav className={styles.types} aria-label="Catalog type">
+              <fieldset className={styles.types} aria-label="Catalog type">
                 {(['all', 'projects', 'schemas'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
-                    aria-current={type === value ? 'page' : undefined}
-                    onClick={() => navigate({ type: value })}
+                    aria-pressed={type === value}
+                    onClick={() => navigate({ type: value === 'all' ? undefined : value })}
                   >
                     {value[0].toUpperCase() + value.slice(1)}
                   </button>
                 ))}
-              </nav>
+              </fieldset>
             </header>
             {view === 'discover' ? (
               <>

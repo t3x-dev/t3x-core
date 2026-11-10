@@ -295,12 +295,14 @@ export interface CreatedRepositoryCommit {
 }
 
 export interface StoredRepositoryCommit {
+  address_number?: string;
   digest: string;
   recorded_at: string;
   object: RepositoryCommitV2;
 }
 
 export interface CommitHistoryProjectionV2 {
+  address_number?: string;
   format: 'transition_v2';
   id: string;
   schema: 't3x/commit/v2';
@@ -768,6 +770,7 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 }
 
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
+  address_number?: string;
   schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;

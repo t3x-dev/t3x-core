@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { REPOSITORY_OBJECT_ADDRESSES_SQL } from './repository-object-addresses-sql';
 import { ensureRepositoryPaths } from './repository-paths';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;
@@ -188,7 +189,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 83;
+export const POSTGRES_SCHEMA_VERSION = 84;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2854,6 +2855,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$;
   `);
+
+  if ((rows[0]?.version ?? 0) < 84) await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
 
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`

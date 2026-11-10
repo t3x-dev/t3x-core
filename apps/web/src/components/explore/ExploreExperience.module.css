@@ -39,7 +39,7 @@
   font-size: 13px;
   cursor: pointer;
 }
-.types button[aria-current],
+.types button[aria-pressed="true"],
 .viewSwitch button[aria-pressed="true"] {
   background: var(--surface-card);
   color: var(--text-primary);

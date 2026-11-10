@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { checksHref } from '@/domain/project/checks';
+import { repositoryObjectHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
   getProjectIdHistoryPath,
@@ -16,6 +17,7 @@ import { workspaceCommitBlocker } from '@/domain/workspaces/changeDecision';
 import { fieldChangeCount, fieldChangeGroups } from '@/domain/workspaces/changeFields';
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
+import { useRepositoryObjectAddress } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
@@ -39,10 +41,12 @@ import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
 
 export function WorkspaceSnapshotReview({
   projectId,
+  reviewNumber,
   snapshotId,
   workspaceId,
 }: {
   projectId: string;
+  reviewNumber?: string;
   snapshotId: string;
   workspaceId: string;
 }) {
@@ -85,6 +89,12 @@ export function WorkspaceSnapshotReview({
     outcomeView.decision?.observation === 'supplied' &&
     outcomeView.decision.outcome === 'rejected';
   const commit = outcomeSnapshot?.objects?.commit?.digest;
+  const commitAddress = useRepositoryObjectAddress(
+    repositoryPath ? projectId : undefined,
+    'commit',
+    commit
+  );
+  const snapshotNumber = reviewNumber ?? state.data?.address_number;
   const branch = snapshot?.review.precondition.refName;
   const workspaceHref = workspaceReviewHref(projectId, workspaceId, {
     branch,
@@ -96,6 +106,7 @@ export function WorkspaceSnapshotReview({
     pane,
     repositoryPath,
     snapshotId,
+    snapshotNumber,
   });
   const laterHref = laterSnapshot
     ? workspaceReviewHref(projectId, workspaceId, {
@@ -103,6 +114,7 @@ export function WorkspaceSnapshotReview({
         pane,
         repositoryPath,
         snapshotId: laterSnapshot.snapshotId,
+        snapshotNumber: state.laterResult?.address_number,
       })
     : null;
   const composeHref = workspaceReviewHref(projectId, workspaceId, {
@@ -117,9 +129,16 @@ export function WorkspaceSnapshotReview({
     returnTo: reviewHref,
   });
   const stateHref =
-    commit && branch
-      ? `${repositoryPath ?? getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
-      : null;
+    repositoryPath && commitAddress.data
+      ? repositoryObjectHref(
+          repositoryPath,
+          'commits',
+          commitAddress.data.number,
+          new URLSearchParams({ view: 'overview' })
+        )
+      : commit && branch
+        ? `${repositoryPath ?? getProjectIdRepoPath(projectId)}?${new URLSearchParams({ branch, commit, view: 'overview' }).toString()}`
+        : null;
 
   const errorHeading = state.recovery
     ? 'Decision result unconfirmed'
@@ -188,7 +207,7 @@ export function WorkspaceSnapshotReview({
       commitBlocker={workspaceCommitBlocker(schemaReview, view)}
       checksHref={checksHref(projectId, {
         repositoryPath,
-        recordId: `review:${snapshotId}`,
+        recordId: snapshotNumber ? `review-${snapshotNumber}` : `review:${snapshotId}`,
         returnTo: reviewHref,
       })}
     />

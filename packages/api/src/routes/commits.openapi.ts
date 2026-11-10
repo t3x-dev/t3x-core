@@ -17,6 +17,7 @@ import {
   ensureMainBranch,
   findBranchesByProject,
   findConversationById,
+  findRepositoryObjectAddress,
   getCommitHistoryEntry,
   getRepositoryDecisionAuditByDigest,
   getTransitionRefHead,
@@ -24,6 +25,7 @@ import {
   getVerifiedTransitionCommitGraph,
   getYOpsForTransitionCommit,
   listCommitHistory,
+  listRepositoryObjectAddresses,
   markConversationCommitted,
   TransitionHeadConflictError,
   TransitionProjectionAuthorizationInvalidError,
@@ -283,6 +285,7 @@ const CreatedCommitV2ResponseSchema = z.object({
   object: CommitV2ObjectSchema,
 });
 const StoredCommitV2ResponseSchema = z.object({
+  address_number: z.string().optional(),
   digest: DigestSchema,
   recorded_at: z.string(),
   object: CommitV2ObjectSchema,
@@ -293,6 +296,7 @@ const DescriptorBaseSchema = z.object({
 });
 
 const CommitHistoryProjectionSchema = z.object({
+  address_number: z.string().optional(),
   format: z.literal('transition_v2'),
   id: z.string(),
   schema: z.literal('t3x/commit/v2'),
@@ -591,6 +595,7 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
     const semanticCommit = await getRepositorySemanticCommitIfSupported(db, hash, projectId);
+    const address = await findRepositoryObjectAddress(db, projectId, 'commit', { id: hash });
     const content =
       semanticCommit?.semanticContent ?? semanticContentFromTransitionState(graph.state);
     return c.json(
@@ -602,6 +607,7 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
             recorded_at: graph.recordedAt,
             object: graph.commit,
             hash,
+            address_number: address?.number,
             schema: graph.commit.schema,
             parents: graph.commit.parents.map((parent) => parent.digest),
             committed_at: graph.recordedAt,
@@ -741,8 +747,25 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
     const commits = branch
       ? await listCommitHistoryForRef(db, projectId, branch, { limit, offset })
       : await listCommitHistoryForAllRefs(db, projectId, { limit, offset });
+    const addresses = await listRepositoryObjectAddresses(
+      db,
+      projectId,
+      'commit',
+      commits.map((commit) => commit.id)
+    );
 
-    return c.json({ success: true as const, data: { commits } }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commits: commits.map((commit) => ({
+            ...commit,
+            address_number: addresses.get(commit.id),
+          })),
+        },
+      },
+      200
+    );
   } catch (err) {
     if (err instanceof TransitionRefHeadIntegrityError) {
       return errorResponse(c, 'REF_HEAD_INTEGRITY_INVALID', err.message, {

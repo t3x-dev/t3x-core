@@ -1,4 +1,5 @@
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { repositoryObjectHref } from '@/domain/project/objectLocation';
+import { getProjectIdRepoPath, workspaceLocation } from '@/domain/project/repoPath';
 
 /** IDs here are decoded values; encode once at the URL boundary. */
 export function workspaceReviewHref(
@@ -7,6 +8,7 @@ export function workspaceReviewHref(
   options: {
     repositoryPath?: string;
     snapshotId?: string;
+    snapshotNumber?: string;
     branch?: string;
     pane?: string | null;
     mode?: 'compose' | 'review';
@@ -24,10 +26,11 @@ export function workspaceReviewHref(
     params.set('reviewPane', options.pane);
   if (options.tool) params.set('workspaceTool', options.tool);
   if (options.returnTo) params.set('returnTo', options.returnTo);
-  const path = options.repositoryPath
-    ? `${options.repositoryPath}/workspaces`
-    : getProjectIdRepoPath(projectId);
-  return `${path}?${params}`;
+  if (options.repositoryPath && options.snapshotNumber)
+    return repositoryObjectHref(options.repositoryPath, 'reviews', options.snapshotNumber, params);
+  if (options.repositoryPath)
+    return workspaceLocation(options.repositoryPath, options.branch ?? null, params);
+  return `${getProjectIdRepoPath(projectId)}?${params}`;
 }
 
 /** The owner/repository catch-all carries encoded path segments, unlike query params. */

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { StateExportButton } from '@/components/shared/StateExportButton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { historyCommitHref } from '@/domain/project/objectLocation';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
 import { StateBranchControls } from './StateBranchControls';
@@ -37,9 +38,7 @@ export function StatePageToolbar({
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   workspaceHref: string;
 }) {
-  const commitHref = headCommit
-    ? `${historyHref}&commit=${encodeURIComponent(headCommit.hash)}`
-    : historyHref;
+  const commitHref = headCommit ? historyCommitHref(historyHref, headCommit) : historyHref;
   return (
     <div className={`${inspectionStyles.surface} ${frameStyles.toolbarViewport}`}>
       <div className={frameStyles.bounds}>
