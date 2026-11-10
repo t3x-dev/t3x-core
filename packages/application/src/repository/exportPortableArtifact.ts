@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
+import { hashWorkspaceSchemaDefinition } from '@t3x-dev/core';
 import type { CommitV2, ProtocolValue, State } from '@t3x-dev/transition';
 import { canonicalizeProtocolValue } from '@t3x-dev/transition';
-import { sha256CompositionValue } from '@t3x-dev/yschema';
 import { exportCommittedState, StateExportIntegrityError } from './exportState';
 
 export class PortableArtifactIntegrityError extends StateExportIntegrityError {}
@@ -31,7 +31,7 @@ export async function exportPortableArtifact(input: {
     !input.schema.schemaHash ||
     !input.schema.definition ||
     input.schema.bindings.length === 0 ||
-    (await sha256CompositionValue(input.schema.definition)) !== input.schema.schemaHash
+    (await hashWorkspaceSchemaDefinition(input.schema.definition)) !== input.schema.schemaHash
   ) {
     throw new PortableArtifactIntegrityError(
       'The exact committed Schema binding is unavailable or invalid'

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
-import { createYOpsState } from '@t3x-dev/core';
+import { createYOpsState, hashWorkspaceSchemaDefinition } from '@t3x-dev/core';
 import { type CommitV2, describeProtocolObject } from '@t3x-dev/transition';
-import { sha256CompositionValue } from '@t3x-dev/yschema';
 import { expect, it } from 'vitest';
 import {
   exportPortableArtifact,
@@ -23,7 +22,7 @@ async function fixture() {
     commitDigest: describeProtocolObject(commit).digest,
     schema: {
       status: 'bound' as const,
-      schemaHash: await sha256CompositionValue(definition),
+      schemaHash: await hashWorkspaceSchemaDefinition(definition),
       definition,
       bindings: [{ canonicalName: 'team/portable', version: '1.0.0' }],
     },
