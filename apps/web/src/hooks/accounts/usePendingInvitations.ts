@@ -24,7 +24,7 @@ export function usePendingInvitations(): boolean {
     };
     refresh();
     window.addEventListener('focus', refresh);
-    const interval = window.setInterval(refresh, 30_000);
+    const interval = window.setInterval(refresh, 60_000);
     return () => {
       active = false;
       window.removeEventListener('focus', refresh);

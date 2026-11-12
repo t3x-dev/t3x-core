@@ -43,7 +43,7 @@ describe('DiscoverHeader navigation', () => {
       expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(1);
       listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [{}] });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(30_000);
+        await vi.advanceTimersByTimeAsync(60_000);
       });
       expect(screen.getByRole('link', { name: 'Invitations, pending' })).toBeInTheDocument();
     } finally {
