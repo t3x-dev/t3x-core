@@ -3,6 +3,7 @@ import {
   type StudioPreview,
   StudioSourceSchema,
 } from '@t3x-dev/api-client';
+import { exploreListHref, exploreReleasePath } from '@/domain/project/exploreLocation';
 import { type SchemaFieldRow, schemaRecord } from './schemaFieldEditing';
 
 export type SchemaSourcePin = StudioPreview['sources'][number];
@@ -31,8 +32,11 @@ export function schemaSourceKey(source: SchemaSourcePin): string {
 }
 
 export function schemaSourceReleaseHref(source: SchemaSourcePin): string {
+  if (!source.projectId) {
+    const pathname = exploreReleasePath(source.canonicalName, source.version);
+    if (pathname) return pathname;
+  }
   const params = new URLSearchParams({
-    view: 'browse',
     type: 'schemas',
     schemaView: 'release',
     catalogName: source.canonicalName,
@@ -40,7 +44,7 @@ export function schemaSourceReleaseHref(source: SchemaSourcePin): string {
     catalogHash: source.hash,
   });
   if (source.projectId) params.set('sourceProjectId', source.projectId);
-  return `/explore?${params}`;
+  return exploreListHref('browse', params);
 }
 
 /** Never infer a node's origin from its name, parent, current branch or presentation Commit. */

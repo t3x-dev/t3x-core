@@ -10,6 +10,7 @@ export function projectMetadataFields(metadataJson: string | null) {
     repository_profile: RepositoryProfileSchema.parse({
       readme: profile?.readme ?? '',
       tags: profile?.tags ?? [],
+      icon: profile?.icon,
     }),
   };
 }

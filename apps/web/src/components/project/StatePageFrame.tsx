@@ -2,6 +2,7 @@
 
 import { ArrowUp, GitBranch } from 'lucide-react';
 import { type ReactNode, useRef } from 'react';
+import { TabsContent } from '@/components/ui/tabs';
 import styles from './StatePageFrame.module.css';
 
 export function StatePageFooter({
@@ -40,19 +41,28 @@ export function StatePageFrame({
   children,
   projectName,
   branch,
+  view,
 }: {
   children: ReactNode;
   projectName: string;
   branch: string;
+  view: 'overview' | 'structure';
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   return (
     <div className={styles.scroll} ref={scrollRef} data-testid="state-page-scroll">
       <div className={`${styles.bounds} ${styles.page}`}>
-        <div className={styles.content} ref={topRef} tabIndex={-1}>
-          {children}
-        </div>
+        {(['overview', 'structure'] as const).map((panel) => (
+          <TabsContent
+            key={panel}
+            value={panel}
+            className={panel === view ? styles.content : undefined}
+            ref={panel === view ? topRef : undefined}
+          >
+            {panel === view ? children : null}
+          </TabsContent>
+        ))}
         <StatePageFooter
           projectName={projectName}
           branch={branch}

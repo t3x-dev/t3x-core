@@ -8,12 +8,15 @@ import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceRevie
 
 const replace = vi.hoisted(() => vi.fn());
 const push = vi.hoisted(() => vi.fn());
-const route = vi.hoisted(() => ({ query: 'reviewPane=yaml' }));
+const route = vi.hoisted(() => ({ query: 'reviewPane=yaml', pathname: '/project/proj_1' }));
 beforeEach(() => {
   localStorage.clear();
   route.query = 'reviewPane=yaml';
+  route.pathname = '/project/proj_1';
+  replace.mockClear();
 });
 vi.mock('next/navigation', () => ({
+  usePathname: () => route.pathname,
   useRouter: () => ({ replace, push }),
   useSearchParams: () => new URLSearchParams(route.query),
 }));
@@ -218,16 +221,25 @@ describe('WorkspaceSnapshotReview', () => {
   });
 });
 
-it('links the exact committed State and replaces the obsolete pre-decision snapshot URL', () => {
+it('keeps the original snapshot and Run while linking the exact later result and committed State', () => {
+  route.pathname = '/owner/repo/workspaces';
   const data = snapshotResponse();
-  data.snapshot.snapshotId = 'rvs_committed';
-  Object.assign(data.snapshot, { objects: { commit: { digest: 'sha256:committed' } } });
+  data.snapshot.snapshotId = 'rvs_old';
+  const later = snapshotResponse();
+  later.snapshot.snapshotId = 'rvs_committed';
+  Object.assign(later.snapshot, { objects: { commit: { digest: 'sha256:committed' } } });
   vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
     decide: vi.fn(),
     load: vi.fn(),
     overrideReason: '',
     setOverrideReason: vi.fn(),
-    state: { data: data as never, deciding: false, error: null, loading: false },
+    state: {
+      data: data as never,
+      laterResult: later as never,
+      deciding: false,
+      error: null,
+      loading: false,
+    },
   });
   render(
     <WorkspaceSnapshotReview
@@ -238,23 +250,30 @@ it('links the exact committed State and replaces the obsolete pre-decision snaps
   );
   expect(screen.getByRole('link', { name: 'View State & export' })).toHaveAttribute(
     'href',
-    '/project/proj_1?branch=feature%2Frelease&commit=sha256%3Acommitted&view=overview'
+    '/owner/repo?branch=feature%2Frelease&commit=sha256%3Acommitted&view=overview'
   );
   const delivery = new URL(
     screen.getByRole('link', { name: 'Open Delivery' }).getAttribute('href')!,
     'http://localhost'
   );
   expect(delivery.searchParams.get('workspaceTool')).toBe('delivery');
-  expect(delivery.searchParams.get('returnTo')).toContain('reviewSnapshot=rvs_committed');
+  expect(delivery.searchParams.get('returnTo')).toContain('reviewSnapshot=rvs_old');
   const history = new URL(
     screen.getByRole('link', { name: 'View commit in History' }).getAttribute('href')!,
     'http://localhost'
   );
   expect(history.searchParams.get('commit')).toBe('sha256:committed');
-  expect(replace).toHaveBeenCalledWith(
-    '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewSnapshot=rvs_committed&reviewPane=yaml',
-    { scroll: false }
+  const run = new URL(
+    screen.getByRole('link', { name: 'View run' }).getAttribute('href')!,
+    'http://localhost'
   );
+  expect(run.pathname).toBe('/owner/repo/checks/review%3Arvs_old');
+  expect(run.searchParams.get('returnTo')).toContain('reviewSnapshot=rvs_old');
+  expect(screen.getByRole('link', { name: 'View result snapshot' })).toHaveAttribute(
+    'href',
+    '/owner/repo/workspaces?workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewSnapshot=rvs_committed&reviewPane=yaml'
+  );
+  expect(replace).not.toHaveBeenCalled();
 });
 
 it('keeps the complete frozen Schema and content visible without loading a newer Draft for comparison', () => {
@@ -399,7 +418,7 @@ it('keeps the fixed Review visible and offers refresh when its decision update f
   expect(load).toHaveBeenCalledOnce();
 });
 
-it('reviews Schema and content in one Workspace snapshot after a decision', () => {
+it('reviews Schema and content in one Workspace snapshot without changing its address', () => {
   const data = snapshotResponse();
   data.snapshot.snapshotId = 'rvs_schema_decided';
   Object.assign(data, {
@@ -431,7 +450,7 @@ it('reviews Schema and content in one Workspace snapshot after a decision', () =
     <WorkspaceSnapshotReview
       projectId="proj_1"
       workspaceId="workspace_prd_handoff"
-      snapshotId="rvs_old"
+      snapshotId="rvs_schema_decided"
     />
   );
   expect(screen.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
@@ -439,10 +458,7 @@ it('reviews Schema and content in one Workspace snapshot after a decision', () =
   expect(screen.getByRole('region', { name: 'Schema review' })).toHaveTextContent('item:');
   fireEvent.click(screen.getByRole('button', { name: 'Content', exact: true }));
   expect(screen.getByText(/Also in this decision/)).toBeVisible();
-  const destination = new URL(replace.mock.calls.at(-1)![0], 'http://local');
-  expect(destination.searchParams.get('tab')).toBe('workspaces');
-  expect(destination.searchParams.get('workspaceMode')).toBe('review');
-  expect(destination.searchParams.get('reviewSnapshot')).toBe('rvs_schema_decided');
+  expect(replace).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
   expect(decide).toHaveBeenCalledWith('accepted', undefined);
 });

@@ -14,6 +14,36 @@ const project = {
 };
 
 describe('ProjectShell', () => {
+  it('updates the browser title for the repository and current section, then releases it', () => {
+    const previousTitle = document.title;
+    document.title = 'Your repositories · T3X';
+    const repository = { ...project, namespace: 'team', description: 'A versioned project' };
+    const view = render(
+      <ProjectShell activeTab="state" project={repository}>
+        State
+      </ProjectShell>
+    );
+    try {
+      expect(document.title).toBe('team/Test Project: A versioned project');
+      view.rerender(
+        <ProjectShell activeTab="reviews" project={repository} pullRequestNumber={42}>
+          Pull request
+        </ProjectShell>
+      );
+      expect(document.title).toBe('Pull request #42 · team/Test Project · T3X');
+      view.rerender(
+        <ProjectShell activeTab="workspaces" pageTitle="Review" project={repository}>
+          Review
+        </ProjectShell>
+      );
+      expect(document.title).toBe('Review · team/Test Project · T3X');
+      view.unmount();
+      expect(document.title).toBe('Your repositories · T3X');
+    } finally {
+      document.title = previousTitle;
+    }
+  });
+
   it('keeps the shared two-row shell across project tabs', () => {
     const view = render(
       <ProjectShell activeTab="state" project={project}>
@@ -56,7 +86,7 @@ describe('ProjectShell', () => {
     expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/t3x-dev/Test-Project/settings?returnTo=%2Ft3x-dev%2FTest-Project%3Ftab%3Dworkspaces'
+      '/t3x-dev/Test-Project/settings'
     );
     expect(screen.queryByText('active')).not.toBeInTheDocument();
     expect(screen.getByText('Review content')).toBeInTheDocument();
@@ -85,25 +115,6 @@ describe('ProjectShell', () => {
     expect(screen.queryByText('orbit-labs')).not.toBeInTheDocument();
   });
 
-  it('returns from Settings to the same PR and branch', () => {
-    render(
-      <ProjectShell
-        activeTab="reviews"
-        branch="feature/release"
-        project={project}
-        projectIdNavigation
-        pullRequestNumber={7}
-      >
-        <div>Review content</div>
-      </ProjectShell>
-    );
-
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/project/proj_test/settings?returnTo=%2Fproject%2Fproj_test%3Ftab%3Dpull-requests%26branch%3Dfeature%252Frelease%26pr%3D7'
-    );
-  });
-
   it('keeps the shared project header on immersive Studio surfaces', () => {
     render(
       <ProjectShell activeTab="schemas" immersive project={project}>
@@ -119,32 +130,5 @@ describe('ProjectShell', () => {
       'flex-1',
       'overflow-hidden'
     );
-  });
-
-  it.each([
-    'discover',
-    'browse',
-  ] as const)('returns from Settings to the same %s view, branch, and Workspace', (activeTab) => {
-    render(
-      <ProjectShell
-        activeTab={activeTab}
-        branch="feature/release"
-        workspaceId="workspace_branch:feature/release"
-        project={{ ...project, namespace: 'orbit', canonical_path: '/orbit/Repo' }}
-      >
-        <div>Catalog content</div>
-      </ProjectShell>
-    );
-
-    const settingsUrl = new URL(
-      screen.getByRole('link', { name: 'Settings' }).getAttribute('href')!,
-      'http://localhost'
-    );
-    expect(settingsUrl.pathname).toBe('/orbit/Repo/settings');
-    const returnUrl = new URL(settingsUrl.searchParams.get('returnTo')!, 'http://localhost');
-    expect(returnUrl.pathname).toBe('/orbit/Repo');
-    expect(returnUrl.searchParams.get('tab')).toBe(activeTab);
-    expect(returnUrl.searchParams.get('branch')).toBe('feature/release');
-    expect(returnUrl.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
   });
 });

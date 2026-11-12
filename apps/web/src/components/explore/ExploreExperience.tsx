@@ -6,7 +6,6 @@ import {
   BookOpen,
   Braces,
   Check,
-  FolderGit2,
   Grid2X2,
   Layers,
   List,
@@ -19,10 +18,16 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import { RepositoryMark, RepositoryTag } from '@/components/project/RepositoryIdentity';
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { CatalogLogo } from '@/components/schemas/CatalogLogo';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SchemaReleasePage } from '@/components/schemas/SchemaReleasePage';
+import {
+  type ExploreView,
+  exploreListHref,
+  exploreReleasePath,
+} from '@/domain/project/exploreLocation';
 import {
   useExploreRelease,
   usePublicProject,
@@ -50,12 +55,28 @@ const releaseKeys = [
   'catalogProjectId',
   'schemaView',
 ] as const;
-export function ExploreExperience() {
+type ReleaseAddress = { canonicalName: string; version: string; pathname: string };
+
+function releaseLocation(pathname: string, params: URLSearchParams, view: ExploreView) {
+  const context = new URLSearchParams(params);
+  for (const key of [...releaseKeys, 'project']) context.delete(key);
+  if (view === 'browse') context.set('view', 'browse');
+  else context.delete('view');
+  return `${pathname}${context.size ? `?${context}` : ''}`;
+}
+
+export function ExploreExperience({
+  releaseAddress,
+  pageView,
+}: {
+  releaseAddress?: ReleaseAddress;
+  pageView?: ExploreView;
+} = {}) {
   const search = useSearchParams();
   const router = useRouter();
   const query = search.toString();
   const params = new URLSearchParams(query);
-  const view = params.get('view') === 'browse' ? 'browse' : 'discover';
+  const view = pageView ?? (params.get('view') === 'browse' ? 'browse' : 'discover');
   const type =
     params.get('type') === 'projects'
       ? 'projects'
@@ -63,7 +84,15 @@ export function ExploreExperience() {
         ? 'schemas'
         : 'all';
   const layout = params.get('layout') === 'list' ? 'list' : 'grid';
-  const release = params.has('catalogName');
+  const release = releaseAddress || params.has('catalogName');
+  const legacyListHref =
+    !release && (params.has('view') || params.get('type') === 'all')
+      ? exploreListHref(view, params)
+      : undefined;
+  const { replace } = router;
+  useEffect(() => {
+    if (legacyListHref) replace(`${legacyListHref}${window.location.hash}`, { scroll: false });
+  }, [legacyListHref, replace]);
   const project = params.get('project');
   const [searchText, setSearchText] = useState(params.get('q') ?? '');
   const routeSearch = params.get('q') ?? '';
@@ -95,9 +124,17 @@ export function ExploreExperience() {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    router.push(`/explore${next.size ? `?${next}` : ''}`, { scroll: false });
+    const nextView = updates.view === 'browse' || updates.view === 'discover' ? updates.view : view;
+    router.push(exploreListHref(nextView, next), { scroll: false });
   }
   function openRelease(item: SchemaCatalogItem) {
+    const pathname = !item.identity.ownerProjectId
+      ? exploreReleasePath(item.identity.canonicalName, item.release.version)
+      : undefined;
+    if (pathname) {
+      router.push(releaseLocation(pathname, params, view), { scroll: false });
+      return;
+    }
     navigate({
       catalogName: item.identity.canonicalName,
       catalogVersion: item.release.version,
@@ -109,11 +146,10 @@ export function ExploreExperience() {
   function back() {
     navigate(Object.fromEntries([...releaseKeys, 'project'].map((key) => [key, undefined])));
   }
-  function viewHref(nextView: 'discover' | 'browse') {
+  function viewHref(nextView: ExploreView) {
     const next = new URLSearchParams(query);
     for (const key of [...releaseKeys, 'project']) next.delete(key);
-    next.set('view', nextView);
-    return `/explore?${next}`;
+    return exploreListHref(nextView, next);
   }
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -124,7 +160,9 @@ export function ExploreExperience() {
       Object.fromEntries([...schemaFilters, 'projectTag', 'q'].map((key) => [key, undefined]))
     );
   }
-  const returnTo = `/explore?${query}`;
+  const returnTo = releaseAddress
+    ? releaseLocation(releaseAddress.pathname, params, view)
+    : exploreListHref(view, params);
   const viewLabel = view === 'browse' ? 'Browse' : 'Discover';
   const backLabel = `Back to ${viewLabel}`;
   return (
@@ -137,7 +175,14 @@ export function ExploreExperience() {
         }}
       />
       {release ? (
-        <ExactRelease params={params} returnTo={returnTo} onBack={back} backLabel={backLabel} />
+        <ExactRelease
+          address={releaseAddress}
+          view={view}
+          params={params}
+          returnTo={returnTo}
+          onBack={back}
+          backLabel={backLabel}
+        />
       ) : project ? (
         <PublicProjectReading projectId={project} onBack={back} backLabel={backLabel} />
       ) : (
@@ -157,18 +202,18 @@ export function ExploreExperience() {
                   <ArrowRight size={17} />
                 </button>
               </form>
-              <nav className={styles.types} aria-label="Catalog type">
+              <fieldset className={styles.types} aria-label="Catalog type">
                 {(['all', 'projects', 'schemas'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
-                    aria-current={type === value ? 'page' : undefined}
-                    onClick={() => navigate({ type: value })}
+                    aria-pressed={type === value}
+                    onClick={() => navigate({ type: value === 'all' ? undefined : value })}
                   >
                     {value[0].toUpperCase() + value.slice(1)}
                   </button>
                 ))}
-              </nav>
+              </fieldset>
             </header>
             {view === 'discover' ? (
               <>
@@ -575,24 +620,11 @@ function ProjectCard({
   row?: boolean;
   onOpen: () => void;
 }) {
-  const tone = Array.from(item.name).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 4;
   return (
-    <article
-      className={`${styles.card} ${styles.projectCard} ${row ? styles.row : ''}`}
-      data-tone={tone}
-    >
-      {!row && (
-        <div className={styles.projectPattern} aria-hidden="true">
-          <span />
-          <span />
-          <FolderGit2 size={32} />
-        </div>
-      )}
+    <article className={`${styles.card} ${row ? styles.row : ''}`}>
       <div className={styles.cardBody}>
         <div className={styles.cardHead}>
-          <span className={styles.projectIcon}>
-            <FolderGit2 size={22} />
-          </span>
+          <RepositoryMark id={item.projectId} icon={item.icon} className={styles.projectIcon} />
           <div className={styles.titleBlock}>
             <button type="button" className={styles.title} onClick={onOpen}>
               {item.name}
@@ -604,9 +636,9 @@ function ProjectCard({
         <p className={styles.description}>
           {item.description || 'Explore this public project and its introduction.'}
         </p>
-        <div className={styles.tags}>
+        <div className={styles.projectTags}>
           {item.tags.slice(0, 3).map((tag) => (
-            <span key={tag}>{tag}</span>
+            <RepositoryTag key={tag} name={tag} />
           ))}
         </div>
         <div className={styles.cardFoot}>
@@ -664,30 +696,53 @@ function LoadMore({
   ) : null;
 }
 function ExactRelease({
+  address,
+  view,
   params,
   returnTo,
   onBack,
   backLabel,
 }: {
+  address?: ReleaseAddress;
+  view: ExploreView;
   params: URLSearchParams;
   returnTo: string;
   onBack: () => void;
   backLabel: string;
 }) {
+  const { replace } = useRouter();
   const query = new URLSearchParams({
-    canonicalName: params.get('catalogName') ?? '',
-    version: params.get('catalogVersion') ?? '',
-    expectedHash: params.get('catalogHash') ?? '',
+    canonicalName: address?.canonicalName ?? params.get('catalogName') ?? '',
+    version: address?.version ?? params.get('catalogVersion') ?? '',
   });
-  if (params.get('sourceProjectId')) query.set('sourceProjectId', params.get('sourceProjectId')!);
-  if (params.get('catalogProjectId'))
-    query.set('catalogProjectId', params.get('catalogProjectId')!);
-  const valid = !!params.get('catalogVersion') && !!params.get('catalogHash');
+  if (!address) {
+    for (const key of ['sourceProjectId', 'catalogProjectId'] as const) {
+      const value = params.get(key);
+      if (value) query.set(key, value);
+    }
+    const expectedHash = params.get('catalogHash');
+    if (expectedHash) query.set('expectedHash', expectedHash);
+  }
+  const valid = !!address || (!!query.get('version') && !!query.get('expectedHash'));
   const result = useExploreRelease(query.toString(), valid);
+  const item = result.data?.item;
+  const canonicalPath =
+    !address &&
+    !params.has('sourceProjectId') &&
+    !params.has('catalogProjectId') &&
+    item &&
+    !item.identity.ownerProjectId &&
+    item.release.hash === query.get('expectedHash')
+      ? exploreReleasePath(item.identity.canonicalName, item.release.version)
+      : undefined;
+  const canonicalHref = canonicalPath ? releaseLocation(canonicalPath, params, view) : undefined;
+  useEffect(() => {
+    if (canonicalHref) replace(`${canonicalHref}${window.location.hash}`, { scroll: false });
+  }, [canonicalHref, replace]);
   return (
     <div className={styles.detail}>
       <SchemaReleasePage
-        item={result.data?.item}
+        item={item}
         loading={result.loading}
         error={
           valid
@@ -698,7 +753,7 @@ function ExactRelease({
         targetProjectId={params.get('studioTarget') ?? undefined}
         workspaceId={params.get('workspace') ?? undefined}
         branch={params.get('branch') ?? undefined}
-        returnTo={returnTo}
+        returnTo={canonicalHref ?? returnTo}
         onBack={onBack}
         backLabel={backLabel}
       />
@@ -735,17 +790,17 @@ function PublicProjectReading({
         {project && (
           <>
             <header className={styles.projectHero}>
-              <div className={styles.projectHeroArt}>
-                <FolderGit2 size={64} />
-              </div>
               <span className={styles.eyebrow}>
                 PUBLIC PROJECT · {project.namespace || 'COMMUNITY'}
               </span>
-              <h1>{project.name}</h1>
+              <div className={styles.projectHeroHeading}>
+                <RepositoryMark id={project.projectId} icon={project.icon} />
+                <h1>{project.name}</h1>
+              </div>
               <p>{project.description}</p>
-              <div className={styles.tags}>
+              <div className={styles.projectTags}>
                 {project.tags.map((tag) => (
-                  <span key={tag}>{tag}</span>
+                  <RepositoryTag key={tag} name={tag} />
                 ))}
               </div>
               {project.repositoryPath ? (

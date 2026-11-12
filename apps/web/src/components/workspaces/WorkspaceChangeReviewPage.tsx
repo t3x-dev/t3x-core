@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { getCanonicalRepositoryPath } from '@/domain/project/repoPath';
 import {
   decodeReviewRouteSegment,
   workspaceReviewHref,
@@ -20,17 +21,23 @@ export function WorkspaceChangeReviewPage({
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const href = workspaceReviewHref(
+  const repositoryPath = getCanonicalRepositoryPath(usePathname());
+  const [path, reviewQuery] = workspaceReviewHref(
     decodeReviewRouteSegment(projectId),
     decodeReviewRouteSegment(workspaceId),
     {
       snapshotId: decodeReviewRouteSegment(snapshotId),
       branch: params.get('branch') ?? undefined,
       pane: params.get('reviewPane'),
+      repositoryPath,
     }
-  );
+  ).split('?');
+  const query = new URLSearchParams(params.toString());
+  query.delete('tab');
+  for (const [key, value] of new URLSearchParams(reviewQuery)) query.set(key, value);
+  const href = `${path}?${query}`;
   useEffect(() => {
-    router.replace(href);
+    router.replace(`${href}${window.location.hash}`);
   }, [href, router]);
   return (
     <p className="p-6 text-sm">

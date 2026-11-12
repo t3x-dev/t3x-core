@@ -99,6 +99,7 @@ export interface ApiCommitOperationsResponse {
 /** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
+  address_number?: string;
   schema: 't3x/commit/v2';
   parents: string[];
   author: { type: string; id?: string; name?: string };
@@ -119,6 +120,7 @@ export interface ApiCommit {
 }
 
 interface CommitHistoryProjection {
+  address_number?: string;
   assurance?: { decision?: { digest?: string } };
   branch?: string;
   content?: SemanticContent;
@@ -173,6 +175,7 @@ function normalizeApiCommit(
   if ('format' in raw && raw.format === 'transition_v2') {
     return {
       hash: raw.id,
+      address_number: raw.address_number,
       schema: raw.schema,
       parents: raw.parents,
       author: { type: 'system', name: 'Transition' },

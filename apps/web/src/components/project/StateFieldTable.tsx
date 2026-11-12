@@ -12,12 +12,14 @@ import {
   Search,
 } from 'lucide-react';
 import type { StructuredDiffKind } from '@/domain/diff/structuredStateDiff';
+import { formatDate, relativeTime } from '@/domain/format/formatters';
 import type { StatePointRow } from '@/domain/project/stateViewModel';
 import { cn } from '@/utils/cn';
 import inspectionStyles from './StateInspection.module.css';
 
 export function StateFieldTable<Row extends StatePointRow>({
   rows,
+  getModifiedAt,
   query,
   onQueryChange,
   onExpandAll,
@@ -27,6 +29,7 @@ export function StateFieldTable<Row extends StatePointRow>({
   onSelectRow,
 }: {
   rows: Row[];
+  getModifiedAt?: (row: Row) => string | undefined;
   query: string;
   onQueryChange: (query: string) => void;
   onExpandAll: () => void;
@@ -62,12 +65,14 @@ export function StateFieldTable<Row extends StatePointRow>({
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this region.
         tabIndex={0}
       >
-        <table className={inspectionStyles.tree}>
+        <table
+          className={cn(inspectionStyles.tree, getModifiedAt && inspectionStyles.modifiedTree)}
+        >
           <thead>
             <tr className={inspectionStyles.th2}>
               <th>Field</th>
               <th>Value</th>
-              <th>Type</th>
+              <th>{getModifiedAt ? 'Last modified' : 'Type'}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,6 +80,7 @@ export function StateFieldTable<Row extends StatePointRow>({
               const isContainer = row.expandable || row.type === 'object' || row.type === 'array';
               const expanded = isExpanded(row);
               const select = () => onSelectRow(row);
+              const modifiedAt = getModifiedAt?.(row);
               return (
                 <tr
                   key={row.id}
@@ -124,7 +130,22 @@ export function StateFieldTable<Row extends StatePointRow>({
                   >
                     <StateValueCell row={row} />
                   </td>
-                  <td className={inspectionStyles.ty}>{row.type}</td>
+                  <td
+                    className={getModifiedAt ? inspectionStyles.modifiedAt : inspectionStyles.ty}
+                    aria-label={
+                      getModifiedAt && !modifiedAt ? 'Last modified time unavailable' : undefined
+                    }
+                  >
+                    {modifiedAt ? (
+                      <time dateTime={modifiedAt} title={formatDate(modifiedAt)}>
+                        {relativeTime(modifiedAt)}
+                      </time>
+                    ) : getModifiedAt ? (
+                      '—'
+                    ) : (
+                      row.type
+                    )}
+                  </td>
                 </tr>
               );
             })}

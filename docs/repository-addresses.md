@@ -115,11 +115,11 @@ recycled and no automatic random suffixes are generated.
 The owner/name route resolves directly through the API, independently of project
 lists or pagination. Case differences and all historical names redirect to the
 current canonical path. Supported ID routes also redirect, preserving query
-parameters and fragments: repository tabs, settings, history, diff, merge, leaf,
+parameters and fragments: repository tabs, settings, history, diff, merge,
 knowledge graph, workspace change review, and conversation source evidence.
 Nested business pages are reused with a route-parameter adapter.
 
-Unknown ID suffixes stay under the ID route. Retired commit and draft routes
+Unknown ID suffixes stay under the ID route. Retired leaf, commit and draft routes
 retain their existing not-found behavior. Pending-migration repositories remain
 accessible by ID with a visible notice. Missing namespace and the display label
 `You` are never used to invent an address.

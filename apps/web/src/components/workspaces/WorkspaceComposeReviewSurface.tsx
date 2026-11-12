@@ -1,5 +1,6 @@
 import {
   type PublishWorkspaceAuthoringInput,
+  type ReviewSnapshotV1,
   type SchemaPreparationTarget,
   T3xApiError,
 } from '@t3x-dev/api-client';
@@ -101,6 +102,7 @@ import {
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
 import { checksHref, checksReturnTo } from '@/domain/project/checks';
+import { getCanonicalRepositoryPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -135,6 +137,7 @@ import {
   listWorkspaceSchemaChoices,
   workspaceSchemaChoiceId,
 } from '@/domain/workspaces/schemaBindings';
+import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
@@ -328,7 +331,7 @@ export function WorkspaceComposeReviewSurface({
       params.delete('returnTo');
       if (nextMode === 'review') {
         params.set('workspaceMode', 'review');
-        if (nextPane && nextPane !== 'changes') {
+        if (nextPane) {
           params.set('reviewPane', nextPane);
         } else {
           params.delete('reviewPane');
@@ -339,7 +342,9 @@ export function WorkspaceComposeReviewSurface({
       }
 
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.replace(`${pathname}${query ? `?${query}` : ''}${window.location.hash}`, {
+        scroll: false,
+      });
     },
     [pathname, routeQuery, router]
   );
@@ -359,8 +364,7 @@ export function WorkspaceComposeReviewSurface({
         const source = new URLSearchParams(routeQuery);
         source.set('workspaceMode', 'review');
         source.delete('workspaceTool');
-        if (reviewPane !== 'changes') source.set('reviewPane', reviewPane);
-        else source.delete('reviewPane');
+        source.set('reviewPane', reviewPane);
         const snapshotId = controller.review?.reviewSnapshot?.snapshotId;
         router.push(
           checksHref(candidate.projectId, {
@@ -665,7 +669,6 @@ export function WorkspaceComposeReviewSurface({
               candidate={controller.candidate ?? candidate}
               controller={controller}
               hidden={Boolean(workspaceTool)}
-              openContentEditor={legacyContentEdit}
             />
           ) : null}
         </div>
@@ -874,7 +877,6 @@ function ComposeSurface({
   candidate,
   controller,
   hidden,
-  openContentEditor,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
@@ -882,7 +884,6 @@ function ComposeSurface({
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   hidden: boolean;
-  openContentEditor: boolean;
 }) {
   const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | 'schema' | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1195,18 +1196,6 @@ function ComposeSurface({
     setSidePanel('chat');
     setSchemaConversationId(undefined);
   }, [candidate.id]);
-  const legacyEditorOpened = useRef(false);
-  useEffect(() => {
-    if (!openContentEditor) {
-      legacyEditorOpened.current = false;
-      return;
-    }
-    if (legacyEditorOpened.current) return;
-    legacyEditorOpened.current = true;
-    setDraftSubject('content');
-    setFieldDialog('structure');
-    if (!activity.enabled) void authoringBootstrap.start();
-  }, [openContentEditor, activity.enabled, authoringBootstrap.start]);
   const selectActivity = useCallback(
     (selection: ComposeActivitySelection, panel: 'history' | 'chat' | 'preserve' = 'history') => {
       setActivitySelection(selection);
@@ -2968,6 +2957,8 @@ function ReviewSurface({
     newerRevision !== undefined ||
     Boolean(activity.newActivity || authoring?.synchronization?.required);
   const snapshot = controller.review.reviewSnapshot;
+  const resolveObjectAddress = useRepositoryObjectAddressResolver();
+  const repositoryPath = getCanonicalRepositoryPath(usePathname());
   const snapshotBasis = snapshot?.review?.precondition;
   const inspectedRevision = authoring?.workspaceRevision ?? controller.candidate.revision;
   const inspectedRefHead = authoring
@@ -3076,17 +3067,27 @@ function ReviewSurface({
       if (hasSavedSchema)
         throw new Error('The saved Schema candidate changed. Load the latest Draft and Schema.');
       if (!reviewMounted.current) return;
+      const prepared: { snapshot?: ReviewSnapshotV1 } = {};
       await controller.prepareReview((snapshot) => {
-        if (!reviewMounted.current) return;
-        router.replace(
-          workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
-            snapshotId: snapshot.snapshotId,
-            branch: snapshot.review.precondition.refName,
-            pane,
-          }),
-          { scroll: false }
-        );
+        prepared.snapshot = snapshot;
       }, authoring);
+      const snapshot = prepared.snapshot;
+      if (!snapshot || !reviewMounted.current) return;
+      const address =
+        repositoryPath && /^rvs_[0-9a-f]{32}$/.test(snapshot.snapshotId)
+          ? await resolveObjectAddress(snapshot.projectId, 'review', snapshot.snapshotId)
+          : null;
+      if (!reviewMounted.current) return;
+      router.replace(
+        workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
+          snapshotId: snapshot.snapshotId,
+          snapshotNumber: address?.number,
+          repositoryPath: address ? repositoryPath : undefined,
+          branch: snapshot.review.precondition.refName,
+          pane,
+        }),
+        { scroll: false }
+      );
     } catch (cause) {
       if (reviewMounted.current)
         setPreparationError(cause instanceof Error ? cause.message : 'Could not prepare Review.');

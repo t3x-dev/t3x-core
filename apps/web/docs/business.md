@@ -9,8 +9,10 @@ the vocabulary needed to discuss frontend behavior.
 The inherited system contracts and frontend contracts B-01 through B-07 are
 normative. They define target behavior and acceptance expectations. API/source
 references explain concepts and help locate implementation; they do not prove
-that the current UI conforms. Keep implementation gaps in the team's work
-records, separately from these decisions.
+that the current UI conforms. Keep [implementation gap summaries](#current-implementation-gaps)
+separate from these decisions and follow the
+[documentation maintenance policy](architecture.md#verification-and-maintenance)
+for what belongs in the team's work records.
 
 Other product areas remain subject to repository-level contracts; their detailed
 frontend workflows are outside this document's scope. These frontend decisions
@@ -190,21 +192,26 @@ subject. External changes announce a newer revision; loading it is explicit.
 Local unsaved changes are handled under B-01 and are never silently excluded
 while the UI implies that they were reviewed.
 
-Prepare Review must use the displayed Workspace/composition revision and ref
-head. If a fresh read or command finds a different subject or precondition,
-stop preparation, preserve the existing view and explain that the Draft or branch
-changed. Offer loading the new version or the supported synchronization path;
-do not silently prepare the newly discovered content. A newer version requires
-inspection and a new explicit preparation action.
+- **Applies when** the user prepares Review for an inspected saved Draft.
+- **Action** Send the inspected Workspace revision, composition revision and
+  Draft basis head (`basis.refHead`). Use the current target branch head
+  (`synchronization.currentRefHead`) for behind detection and synchronization.
+- **Block when** a fresh read or command finds a changed subject or
+  precondition, including a target branch head that differs from the inspected
+  basis. Explain the change, preserve the inspected view and offer loading the
+  new version or the supported synchronization path. Preparing the newer
+  version requires inspection and a new explicit action.
+- **Verify** With a Draft based on H1 and a target branch known to be at H2,
+  keep the H1 Draft visible and offer synchronization. Preparation cannot
+  substitute H2 for the inspected basis.
 
 If Schema preparation changes Content, show its exact before/after and impact
 before applying it under B-04. The resulting Draft becomes a new identified
 subject for inspection and Review. A previous confirmation does not authorize
 unexpected new changes.
 
-Fixed Review views read that snapshot's values and evidence. Refresh may show a
-later Decision/Commit result for the same Transition and unchanged reviewed
-subject; it must not substitute a new Draft or silently switch Transitions.
+Fixed Review views follow [A-02](architecture.md#a-02-read-refresh-and-invalidation)
+for the requested snapshot identity and later outcomes.
 A superseded or stale Review remains readable with an explanation. It cannot
 authorize a new decision against different facts. Confirmation uses the fixed
 preconditions; the application remains authoritative on validity.
@@ -220,9 +227,16 @@ Review, committing and publishing a public version are separate operations.
 Label their outcomes separately; completing one does not imply the others.
 
 1. A preview identifies its exact sources, definition and candidate/version.
-   The definition to save/adopt must be the one previewed. A promise to retain
-   local edits includes them in that preview; unresolved source conflicts or
-   exclusions are shown before saving, not silently chosen.
+   Save or adopt the definition that was previewed. When retaining local edits,
+   include them in that preview.
+   - **Applies when** saving a definition combined from Schema sources.
+   - **Action** Show source and local edit conflicts before saving. Include
+     explicit resolutions and exclusions in the final preview and save that
+     exact definition.
+   - **Block when** the source preview is invalid or a conflict remains
+     unresolved. Require an explicit choice for each conflict.
+   - **Verify** An unresolved conflict prevents saving. After resolution, the
+     saved definition and its readback match the final preview.
 2. Saving a candidate does not itself adopt its definition or alter Content.
    Dedicated and inline editors use the same Workspace/candidate identity and
    local-edit protections. Preserve local Content edits when switching editors;
@@ -275,9 +289,9 @@ a generic fix-fields or retry instruction must not stand in for a missing
 capability. Preserve independent failures when one is resolved. If no supported
 recovery action is available, state that limitation and investigate ownership
 of the capability gap. An unconnected existing API or missing frontend entry is
-a frontend gap; record a confirmed backend defect in the team's external
-`Record-backend.md`. Do not fabricate an action or promise it will unblock the
-workflow.
+a frontend gap. Follow the [task authorization boundary](../AGENTS.md#scope-and-required-reading)
+for fixes and backend handoff. Keep feedback aligned with the recovery actions
+the product supports.
 
 **Acceptance:** a confirmed write stays confirmed after a failed read; a lost
 response cannot produce a different retry; recovery addresses the reported
@@ -316,28 +330,28 @@ views/export agree as structured values, not necessarily as serialized text.
 
 ### B-07: Check scope and readiness
 
-Each check identifies its subject/version, Content or Schema scope, status and
-reason. Keep observation, outcome and freshness distinguishable:
+Identify the facts below and the reason for each check's displayed state.
 
-| Status | Meaning |
+| Fact | Meaning |
 | --- | --- |
-| Passed | A conclusive successful observation for the stated subject. |
-| Failed | A conclusive failure for that subject; retain its findings. |
-| Not applicable | The application explicitly declares this check inapplicable and supplies its scope/reason. |
-| Not observed | No observation is recorded; this alone says neither that a requirement is missing nor that it passed. |
-| Missing required evidence | An identified application requirement lacks its evidence. |
-| Pending / inconclusive | Work is running or has no conclusive outcome; do not map it to Passed or invent a failure. |
-| Stale | Evidence applies to older/different facts. Preserve its original outcome with a freshness warning; it does not authorize the current subject. |
+| Scope and subject | Identify the exact version and what the check covers, such as Content, Schema, or Transition integrity and replay. |
+| Requirement and applicability | Identify whether the application requires the evidence. Show Missing required evidence only for an identified requirement that lacks evidence. Not applicable requires an explicit application declaration with scope and reason. |
+| Observation | Distinguish no recorded observation, work in progress and a recorded observation. |
+| Outcome | A recorded observation can pass, fail or be inconclusive. Retain its findings and reason. |
+| Freshness | Identify whether evidence applies to the current subject. Stale evidence retains its original outcome with a freshness warning. |
 
-Do not infer Not applicable from no visible fields, no run, or a missing response.
-An exemption for Content validation says nothing about unrelated checks. Do not
-reapply a current rule or inferred exemption to rewrite historical evidence.
-
-Decision controls require matching loaded review data and the application's
-current capabilities. The frontend may block invalid or incomplete input; it
-cannot grant permission or relax policy because some check looks successful.
-Loading, unknown freshness or missing authority cannot appear as ready. Recheck
-at the authoritative command boundary rather than trusting a cached button.
+- **Applies when** presenting checks or readiness in the workflow covered by this
+  document.
+- **Action** Keep the facts above distinct and preserve historical evidence.
+  Limit an exemption to the check and scope declared by the application.
+- **Block when** review data is loading or mismatched, freshness is unknown or
+  stale, or application authority is missing. These states cannot appear as
+  ready for the affected action. Recheck capabilities and preconditions at the
+  authoritative command boundary.
+- **Verify** A failed check for an older revision stays failed and is marked
+  stale. An unobserved check with unknown requirement remains unobserved.
+  Missing required evidence identifies the requirement. A Content exemption
+  leaves unrelated checks unchanged.
 
 Override is available only when the application authorizes it and requires an
 explicit reason. It does not bypass identity, authorization, deterministic replay,
@@ -349,11 +363,19 @@ the branch.
 do not authorize a new revision; failed/inconclusive/missing evidence stays
 visible and an authorized override does not erase the failure.
 
+## Current implementation gaps
+
+For B-07, [fixed Review](../src/domain/workspaces/changeDecision.ts) maps both
+an absent observation and an observation with no outcome to `missing`.
+[Workspace preparation](../src/components/workspaces/WorkspaceComposeReviewSurface.tsx)
+maps both to `pending`. The status mapping still needs to preserve observation
+and outcome separately and account for when evidence is required.
+
 ## Applying these contracts
 
 Together with [A-01 through A-05](architecture.md#frontend-contracts), these rules
 resolve the frontend boundaries listed during documentation consolidation.
-Implement changes against the relevant IDs and record any nonconforming behavior
-as an implementation gap. Contract adoption does not mark existing code, tests
+Implement changes against the relevant IDs and track deviations in the team's
+work records. Contract adoption does not mark existing code, tests
 or business acceptance complete. Use a future explicit decision for new product
 requirements rather than inferring them from implementation convenience.

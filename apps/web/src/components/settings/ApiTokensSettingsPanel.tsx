@@ -169,6 +169,9 @@ export function ApiTokensSettingsPanel() {
         <header className={styles.titleRow}>
           <h1>API tokens</h1>
         </header>
+        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+          Manage tokens issued to your account. You can restrict each token to a project.
+        </p>
 
         <section aria-label="API tokens" className={styles.card}>
           <div className={styles.toolbar}>

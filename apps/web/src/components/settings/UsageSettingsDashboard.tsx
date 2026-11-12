@@ -97,6 +97,9 @@ export function UsageSettingsDashboard() {
         <div className={styles.titleRow}>
           <div className={styles.titleGroup}>
             <h1>Usage</h1>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Usage is scoped to your account when you are signed in.
+            </p>
           </div>
           <div className={styles.rangeWrap}>
             <button

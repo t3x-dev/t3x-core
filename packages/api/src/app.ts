@@ -126,6 +126,7 @@ import {
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
+import { repositoryObjectAddressRoutes } from './routes/repository-object-addresses.openapi';
 import { repositoryPathRoutes } from './routes/repository-paths.openapi';
 import { createWsRoute } from './routes/ws';
 import type { AppEnv } from './types';
@@ -256,6 +257,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', collaborationCommandRoutes);
   api.route('/', collaborationInvitationRoutes);
   api.route('/', repositoryPathRoutes);
+  api.route('/', repositoryObjectAddressRoutes);
   api.route('/', projectRoutes);
   api.route('/', createProjectVisibilityRoutes(options?.projectVisibilityPolicy));
   api.route('/', pullRequestRoutes);
@@ -352,6 +354,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Deployment', description: 'Public deployment capability discovery' },
       { name: 'Health', description: 'Health check endpoints' },
       { name: 'Projects', description: 'Project management' },
+      { name: 'Repositories', description: 'Repository object addresses' },
       { name: 'Checks', description: 'Project checks and verification records' },
       { name: 'Explore', description: 'Public project and schema discovery' },
       { name: 'Namespaces', description: 'Personal and organization namespaces' },

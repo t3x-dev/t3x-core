@@ -1290,7 +1290,7 @@ it('requires a valid Workspace for diagnostics and never opens a retired check d
   expect(mocks.push).not.toHaveBeenCalled();
 });
 
-it('uses the resolved branch target in all outbound Studio links and normalizes its URL', () => {
+it('uses the resolved branch target in outbound links without expanding the Studio URL', () => {
   mocks.query =
     'branch=feature&returnTo=%2Fexplore%3FcatalogName%3Dteam%252Fbase%26workspace%3Dold%26branch%3Dmain';
   mocks.workspaces = [
@@ -1299,9 +1299,7 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   ];
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: /current branch feature/ })).toBeVisible();
-  expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining('workspace=feature-draft'), {
-    scroll: false,
-  });
+  expect(mocks.replace).not.toHaveBeenCalled();
   const back = screen.getByRole('link', { name: 'Back to source' });
   const url = new URL(back.getAttribute('href')!, 'http://local');
   expect(url.searchParams.get('workspace')).toBe('feature-draft');
@@ -1309,6 +1307,70 @@ it('uses the resolved branch target in all outbound Studio links and normalizes 
   openSources();
   expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
   closeSources();
+});
+
+it('removes the old Studio view flag without changing the explicit Workspace', () => {
+  mocks.query = 'branch=main&schemaView=studio&workspace=workspace_branch%3Amain';
+  mocks.branches = ['main'];
+  mocks.workspaces = [boundWorkspace()];
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
+  expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
+    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain',
+    { scroll: false }
+  );
+});
+
+it('keeps the short Studio entry and local edits when a refresh makes another Workspace the default', async () => {
+  const main = boundWorkspace();
+  const feature = { ...main, id: 'feature-draft', title: 'Feature', targetBranch: 'feature' };
+  mocks.query = '';
+  mocks.branches = ['main', 'feature'];
+  mocks.workspaces = [main, feature];
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: { yschema: '0.1', nodes: { checklist: { slots: { title: { type: 'string' } } } } },
+  };
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  const required = () => screen.getByLabelText('Required checklist/title');
+  fireEvent.click(required());
+  expect(required()).toBeChecked();
+
+  mocks.workspaces = [{ ...main, status: 'committed' }, feature];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
+  expect(screen.getByText(/This Workspace is committed/)).toBeVisible();
+  expect(required()).toBeChecked();
+  expect(mocks.replace).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches\/tags/ }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'feature' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Save schema draft before leaving?');
+  expect(mocks.push).not.toHaveBeenCalled();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/team/project/schemas?workspace=feature-draft&branch=feature',
+      {
+        scroll: false,
+      }
+    )
+  );
+});
+
+it('preserves an explicit Studio target when the main Workspace is not the default', () => {
+  mocks.query = 'branch=main&schemaView=studio&workspace=workspace_branch%3Amain';
+  mocks.branches = ['main', 'feature'];
+  mocks.workspaces = [
+    { ...boundWorkspace(), status: 'committed' },
+    { ...boundWorkspace(), id: 'feature-draft', targetBranch: 'feature' },
+  ];
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
+    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain',
+    { scroll: false }
+  );
 });
 
 it('protects unsaved edits before switching branches', async () => {
@@ -1330,7 +1392,7 @@ it('protects unsaved edits before switching branches', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
   await waitFor(() =>
     expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?workspace=feature-draft&branch=feature&schemaView=studio',
+      '/team/project/schemas?workspace=feature-draft&branch=feature',
       { scroll: false }
     )
   );
@@ -2040,6 +2102,25 @@ function setupYamlDraft() {
   return render(<SchemaStudioExperience projectId="p" />);
 }
 
+it('retains unsaved YAML and rejects saving after its Workspace is committed elsewhere', async () => {
+  const main = boundWorkspace();
+  const { rerender } = setupYamlDraft();
+  openYaml();
+  const editor = screen.getByLabelText('Schema definition YAML editor') as HTMLTextAreaElement;
+  const edited = editor.value.replace('type: string', 'type: number');
+  fireEvent.change(editor, { target: { value: edited } });
+
+  mocks.workspaces = [{ ...main, status: 'committed' }];
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(editor).toBeVisible();
+  expect(editor).toHaveValue(edited);
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  const dialog = screen.getByRole('dialog', { name: 'Schema YAML editor' });
+  expect(await within(dialog).findByText(/persisted Workspace before saving/)).toBeVisible();
+  expect(editor).toHaveValue(edited);
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+});
+
 it('carries unsaved fields into YAML, saves in place, and returns to the saved field definition', async () => {
   const { rerender } = setupYamlDraft();
   fireEvent.click(screen.getByLabelText('Required checklist/title'));
@@ -2235,7 +2316,7 @@ it('blocks a mismatched branch and Workspace without correcting the URL or editi
   fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
   fireEvent.click(screen.getByRole('menuitemradio', { name: /^main$/ }));
   expect(mocks.push).toHaveBeenCalledWith(
-    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain&schemaView=studio',
+    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain',
     { scroll: false }
   );
 });

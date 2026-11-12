@@ -1191,6 +1191,14 @@
       "action": "project:read"
     },
     {
+      "source": "repository-object-addresses.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/object-addresses/{kind}/{key}",
+      "policy": "project",
+      "rationale": "Exact Commit and Review addresses resolve only after the same project read check as their evidence.",
+      "action": "project:read"
+    },
+    {
       "source": "projects.openapi.ts",
       "method": "GET",
       "path": "/v1/projects",

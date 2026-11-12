@@ -73,13 +73,8 @@ it('publishes only on explicit submit, pins the checked revision and opens the e
     tags: [],
   });
   const url = new URL(screen.getByRole('link').getAttribute('href')!, 'http://localhost');
-  expect(Object.fromEntries(url.searchParams)).toEqual({
-    tab: 'browse',
-    schemaView: 'release',
-    catalogName: receipt.source.canonicalName,
-    catalogVersion: '1.0.0',
-    catalogHash: artifactHash,
-  });
+  expect(url.pathname).toBe(`/explore/schemas/${receipt.source.canonicalName}/1.0.0`);
+  expect(url.search).toBe('');
 });
 it('disables stale or blocked previews without attempting a write', () => {
   const { rerender } = render(<StudioPublishDialog {...props} currentReviewHash={undefined} />);

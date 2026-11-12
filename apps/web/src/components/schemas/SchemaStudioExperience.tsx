@@ -204,6 +204,11 @@ export function SchemaStudioExperience({
   const requestedWorkspaceId = params?.get('workspace') ?? '';
   const requestedBranch = params?.get('branch');
   const query = params?.toString() ?? '';
+  const [implicitTarget, setImplicitTarget] = useState<{
+    scope: string;
+    id: string;
+    branch: string;
+  }>();
   const projectScope = useMemo(() => ({ active: true, attempts: new Set<string>() }), [projectId]);
   const activeProjectScope = useRef(projectScope);
   activeProjectScope.current = projectScope;
@@ -222,7 +227,6 @@ export function SchemaStudioExperience({
       routeScope.active = false;
     };
   }, [routeScope]);
-  const legacyView = params?.get('schemaView') === 'active';
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const sourceManagerTrigger = useRef<HTMLButtonElement>(null);
   const [sourceManagerOpen, setSourceManagerOpen] = useState(false);
@@ -311,11 +315,14 @@ export function SchemaStudioExperience({
       ),
     [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
   );
-  const workspaceId = resolveStudioWorkspaceId(
-    draftWorkspaces,
-    requestedWorkspaceId,
-    requestedBranch
-  );
+  const targetsReady =
+    !workspaces.loading && !workspaces.error && !projectBranches.loading && !projectBranches.error;
+  const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
+  const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
+  const workspaceId =
+    requestedWorkspaceId ||
+    pinned?.id ||
+    (targetsReady ? resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch) : '');
   const selectedTarget =
     draftWorkspaces.find((item) => item.id === workspaceId) ??
     workspaces.workspaces.find((item) => item.id === workspaceId);
@@ -323,9 +330,15 @@ export function SchemaStudioExperience({
     selectedTarget && requestedBranch && selectedTarget.targetBranch !== requestedBranch
   );
   const target = targetMismatch ? undefined : selectedTarget;
-  const invalidTarget = Boolean(targetMismatch || (requestedWorkspaceId && !selectedTarget));
+  const invalidTarget = Boolean(targetMismatch || (workspaceId && !selectedTarget));
   const targetCommitted = target?.status === 'committed';
-  const setupBranch = requestedBranch || target?.targetBranch || projectBranches.branches[0];
+  useEffect(() => {
+    if (!requestedWorkspaceId && !pinned && targetsReady && target) {
+      setImplicitTarget({ scope: implicitScope, id: target.id, branch: target.targetBranch });
+    }
+  }, [implicitScope, pinned, requestedWorkspaceId, target, targetsReady]);
+  const setupBranch =
+    requestedBranch || target?.targetBranch || pinned?.branch || projectBranches.branches[0];
   const setupKey = JSON.stringify([projectId, setupBranch]);
   const workspaceSetupError = !workspaces.workspaces.some(
     (item) => item.targetBranch === setupBranch
@@ -402,27 +415,16 @@ export function SchemaStudioExperience({
     workspaceSetupRetry,
     projectScope,
   ]);
+  const replaceRoute = router.replace;
   useEffect(() => {
-    if (!target || workspaces.loading || projectBranches.loading || projectBranches.error) return;
-    if (
-      !legacyView &&
-      requestedWorkspaceId === target.id &&
-      requestedBranch === target.targetBranch
-    )
-      return;
-    router.replace(schemaWorkspaceHref(pathname, query, target), { scroll: false });
-  }, [
-    legacyView,
-    pathname,
-    query,
-    requestedBranch,
-    requestedWorkspaceId,
-    router,
-    target,
-    workspaces.loading,
-    projectBranches.loading,
-    projectBranches.error,
-  ]);
+    const next = new URLSearchParams(query);
+    const view = next.get('schemaView');
+    if (view !== 'studio' && view !== 'active') return;
+    next.delete('schemaView');
+    replaceRoute(`${pathname}${next.size ? `?${next}` : ''}${window.location.hash}`, {
+      scroll: false,
+    });
+  }, [pathname, query, replaceRoute]);
 
   function changeWorkspace(id: string) {
     const next = draftWorkspaces.find((item) => item.id === id);
@@ -1306,7 +1308,7 @@ export function SchemaStudioExperience({
         contextLocked={dataDirty || definitionOpen || applying}
         editorInvalid={editorInvalid}
         dataEditor={() =>
-          editorUnavailable ? null : (
+          editorUnavailable && !dataDirty ? null : (
             <SchemaDataEditor
               navigationRef={navigationRef}
               showSaveAction={false}
@@ -1452,7 +1454,7 @@ export function SchemaStudioExperience({
         branchControl={
           <StateBranchControls
             key={JSON.stringify([projectId, workspaceId, target?.targetBranch])}
-            branch={target?.targetBranch ?? requestedBranch ?? ''}
+            branch={target?.targetBranch ?? requestedBranch ?? pinned?.branch ?? ''}
             branchOptions={Array.from(new Set(draftWorkspaces.map((item) => item.targetBranch)))}
             headCommitHash={
               target ? (projectBranches.branchHeads[target.targetBranch] ?? null) : null
@@ -1635,7 +1637,7 @@ export function SchemaStudioExperience({
         </DialogContent>
       </Dialog>
       <SchemaYamlEditor
-        open={definitionOpen && !editorUnavailable}
+        open={definitionOpen}
         onOpenChange={setDefinitionOpen}
         workspaceTitle={selectedWorkspaceTitle}
         initialDefinition={yamlInitial}

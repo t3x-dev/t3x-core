@@ -8,7 +8,7 @@ import {
 
 it('keeps browsing separate from returning to an exact release', () => {
   expect(schemaBrowseHref('project', 'feature-draft', 'feature')).toBe(
-    '/explore?view=browse&type=schemas&studioTarget=project&branch=feature&workspace=feature-draft'
+    '/explore/browse?type=schemas&studioTarget=project&branch=feature&workspace=feature-draft'
   );
   const href = schemaSourceHref(
     '/explore?catalogName=team%2Fbase&catalogHash=sha256%3Aabc&q=care&studioTarget=old&workspace=old&branch=main',
@@ -24,6 +24,11 @@ it('keeps browsing separate from returning to an exact release', () => {
   expect(params.get('branch')).toBe('feature');
   expect(schemaSourceHref('https://external.example', 'project')).toBeUndefined();
 });
+it('returns to the short release path after selecting an adoption target', () => {
+  expect(
+    schemaSourceHref('/explore/schemas/team/base/1.0.0?view=browse&workspace=old', 'project', 'new')
+  ).toBe('/explore/schemas/team/base/1.0.0?view=browse&workspace=new&studioTarget=project');
+});
 it('switches both Workspace and branch without reusing the previous candidate', () => {
   const href = schemaWorkspaceHref(
     '/team/repo/schemas',
@@ -36,7 +41,6 @@ it('switches both Workspace and branch without reusing the previous candidate', 
   expect(Object.fromEntries(url.searchParams)).toEqual({
     workspace: 'feature-draft',
     branch: 'feature/test',
-    schemaView: 'studio',
     returnTo: '/explore?q=care',
   });
 });

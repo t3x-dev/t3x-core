@@ -16,6 +16,9 @@ it('only carries a local Explore return path through creation and Studio', () =>
     'https://outside.test',
     '//outside.test',
     '/explore/../settings',
+    '/explore/schemas/team/../definition/1.0.0',
+    '/explore/schemas/team/%2e%2e/definition/1.0.0',
+    '/explore/schemas/team/definition',
     '/explore\\outside',
     '/explore\n',
     '/explorer',
@@ -24,5 +27,8 @@ it('only carries a local Explore return path through creation and Studio', () =>
     expect(safeExploreReturn(value)).toBeUndefined();
   expect(safeExploreReturn('/explore?catalogName=team%2Fdefinition')).toBe(
     '/explore?catalogName=team%2Fdefinition'
+  );
+  expect(safeExploreReturn('/explore/schemas/team/definition/1.0.0?view=browse')).toBe(
+    '/explore/schemas/team/definition/1.0.0?view=browse'
   );
 });

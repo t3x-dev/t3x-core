@@ -4,6 +4,7 @@ import { Copy, KeyRound, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LocalAccessCheckResult, LocalConfigState } from '@/domain/accessConfig';
@@ -11,6 +12,7 @@ import type { CreatedT3xApiKey, T3xApiKey } from '@/domain/apiKeys';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { formatDate, relativeTime } from '@/domain/format/formatters';
 import { useAccessSettings } from '@/hooks/access/useAccessSettings';
+import { withReturnTo } from '@/utils/navigationReturn';
 
 function formatSourceLabel(
   source: LocalConfigState['api_url_source'] | LocalConfigState['api_key_source']
@@ -28,6 +30,7 @@ function formatSourceLabel(
 }
 
 export function AccessSettingsPanel() {
+  const { canAdministerProviderCredentials } = useDeploymentCapabilities();
   const {
     fetchLocalConfig,
     listApiKeys,
@@ -395,12 +398,16 @@ export function AccessSettingsPanel() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-          <span>Provider keys stay in Settings / Providers.</span>
-          <Link href="/settings/providers" className="font-medium text-[var(--text-primary)]">
-            Open providers settings
-          </Link>
-        </div>
+        {canAdministerProviderCredentials && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <Link
+              href={withReturnTo('/settings/provider-credentials', '/settings/access')}
+              className="font-medium text-[var(--text-primary)]"
+            >
+              Open deployment provider credentials
+            </Link>
+          </div>
+        )}
       </section>
 
       <div className="space-y-1">

@@ -15,11 +15,12 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { getProjectTabSegment } from '@/components/project/projectTabModel';
-import { getProjectIdHistoryPath } from '@/domain/project/repoPath';
+import { getCanonicalRepositoryPath, getProjectIdHistoryPath } from '@/domain/project/repoPath';
 import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
 import { useProjectCollaboration } from '@/hooks/accounts/useProjectCollaboration';
 import { useProjectCommunityActivity } from '@/hooks/project/useProjectCommunityActivity';
 import { buildReturnTo } from '@/utils/navigationReturn';
+import { rememberRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import styles from './ProjectCommunityTab.module.css';
 
 interface ProjectCommunityTabProps {
@@ -70,6 +71,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
       });
   }
   const projectPath = `/project/${encodeURIComponent(projectId)}`;
+  const settingsPath = `${getCanonicalRepositoryPath(pathname) ?? projectPath}/settings`;
   const pullRequestsPath = `${projectPath}?tab=${getProjectTabSegment('reviews')}`;
   const focusedBranch = branch?.trim() || 'main';
   const workspacePath = branch?.trim()
@@ -277,7 +279,11 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
             <div className={styles.headingRow}>
               <h3 id="community-collaborators-title">Collaborators</h3>
               {canManageGuests ? (
-                <Link className={styles.openObject} href={`${projectPath}/settings#access`}>
+                <Link
+                  className={styles.openObject}
+                  href={`${settingsPath}#access`}
+                  onNavigate={() => rememberRepositorySettingsReturn(projectId, settingsPath)}
+                >
                   Manage access
                   <ArrowRight aria-hidden="true" />
                 </Link>

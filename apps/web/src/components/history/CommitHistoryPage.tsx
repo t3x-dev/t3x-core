@@ -31,7 +31,8 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { commitStructureHref } from '@/domain/project/objectLocation';
+import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -51,6 +52,7 @@ import styles from './HistoryList.module.css';
 
 interface CommitHistoryPageProps {
   projectId: string;
+  commitHash?: string;
 }
 
 interface CommitWithDiffStats {
@@ -108,9 +110,10 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
 // Component
 // ============================================================================
 
-export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
+export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPageProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const listPath = commitHash ? pathname.replace(/\/[0-9]+\/?$/, '') : pathname;
   const searchParams = useSearchParams();
   const query = searchParams.toString();
   const queryRef = useRef(query);
@@ -121,9 +124,9 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const stateLocation = returnHref.split('?')[0];
   const returnsToState =
     returnHref === stateHref ||
-    (stateLocation === pathname.replace(/\/history\/?$/, '') &&
+    (stateLocation === listPath.replace(/\/history\/?$/, '') &&
       !new URL(returnHref, 'https://t3x.local').searchParams.has('tab'));
-  const selectedCommitHash = searchParams.get('commit')?.trim() || null;
+  const selectedCommitHash = commitHash ?? (searchParams.get('commit')?.trim() || null);
   const authorFilter = searchParams.get('author') || 'all';
   const searchQuery = searchParams.get('q') || '';
   const [searchInput, setSearchInput] = useState(searchQuery);
@@ -217,20 +220,28 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const parentError = !listedParent ? resolvedParent?.error : undefined;
 
   const updateQuery = useCallback(
-    (changes: Record<string, string | null>, push = false) => {
+    (changes: Record<string, string | null>, push = false, addressNumber?: string) => {
       const params = new URLSearchParams(queryRef.current);
       for (const [key, value] of Object.entries(changes)) {
         if (value === null) params.delete(key);
         else params.set(key, value);
       }
+      const changingCommit = Object.hasOwn(changes, 'commit');
+      if (addressNumber) params.delete('commit');
       queryRef.current = params.toString();
-      const href = buildReturnTo(pathname, params);
+      const target = addressNumber
+        ? `${listPath}/${addressNumber}`
+        : changingCommit
+          ? listPath
+          : pathname;
+      const href = buildReturnTo(target, params);
       if (push) router.push(href, { scroll: false });
+      else if (target !== pathname) router.replace(href, { scroll: false });
       // These controls only change this client view. Native history updates keep
       // Next's search params in sync without a server navigation on every key.
       else window.history.replaceState(null, '', href);
     },
-    [pathname, router]
+    [listPath, pathname, router]
   );
   const closeCommit = useCallback(() => updateQuery({ commit: null }), [updateQuery]);
 
@@ -406,11 +417,16 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
         else focusDetail.current = true;
       }
       if (hash !== selectedCommitHash) {
-        updateQuery({ commit: hash }, true);
+        const address = commits.find(({ commit }) => commit.hash === hash)?.commit.address_number;
+        updateQuery(
+          { commit: hash },
+          true,
+          address && !listPath.startsWith('/project/') ? address : undefined
+        );
       }
       setTourOpen(false);
     },
-    [selectedCommitHash, updateQuery]
+    [commits, listPath, selectedCommitHash, updateQuery]
   );
 
   useEffect(() => {
@@ -621,6 +637,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
             <CommitHistoryDiffCard
               key={selectedCommit.hash}
               commit={selectedCommit}
+              structureHref={commitStructureHref(
+                getCanonicalRepositoryPath(pathname),
+                selectedCommit
+              )}
               parentCommit={parentCommit}
               parentError={parentError}
               onParentSelect={handleNavOpen}

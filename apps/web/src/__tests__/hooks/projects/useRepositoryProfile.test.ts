@@ -30,12 +30,18 @@ it('updates current display without replaying unrelated fields from out-of-order
       ? new Promise((resolve) => {
           finishReadme = resolve;
         })
-      : Promise.resolve({ repository_profile: { readme: 'New', tags: ['New tag'] } })
+      : Promise.resolve({
+          repository_profile: {
+            readme: 'New',
+            tags: ['New tag'],
+            icon: { key: 'flask', color: 'violet' },
+          },
+        })
   );
   const { result } = renderHook(() => useRepositoryProfile('p'));
   await act(async () => {
     const first = result.current({ readme: 'New' });
-    await result.current({ tags: ['New tag'] });
+    await result.current({ tags: ['New tag'], icon: { key: 'flask', color: 'violet' } });
     finishReadme({
       name: 'Stale',
       metadata: { description: 'Stale' },
@@ -46,9 +52,24 @@ it('updates current display without replaying unrelated fields from out-of-order
   expect(useProjectStore.getState().details.p).toMatchObject({
     name: 'Current',
     description: 'Keep',
-    repositoryProfile: { readme: 'New', tags: ['New tag'] },
+    repositoryProfile: {
+      readme: 'New',
+      tags: ['New tag'],
+      icon: { key: 'flask', color: 'violet' },
+    },
   });
   expect(update).toHaveBeenCalledWith('p', { repository_profile: { readme: 'New' } });
+});
+
+it('requires the server to confirm icon changes, including a null reset', async () => {
+  update.mockResolvedValueOnce({ repository_profile: { readme: 'Original', tags: ['Old'] } });
+  update.mockResolvedValueOnce({
+    repository_profile: { readme: 'Original', tags: ['Old'], icon: null },
+  });
+  const { result } = renderHook(() => useRepositoryProfile('p'));
+  await expect(result.current({ icon: null })).rejects.toThrow('did not return');
+  await act(async () => result.current({ icon: null }));
+  expect(useProjectStore.getState().details.p.repositoryProfile?.icon).toBeNull();
 });
 
 it('saves the description without rolling back other repository metadata', async () => {

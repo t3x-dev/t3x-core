@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleDashed,
   GitBranch,
+  History,
   Loader2,
   Pencil,
   ShieldAlert,
@@ -38,6 +39,7 @@ export function ChangeDecisionPanel({
   checksHref,
   contentValidation,
   embedded = false,
+  historical = false,
 }: {
   branch: string | null;
   busy: boolean;
@@ -50,6 +52,7 @@ export function ChangeDecisionPanel({
   checksHref?: string;
   contentValidation?: 'not_applicable';
   embedded?: boolean;
+  historical?: boolean;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
@@ -63,7 +66,14 @@ export function ChangeDecisionPanel({
   const overrideAllowed =
     !commitBlocker && !acceptAllowed && view.capabilities.override.disposition === 'allowed';
   const rejectAllowed = view.capabilities.reject.disposition === 'allowed';
-  const status = panelStatus(view, acceptAllowed, overrideAllowed, contentValidation);
+  const status = historical
+    ? {
+        tone: 'historical' as const,
+        icon: History,
+        title: 'Recorded review',
+        detail: 'Checks recorded for this snapshot.',
+      }
+    : panelStatus(view, acceptAllowed, overrideAllowed, contentValidation);
 
   return (
     <section
@@ -84,7 +94,9 @@ export function ChangeDecisionPanel({
 
       <dl className="grid gap-2 border-b border-[var(--stroke-divider)] px-4 py-3 text-xs">
         <div className="flex items-center justify-between gap-3">
-          <dt className="text-[var(--text-tertiary)]">{decided ? 'Branch' : 'Commit to'}</dt>
+          <dt className="text-[var(--text-tertiary)]">
+            {decided || historical ? 'Branch' : 'Commit to'}
+          </dt>
           <dd className="inline-flex min-w-0 items-center gap-1 rounded bg-[var(--surface-panel)] px-1.5 py-0.5 font-mono font-semibold text-[var(--text-primary)]">
             <GitBranch aria-hidden="true" className="size-3 shrink-0" />
             <span className="truncate">{branch ?? 'main'}</span>
@@ -123,7 +135,7 @@ export function ChangeDecisionPanel({
         ) : null}
       </section>
 
-      {!decided && blockers.length > 0 ? (
+      {!historical && !decided && blockers.length > 0 ? (
         <section aria-label="Why this is blocked" className="grid gap-2 px-4 pt-3">
           {blockers.map((blocker) => (
             <div
@@ -157,7 +169,7 @@ export function ChangeDecisionPanel({
         </section>
       ) : null}
 
-      {!decided ? (
+      {!historical && !decided ? (
         <div className="grid gap-2 px-4 py-3">
           {commitBlocker ? (
             <p role="alert" className="text-xs text-[var(--status-warning)]">
@@ -315,9 +327,13 @@ function CheckRow({ check, summaryOnly }: { check: ChangeCheckRow; summaryOnly?:
   );
 }
 
-type Tone = 'ready' | 'blocked' | 'override' | 'done' | 'rejected';
+type Tone = 'ready' | 'blocked' | 'override' | 'done' | 'rejected' | 'historical';
 
 const STATUS_TONE: Record<Tone, { header: string; icon: string }> = {
+  historical: {
+    header: 'border-[var(--stroke-divider)] bg-[var(--surface-panel)]',
+    icon: 'text-[var(--text-secondary)]',
+  },
   ready: {
     header: 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]',
     icon: 'text-[var(--status-success)]',

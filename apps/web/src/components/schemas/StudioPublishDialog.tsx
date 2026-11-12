@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { schemaSourceReleaseHref } from '@/domain/schemas/schemaProvenance';
 import { studioPublicationBlocker } from '@/domain/schemas/studioPublication';
 import { usePublishStudioSchema } from '@/hooks/schemas/usePublishStudioSchema';
 import { SchemaDefinitionTree } from './SchemaDefinitionTree';
@@ -107,15 +107,7 @@ export function StudioPublishDialog({
       if (mounted.current) setBusy(false);
     }
   }
-  const releaseHref = result
-    ? `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({
-        tab: 'browse',
-        schemaView: 'release',
-        catalogName: result.source.canonicalName,
-        catalogVersion: result.source.version,
-        catalogHash: result.source.hash,
-      })}`
-    : '';
+  const releaseHref = result ? schemaSourceReleaseHref(result.source) : '';
   return (
     <Dialog
       open

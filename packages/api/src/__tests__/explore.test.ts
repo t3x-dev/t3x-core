@@ -207,6 +207,50 @@ it('reads exact releases without a destination and rejects mismatches, revocatio
   });
   expect((await requestRelease()).status).toBe(404);
 });
+it('reads an exact public release by name and version without trusting a caller-supplied hash', async () => {
+  const canonicalName = 'explore-test/public-example';
+  const publish = async (version: string) => {
+    const manifest = { ...sourceManifest, canonicalName, version, readme: `# Version ${version}` };
+    const artifactHash = await sha256CompositionValue(manifest);
+    await upsertYSchemaArtifactVersion(db, {
+      artifact_id: 'explore-public-example',
+      artifact_version_id: `explore-public-example-${version}`,
+      canonical_name: canonicalName,
+      version,
+      family: 'custom',
+      kind: 'schema',
+      visibility: 'community',
+      status: 'published',
+      manifest_json: manifest,
+      artifact_hash: artifactHash,
+      path_count: 0,
+      provides: [],
+      requires: [],
+    });
+    return artifactHash;
+  };
+  const first = await publish('1.0.0');
+  const second = await publish('2.0.0');
+  const request = (query: Record<string, string> = {}) =>
+    app.request(
+      `/v1/explore/schema-release?${new URLSearchParams({ canonicalName, version: '1.0.0', ...query })}`
+    );
+  const exact = await request();
+  expect(exact.status).toBe(200);
+  expect((await exact.json()).data).toMatchObject({
+    artifactHash: first,
+    readme: '# Version 1.0.0',
+  });
+  expect((await request({ expectedHash: first })).status).toBe(200);
+  expect((await request({ expectedHash: second })).status).toBe(404);
+  expect((await request({ version: '3.0.0' })).status).toBe(404);
+  expect((await request({ sourceProjectId: sourceId })).status).toBe(400);
+  await db
+    .update(yschemaArtifactVersions)
+    .set({ manifestJson: { ...sourceManifest, canonicalName, readme: 'Tampered' } })
+    .where(eq(yschemaArtifactVersions.artifactVersionId, 'explore-public-example-1.0.0'));
+  expect((await request()).status).toBe(404);
+});
 it('withdraws the public detail and directory as soon as visibility changes', async () => {
   await db.update(projects).set({ visibility: 'private' }).where(eq(projects.projectId, publicId));
   expect((await app.request(`/v1/explore/projects/${publicId}`)).status).toBe(404);

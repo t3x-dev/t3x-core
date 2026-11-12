@@ -7,6 +7,7 @@ import { ExploreExperience } from '@/components/explore/ExploreExperience';
 const mocks = vi.hoisted(() => ({
   query: '',
   push: vi.fn(),
+  replace: vi.fn(),
   catalog: vi.fn(),
   publicProjects: vi.fn(),
   publicProject: vi.fn(),
@@ -14,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
-  useRouter: () => ({ push: mocks.push }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }));
 vi.mock('@/infrastructure/explore', () => ({
   fetchPublicProjects: mocks.publicProjects,
@@ -88,9 +89,8 @@ it('uses real editorial releases and public projects while retaining visual card
   expect(screen.queryByText('128')).not.toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('button', { name: 'Explore Care checklist' })[0]);
   const route = new URL(mocks.push.mock.calls.at(-1)![0], 'http://local');
-  expect(route.pathname).toBe('/explore');
-  expect(route.searchParams.get('catalogHash')).toBe('sha256:exact');
-  expect(route.searchParams.has('studioTarget')).toBe(false);
+  expect(route.pathname).toBe('/explore/schemas/t3x/care-checklist/1.0.0');
+  expect(route.search).toBe('');
 });
 it('sends filters to the schema server while keeping public project paging independent', async () => {
   mocks.query = 'view=browse&type=all&q=garden&publisher=alice&projectTag=plants';
@@ -105,6 +105,13 @@ it('sends filters to the schema server while keeping public project paging indep
   expect(screen.getByRole('heading', { name: 'Schemas', exact: true })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Public projects', exact: true })).toBeInTheDocument();
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
+  expect(screen.getAllByRole('link', { name: 'Browse', exact: true })).toHaveLength(1);
+  expect(
+    within(screen.getByRole('group', { name: 'Catalog type' })).getByRole('button', {
+      name: 'All',
+      pressed: true,
+    })
+  ).toBeVisible();
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute('aria-current', 'page');
   expect(navigation.getByRole('link', { name: 'Discover' })).not.toHaveAttribute('aria-current');
   const discover = new URL(
@@ -112,12 +119,14 @@ it('sends filters to the schema server while keeping public project paging indep
     'http://local'
   );
   expect(Object.fromEntries(discover.searchParams)).toEqual({
-    view: 'discover',
-    type: 'all',
     q: 'garden',
     publisher: 'alice',
     projectTag: 'plants',
   });
+  expect(mocks.replace).toHaveBeenCalledWith(
+    '/explore/browse?q=garden&publisher=alice&projectTag=plants',
+    { scroll: false }
+  );
   expect(screen.queryByRole('navigation', { name: 'Explore views' })).not.toBeInTheDocument();
 });
 it('resolves a release directly even when it is not on a loaded catalog page', async () => {
@@ -127,14 +136,42 @@ it('resolves a release directly even when it is not on a loaded catalog page', a
   expect(mocks.release).toHaveBeenCalledWith(
     'canonicalName=t3x%2Fcare-checklist&version=1.0.0&expectedHash=sha256%3Aexact'
   );
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith('/explore/schemas/t3x/care-checklist/1.0.0', {
+      scroll: false,
+    })
+  );
   expect(mocks.catalog.mock.calls.every((call) => call[2] === false)).toBe(true);
   expect(screen.getByRole('button', { name: 'Use Schema' })).toBeEnabled();
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
     'href',
-    '/explore?view=browse'
+    '/explore/browse'
   );
   expect(screen.getByRole('button', { name: 'Back to Discover' })).toBeInTheDocument();
+});
+it('uses the short path identity and retains Browse context on the way back', async () => {
+  mocks.query = 'view=browse&q=care';
+  render(
+    <ExploreExperience
+      releaseAddress={{
+        canonicalName: 't3x/care-checklist',
+        version: '1.0.0',
+        pathname: '/explore/schemas/t3x/care-checklist/1.0.0',
+      }}
+    />
+  );
+  expect(await screen.findByRole('heading', { name: 'Care checklist' })).toBeInTheDocument();
+  expect(mocks.release).toHaveBeenCalledWith('canonicalName=t3x%2Fcare-checklist&version=1.0.0');
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
+  expect(mocks.push).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
+});
+it('never replaces a legacy URL whose requested hash does not match', async () => {
+  mocks.query = 'catalogName=t3x%2Fcare-checklist&catalogVersion=1.0.0&catalogHash=sha256%3Aother';
+  mocks.release.mockRejectedValue(new Error('Release unavailable'));
+  render(<ExploreExperience />);
+  expect(await screen.findByText('Release unavailable')).toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });
 it('shows a public introduction without inventing permission to open project contents', async () => {
   mocks.query = 'view=browse&type=projects&project=public';
@@ -144,8 +181,19 @@ it('shows a public introduction without inventing permission to open project con
   const navigation = within(screen.getByRole('navigation', { name: 'Global' }));
   expect(navigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
     'href',
-    '/explore?view=browse&type=projects'
+    '/explore/browse?type=projects'
   );
   fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
-  expect(mocks.push).toHaveBeenCalledWith('/explore?view=browse&type=projects', { scroll: false });
+  expect(mocks.push).toHaveBeenCalledWith('/explore/browse?type=projects', { scroll: false });
+});
+it('uses Discover as the default URL and lets the Browse path override a stale view query', () => {
+  mocks.query = 'view=discover';
+  const discover = render(<ExploreExperience />);
+  expect(mocks.replace).toHaveBeenCalledWith('/explore', { scroll: false });
+  discover.unmount();
+  mocks.replace.mockClear();
+  mocks.query = 'view=discover&q=care';
+  render(<ExploreExperience pageView="browse" />);
+  expect(screen.getByRole('main', { name: 'Browse' })).toBeInTheDocument();
+  expect(mocks.replace).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
 });

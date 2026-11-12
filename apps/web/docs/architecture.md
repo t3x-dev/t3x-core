@@ -7,13 +7,14 @@ contracts WebUI consumes. Its scope includes browser UI and WebUI's Next.js
 transport bridge. It does not redefine application authority or the protocol.
 
 The inherited system boundaries and the frontend contracts A-01 through A-05
-are normative. Source and transport maps are descriptive references. These
-contracts define the target behavior for changes and reviews; they do not
-certify that existing code already conforms or authorize a broad rewrite.
+are normative. The source, navigation, and transport sections describe the
+current implementation. The contracts define the target behavior for changes
+and reviews. Conformance requires verification, and broad rewrites require
+separate authorization.
 
 Current behavior must be checked against these contracts and the
-[business contracts](business.md). Record implementation gaps separately;
-existing code is evidence, not an exception to the rule.
+[business contracts](business.md). Keep [implementation gap summaries](#current-implementation-gaps)
+separate from the rules; existing code is evidence, not an exception to the rule.
 
 ## Owning references
 
@@ -57,15 +58,15 @@ preview without gaining authority to mutate persisted history.
 
 ### Next.js boundary
 
-`src/app/` composes routes and pages. `src/app/api/` and `src/server/` contain
-the WebUI server-side transport bridge. The boundary test explicitly allows
-server transport fetches and maintains an allowlist for other existing page-level
-data access. Those exceptions do not make arbitrary direct access a general
-view-layer convention.
+`src/app/` composes routes and pages. The product HTTP bridge is the catch-all
+route in `src/app/api/` and its implementation in `src/server/`. The boundary
+test explicitly allows server transport fetches and maintains an allowlist for
+other existing page-level data access.
 
 Keep browser modules separate from server credentials and server-only adapters.
-The current bridge forwards session credentials upstream; it does not own
-Workspace authorization or redefine the application's command rules.
+The page gate in `src/proxy.ts` uses session cookie presence for navigation.
+The HTTP bridge forwards session credentials upstream. Workspace authorization
+and command rules remain with the application.
 
 ## Source map
 
@@ -81,8 +82,9 @@ implementations fulfill their intended responsibility.
 | `src/store/` | Zustand state containers |
 | `src/queries/`, `src/commands/` | Read and write use cases |
 | `src/domain/` | Pure calculations, comparisons and display projections |
-| `src/infrastructure/` | API adapters and browser transport helpers |
+| `src/infrastructure/` | API adapters, browser transport helpers and a server-only development database adapter |
 | `src/server/` | WebUI server-side transport implementation |
+| `src/proxy.ts` | Page session gate and redirects |
 | `src/types/`, `src/data/` | Shared types and static data |
 | `src/utils/`, `src/styles/` | Supporting helpers and styling |
 | `src/__tests__/` | Unit, component, hook and boundary tests |
@@ -97,9 +99,66 @@ function signatures have callers: inspect them before changing an interface.
 Types, data and utility directories do not create an additional authority layer;
 [A-04](#a-04-module-responsibilities-and-exceptions) governs their responsibilities.
 
+<a id="repository-navigation-and-browser-titles"></a>
+
+## WebUI navigation and addresses
+
+The [URL and navigation rules](#url-and-navigation-rules) define the target for
+new and changed WebUI links. This section records the current entry points.
+
+- Repository navigation uses the resolved `/{owner}/{repo}` address when
+  available. The [repository location helper](../src/domain/project/repositoryLocation.ts)
+  converts supported legacy `tab` queries at the repository root. An explicit
+  section such as `/schemas` takes precedence over a conflicting `tab` query.
+  [Repository Addresses](../../../docs/repository-addresses.md#web-compatibility)
+  owns address resolution and compatibility. Fixed Review links follow
+  [A-02](#a-02-read-refresh-and-invalidation) for snapshot identity.
+- The [repository shell](../src/components/project/ProjectShell.tsx) sets the
+  browser title from the resolved repository and the selected section or object.
+  Explore uses route metadata for Discover, Browse and named Schema releases.
+- Repository Settings links use the plain Settings path. Same-tab navigation
+  keeps the source on the Settings history entry so the return link can restore
+  it after a refresh. A direct visit or a new tab defaults to the repository
+  home. Old Settings links can supply `returnTo`. Opening the link consumes the
+  parameter and accepts a supported view of the same repository or the main
+  repository directory.
+  Settings section navigation uses a fragment such as `#autopilot` and restores
+  the addressed section when a direct link loads.
+- Run lists keep their older-record cursor in the browser history entry.
+  Legacy list links consume `cursor` after restoring that entry. A newly opened
+  list starts at the newest records for its filters. A Run detail opened from an
+  older page can return to that entry in the same tab.
+- The short `/schemas` entry selects a Workspace when it opens. Background
+  refreshes keep that selection for the open editor. Legacy links keep any
+  explicit branch or Workspace when dropping the redundant Studio view flag.
+- Explore links to an exact public Schema release by canonical name and
+  version, for example `/explore/schemas/t3x/weekly-goals/1.0.0`. The server
+  checks the stored content hash. Old public links with a hash are replaced
+  only after that exact release is verified. Project-scoped links keep their
+  existing access and hash checks.
+- Discover and Browse use `/explore` and `/explore/browse` respectively.
+  Legacy list links with `view=discover` or `view=browse` move to the matching
+  address and preserve filters and fragments.
+
+| Destination | Current address example |
+| --- | --- |
+| Browse Schema results | `/explore/browse?type=schemas` |
+| Workspace for an explicit branch | `/team/repo/branches/main/workspaces?workspaceMode=review&reviewPane=yaml` |
+| State at an exact Commit | `/team/repo/commits/42` |
+| History for the same Commit | `/team/repo/history/42` |
+| Fixed Review | `/team/repo/reviews/17?reviewPane=yaml` |
+| Run details | `/team/repo/checks/review-17`, `/team/repo/checks/validation-8`, `/team/repo/checks/schema-3`, or `/team/repo/checks/pr-12` |
+
+The storage migration assigns numbers to historical objects and allocates
+numbers for new objects in the write transaction. These numbers are scoped to
+the repository and object kind. The Run view uses the same number for a Review
+record and reuses the Pull request number for its current checks. Number
+resolution is read-only and uses the same project read permission as the
+underlying evidence. The existing readers verify the resolved exact object.
+
 ## Transport and local access
 
-The current browser HTTP path is:
+The current product HTTP path is:
 
 ```text
 Browser adapter -> same-origin /api -> Next.js proxy -> standalone API
@@ -112,6 +171,11 @@ transport's timeout, retry and abort handling. The
 from `T3X_API_URL`, defaulting to `http://localhost:8000`. Browser requests are
 not direct requests to that upstream address. WebSocket rewriting is configured
 separately in [next.config.ts](../next.config.ts).
+
+The [development SQL route](../src/app/api/dev/sql/route.ts) uses the
+[server-only database adapter](../src/infrastructure/db.ts) directly. It
+requires development mode and `T3X_ENABLE_DEV_SQL=true`. This route is a
+development tool outside the product HTTP bridge and mutation path.
 
 The `/settings/access` capability manages the standalone API host's local shared
 configuration and provides Test Access. For that host configuration, environment
@@ -126,20 +190,29 @@ for deployment and authentication setup.
 
 Use the [README check index](../README.md#checks) and the
 [repository verification policy](../../../AGENTS.md#verification).
-Biome, the shell boundary check and import-boundary tests overlap but inspect
-different sets of imports and exceptions. They do not prove object identity,
-refresh correctness, durable-save behavior or business acceptance.
+Biome restricts configured import patterns. The
+[shell boundary check](../scripts/check-v2-boundaries.sh) counts selected alias
+imports and literal `fetch` calls. The import-boundary test checks selected
+layer aliases, literal `fetch` calls and the app-layer allowlist of file and
+import pairs. Review dependency rules against the resolved module and operation
+when a check does not cover them. Verify object identity, refresh behavior and
+durable saves at the affected workflow.
 
 Some source comments and the shell checker still refer to removed architecture
 documents. This document replaces those missing prose references; repairing
 source comments is separate from changing dependency rules. Do not infer an
 unwritten exception from a stale comment or silently broaden a check's allowlist.
 
-Update the owning rule when an authorized decision changes. Keep its identity,
-reason and verification expectations together; update affected callers and
-checks during implementation. Record defects and execution history in the
-team's work records. Preserve frozen system contracts and use their owning
-Issue process for changes outside frontend authority.
+Follow the [writeback authorization rule](../AGENTS.md#changes-and-verification)
+when updating the owning rule. Keep its identity, reason and verification
+expectations together; update affected callers and checks during implementation.
+Preserve frozen system contracts and use their owning Issue process for changes
+outside frontend authority.
+
+In WebUI contract documents, summarize only current implementation gaps that
+affect how a rule is applied or verified. Keep these summaries separate from
+the rules and remove them once conformance is verified. Keep reproduction
+steps, verification results, repair plans and progress in the team's work records.
 
 ## Frontend contracts
 
@@ -193,10 +266,19 @@ or apply another scope's data. Buffer lifetime follows [B-01](business.md#b-01-l
    Only a successful response for the intended object can establish emptiness.
    Retained data remains labelled with its original identity during refresh or
    failure; it does not establish the requested newer version's readiness.
-5. Fixed Review/Commit content stays pinned. A Review may acquire a later
-   Decision/Commit result only for the same Transition and reviewed subject;
-   historical content cannot be filled from the live Draft. A different
-   historical object requires explicit navigation and its own load.
+5. Fixed Review and Commit content stays pinned. Historical content uses its
+   own identity and never falls back to the live Draft.
+   - **Applies when** opening or refreshing a fixed Review URL with a snapshot ID.
+   - **Action** Use the requested ID as the URL identity and read the requested
+     snapshot's values and evidence. A later Decision or Commit for the same
+     Transition and reviewed subject may appear alongside it. Link explicitly to
+     the result snapshot or Commit.
+   - **Block when** a later result belongs to a different Transition or reviewed
+     subject, or its identity cannot be verified. Keep the requested snapshot
+     visible. A refresh preserves the URL identity. A different historical
+     object requires explicit navigation and its own load.
+   - **Verify** Reopen a pre-decision link after Commit. The address and original
+     review evidence stay fixed, and the result link opens the exact result.
 
 [B-03](business.md#b-03-the-version-being-reviewed) defines which version a user
 reviews. Notification transports and refresh intervals are implementation
@@ -231,6 +313,24 @@ a late acknowledgement nor a failed refresh may clear them. Results from a
 previous scope cannot update the newly selected scope. A new authoritative
 revision invalidates unprepared assumptions; an existing fixed Review remains
 readable with its own status.
+
+**Recovery across refresh**
+
+- **Applies when** a write outcome is unknown and the application supports
+  querying its result or retrying the exact command.
+- **Action** Query the authoritative result first when a supported lookup is
+  available. Retain across refresh only the data needed for an exact retry, scoped
+  to the authenticated session, principal and command subject. Keep this
+  recovery data separate from the unsaved working copy. Clear it when the outcome
+  is confirmed, the user signs out or the session or principal changes.
+- **Block when** the session or subject cannot be verified, the original command
+  cannot be reconstructed exactly, or retry is unsupported. Skip cross-refresh
+  retention and retry in these cases. Limit recovery to supported result lookup
+  and leave the outcome unconfirmed until verified.
+- **Verify** After a lost response, refreshing in the same session can recover
+  the result or retry with the original command identity, payload and
+  preconditions. Signing out or switching accounts in the same tab prevents
+  recovery or submission of the previous session's command.
 
 **Acceptance:** cover write-success/read-failure, lost response and exact retry,
 concurrent refusal, edits made during submission and late completion after a
@@ -270,7 +370,7 @@ version identity, permission, readiness or recovery.
 | Workspace Content editing and verified proposal publication | Use the authoritative authoring Draft and guarded application capabilities, with the ownership and outcome rules above. |
 | Dedicated or inline Schema editing | Address the same explicit Workspace/candidate and exact definition; share the business rules in B-04. |
 | Exact-source configuration | May use its own supported source-transition capability; it must retain its exact-source semantics and the same application authority. |
-| Legacy `workspaceTool=edit` / `reviewPane=edit` editing addresses | Adapt or redirect to the canonical editing session. They must not maintain a separate current Draft reconstructed from legacy fields. |
+| Legacy `workspaceTool=edit` / `reviewPane=edit` editing addresses | Open Compose for the intended Workspace or branch. Starting the editor and initializing a Draft require an explicit user action. |
 | Historical Review, Commit and operation evidence | Keep exact-version reads available; historical data does not become current mutation authority. |
 
 A compatibility adapter is supported only when it can identify the exact current
@@ -287,3 +387,54 @@ have already migrated or authorize deleting them in a documentation change.
 **Acceptance:** old addresses resolve to the intended Workspace or exact
 historical object; supported writes obey the same guards; unsupported writes
 are explicit; retirement keeps history readable.
+
+<a id="repository-url-principles"></a>
+
+#### URL and navigation rules
+
+Apply these rules to new and changed WebUI links and controls.
+
+- Put the destination and the selected object's identity in the path. Use the
+  resolved repository address. An explicitly selected branch belongs in the
+  path. A branch that only filters a list can be a query parameter. Keep the
+  project-ID entry for repositories awaiting a canonical address.
+- Keep shareable presentation and filter values in concise query parameters.
+  Numbered pagination may use `?page=2`. Keep opaque paging cursors in the
+  request or the current tab's history. An explicit view must take precedence
+  over a personal preference. Omit a default only when the address still
+  restores the intended result. Use a fragment to address a section on the page.
+- Use readable names, versions or stable project-scoped numbers in regular
+  user-facing addresses. Check project access before resolving a historical
+  number, then apply the existing checks to the exact object. Keep full
+  hashes and internal IDs available in technical evidence, API requests and
+  supported legacy links. Invitation and share credentials follow their own
+  access flows. Fixed Review and Commit identity follows
+  [A-02](#a-02-read-refresh-and-invalidation).
+- Generate the canonical address at the entry point. Treat supported old
+  paths and query forms as inputs to compatibility handling. Preserve the
+  original object, relevant view state and valid anchor. Encode each value once
+  as a URL component. If an exact object is missing or outside the current
+  scope, show that result. Opening a link can restore navigation and view
+  state. Draft initialization and writes require an explicit user action.
+- Derive the return destination when there is an unambiguous default. Keep
+  same-tab Settings return context and Run paging in history state. Use
+  `returnTo` when a shareable address needs to restore a supported source such
+  as a filtered list. Validate the destination within the receiving route's
+  allowed scope and use the default for an invalid target.
+- Use links for page navigation and mark the active destination. Use selection
+  controls for filters and accessible tabs for switching associated panels.
+  Browser titles identify the page and its object when a name, version or
+  number is available.
+
+**Verify** direct opening, refresh, copying to a new tab, browser back and
+forward, and supported old links. Check exact identity, authorization, and
+valid anchors during normalization. Confirm that reopening a navigation
+address leaves persisted data unchanged.
+
+## Current implementation gaps
+
+| Contract | Observed behavior |
+| --- | --- |
+| A-01, A-03 | The [Decision recovery record](../src/hooks/workspaces/useWorkspaceReviewSnapshot.ts) is keyed by project, Workspace and Transition. Its key omits the authenticated session and principal, and [session cleanup](../src/infrastructure/session.ts) leaves the recovery record in browser storage. |
+| A-04 | A relative import of the same module can bypass checks that match its alias. The app allowlist also records module imports rather than operations. The project page's allowed [YSchema validation query module](../src/queries/yschemaValidation.ts) exposes both a read and a write. |
+| A-05 | State branch selection still uses a query parameter. Diff, source evidence and project-scoped Schema releases still have routes or producers that carry internal identifiers. Some compatibility link builders still emit old forms when their caller only has an internal identifier. |

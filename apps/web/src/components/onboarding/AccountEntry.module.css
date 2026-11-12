@@ -1,0 +1,112 @@
+.entry {
+  flex: 1;
+  min-height: 100dvh;
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--accent-commit-soft) 76%, var(--identity-violet-muted)),
+    color-mix(in srgb, var(--identity-amber-muted) 52%, var(--surface-app)) 62%,
+    var(--surface-card)
+  );
+}
+
+.header {
+  border-bottom: 1px solid var(--stroke-divider);
+  background: var(--surface-card);
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 52px;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: 4px clamp(12px, 3vw, 24px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.brand svg {
+  width: 23px;
+  height: 23px;
+}
+
+.setup {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.card {
+  position: relative;
+  width: min(calc(100% - 28px), 346px);
+  margin: 49px auto 30px;
+  padding: 34px 20px 20px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 14px;
+  background: var(--surface-card);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--text-primary) 8%, transparent);
+  --emblem-ink: var(--identity-sky);
+  --emblem-surface: var(--identity-sky-muted);
+}
+
+.card[data-kind="register"] {
+  --emblem-ink: var(--identity-amber);
+  --emblem-surface: color-mix(in srgb, var(--identity-amber-muted) 76%, #ffd46d);
+}
+
+.card[data-kind="namespace"] {
+  --emblem-ink: var(--identity-teal);
+  --emblem-surface: var(--identity-teal-muted);
+}
+
+.emblem {
+  position: absolute;
+  inset-block-start: -21px;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 3px solid var(--surface-card);
+  border-radius: 13px;
+  color: var(--emblem-ink);
+  background: var(--emblem-surface);
+}
+
+.title {
+  margin: 0 0 16px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.description {
+  margin: -8px 0 15px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.modeLink {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 440px) {
+  .card {
+    margin-block-start: 39px;
+    padding-inline: 16px;
+  }
+}

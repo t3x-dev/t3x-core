@@ -385,6 +385,21 @@ export function buildStatePointRows(
   return rows;
 }
 
+export function indexStatePointValues(
+  content: StateTreeContent
+): Map<string, { value: unknown } | null> {
+  const values = new Map<string, { value: unknown } | null>();
+  function visit(value: unknown, path: string) {
+    const normalized = normalizePath(path);
+    values.set(normalized, values.has(normalized) ? null : { value });
+    if (value !== null && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) visit(child, `${normalized}/${key}`);
+    }
+  }
+  for (const [key, value] of Object.entries(semanticContentToPlain(content))) visit(value, key);
+  return values;
+}
+
 /** Resolve the same normalized path used by State rows, without comparing display summaries. */
 export function readStatePointValue(
   content: StateTreeContent,

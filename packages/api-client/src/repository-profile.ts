@@ -32,15 +32,63 @@ export const RepositoryTagsSchema = z
     'At most 32 tags of 64 Unicode characters after trimming, ignoring blanks and exact duplicates. Case and order are preserved. An empty array clears tags.'
   );
 
+export const RepositoryIconKeySchema = z.enum([
+  'flask',
+  'repository',
+  'database',
+  'workflow',
+  'boxes',
+  'braces',
+  'code',
+  'book',
+  'shield',
+  'branch',
+  'pull-request',
+  'layers',
+  'network',
+  'package',
+  'terminal',
+  'chip',
+  'chart',
+  'bot',
+  'cloud',
+  'globe',
+  'lock',
+  'bolt',
+  'tools',
+  'checklist',
+]);
+export const RepositoryIconColorSchema = z.enum([
+  'violet',
+  'teal',
+  'sky',
+  'amber',
+  'rose',
+  'slate',
+]);
+
+// Readers accept new catalog identifiers so older clients can still display the repository.
+export const RepositoryIconSchema = z.object({ key: z.string(), color: z.string() });
+export const RepositoryIconSelectionSchema = z.strictObject({
+  key: RepositoryIconKeySchema,
+  color: RepositoryIconColorSchema,
+});
+export type RepositoryIcon = z.infer<typeof RepositoryIconSchema>;
+export type RepositoryIconSelection = z.infer<typeof RepositoryIconSelectionSchema>;
+
 /** Current project information; never resolved from a branch or Commit. */
 export const RepositoryProfileSchema = z.object({
   readme: RepositoryReadmeSchema,
   tags: RepositoryTagsSchema,
+  icon: RepositoryIconSchema.nullable().optional(),
 });
 export const RepositoryProfilePatchSchema = RepositoryProfileSchema.partial()
+  .extend({
+    icon: RepositoryIconSelectionSchema.nullable().optional().describe('Null resets the icon.'),
+  })
   .strict()
   .describe(
-    'Only supplied fields change. Omitted fields are preserved atomically; null is not accepted. Does not create a Commit or advance a branch.'
+    'Only supplied fields change. Omitted fields are preserved atomically. Does not create a Commit or advance a branch.'
   );
 export type RepositoryProfile = z.infer<typeof RepositoryProfileSchema>;
 export type RepositoryProfilePatch = z.input<typeof RepositoryProfilePatchSchema>;

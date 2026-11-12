@@ -14,8 +14,9 @@ import {
   Trash2,
   Trophy,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
@@ -45,6 +46,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { evaluationCompareHref, evaluationDeployHref } from '@/domain/evaluationLocation';
+import { useProjects } from '@/hooks/projects/useProjects';
+import { useQuery } from '@/hooks/shared/useQuery';
 import {
   type ComparisonResult,
   type ConfigurationStats,
@@ -56,7 +60,6 @@ import {
   getSavedComparison,
   listEngineRuns,
   listSavedComparisons,
-  type SavedComparison,
 } from '@/infrastructure';
 import { cn } from '@/utils/cn';
 
@@ -65,17 +68,24 @@ function formatConfig(config: ConfigurationStats): string {
   return `${config.model} + ${config.prompt_version}`;
 }
 
-/** Parse URL param to config object (format: "model|version") */
-function parseConfigParam(param: string | null): { model: string; prompt_version: string } | null {
-  if (!param) return null;
-  const [model, version] = param.split('|');
-  if (!model || !version) return null;
-  return { model, prompt_version: version };
-}
-
 /** Encode config to URL param (format: "model|version") */
 function encodeConfigParam(config: { model: string; prompt_version: string }): string {
   return `${config.model}|${config.prompt_version}`;
+}
+
+function configIdentity({ model, prompt_version }: ConfigurationStats) {
+  return { model, prompt_version };
+}
+
+async function listConfigurationRuns(projectId: string, config: ConfigurationStats) {
+  const filters = { ...configIdentity(config), project_id: projectId, limit: 10 };
+  const [completed, failed] = await Promise.all([
+    listEngineRuns({ ...filters, status: 'completed' }),
+    listEngineRuns({ ...filters, status: 'failed' }),
+  ]);
+  return [...completed.runs, ...failed.runs]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .slice(0, 10);
 }
 
 /** Format latency for display */
@@ -167,228 +177,211 @@ function formatScore(score: number | null): string {
 }
 
 function ComparePageContent() {
+  const params = useSearchParams();
+  const projectId = params.get('project')?.trim() ?? '';
+  const saved = params.get('saved');
+  const router = useRouter();
+  const { projects, loading, error, refresh } = useProjects(100, undefined, true);
+  const listed = projects.some((project) => project.project_id === projectId);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+        <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+          Project
+          <select
+            className="max-w-full rounded-md border bg-background px-2 py-1.5"
+            value={projectId}
+            onChange={(event) =>
+              router.push(
+                evaluationCompareHref(event.target.value, !projectId && saved ? { saved } : {})
+              )
+            }
+          >
+            <option value="">Choose a project</option>
+            {projectId && !listed && <option value={projectId}>{projectId}</option>}
+            {projects.map((project) => (
+              <option key={project.project_id} value={project.project_id}>
+                {project.namespace ? `${project.namespace}/${project.name}` : project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {loading && <span className="text-sm text-muted-foreground">Loading projects…</span>}
+        {error && (
+          <Button variant="ghost" size="sm" onClick={() => void refresh()}>
+            Retry project list
+          </Button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1">
+        {projectId ? (
+          <ProjectComparison key={projectId} projectId={projectId} />
+        ) : (
+          <div className="space-y-2 p-6">
+            <h1 className="text-lg font-medium">A/B Test Comparison</h1>
+            <p className="text-sm text-muted-foreground">
+              {error
+                ? 'Could not load projects.'
+                : !loading && projects.length === 0
+                  ? 'There are no accessible projects to compare.'
+                  : 'Choose a project to see its configurations and saved comparisons.'}
+            </p>
+            <Link href="/repositories" className="text-sm underline">
+              Browse repositories
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProjectComparison({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-
-  // Parse URL params
-  const controlParam = searchParams.get('a');
-  const treatmentParam = searchParams.get('b');
-  const savedParam = searchParams.get('saved');
-  const controlConfig = parseConfigParam(controlParam);
-  const treatmentConfig = parseConfigParam(treatmentParam);
-
-  // State
-  const [configurations, setConfigurations] = useState<ConfigurationStats[]>([]);
-  const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [comparing, setComparing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Individual runs state
-  const [controlRuns, setControlRuns] = useState<EngineRun[]>([]);
-  const [treatmentRuns, setTreatmentRuns] = useState<EngineRun[]>([]);
-  const [loadingRuns, setLoadingRuns] = useState(false);
+  const savedSnapshotId = searchParams.get('saved');
+  const controlParam = savedSnapshotId ? null : searchParams.get('a');
+  const treatmentParam = savedSnapshotId ? null : searchParams.get('b');
+  const configurationsQuery = useQuery({
+    queryKey: ['evaluation-configurations', projectId],
+    queryFn: () => getConfigurations(projectId),
+    enabled: !savedSnapshotId,
+    staleTime: 0,
+  });
+  const configurations = configurationsQuery.data ?? [];
+  const loading = configurationsQuery.isLoading;
+  const controlConfig =
+    configurations.find((config) => encodeConfigParam(config) === controlParam) ?? null;
+  const treatmentConfig =
+    configurations.find((config) => encodeConfigParam(config) === treatmentParam) ?? null;
+  const canCompare = Boolean(controlConfig && treatmentConfig && controlParam !== treatmentParam);
+  const history = useQuery({
+    queryKey: ['evaluation-comparison-history', projectId],
+    queryFn: () => listSavedComparisons(projectId),
+    staleTime: 0,
+  });
+  const savedComparisons = history.data ?? [];
+  const snapshot = useQuery({
+    queryKey: ['evaluation-comparison-snapshot', projectId, savedSnapshotId],
+    queryFn: async () => {
+      const saved = await getSavedComparison(savedSnapshotId as string, projectId);
+      if (saved.project_id !== projectId)
+        throw new Error('Saved comparison belongs to another project.');
+      const result = saved.result_snapshot as Partial<ComparisonResult>;
+      if (
+        !result.control ||
+        !result.treatment ||
+        !result.comparison?.pass_rate ||
+        !result.comparison.avg_score ||
+        !result.comparison.avg_latency ||
+        !result.comparison.avg_tokens
+      ) {
+        throw new Error('This saved comparison has an unsupported result format.');
+      }
+      return result as ComparisonResult;
+    },
+    enabled: Boolean(savedSnapshotId),
+    staleTime: 0,
+  });
+  const live = useQuery({
+    queryKey: ['evaluation-comparison', projectId, controlParam, treatmentParam],
+    queryFn: () =>
+      compareConfigurations(
+        configIdentity(controlConfig as ConfigurationStats),
+        configIdentity(treatmentConfig as ConfigurationStats),
+        projectId
+      ),
+    enabled: canCompare && !configurationsQuery.error && !loading,
+    staleTime: 0,
+  });
+  const samples = useQuery({
+    queryKey: ['evaluation-comparison-runs', projectId, controlParam, treatmentParam],
+    queryFn: async () => {
+      const [controlRuns, treatmentRuns] = await Promise.all([
+        listConfigurationRuns(projectId, controlConfig as ConfigurationStats),
+        listConfigurationRuns(projectId, treatmentConfig as ConfigurationStats),
+      ]);
+      return { controlRuns, treatmentRuns };
+    },
+    enabled: canCompare && !configurationsQuery.error && !loading,
+    staleTime: 0,
+  });
+  const { controlRuns = [], treatmentRuns = [] } = samples.data ?? {};
+  const loadingRuns = samples.isLoading;
+  const resultQuery = savedSnapshotId ? snapshot : live;
+  const comparing = resultQuery.isLoading;
+  const comparisonResult = resultQuery.error ? null : resultQuery.data;
   const [runFilter, setRunFilter] = useState<'all' | 'a' | 'b'>('all');
-
-  // Save comparison state
-  const [savedComparisons, setSavedComparisons] = useState<SavedComparison[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [saving, setSaving] = useState(false);
-  const [savedSnapshotId, setSavedSnapshotId] = useState<string | null>(savedParam);
+  const [saveError, setSaveError] = useState('');
+  const [historyError, setHistoryError] = useState('');
+  const canSave =
+    !savedSnapshotId &&
+    comparisonResult &&
+    !comparing &&
+    controlConfig &&
+    treatmentConfig &&
+    samples.data &&
+    !loadingRuns &&
+    !samples.error;
 
-  // Load available configurations
-  useEffect(() => {
-    async function loadConfigurations() {
-      try {
-        const configs = await getConfigurations();
-        setConfigurations(configs);
-      } catch {
-        setError('Failed to load configurations');
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadConfigurations();
-  }, []);
-
-  // Load saved comparisons list
-  useEffect(() => {
-    // Load all saved comparisons (no project filter for now)
-    listSavedComparisons()
-      .then(setSavedComparisons)
-      .catch(() => {});
-  }, []);
-
-  // Load saved snapshot if URL has saved=comp_xxx
-  useEffect(() => {
-    if (!savedParam) {
-      setSavedSnapshotId(null);
-      return;
-    }
-    setSavedSnapshotId(savedParam);
-    setComparing(true);
-    getSavedComparison(savedParam)
-      .then((saved) => {
-        const snap = saved.result_snapshot as {
-          control: ConfigurationStats;
-          treatment: ConfigurationStats;
-          comparison: ComparisonResult['comparison'];
-        };
-        setComparisonResult({
-          control: snap.control,
-          treatment: snap.treatment,
-          comparison: snap.comparison,
-        });
-      })
-      .catch(() => {
-        setError('Failed to load saved comparison');
-      })
-      .finally(() => {
-        setComparing(false);
-      });
-  }, [savedParam]);
-
-  // Load comparison when both configs are selected (skip if viewing saved snapshot)
-  useEffect(() => {
-    if (savedParam) return;
-
-    async function loadComparison() {
-      if (!controlConfig || !treatmentConfig) {
-        setComparisonResult(null);
-        return;
-      }
-
-      setComparing(true);
-      setError(null);
-
-      try {
-        const result = await compareConfigurations(controlConfig, treatmentConfig);
-        setComparisonResult(result);
-      } catch {
-        setError('Failed to load comparison data');
-        setComparisonResult(null);
-      } finally {
-        setComparing(false);
-      }
-    }
-
-    loadComparison();
-  }, [
-    controlConfig?.model,
-    controlConfig?.prompt_version,
-    treatmentConfig?.model,
-    treatmentConfig?.prompt_version,
-    savedParam,
-  ]);
-
-  // Save comparison handler
-  const handleSave = useCallback(async () => {
-    if (!comparisonResult || !controlConfig || !treatmentConfig) return;
+  async function handleSave() {
+    if (!canSave || !saveTitle.trim() || saving) return;
+    setSaveError('');
     setSaving(true);
     try {
-      const saved = await createSavedComparison({
-        title: saveTitle,
-        control_config: controlConfig,
-        treatment_config: treatmentConfig,
+      await createSavedComparison({
+        project_id: projectId,
+        title: saveTitle.trim(),
+        control_config: configIdentity(controlConfig),
+        treatment_config: configIdentity(treatmentConfig),
         control_run_ids: controlRuns.map((r) => r.run_id),
         treatment_run_ids: treatmentRuns.map((r) => r.run_id),
         result_snapshot: comparisonResult as unknown as Record<string, unknown>,
       });
-      setSavedComparisons((prev) => [saved, ...prev]);
+      history.refetch();
       setSaveDialogOpen(false);
-      setSaveTitle('');
     } catch {
-      // Save failed — keep dialog open
+      setSaveError('Could not confirm the save. Check the project history before trying again.');
     } finally {
       setSaving(false);
     }
-  }, [comparisonResult, controlConfig, treatmentConfig, controlRuns, treatmentRuns, saveTitle]);
+  }
 
-  // Delete saved comparison
-  const handleDeleteSaved = useCallback(
-    async (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      try {
-        await deleteSavedComparison(id);
-        setSavedComparisons((prev) => prev.filter((c) => c.comparison_id !== id));
-        if (savedSnapshotId === id) {
-          router.push('/deploy/compare');
-        }
-      } catch {
-        // Delete failed
+  async function handleDeleteSaved(id: string, event: React.MouseEvent) {
+    event.stopPropagation();
+    setHistoryError('');
+    try {
+      await deleteSavedComparison(id, projectId);
+      history.refetch();
+      const current = new URLSearchParams(window.location.search);
+      if (current.get('project') === projectId && current.get('saved') === id) {
+        router.push(evaluationCompareHref(projectId));
       }
-    },
-    [savedSnapshotId, router]
-  );
-
-  // Load individual runs when configurations are selected
-  useEffect(() => {
-    async function loadIndividualRuns() {
-      if (!controlConfig && !treatmentConfig) {
-        setControlRuns([]);
-        setTreatmentRuns([]);
-        return;
-      }
-
-      setLoadingRuns(true);
-
-      try {
-        const [controlResult, treatmentResult] = await Promise.all([
-          controlConfig
-            ? listEngineRuns({
-                model: controlConfig.model,
-                prompt_version: controlConfig.prompt_version,
-                limit: 10,
-              })
-            : Promise.resolve({ runs: [] }),
-          treatmentConfig
-            ? listEngineRuns({
-                model: treatmentConfig.model,
-                prompt_version: treatmentConfig.prompt_version,
-                limit: 10,
-              })
-            : Promise.resolve({ runs: [] }),
-        ]);
-
-        setControlRuns(controlResult.runs);
-        setTreatmentRuns(treatmentResult.runs);
-      } catch {
-        // Individual runs load failed - empty table will be shown
-      } finally {
-        setLoadingRuns(false);
-      }
+    } catch {
+      setHistoryError('Could not confirm deletion. Refresh the project history.');
     }
+  }
 
-    loadIndividualRuns();
-  }, [
-    controlConfig?.model,
-    controlConfig?.prompt_version,
-    treatmentConfig?.model,
-    treatmentConfig?.prompt_version,
-  ]);
+  function selectConfig(slot: 'a' | 'b', config: ConfigurationStats) {
+    const selection: Record<string, string> = {};
+    if (controlParam) selection.a = controlParam;
+    if (treatmentParam) selection.b = treatmentParam;
+    selection[slot] = encodeConfigParam(config);
+    setSaveDialogOpen(false);
+    router.push(evaluationCompareHref(projectId, selection));
+  }
 
-  // Update URL with selected config
-  const selectConfig = (
-    slot: 'a' | 'b',
-    config: { model: string; prompt_version: string } | null
-  ) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (config) {
-      params.set(slot, encodeConfigParam(config));
-    } else {
-      params.delete(slot);
-    }
-    router.push(`/deploy/compare?${params.toString()}`);
-  };
-
-  // Swap A and B
-  const swapConfigs = () => {
-    const params = new URLSearchParams();
-    if (treatmentParam) params.set('a', treatmentParam);
-    if (controlParam) params.set('b', controlParam);
-    router.push(`/deploy/compare?${params.toString()}`);
-  };
+  function swapConfigs() {
+    const selection: Record<string, string> = {};
+    if (treatmentParam) selection.a = treatmentParam;
+    if (controlParam) selection.b = controlParam;
+    setSaveDialogOpen(false);
+    router.push(evaluationCompareHref(projectId, selection));
+  }
 
   // Check if a config matches the current selection
   const isConfigSelected = (
@@ -467,12 +460,10 @@ function ComparePageContent() {
                 configurations.map((config) => (
                   <DropdownMenuItem
                     key={`${config.model}-${config.prompt_version}`}
-                    onClick={() =>
-                      selectConfig(slot, {
-                        model: config.model,
-                        prompt_version: config.prompt_version,
-                      })
+                    disabled={
+                      encodeConfigParam(config) === (slot === 'a' ? treatmentParam : controlParam)
                     }
+                    onClick={() => selectConfig(slot, config)}
                     className={cn(isConfigSelected(config, selectedConfig) && 'bg-muted')}
                   >
                     <div className="flex items-center justify-between w-full">
@@ -535,15 +526,16 @@ function ComparePageContent() {
     );
   };
 
-  // Can compare when both configs are selected
-  const canCompare = controlConfig && treatmentConfig;
-
   return (
     <div className="flex h-full flex-col">
       {/* Fixed Header */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/deploy')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(evaluationDeployHref(projectId))}
+          >
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -560,11 +552,12 @@ function ComparePageContent() {
         </div>
         <div className="flex items-center gap-2">
           {/* Save button — only when comparing live data */}
-          {!savedSnapshotId && comparisonResult && controlConfig && treatmentConfig && (
+          {canSave && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
+                setSaveError('');
                 const now = new Date().toLocaleDateString();
                 setSaveTitle(`${controlConfig.model} vs ${treatmentConfig.model} · ${now}`);
                 setSaveDialogOpen(true);
@@ -575,7 +568,7 @@ function ComparePageContent() {
             </Button>
           )}
           {/* Share button for saved snapshots */}
-          {savedSnapshotId && (
+          {savedSnapshotId && snapshot.data && !snapshot.error && (
             <ShareLinkButton entityType="comparison" entityId={savedSnapshotId} />
           )}
           {/* History dropdown */}
@@ -592,7 +585,18 @@ function ComparePageContent() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 max-h-72 overflow-auto">
-              {savedComparisons.length === 0 ? (
+              {history.isLoading ? (
+                <div className="p-3 text-sm text-muted-foreground">Loading project history…</div>
+              ) : history.error ? (
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    history.refetch();
+                  }}
+                >
+                  Could not load history. Retry
+                </DropdownMenuItem>
+              ) : savedComparisons.length === 0 ? (
                 <div className="p-3 text-sm text-muted-foreground text-center">
                   No saved comparisons yet
                 </div>
@@ -604,7 +608,9 @@ function ComparePageContent() {
                       'flex items-center justify-between',
                       savedSnapshotId === sc.comparison_id && 'bg-muted'
                     )}
-                    onClick={() => router.push(`/deploy/compare?saved=${sc.comparison_id}`)}
+                    onClick={() =>
+                      router.push(evaluationCompareHref(projectId, { saved: sc.comparison_id }))
+                    }
                   >
                     <div className="flex-1 min-w-0 mr-2">
                       <div className="text-sm font-medium truncate">{sc.title}</div>
@@ -616,6 +622,7 @@ function ComparePageContent() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 shrink-0 text-destructive"
+                      aria-label={`Delete comparison ${sc.title}`}
                       onClick={(e) => handleDeleteSaved(sc.comparison_id, e)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -626,7 +633,7 @@ function ComparePageContent() {
               {savedSnapshotId && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push('/deploy/compare')}>
+                  <DropdownMenuItem onClick={() => router.push(evaluationCompareHref(projectId))}>
                     Back to live comparison
                   </DropdownMenuItem>
                 </>
@@ -662,6 +669,11 @@ function ComparePageContent() {
                   if (e.key === 'Enter' && saveTitle.trim()) handleSave();
                 }}
               />
+              {saveError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {saveError}
+                </p>
+              )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
                   Cancel
@@ -686,22 +698,25 @@ function ComparePageContent() {
           )}
 
           {/* Configuration Selectors */}
-          {!loading && (
-            <div className="grid gap-3 md:grid-cols-2">
-              <ConfigSelector
-                slot="a"
-                selectedConfig={controlConfig}
-                label="Control (Baseline)"
-                badgeColor="bg-[var(--status-info-muted)] text-[var(--status-info)] border-[var(--status-info)]/30"
-              />
-              <ConfigSelector
-                slot="b"
-                selectedConfig={treatmentConfig}
-                label="Treatment (Variant)"
-                badgeColor="bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30"
-              />
-            </div>
-          )}
+          {!savedSnapshotId &&
+            !loading &&
+            !configurationsQuery.error &&
+            configurations.length >= 2 && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <ConfigSelector
+                  slot="a"
+                  selectedConfig={controlConfig}
+                  label="Control (Baseline)"
+                  badgeColor="bg-[var(--status-info-muted)] text-[var(--status-info)] border-[var(--status-info)]/30"
+                />
+                <ConfigSelector
+                  slot="b"
+                  selectedConfig={treatmentConfig}
+                  label="Treatment (Variant)"
+                  badgeColor="bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30"
+                />
+              </div>
+            )}
 
           {/* Comparing loading state */}
           {comparing && (
@@ -712,12 +727,43 @@ function ComparePageContent() {
           )}
 
           {/* Error State */}
-          {error && (
+          {(configurationsQuery.error || resultQuery.error || historyError) && (
             <Card className="border-[var(--status-error)]/30 bg-[var(--status-error-muted)]">
-              <CardContent className="py-6 text-center text-[var(--status-error)]">
-                {error}
+              <CardContent
+                className="flex flex-wrap items-center gap-2 py-4 text-[var(--status-error)]"
+                role="alert"
+              >
+                {configurationsQuery.error
+                  ? 'Could not load configurations for this project.'
+                  : resultQuery.error
+                    ? savedSnapshotId
+                      ? resultQuery.error.message
+                      : 'Could not load comparison data.'
+                    : historyError}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (configurationsQuery.error) configurationsQuery.refetch();
+                    else if (resultQuery.error) resultQuery.refetch();
+                    else {
+                      setHistoryError('');
+                      history.refetch();
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
               </CardContent>
             </Card>
+          )}
+          {samples.error && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+              Could not load the runs behind this comparison.
+              <Button variant="outline" size="sm" onClick={samples.refetch}>
+                Retry runs
+              </Button>
+            </div>
           )}
 
           {/* Comparison Results */}
@@ -954,7 +1000,7 @@ function ComparePageContent() {
               </Card>
 
               {/* Individual Runs Section */}
-              <Card>
+              <Card className={savedSnapshotId || samples.error ? 'hidden' : undefined}>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
                     <span>Individual Runs</span>
@@ -1139,16 +1185,28 @@ function ComparePageContent() {
             </>
           )}
 
-          {/* Empty State */}
-          {!loading && !comparing && !canCompare && (
+          {!savedSnapshotId && !loading && !configurationsQuery.error && !canCompare && (
             <Card>
-              <CardContent className="flex h-64 flex-col items-center justify-center text-center">
-                <ArrowLeftRight className="mb-[var(--space-group)] h-12 w-12 text-muted-foreground/50" />
-                <h3 className="text-lg font-medium">Select Two Configurations to Compare</h3>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  Choose a control configuration (A) and a treatment configuration (B) from the
-                  dropdowns above to see an A/B test comparison with statistical significance.
+              <CardContent className="space-y-3 py-8 text-center">
+                <h2 className="text-lg font-medium">
+                  {configurations.length === 0
+                    ? 'No comparable runs yet'
+                    : configurations.length === 1
+                      ? 'One configuration available'
+                      : 'Select two different configurations'}
+                </h2>
+                <p className="mx-auto max-w-lg text-sm text-muted-foreground">
+                  {configurations.length < 2
+                    ? 'Compare needs two distinct model and prompt version combinations from finished evaluation runs in this project.'
+                    : 'Choose a baseline and a variant from this project.'}
                 </p>
+                {configurations.length < 2 && (
+                  <Button asChild variant="outline">
+                    <Link href={evaluationDeployHref(projectId, true)}>
+                      Prepare comparison data
+                    </Link>
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}

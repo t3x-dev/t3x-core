@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
@@ -89,12 +90,14 @@ function YamlPane({
 
 export function CommitHistoryDiffCard({
   commit,
+  structureHref,
   parentCommit,
   parentError,
   onParentSelect,
   onListFocus,
 }: {
   commit: ApiCommit;
+  structureHref: string;
   parentCommit: ApiCommit | null;
   parentError?: string;
   onParentSelect: (hash: string) => void;
@@ -120,6 +123,9 @@ export function CommitHistoryDiffCard({
             </summary>
             <code>{commit.hash}</code>
           </details>
+          <Link className={listStyles.textAction} href={structureHref}>
+            View Structure
+          </Link>
           <button className={listStyles.mobileListLink} type="button" onClick={onListFocus}>
             <ArrowUpRight aria-hidden="true" size={14} /> Commit list
           </button>

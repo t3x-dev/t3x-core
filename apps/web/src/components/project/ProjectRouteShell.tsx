@@ -10,13 +10,21 @@ import {
 } from '@/domain/project/repositoryLocation';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
-import { buildReturnTo } from '@/utils/navigationReturn';
+import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import { ProjectShell } from './ProjectShell';
 import { resolveProjectRouteTab } from './projectTabModel';
 
 function isProjectIndex(pathname: string): boolean {
   return /^\/project\/[^/]+\/?$/.test(pathname);
 }
+
+const DETAIL_PAGE_TITLES = new Map([
+  ['changes', 'Review'],
+  ['diff', 'Compare'],
+  ['merge', 'Merge'],
+  ['sources', 'Source evidence'],
+  ['knowledge-graph', 'Knowledge graph'],
+]);
 
 export function ProjectRouteShell({
   children,
@@ -68,13 +76,25 @@ export function ProjectRouteShell({
       return;
     const suffix = pathname.slice(base.length);
     if (!isSupportedRepositorySuffix(suffix)) return;
+    if (suffix === '/settings') {
+      carryRepositorySettingsReturn(projectId, `${resolvedProject.canonical_path}/settings`);
+    }
     router.replace(
-      repositoryLocation(resolvedProject.canonical_path, suffix, query, window.location.hash),
+      repositoryLocation(resolvedProject.canonical_path, suffix, query, window.location.hash, base),
       { scroll: false }
     );
   }, [resolvedProject?.canonical_path, pathname, query, projectId, router]);
 
   const suffix = `/${pathname.split('/').slice(3).join('/')}`;
+  const [, view = '', detail] = suffix.split('/');
+  const pageTitle =
+    view === 'checks' && detail
+      ? /^(review|validation|schema|pr)-[1-9][0-9]*$/.test(detail)
+        ? `Run ${detail}`
+        : 'Run details'
+      : view === 'history' && /^[1-9][0-9]*$/.test(detail)
+        ? `Commit #${detail} · History`
+        : DETAIL_PAGE_TITLES.get(view);
   if (isRetiredRepositoryLocation(suffix, searchParams)) notFound();
 
   // The project index already owns ProjectShell because it also controls the
@@ -95,14 +115,11 @@ export function ProjectRouteShell({
 
   return (
     <ProjectShell
-      activeTab={resolveProjectRouteTab(
-        pathname.split('/').filter(Boolean)[2] ?? null,
-        new URLSearchParams(query)
-      )}
+      activeTab={resolveProjectRouteTab(view || null, new URLSearchParams(query))}
       branch={searchParams.get('branch') === 'all' ? null : searchParams.get('branch')}
+      pageTitle={resolvedProject ? pageTitle : null}
       project={project}
       projectIdNavigation={Boolean(projectId)}
-      settingsReturnTo={buildReturnTo(pathname, query)}
     >
       {children}
     </ProjectShell>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RepositoryIconSchema } from './repository-profile.js';
 import { SchemaCatalogItemSchema } from './schema-catalog.js';
 import { SchemaNodeProvenanceSchema } from './schema-provenance';
 
@@ -10,6 +11,7 @@ export const PublicProjectSchema = z
     namespace: z.string().nullable(),
     description: z.string(),
     tags: z.array(z.string()),
+    icon: RepositoryIconSchema.nullable().optional(),
     createdAt: z.string(),
     repositoryPath: z.string().nullable(),
   })

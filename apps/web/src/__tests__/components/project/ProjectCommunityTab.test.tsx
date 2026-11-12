@@ -96,13 +96,13 @@ describe('ProjectCommunityTab', () => {
     expect(screen.queryByRole('link', { name: 'Manage access' })).not.toBeInTheDocument();
   });
 
-  it('links authorized collaborators to repository access settings', () => {
+  it('links authorized collaborators directly to canonical repository access settings', () => {
     mocks.canManageGuests = true;
     render(<ProjectCommunityTab projectId="project one" />);
 
     expect(screen.getByRole('link', { name: 'Manage access' })).toHaveAttribute(
       'href',
-      '/project/project%20one/settings#access'
+      '/team/repo/settings#access'
     );
   });
 

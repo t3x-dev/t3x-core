@@ -147,6 +147,7 @@ describe('ProjectDirectoryPage', () => {
   });
 
   it('renders the organization-level repository directory as the app entrypoint', () => {
+    currentPath = '/t3x-dev';
     render(<ProjectDirectoryPage />);
 
     expect(screen.getAllByText('t3x-dev')).toHaveLength(2);
@@ -158,18 +159,12 @@ describe('ProjectDirectoryPage', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/settings/provider-credentials?owner=t3x-dev'
+      '/settings?namespace=t3x-dev&returnTo=%2Ft3x-dev'
     );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     const header = within(screen.getByRole('link', { name: 'T3X home' }).closest('header')!);
-    expect(header.getByRole('link', { name: 'Discover' })).toHaveAttribute(
-      'href',
-      '/explore?view=discover'
-    );
-    expect(header.getByRole('link', { name: 'Browse' })).toHaveAttribute(
-      'href',
-      '/explore?view=browse'
-    );
+    expect(header.getByRole('link', { name: 'Discover' })).toHaveAttribute('href', '/explore');
+    expect(header.getByRole('link', { name: 'Browse' })).toHaveAttribute('href', '/explore/browse');
     expect(header.queryByRole('link', { name: 'New repository' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',
@@ -213,13 +208,14 @@ describe('ProjectDirectoryPage', () => {
       namespace: 'lqw905',
       canonical_path: `/lqw905/${project.name}`,
     }));
+    currentPath = '/lqw905';
     render(<ProjectDirectoryPage ownerSlug="lqw905" />);
 
     expect(screen.getAllByText('lqw905')).toHaveLength(2);
     expect(screen.queryByText('3 members')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/settings/provider-credentials?owner=lqw905'
+      '/settings?namespace=lqw905&returnTo=%2Flqw905'
     );
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',

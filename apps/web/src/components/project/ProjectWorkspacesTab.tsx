@@ -9,8 +9,11 @@ import {
   getProjectWorkspaceStarterCandidate,
   repairLeakedWorkspacePreviewCandidate,
 } from '@/data/workspaceCandidates';
+import { repositoryObjectHref } from '@/domain/project/objectLocation';
+import { getCanonicalRepositoryPath, workspaceLocation } from '@/domain/project/repoPath';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
+import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useSession } from '@/hooks/shared/useSession';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
@@ -19,14 +22,20 @@ import { BranchLoadError } from './BranchLoadError';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
+  workspaceBranch?: string | null;
+  fixedReview?: { workspaceId: string; snapshotId: string; number: string };
 }
 
-export function ProjectWorkspacesTab({ projectId }: ProjectWorkspacesTabProps) {
+export function ProjectWorkspacesTab({
+  projectId,
+  workspaceBranch,
+  fixedReview,
+}: ProjectWorkspacesTabProps) {
   const params = useSearchParams();
-  if (params.get('reviewPane') === 'checks')
+  if (!fixedReview && params.get('reviewPane') === 'checks')
     return <WorkspaceChecksRedirect projectId={projectId} />;
-  const snapshotId = params.get('reviewSnapshot');
-  const workspaceId = params.get('workspace');
+  const snapshotId = fixedReview?.snapshotId ?? params.get('reviewSnapshot');
+  const workspaceId = fixedReview?.workspaceId ?? params.get('workspace');
   if (snapshotId) {
     if (!workspaceId)
       return (
@@ -40,14 +49,17 @@ export function ProjectWorkspacesTab({ projectId }: ProjectWorkspacesTabProps) {
         projectId={projectId}
         workspaceId={workspaceId}
         snapshotId={snapshotId}
+        reviewNumber={fixedReview?.number}
       />
     );
   }
-  return <ProjectWorkspacesContent projectId={projectId} />;
+  return <ProjectWorkspacesContent projectId={projectId} workspaceBranch={workspaceBranch} />;
 }
 
-function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
+function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspacesTabProps) {
+  const resolveObjectAddress = useRepositoryObjectAddressResolver();
   const pathname = usePathname();
+  const repositoryPath = getCanonicalRepositoryPath(pathname);
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
@@ -75,7 +87,7 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const { getUser } = useSession();
   const sessionUserId = getUser()?.id ?? null;
-  const branch = searchParams.get('branch')?.trim() || null;
+  const branch = workspaceBranch ?? (searchParams.get('branch')?.trim() || null);
   const {
     branchHeads,
     branches,
@@ -110,18 +122,21 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
     : branchWorkspace;
   const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
+  const missingBranch =
+    workspaceBranch && !branchesLoading && !branchesError && !branches.includes(workspaceBranch);
   const navigationError =
     projectWorkspaces.error ??
-    (requestedWorkspaceId && !requestedCandidate
-      ? `Workspace ${requestedWorkspaceId} was not found in this project.`
-      : requestedWorkspaceId && branch && requestedCandidate?.targetBranch !== branch
-        ? `Workspace ${requestedWorkspaceId} belongs to ${requestedCandidate?.targetBranch}, not ${branch}.`
-        : null);
+    (missingBranch
+      ? `Branch ${workspaceBranch} was not found in this project.`
+      : requestedWorkspaceId && !requestedCandidate
+        ? `Workspace ${requestedWorkspaceId} was not found in this project.`
+        : requestedWorkspaceId && branch && requestedCandidate?.targetBranch !== branch
+          ? `Workspace ${requestedWorkspaceId} belongs to ${requestedCandidate?.targetBranch}, not ${branch}.`
+          : null);
 
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', 'workspaces');
       params.set('workspace', workspaceId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
@@ -137,13 +152,23 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
       const params = new URLSearchParams(routeQuery);
       params.set('branch', nextBranch);
       params.delete('workspace');
+      const href = repositoryPath
+        ? workspaceLocation(repositoryPath, nextBranch, params)
+        : `?${params}`;
       const navigate = () => {
-        if (isCurrent()) router.replace(`?${params.toString()}`, { scroll: false });
+        if (isCurrent()) router.replace(href, { scroll: false });
       };
       if (requestNavigation) requestNavigation(navigate);
       else navigate();
     },
-    [captureNavigation, projectWorkspaces.refresh, refreshBranches, router, routeQuery]
+    [
+      captureNavigation,
+      projectWorkspaces.refresh,
+      refreshBranches,
+      repositoryPath,
+      router,
+      routeQuery,
+    ]
   );
 
   const handleCreateWorkspaceBranch = useCallback(
@@ -162,18 +187,25 @@ function ProjectWorkspacesContent({ projectId }: ProjectWorkspacesTabProps) {
   );
 
   const handleViewCommitInState = useCallback(
-    (commitHash: string, branch: string) => {
-      const repositoryPath = pathname.endsWith('/workspaces')
-        ? pathname.slice(0, -'/workspaces'.length)
-        : pathname;
+    async (commitHash: string, branch: string) => {
+      const isCurrent = captureNavigation();
       const params = new URLSearchParams({
         branch,
         commit: commitHash,
         view: 'canvas',
       });
-      router.push(`${repositoryPath}?${params.toString()}`);
+      const address =
+        repositoryPath && /^sha256:[0-9a-f]{64}$/.test(commitHash)
+          ? await resolveObjectAddress(projectId, 'commit', commitHash).catch(() => null)
+          : null;
+      if (!isCurrent()) return;
+      router.push(
+        repositoryPath && address
+          ? repositoryObjectHref(repositoryPath, 'commits', address.number, params)
+          : `${repositoryPath ?? pathname}?${params}`
+      );
     },
-    [pathname, router]
+    [captureNavigation, pathname, projectId, repositoryPath, resolveObjectAddress, router]
   );
 
   return (

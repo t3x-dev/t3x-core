@@ -1,5 +1,6 @@
 'use client';
 
+import type { RepositoryIcon } from '@t3x-dev/api-client';
 import {
   BookOpen,
   Boxes,
@@ -20,13 +21,16 @@ import {
   UsersRound,
 } from 'lucide-react';
 import Link from 'next/link';
+import { T3XMark } from '@/components/layout/T3XMark';
 import {
   getProjectTabSegment,
   PROJECT_TABS,
   type ProjectTabId,
   projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
+import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
+import { workspaceLocation } from '@/domain/project/repoPath';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -46,6 +50,7 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
 export function DiscoverHeader({
   repoPath,
   settingsHref = '/settings',
+  onSettingsNavigate,
   projectIdNavigation = false,
   branch,
   workspaceId,
@@ -54,6 +59,7 @@ export function DiscoverHeader({
   activeTab = 'schemas',
   owner,
   projectName,
+  projectIdentity,
   newProjectHref,
   namespaceTab,
   exploreNavigation,
@@ -67,6 +73,7 @@ export function DiscoverHeader({
   namespaceTab?: 'repositories' | 'settings';
   repoPath?: string;
   settingsHref?: string;
+  onSettingsNavigate?: () => void;
   projectIdNavigation?: boolean;
   branch?: string | null;
   workspaceId?: string | null;
@@ -75,13 +82,14 @@ export function DiscoverHeader({
   activeTab?: ProjectTabId;
   owner?: string;
   projectName?: string;
+  projectIdentity?: { id: string; icon?: RepositoryIcon | null };
   newProjectHref?: string;
   repositoriesNavigation?: boolean;
 }) {
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
-  const discoverHref = exploreNavigation?.discoverHref ?? '/explore?view=discover';
-  const browseHref = exploreNavigation?.browseHref ?? '/explore?view=browse';
+  const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
+  const browseHref = exploreNavigation?.browseHref ?? '/explore/browse';
   const exploreLabel = exploreView === 'browse' ? 'Browse' : 'Discover';
   const ExploreIcon = exploreView === 'browse' ? BookOpen : Compass;
   const ownerHref = repositoriesNavigation
@@ -106,6 +114,8 @@ export function DiscoverHeader({
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
     if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
+    if (tab === 'workspaces' && !projectIdNavigation)
+      return workspaceLocation(repoPath, branch ?? null, params);
     const path =
       projectIdNavigation || tab === 'state'
         ? repoPath
@@ -120,43 +130,40 @@ export function DiscoverHeader({
       <div className={styles.topRow}>
         <div className={styles.identity}>
           <Link className={styles.brand} href={homeHref} aria-label="T3X home">
-            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
-              <rect width="26" height="26" rx="7" fill="var(--text-primary)" />
-              <path
-                d="M7 8.5h12M13 8.5v10"
-                stroke="var(--surface-card)"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="19" cy="17.5" r="2.2" fill="var(--accent-commit)" />
-            </svg>
+            <T3XMark />
             <span>T3X</span>
           </Link>
           <span className={styles.separator} aria-hidden="true">
             /
           </span>
           <div className={styles.context}>
-            <Link
-              className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
-              href={isExplore ? (exploreView === 'browse' ? browseHref : discoverHref) : ownerHref}
-            >
-              {isExplore ? (
+            {isExplore ? (
+              <span className={`${styles.owner} ${styles.currentContext}`}>
                 <ExploreIcon aria-hidden="true" />
-              ) : repositoriesNavigation ? (
-                <FolderGit2 aria-hidden="true" />
-              ) : owner ? (
-                <OwnerIcon aria-hidden="true" />
-              ) : (
-                <FolderGit2 aria-hidden="true" />
-              )}
-              <span>{isExplore ? exploreLabel : owner || 'Repositories'}</span>
-            </Link>
+                <span>{exploreLabel}</span>
+              </span>
+            ) : (
+              <Link
+                className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
+                href={ownerHref}
+              >
+                {owner && !repositoriesNavigation ? (
+                  <OwnerIcon aria-hidden="true" />
+                ) : (
+                  <FolderGit2 aria-hidden="true" />
+                )}
+                <span>{owner || 'Repositories'}</span>
+              </Link>
+            )}
             {projectName ? (
               <>
                 <span className={styles.separator} aria-hidden="true">
                   /
                 </span>
                 <Link href={repoPath || '/'} className={styles.repository}>
+                  {projectIdentity && (
+                    <RepositoryMark {...projectIdentity} className={styles.repositoryMark} />
+                  )}
                   <h1>{projectName}</h1>
                 </Link>
               </>
@@ -248,6 +255,7 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tabHref(tab.id)}
+                    onNavigate={tab.id === 'settings' && !selected ? onSettingsNavigate : undefined}
                     scroll={false}
                     className={styles.tab}
                     aria-label={tab.label}

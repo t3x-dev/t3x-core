@@ -28,9 +28,41 @@ export function getProjectIdRepoPath(projectId: string): string {
   return `/project/${encodeURIComponent(projectId)}`;
 }
 
+/** Call from a resolved repository route, where the first two segments are the address. */
+export function getCanonicalRepositoryPath(pathname: string): string | undefined {
+  return pathname.startsWith('/project/') ? undefined : pathname.split('/').slice(0, 3).join('/');
+}
+
+export function workspaceBranchFromSuffix(suffix: string): string | null {
+  const segment = /^\/branches\/([^/]+)\/workspaces\/?$/.exec(suffix)?.[1];
+  if (!segment) return null;
+  try {
+    const branch = decodeURIComponent(segment);
+    return branch && branch !== '.' && branch !== '..' ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
+export function workspaceLocation(base: string, branch: string | null, query?: URLSearchParams) {
+  const params = new URLSearchParams(query);
+  const idRoute = base.startsWith('/project/');
+  let suffix = idRoute ? '' : '/workspaces';
+  if (idRoute) params.set('tab', 'workspaces');
+  else params.delete('tab');
+  if (branch && !idRoute && branch !== '.' && branch !== '..' && !params.has('reviewSnapshot')) {
+    suffix = `/branches/${encodeURIComponent(branch)}/workspaces`;
+    params.delete('branch');
+  } else if (branch) {
+    params.set('branch', branch);
+  }
+  return `${base}${suffix}${params.size ? `?${params}` : ''}`;
+}
+
 export function getProjectIdHistoryPath(
   projectId: string,
   options: {
+    repositoryPath?: string;
     branch?: string | null;
     commit?: string | null;
     view?: 'list';
@@ -42,7 +74,7 @@ export function getProjectIdHistoryPath(
   if (options.commit) params.set('commit', options.commit);
   if (options.view) params.set('view', options.view);
   if (options.returnTo) params.set('returnTo', options.returnTo);
-  return `${getProjectIdRepoPath(projectId)}/history${params.size ? `?${params}` : ''}`;
+  return `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/history${params.size ? `?${params}` : ''}`;
 }
 
 export function getProjectIdCanvasPath(projectId: string): string {
@@ -51,15 +83,21 @@ export function getProjectIdCanvasPath(projectId: string): string {
 
 export function getProjectIdWorkspacePath(
   projectId: string,
-  options?: { branch?: string | null; sourceConversationId?: string | null }
+  options?: {
+    branch?: string | null;
+    sourceConversationId?: string | null;
+    repositoryPath?: string;
+  }
 ): string {
-  const params = new URLSearchParams({
-    branch: options?.branch?.trim() || 'main',
-    tab: 'workspaces',
-  });
+  const branch = options?.branch?.trim() || 'main';
+  const params = new URLSearchParams({ branch, tab: 'workspaces' });
   const sourceConversationId = options?.sourceConversationId?.trim();
   if (sourceConversationId) params.set('sourceConversation', sourceConversationId);
-  return `${getProjectIdRepoPath(projectId)}?${params.toString()}`;
+  return workspaceLocation(
+    options?.repositoryPath ?? getProjectIdRepoPath(projectId),
+    branch,
+    params
+  );
 }
 
 export function getProjectIdCanvasCommitPath(projectId: string, commitHash: string): string {

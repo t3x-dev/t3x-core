@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsLayout from '@/app/settings/layout';
@@ -44,6 +44,7 @@ vi.mock('@/hooks/projects/useProjectDetail', () => ({
 
 vi.mock('@/hooks/accounts/useNamespaceAccounts', () => ({
   useNamespaceAccounts: () => ({
+    accounts: [{ namespace: { kind: 'organization', slug: 'team-b', display_name: 'Team B' } }],
     activeAccount: activeNamespaceName
       ? {
           namespace: {
@@ -73,29 +74,25 @@ describe('SettingsLayout', () => {
     mockPush.mockClear();
   });
 
-  it('keeps a provider-credentials owner as entry context without propagating it to Members', () => {
+  it('keeps the requested namespace and directory return when navigating to Members', () => {
     activeNamespaceName = 'Team A';
     activeNamespaceSlug = 'team-a';
-    mockPathname = '/settings/provider-credentials';
-    mockSearchParams = new URLSearchParams({ owner: 'team-b' });
+    mockSearchParams = new URLSearchParams({ namespace: 'team-b', returnTo: '/team-b' });
 
     renderLayout();
 
     expect(screen.getByRole('link', { name: 'team-b' })).toHaveAttribute('href', '/team-b');
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/settings/provider-credentials?owner=team-b'
-    );
-    expect(screen.getByText('Organization: Team A')).toBeInTheDocument();
+    expect(screen.getByText('Organization: Team B')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute(
       'href',
-      '/settings/members'
+      '/settings/members?namespace=team-b&returnTo=%2Fteam-b'
     );
-    expect(screen.getByRole('link', { name: 'General' })).toHaveAttribute('href', '/settings');
     fireEvent.change(screen.getByLabelText('Settings'), {
       target: { value: '/settings/members' },
     });
-    expect(mockPush).toHaveBeenLastCalledWith('/settings/members');
+    expect(mockPush).toHaveBeenLastCalledWith(
+      '/settings/members?namespace=team-b&returnTo=%2Fteam-b'
+    );
   });
 
   it.each([
@@ -119,10 +116,7 @@ describe('SettingsLayout', () => {
       'href',
       '/settings/members'
     );
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/settings/provider-credentials'
-    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
   });
 
   it('keeps return context and a project filter when switching between automation pages', () => {
@@ -189,15 +183,18 @@ describe('SettingsLayout', () => {
       'href',
       '/settings/preferences'
     );
-    expect(screen.getByRole('link', { name: /Model access/i })).toHaveAttribute(
-      'href',
-      '/settings/model-access'
-    );
+    expect(
+      within(screen.getByRole('region', { name: 'Deployment' })).getByRole('link', {
+        name: /Model access/i,
+      })
+    ).toHaveAttribute('href', '/settings/model-access');
     expect(screen.getByRole('link', { name: /Members/i })).toHaveAttribute(
       'href',
       '/settings/members'
     );
-    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('href', '/settings/usage');
+    expect(
+      within(screen.getByRole('region', { name: 'Personal' })).getByRole('link', { name: 'Usage' })
+    ).toHaveAttribute('href', '/settings/usage');
     expect(screen.queryByRole('link', { name: 'Provider credentials' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/settings/help');
   });

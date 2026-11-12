@@ -23,6 +23,7 @@ const storageMock = vi.hoisted(() => {
     findProjectById: vi.fn((_db, projectId: string) =>
       Promise.resolve({ projectId, namespaceId: 'ns_test', ownerId: null })
     ),
+    findRepositoryObjectAddress: vi.fn(),
     findProjectAuthorityFacts: vi.fn(
       (
         _db,
@@ -162,6 +163,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
     findProjectById: storageMock.findProjectById,
+    findRepositoryObjectAddress: storageMock.findRepositoryObjectAddress,
     findProjectAuthorityFacts: storageMock.findProjectAuthorityFacts,
     findBranchByName: storageMock.findBranchByName,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
@@ -191,6 +193,7 @@ vi.mock('../lib/workspace-transition', async (importOriginal) => {
 });
 
 import { requestPrincipalFromApiKey } from '../lib/request-principal';
+import { repositoryObjectAddressRoutes } from '../routes/repository-object-addresses.openapi';
 import { workspaceRoutes } from '../routes/workspaces.openapi';
 
 const mockCommitV2 = {
@@ -319,6 +322,7 @@ describe('Workspace routes', () => {
   const app = new Hono();
 
   app.route('/', workspaceRoutes);
+  app.route('/', repositoryObjectAddressRoutes);
 
   function appWithApiKey(apiKey: ApiKey) {
     const authenticatedApp = new Hono();
@@ -335,6 +339,7 @@ describe('Workspace routes', () => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
     storageMock.findProjectById.mockClear();
+    storageMock.findRepositoryObjectAddress.mockReset();
     storageMock.findBranchByName.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
     storageMock.getLatestTransitionReviewSnapshot.mockReset();
@@ -601,6 +606,28 @@ describe('Workspace routes', () => {
     );
     expect(transitionMock.reviewWorkspaceTransition).not.toHaveBeenCalled();
     expect(transitionMock.decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
+
+  it('resolves a numbered fixed Review to the exact snapshot and its Workspace', async () => {
+    const stored = mockStoredReviewSnapshot('committed');
+    storageMock.findRepositoryObjectAddress.mockResolvedValueOnce({
+      id: stored.snapshotId,
+      number: '17',
+    });
+    storageMock.getTransitionReviewSnapshot.mockResolvedValueOnce(stored);
+    const response = await app.request('/v1/projects/proj_sources/object-addresses/review/17');
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toEqual({
+      id: stored.snapshotId,
+      number: '17',
+      workspaceId: stored.workspaceId,
+    });
+    expect(storageMock.findRepositoryObjectAddress).toHaveBeenCalledWith(
+      expect.anything(),
+      'proj_sources',
+      'review',
+      { number: '17' }
+    );
   });
 
   it('recovers the complete Schema/content Review from immutable preparation, not the current Draft', async () => {

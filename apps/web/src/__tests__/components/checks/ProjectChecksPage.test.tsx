@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import type { CheckRecord } from '@/domain/project/checks';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
+import { useRunPagination } from '@/hooks/projects/useRunPagination';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -63,6 +64,7 @@ const record: CheckRecord = {
 describe('Repository Checks', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState(null, '', '/');
     mocks.query = '';
     mocks.pathname = '/owner/repo/checks';
     mocks.list.mockResolvedValue({ records: [record], next_cursor: 'older' });
@@ -94,18 +96,82 @@ describe('Repository Checks', () => {
     render(<ProjectChecksPage projectId="p" />);
     const link = await screen.findByRole('link', { name: /Snapshot r12/ });
     const url = new URL(link.getAttribute('href') ?? '', 'http://localhost');
-    expect(url.pathname).toBe('/project/p/checks/review%3Ar12');
+    expect(url.pathname).toBe('/owner/repo/checks/review%3Ar12');
     expect(url.searchParams.get('returnTo')).toBe(
       '/owner/repo/checks?workspace=ws%3Amain&kind=review'
     );
     expect(screen.getByRole('link', { name: 'Open Workspaces' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces'
+      '/owner/repo/workspaces'
     );
     fireEvent.click(screen.getByRole('button', { name: /Older records/ }));
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/owner/repo/checks?workspace=ws%3Amain&kind=review&cursor=older',
-      { scroll: false }
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'kind=review&workspace=ws%3Amain&cursor=older',
+        expect.any(AbortSignal)
+      )
+    );
+    expect(window.location.pathname).toBe('/owner/repo/checks');
+    expect(window.location.search).toBe('?workspace=ws%3Amain&kind=review');
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+  it('consumes a legacy cursor and restores it only on the same browser entry', async () => {
+    mocks.query = 'q=device&cursor=older';
+    const view = render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'cursor=older&q=device',
+        expect.any(AbortSignal)
+      )
+    );
+    expect(window.location.search).toBe('?q=device');
+    view.unmount();
+    mocks.query = 'q=device';
+    const refreshed = render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        'p',
+        'cursor=older&q=device',
+        expect.any(AbortSignal)
+      )
+    );
+    refreshed.unmount();
+    window.history.replaceState(null, '', '/owner/repo/checks?q=device');
+    render(<ProjectChecksPage projectId="p" />);
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith('p', 'q=device', expect.any(AbortSignal))
+    );
+  });
+
+  it('returns from Run details to the previous same-tab page without a cursor in either address', () => {
+    const list = '/owner/repo/checks';
+    const detail = `${list}/review-12`;
+    window.history.replaceState(null, '', list);
+    const { result, rerender } = renderHook(
+      ({ pathname }) => useRunPagination(pathname, '', pathname !== list),
+      { initialProps: { pathname: list } }
+    );
+    act(() => result.current.openPage('older'));
+    result.current.rememberDetail(detail);
+    window.history.pushState(null, '', detail);
+    rerender({ pathname: detail });
+    expect(result.current.returnToPrevious).toBe(true);
+    act(() => result.current.replaceDetail(detail + '?check=evidence'));
+    expect(window.location.search).toBe('?check=evidence');
+    expect(result.current.returnToPrevious).toBe(true);
+  });
+  it('opens an unfiltered Run record without encoding the default return path', async () => {
+    const { rerender } = render(<ProjectChecksPage projectId="p" />);
+    const path = '/owner/repo/checks/review%3Ar12';
+    expect(await screen.findByRole('link', { name: /Snapshot r12/ })).toHaveAttribute('href', path);
+
+    mocks.pathname = path;
+    rerender(<ProjectChecksPage projectId="p" recordId="review%3Ar12" />);
+    expect(screen.getByRole('link', { name: 'Run', exact: true })).toHaveAttribute(
+      'href',
+      '/owner/repo/checks'
     );
   });
   it('groups only review snapshots with the same Workspace and revision on the page', async () => {
@@ -148,15 +214,15 @@ describe('Repository Checks', () => {
     expect(screen.getByText('summary/audience')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Review snapshot' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12'
+      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12'
     );
     expect(screen.getByRole('link', { name: 'Open current Workspace' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&branch=main'
+      '/owner/repo/workspaces?workspace=ws%3Amain&branch=main'
     );
     expect(screen.getByRole('link', { name: 'Schema checks & impact' })).toHaveAttribute(
       'href',
-      '/project/p?tab=workspaces&workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
+      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
     );
     expect(mocks.detail).toHaveBeenCalledWith('p', 'review:r12', expect.any(AbortSignal));
     expect(mocks.list).not.toHaveBeenCalled();
@@ -199,6 +265,7 @@ describe('Repository Checks', () => {
         checks: [],
       },
     });
+    mocks.pathname = '/project/p/checks/pull-request%3Apr1';
     render(<ProjectChecksPage projectId="p" recordId="pull-request:pr1" />);
     expect(await screen.findByText(/Rerunning replaces these results/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open PR checks' })).toHaveAttribute(

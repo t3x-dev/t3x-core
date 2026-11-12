@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
@@ -46,11 +47,13 @@ import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
+import { buildReturnTo } from '@/utils/navigationReturn';
 import {
   orderProjectsByRecentOpen,
   readRecentProjectIds,
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
+import { rememberRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import { DeletedRepositoriesView } from './DeletedRepositoriesView';
 import styles from './ProjectDirectoryPage.module.css';
 import {
@@ -123,7 +126,10 @@ function ProjectActions({
               Rename
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href={`${path}/settings`}>
+              <Link
+                href={`${path}/settings`}
+                onNavigate={() => rememberRepositorySettingsReturn(project.id, `${path}/settings`)}
+              >
                 <Settings aria-hidden="true" size={15} />
                 Repository settings
               </Link>
@@ -165,7 +171,7 @@ function ProjectRow({
 }) {
   return (
     <article className={styles.repositoryRow}>
-      <RepositoryMark id={project.id} />
+      <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
       <div className={styles.rowContent}>
         <div className={styles.rowHeading}>
           <Link
@@ -484,11 +490,10 @@ function ProjectDirectoryContent({
         owner={accessible ? undefined : ownerSlug}
         namespaceTab={accessible ? undefined : 'repositories'}
         repositoriesNavigation={accessible}
-        settingsHref={
-          accessible
-            ? undefined
-            : `/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`
-        }
+        settingsHref={namespaceSettingsHref(
+          accessible ? null : ownerSlug,
+          buildReturnTo(pathname, searchParams)
+        )}
         contextLabel={accessible ? undefined : isPersonalNamespace ? 'Personal' : 'Organization'}
       />
 
@@ -661,7 +666,7 @@ function ProjectDirectoryContent({
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
                         onClick={() => recordRecentProjectOpen(project.id)}
                       >
-                        <RepositoryMark id={project.id} />
+                        <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
                         <span>
                           <strong>{project.name}</strong>
                           <span>{project.namespace ?? ownerSlug}</span>

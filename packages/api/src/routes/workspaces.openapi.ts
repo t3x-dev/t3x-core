@@ -20,6 +20,7 @@ import {
   ConflictError,
   DraftAuthoringConflictError,
   findBranchByName,
+  findRepositoryObjectAddress,
   findWorkspaceDraft,
   getLatestTransitionReviewSnapshot,
   getTransitionProposalPreparation,
@@ -182,6 +183,7 @@ const WorkspaceTransitionDecisionResponseSchema = WorkspaceTransitionReviewRespo
 const ReviewSnapshotIdSchema = z.string().regex(/^rvs_[0-9a-f]{32}$/);
 
 const WorkspaceTransitionReviewSnapshotResponseSchema = z.object({
+  address_number: z.string().optional(),
   snapshot_id: ReviewSnapshotIdSchema,
   snapshot_digest: TransitionDigestSchema,
   project_id: z.string(),
@@ -1213,9 +1215,13 @@ function transitionPreconditionToWire(precondition: WorkspaceTransitionPrecondit
 }
 
 async function transitionReviewSnapshotToWire(db: AnyDB, record: StoredTransitionReviewSnapshot) {
-  const preparation = await getTransitionProposalPreparation(db, record.transitionId);
+  const [preparation, address] = await Promise.all([
+    getTransitionProposalPreparation(db, record.transitionId),
+    findRepositoryObjectAddress(db, record.projectId, 'review', { id: record.snapshotId }),
+  ]);
   const frozen = preparation ? JSON.parse(preparation.canonicalJson) : null;
   return {
+    address_number: address?.number,
     snapshot_id: record.snapshotId,
     snapshot_digest: record.snapshotDigest,
     project_id: record.projectId,

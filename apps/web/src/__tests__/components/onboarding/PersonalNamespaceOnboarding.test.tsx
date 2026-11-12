@@ -34,7 +34,7 @@ describe('PersonalNamespaceOnboarding', () => {
     expect(screen.getByRole('heading', { name: 'Choose your namespace' })).toBeInTheDocument();
     expect(screen.getByLabelText('Personal namespace')).toHaveValue('lqw905');
     expect(screen.getByRole('button', { name: 'Use @lqw905' })).toBeInTheDocument();
-    expect(screen.getByText('This namespace looks available.')).toBeInTheDocument();
+    expect(screen.getByText('This namespace format is valid.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
@@ -53,7 +53,7 @@ describe('PersonalNamespaceOnboarding', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });
 
-  it('restores the GitHub suggestion after editing', () => {
+  it('restores the suggested namespace after editing', () => {
     render(<PersonalNamespaceOnboarding suggestedNamespace="lqw905" />);
     const input = screen.getByLabelText('Personal namespace');
 

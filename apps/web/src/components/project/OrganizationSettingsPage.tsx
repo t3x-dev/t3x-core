@@ -1,8 +1,9 @@
 'use client';
 
 import { redirect } from 'next/navigation';
+import { namespaceSettingsHref } from '@/domain/settingsLocation';
 
 export function OrganizationSettingsPage({ ownerSlug }: { ownerSlug: string }) {
-  redirect(`/settings/provider-credentials?owner=${encodeURIComponent(ownerSlug)}`);
+  redirect(namespaceSettingsHref(ownerSlug, `/${encodeURIComponent(ownerSlug)}`));
   return null;
 }

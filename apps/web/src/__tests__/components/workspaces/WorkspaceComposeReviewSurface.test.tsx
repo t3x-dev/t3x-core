@@ -2002,7 +2002,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(prepareReview).not.toHaveBeenCalled();
     expect(onModeChange).toHaveBeenCalledWith('review');
     expect(navigationMocks.replace).toHaveBeenLastCalledWith(
-      '/t3x-dev/test-project/workspaces?workspaceMode=review',
+      '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
     );
 
@@ -2478,7 +2478,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalled());
     const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
-    expect(target.pathname).toBe('/project/proj_1/checks');
+    expect(target.pathname).toBe('/t3x-dev/test-project/checks');
     expect(target.searchParams.get('workspace')).toBe(candidate.id);
     expect(controller.prepareReview).not.toHaveBeenCalled();
     expect(snapshotMocks.list).not.toHaveBeenCalled();
@@ -2626,7 +2626,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         .map((button) => button.getAttribute('aria-label'))
     ).toEqual(['Changes', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project/workspaces?workspaceMode=review',
+      '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
     );
 
@@ -2681,7 +2681,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     const back = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
     expect(back.searchParams.get('workspaceTool')).toBeNull();
-    expect(back.searchParams.get('reviewPane')).toBeNull();
+    expect(back.searchParams.get('reviewPane')).toBe(tool === 'delivery' ? 'changes' : null);
     expect(back.searchParams.get('workspace')).toBe('ws:main');
     expect(onModeChange).toHaveBeenCalledWith(tool === 'delivery' ? 'review' : 'compose');
   });
@@ -2689,8 +2689,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   it.each([
     'reviewPane',
     'workspaceTool',
-  ])('opens the canonical editor from a legacy %s=edit URL', async (parameter) => {
-    enableComposeActivity();
+  ])('opens Compose without starting the editor or saving from a legacy %s=edit URL', (parameter) => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     navigationMocks.searchParams = new URLSearchParams(
       `workspace=ws%3Amain&branch=feature&workspaceMode=review&${parameter}=edit`
@@ -2710,7 +2709,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
-    expect(await screen.findByRole('dialog', { name: 'Edit Workspace Draft' })).toBeVisible();
+    expect(screen.queryByRole('dialog', { name: 'Edit Workspace Draft' })).not.toBeInTheDocument();
+    expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
     const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
     expect(target.searchParams.get('workspaceMode')).toBe('compose');
     expect(target.searchParams.get('workspace')).toBe('ws:main');

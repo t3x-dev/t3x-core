@@ -96,6 +96,16 @@
   min-width: 0;
 }
 
+.repository .repositoryMark {
+  width: 26px;
+  height: 26px;
+}
+
+.repositoryMark svg {
+  width: 15px;
+  height: 15px;
+}
+
 .repository h1 {
   margin: 0;
   font-size: inherit;

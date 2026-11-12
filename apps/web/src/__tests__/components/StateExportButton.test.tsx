@@ -5,7 +5,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { StateExportButton } from '@/components/shared/StateExportButton';
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), download: vi.fn() }));
-vi.mock('@/infrastructure/stateExport', () => ({
+vi.mock('@/infrastructure/stateExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/stateExport')>()),
   fetchStateExport: mocks.fetch,
   downloadStateExport: mocks.download,
 }));

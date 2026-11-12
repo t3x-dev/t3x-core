@@ -1,5 +1,6 @@
 'use client';
 
+import { isRecipeTriggerAvailable } from '@t3x-dev/api-client';
 import {
   ArrowRight,
   FileOutput,
@@ -9,7 +10,6 @@ import {
   Loader2,
   MoreVertical,
   Pencil,
-  Play,
   Plus,
   Sparkles,
   Trash2,
@@ -32,9 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { useProjects } from '@/hooks/projects/useProjects';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
-import { useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import type { CreateRecipeInput, Recipe, RecipeStep, UpdateRecipeInput } from '@/types/api';
 import styles from './RecipeSettings.module.css';
@@ -42,6 +41,7 @@ import styles from './RecipeSettings.module.css';
 const TRIGGER_LABELS: Record<string, string> = {
   'commit.created': 'Commit created',
   'merge.completed': 'Merge completed',
+  'check.failed': 'Check failed',
   'leaf.created': 'Leaf created',
   'leaf.generated': 'Leaf generated',
   'run.completed': 'Run completed',
@@ -81,9 +81,16 @@ function ActionIcon({ action }: { action: RecipeStep['action'] }) {
 
 export default function RecipesPage() {
   const projectId = useSearchParams().get('project')?.trim() ?? '';
-  const projects = useProjectStore((state) => state.projects);
-  const initialized = useProjectStore((state) => state.initialized);
-  const { list: fetchProjects } = useProjectCrud();
+  return <RecipeSettings key={projectId} projectId={projectId} />;
+}
+
+function RecipeSettings({ projectId }: { projectId: string }) {
+  const {
+    projects,
+    loading: projectsLoading,
+    error: projectsError,
+    refresh: refreshProjects,
+  } = useProjects(100, undefined, true);
   const { listRecipes, createRecipe, updateRecipe, deleteRecipe } = useRecipeCommands();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -93,27 +100,32 @@ export default function RecipesPage() {
   const formOpenerRef = useRef<HTMLElement | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    if (!initialized) void fetchProjects();
-  }, [fetchProjects, initialized]);
-
   const targetProjectIds = useMemo(
-    () => (projectId ? [projectId] : projects.map((project) => project.id)),
+    () => (projectId ? [projectId] : projects.map((project) => project.project_id)),
     [projectId, projects]
   );
-  const activeProjectId = selectedProjectId || projectId || projects[0]?.id || '';
-  const activeProjectName =
-    projects.find((project) => project.id === activeProjectId)?.name ?? 'Current project';
+  const projectLabels = new Map(
+    projects.map((project) => [
+      project.project_id,
+      project.namespace ? `${project.namespace}/${project.name}` : project.name,
+    ])
+  );
+  const editableProjects = projects.filter((project) => project.can_edit !== false);
+  const canCreate = projectId
+    ? !projects.some((project) => project.project_id === projectId && project.can_edit === false)
+    : !projectsLoading && !projectsError && !loading && editableProjects.length > 0;
+  const projectListError = !projectId && projectsError;
   const settingsHref = projectId
     ? `/project/${encodeURIComponent(projectId)}/settings`
     : '/settings';
 
   const fetchAllRecipes = useCallback(async () => {
-    if (!projectId && !initialized) return;
+    if (!projectId && projectsLoading) return;
     if (targetProjectIds.length === 0) {
       setRecipes([]);
       setLoading(false);
@@ -136,7 +148,7 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  }, [initialized, listRecipes, projectId, targetProjectIds]);
+  }, [listRecipes, projectId, projectsLoading, targetProjectIds]);
 
   useEffect(() => {
     void fetchAllRecipes();
@@ -145,19 +157,19 @@ export default function RecipesPage() {
   const closeForm = useCallback(() => {
     setFormOpen(false);
     setEditingRecipe(null);
-    setSelectedProjectId(null);
+    setSelectedProjectId('');
+    setFormError(null);
   }, []);
 
   const openCreate = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
+      if (!canCreate) return;
       formOpenerRef.current = event.currentTarget;
-      const targetProjectId = projectId || projects[0]?.id;
-      if (!targetProjectId) return;
-      setSelectedProjectId(targetProjectId);
+      setSelectedProjectId(projectId);
       setEditingRecipe(null);
       setFormOpen(true);
     },
-    [projectId, projects]
+    [canCreate, projectId]
   );
 
   const openEdit = useCallback((recipe: Recipe, opener: HTMLElement) => {
@@ -169,6 +181,8 @@ export default function RecipesPage() {
 
   const handleFormSubmit = useCallback(
     async (data: CreateRecipeInput | UpdateRecipeInput) => {
+      if (!selectedProjectId || formLoading) return;
+      setFormError(null);
       setFormLoading(true);
       try {
         if (editingRecipe) {
@@ -181,19 +195,19 @@ export default function RecipesPage() {
             current.map((recipe) => (recipe.id === updated.id ? updated : recipe))
           );
           toast.success('Recipe updated');
-        } else if (selectedProjectId) {
+        } else {
           const created = await createRecipe(selectedProjectId, data as CreateRecipeInput);
           setRecipes((current) => [...current, created]);
           toast.success('Recipe created');
         }
         closeForm();
       } catch (submitError) {
-        toast.error(formatUserFacingError(submitError, 'Operation failed.'));
+        setFormError(formatUserFacingError(submitError, 'Failed to save the recipe.'));
       } finally {
         setFormLoading(false);
       }
     },
-    [closeForm, createRecipe, editingRecipe, selectedProjectId, updateRecipe]
+    [closeForm, createRecipe, editingRecipe, formLoading, selectedProjectId, updateRecipe]
   );
 
   const handleDelete = useCallback(async () => {
@@ -227,11 +241,7 @@ export default function RecipesPage() {
               <h1>Recipes</h1>
               <span className={styles.scopeBadge}>{projectId ? 'Project' : 'Across projects'}</span>
             </div>
-            <Button
-              className={styles.newButton}
-              onClick={openCreate}
-              disabled={!projectId && projects.length === 0}
-            >
+            <Button className={styles.newButton} onClick={openCreate} disabled={!canCreate}>
               <Plus aria-hidden="true" />
               New recipe
             </Button>
@@ -252,22 +262,28 @@ export default function RecipesPage() {
                       Trigger <ArrowRight aria-hidden="true" /> Action
                     </th>
                     <th>Status</th>
-                    <th>Last run</th>
+                    <th>Project</th>
                     <th className={styles.actionColumn}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
+                  {loading || (!projectId && projectsLoading) ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
                         <Loader2 aria-label="Loading recipes" className={styles.spinner} />
                       </td>
                     </tr>
-                  ) : error ? (
+                  ) : projectListError || error ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
-                        <span className={styles.errorText}>{error}</span>
-                        <Button size="sm" variant="outline" onClick={() => void fetchAllRecipes()}>
+                        <span className={styles.errorText}>{projectListError || error}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void (projectListError ? refreshProjects() : fetchAllRecipes())
+                          }
+                        >
                           Retry
                         </Button>
                       </td>
@@ -280,9 +296,11 @@ export default function RecipesPage() {
                             ? 'No recipes configured for this project.'
                             : 'No recipes configured in the loaded projects.'}
                         </span>
-                        <button type="button" onClick={openCreate}>
-                          Create your first recipe
-                        </button>
+                        {canCreate && (
+                          <button type="button" onClick={openCreate}>
+                            Create your first recipe
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -318,12 +336,24 @@ export default function RecipesPage() {
                             </div>
                           </td>
                           <td>
-                            <span className={recipe.enabled ? styles.enabled : styles.disabled}>
+                            <span
+                              className={
+                                recipe.enabled && isRecipeTriggerAvailable(recipe.trigger.event)
+                                  ? styles.enabled
+                                  : styles.disabled
+                              }
+                            >
                               <span aria-hidden="true" />
-                              {recipe.enabled ? 'Enabled' : 'Disabled'}
+                              {!isRecipeTriggerAvailable(recipe.trigger.event)
+                                ? 'Trigger unavailable'
+                                : recipe.enabled
+                                  ? 'Enabled'
+                                  : 'Disabled'}
                             </span>
                           </td>
-                          <td className={styles.lastRun}>—</td>
+                          <td className="break-words">
+                            {projectLabels.get(recipe.project_id) ?? recipe.project_id}
+                          </td>
                           <td className={styles.actionColumn}>
                             <div className={styles.rowActions}>
                               <Button
@@ -333,15 +363,6 @@ export default function RecipesPage() {
                               >
                                 <Pencil aria-hidden="true" />
                                 Edit
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled
-                                title="Persisted run history is not supported yet"
-                              >
-                                <Play aria-hidden="true" />
-                                Run history unavailable
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -386,7 +407,9 @@ export default function RecipesPage() {
           className={`${palette.scope} ${styles.drawer}`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            document.getElementById('recipe-name')?.focus();
+            document
+              .getElementById(projectId || editingRecipe ? 'recipe-name' : 'recipe-target-project')
+              ?.focus();
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -404,7 +427,20 @@ export default function RecipesPage() {
             onSubmit={handleFormSubmit}
             onCancel={closeForm}
             loading={formLoading}
-            projectName={activeProjectName}
+            projectName={projectLabels.get(selectedProjectId) ?? selectedProjectId}
+            projectSelection={
+              projectId || editingRecipe
+                ? undefined
+                : {
+                    value: selectedProjectId,
+                    onChange: setSelectedProjectId,
+                    options: editableProjects.map(({ project_id }) => ({
+                      id: project_id,
+                      label: projectLabels.get(project_id) ?? project_id,
+                    })),
+                  }
+            }
+            error={formError}
             variant="drawer"
           />
         </SheetContent>
