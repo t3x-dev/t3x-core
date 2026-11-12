@@ -305,14 +305,18 @@
   position: sticky;
   top: 0;
   min-width: 0;
-  padding: 0 0 0 12px;
   background: var(--surface-card);
 }
 .traceHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.traceSupplement {
+  padding: 0 20px 20px;
 }
 .traceHeader h2 {
   font-size: 14px;
