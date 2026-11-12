@@ -66,6 +66,15 @@ it('expands recorded operations into separate field-level set cards', () => {
   fireEvent.click(screen.getByText(/P-01 · YOp 1/));
   const cards = layer.querySelectorAll('li');
   expect(cards).toHaveLength(3);
+  expect([...cards].map((card) => card.querySelector('code')?.textContent)).toEqual([
+    'title',
+    'priority',
+    'acceptance',
+  ]);
+  expect(cards[0]!.querySelector('code')).toHaveAttribute(
+    'title',
+    'requirements/children/[key=first]/slots/title'
+  );
   expect([...cards].map((card) => card.textContent)).toEqual([
     expect.stringContaining('set'),
     expect.stringContaining('set'),

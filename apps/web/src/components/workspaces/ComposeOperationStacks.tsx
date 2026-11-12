@@ -84,7 +84,7 @@ export function ComposeOperationStacks({ stacks }: { stacks: readonly OperationS
                         <span className={styles.verb} data-op={field.op}>
                           {field.op}
                         </span>
-                        <code title={field.path}>{field.path}</code>
+                        <code title={field.path}>{fieldName(field.path)}</code>
                         <span className={styles.values}>
                           <del title={value(field.before)}>{value(field.before)}</del>
                           <span aria-hidden="true">→</span>

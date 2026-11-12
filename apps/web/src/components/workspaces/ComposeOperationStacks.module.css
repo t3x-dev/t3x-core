@@ -131,7 +131,8 @@
   white-space: nowrap;
 }
 .field code {
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .values {
   display: flex;
