@@ -151,6 +151,30 @@
   position: sticky;
   top: 16px;
 }
+.selectedDetails {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.selectedDetailsHeader {
+  border-bottom: 1px solid var(--stroke-divider);
+  padding: 12px 20px;
+}
+.selectedDetailsHeader h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.selectedDetailsReason {
+  padding: 0 20px;
+}
+.selectedDetailsUnavailable {
+  border-top: 1px solid var(--stroke-divider);
+  padding: 16px 20px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
 .details {
   padding: 12px 24px;
   border-top: 1px solid var(--stroke-divider);
