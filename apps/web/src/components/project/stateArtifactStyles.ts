@@ -21,14 +21,23 @@ export const stateArtifactStyles = `
 .t3x-state-artifact .t3x-artifact-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .t3x-state-artifact .t3x-artifact-tags > span {
   padding: 2px 8px; border-radius: 12px; background: #eaeef2;
-  color: var(--card-muted); font-size: 12px; font-weight: 600;
+  color: var(--card-muted); font-size: 12px; font-weight: 600; overflow-wrap: anywhere;
 }
-.t3x-state-artifact .t3x-artifact-tags > span:first-child { background: #f1e8ff; color: #6338a4; }
+.t3x-state-artifact .t3x-artifact-tags > .t3x-artifact-tag-kind {
+  background: #f1e8ff; color: #6338a4;
+}
+.t3x-state-artifact .t3x-artifact-tags > .t3x-artifact-tag-schema {
+  background: #ddf4ff; color: #0753a0;
+}
 .t3x-state-artifact h2, .t3x-state-artifact h3, .t3x-state-artifact p,
 .t3x-state-artifact dl, .t3x-state-artifact dd { margin: 0; }
 .t3x-state-artifact h2 {
   margin-top: 6px; font-size: 22px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.t3x-state-artifact .t3x-artifact-description {
+  margin-top: 5px; color: var(--card-muted); font-size: 13px;
+  overflow-wrap: anywhere; white-space: pre-wrap;
 }
 .t3x-state-artifact section { padding: 16px var(--card-padding); }
 .t3x-state-artifact h3 { margin-bottom: 6px; font-size: 13px; font-weight: 650; }

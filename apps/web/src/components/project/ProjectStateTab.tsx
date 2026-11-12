@@ -923,6 +923,8 @@ export function ProjectStateTab({
                         key={`${projectId}:${headCommit.hash}`}
                         projectId={projectId}
                         projectName={projectName}
+                        projectDescription={projectDescription}
+                        schemaBindings={committedSchema.snapshot?.bindings}
                         commitDigest={headCommit.hash}
                         structureYaml={yamlText}
                         href={commitStructureHref(repositoryPath, headCommit, true)}

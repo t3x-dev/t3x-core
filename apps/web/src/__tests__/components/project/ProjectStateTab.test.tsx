@@ -537,12 +537,16 @@ function setupHookMocks() {
   });
 }
 
-function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION) {
+function renderStateTab(
+  validation: YSchemaValidationSummary | null = VALIDATION,
+  projectDescription?: string
+) {
   const element = () => (
     <ProjectStateTab
       initialView="structure"
       projectId="proj_test"
       projectName="Test Project"
+      projectDescription={projectDescription}
       validation={validation}
     />
   );
@@ -578,8 +582,20 @@ describe('ProjectStateTab', () => {
         content: commit.content,
       }),
     });
+    hookMocks.committedSchema = {
+      loading: false,
+      retry: vi.fn(),
+      snapshot: {
+        status: 'bound',
+        schemaHash: `sha256:${'b'.repeat(64)}`,
+        bindings: [
+          { schemaName: 'Care Checklist', canonicalName: 't3x/care-checklist', version: '1.0.0' },
+        ],
+        definition: {},
+      },
+    };
     navigationMocks.search = 'view=structure';
-    const { updateSearch } = renderStateTab();
+    const { updateSearch } = renderStateTab(null, 'The project description.');
 
     const structure = await screen.findByRole('region', { name: 'State structure' });
     const row = within(structure).getByText('problem').closest('tr')!;
@@ -597,6 +613,11 @@ describe('ProjectStateTab', () => {
     updateSearch(previewQuery);
     const dialog = screen.getByRole('dialog', { name: 'Share card' });
     const summary = await within(dialog).findByRole('region', { name: 'Content summary' });
+    const header = dialog.querySelector('article header') as HTMLElement;
+    expect(within(header).getByRole('heading', { name: 'Test Project' })).toBeVisible();
+    expect(within(header).getByText('The project description.')).toBeVisible();
+    expect(within(header).getByText('Content', { exact: true })).toBeVisible();
+    expect(within(header).getByText('Schema Care Checklist@1.0.0')).toBeVisible();
     expect(within(summary).getByText('You: i need food and drink')).toBeVisible();
     expect(summary).not.toHaveTextContent('t3x.dev/semantic-content');
     expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
@@ -647,6 +668,8 @@ describe('ProjectStateTab', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Share card' });
     expect(await within(dialog).findByText(/Content summary is unavailable/)).toBeVisible();
+    expect(dialog.querySelector('.t3x-artifact-description')).toBeNull();
+    expect(dialog.querySelector('.t3x-artifact-tag-schema')).toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
     fireEvent.click(within(dialog).getByText('Full data (YAML)'));
     const rawYaml = within(dialog).getByText(/next: present/);

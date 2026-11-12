@@ -48,13 +48,14 @@ export function summarizeArtifactState(yaml: string, structureYaml: string) {
   const value: unknown = load(yaml, { schema: JSON_SCHEMA });
   // Structure already projects the semantic tree of this same Commit into business fields.
   const semantic = isSemanticState(value);
+  const objectType = semantic ? 'Content' : 'State';
   const content: unknown = semantic ? load(structureYaml, { schema: JSON_SCHEMA }) : value;
   const roots = semantic && isRecord(content) ? Object.values(content) : [];
   const document = roots.length === 1 && isRecord(roots[0]) ? roots[0] : content;
   const rows = new Map<string, SummaryRow>();
   let count = 0;
   for (const field of summarizeFields(document)) {
-    if (count++ === SUMMARY_LIMIT) return { rows: [...rows.values()], hasMore: true };
+    if (count++ === SUMMARY_LIMIT) return { objectType, rows: [...rows.values()], hasMore: true };
     const path = field.path.slice(0, -1);
     const key = JSON.stringify(path.length ? path : field.path);
     const entry = { name: field.path[field.path.length - 1], value: field.value };
@@ -62,5 +63,16 @@ export function summarizeArtifactState(yaml: string, structureYaml: string) {
     if (row) row.fields.push(entry);
     else rows.set(key, { path, fields: [entry] });
   }
-  return { rows: [...rows.values()], hasMore: false };
+  return { objectType, rows: [...rows.values()], hasMore: false };
+}
+
+export function artifactSchemaLabels(bindings: readonly Record<string, unknown>[] = []) {
+  const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+  const labels = new Set<string>();
+  for (const binding of bindings) {
+    const name = text(binding.schemaName) || text(binding.canonicalName);
+    const version = text(binding.version);
+    if (name || version) labels.add(name && version ? `${name}@${version}` : name || version);
+  }
+  return [...labels];
 }

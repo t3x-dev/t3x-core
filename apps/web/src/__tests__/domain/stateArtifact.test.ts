@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { summarizeArtifactState } from '@/domain/project/stateArtifact';
+import { artifactSchemaLabels, summarizeArtifactState } from '@/domain/project/stateArtifact';
 
 it('shows actual values in ordinary nested YAML, including lists and falsy values', () => {
   const summary = summarizeArtifactState(
@@ -21,11 +21,29 @@ it('shows actual values in ordinary nested YAML, including lists and falsy value
 });
 
 it('bounds the summary without treating an empty document as a field', () => {
-  expect(summarizeArtifactState('{}', '')).toEqual({ rows: [], hasMore: false });
+  expect(summarizeArtifactState('{}', '')).toEqual({
+    objectType: 'State',
+    rows: [],
+    hasMore: false,
+  });
   const summary = summarizeArtifactState(
     JSON.stringify(Array.from({ length: 100 }, (_, i) => i)),
     ''
   );
   expect(summary.rows).toHaveLength(16);
   expect(summary.hasMore).toBe(true);
+});
+
+it('labels only the Schema identity and version present in each binding', () => {
+  expect(
+    artifactSchemaLabels([
+      { schemaName: 'Care Checklist', canonicalName: 't3x/care-checklist', version: '1.0.0' },
+      { canonicalName: 't3x/prompt', version: 'v1' },
+      { version: '2.0.0' },
+      { schemaName: 'Weekly Goals' },
+      { schemaName: 'Weekly Goals' },
+      { schemaName: ' ', version: null },
+    ])
+  ).toEqual(['Care Checklist@1.0.0', 't3x/prompt@v1', '2.0.0', 'Weekly Goals']);
+  expect(artifactSchemaLabels()).toEqual([]);
 });

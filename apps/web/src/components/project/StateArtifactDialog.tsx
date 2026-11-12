@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { shortHash } from '@/domain/format/formatters';
+import { artifactSchemaLabels } from '@/domain/project/stateArtifact';
 import { downloadStateArtifactCard, useStateArtifact } from '@/hooks/commits/useStateArtifact';
 import { useClipboard } from '@/hooks/shared/useClipboard';
 import { stateArtifactStyles } from './stateArtifactStyles';
@@ -25,6 +26,8 @@ import { stateArtifactStyles } from './stateArtifactStyles';
 interface ArtifactProps {
   projectId: string;
   projectName: string;
+  projectDescription?: string;
+  schemaBindings?: readonly Record<string, unknown>[];
   commitDigest: string;
   structureYaml: string;
   href: string;
@@ -56,6 +59,8 @@ export function StateArtifactDialog({
 function ArtifactPreview({
   projectId,
   projectName,
+  projectDescription,
+  schemaBindings,
   commitDigest,
   structureYaml,
   href,
@@ -67,6 +72,8 @@ function ArtifactPreview({
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
   const data = result && 'data' in result ? result.data : null;
+  const description = typeof projectDescription === 'string' ? projectDescription.trim() : '';
+  const objectType = summary?.objectType ?? (data?.exact ? 'State' : null);
 
   async function share() {
     const url = new URL(href, window.location.origin).href;
@@ -163,12 +170,20 @@ function ArtifactPreview({
                 </span>
                 <div>
                   <p className="t3x-artifact-tags">
-                    <span>State</span>
+                    {objectType ? (
+                      <span className="t3x-artifact-tag-kind">{objectType}</span>
+                    ) : null}
+                    {artifactSchemaLabels(schemaBindings).map((label) => (
+                      <span key={label} className="t3x-artifact-tag-schema">
+                        Schema {label}
+                      </span>
+                    ))}
                     <span>
                       Commit <code title={commitDigest}>{shortHash(commitDigest)}</code>
                     </span>
                   </p>
                   <h2>{projectName}</h2>
+                  {description ? <p className="t3x-artifact-description">{description}</p> : null}
                 </div>
               </header>
               <section aria-label="Content summary">
