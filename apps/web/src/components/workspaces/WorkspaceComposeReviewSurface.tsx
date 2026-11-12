@@ -3,6 +3,7 @@ import {
   type ReviewSnapshotV1,
   type SchemaPreparationTarget,
   T3xApiError,
+  type TransitionProtocolValue,
 } from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
@@ -106,6 +107,7 @@ import { getCanonicalRepositoryPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  readStatePointValue,
   type StatePointRow,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
@@ -172,7 +174,11 @@ import {
 } from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
-import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
+import {
+  ComposeChangeContext,
+  ComposeChangeReason,
+  ComposeNodeHistoryPanel,
+} from './ComposeNodeHistoryPanel';
 import { useWorkspaceContentNavigation } from './useWorkspaceContentNavigation';
 import { type PublishedTurnChanges, WorkspaceTurnChanges } from './WorkspaceAssistantActivity';
 import {
@@ -3153,6 +3159,9 @@ function ReviewSurface({
     subjectChanges
   );
   const [selectedStructureRowId, setSelectedStructureRowId] = useState<string | null>(null);
+  const selectedStructureRow = selectedStructureRowId
+    ? (structureModel.rows.find((row) => row.id === selectedStructureRowId) ?? null)
+    : null;
   const view = controller.review.view;
   const checks = getReviewChecks(controller);
   const preparing = controller.busyAction === 'review.prepare';
@@ -3195,12 +3204,7 @@ function ReviewSurface({
     controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'source_chat:current';
   const materialLabel = sourceLabel.length > 36 ? `${sourceLabel.slice(0, 33)}…` : sourceLabel;
   const activeStructureRow =
-    (selectedStructureRowId
-      ? structureModel.rows.find((row) => row.id === selectedStructureRowId)
-      : null) ??
-    changedStructureRows[0] ??
-    structureModel.rows[0] ??
-    null;
+    selectedStructureRow ?? changedStructureRows[0] ?? structureModel.rows[0] ?? null;
 
   if (pane === 'checks') {
     return <WorkspaceChecksRedirect projectId={candidate.projectId} workspaceId={candidate.id} />;
@@ -3387,6 +3391,14 @@ function ReviewSurface({
             </section>
           ) : (
             <>
+              {subject === 'content' && activeStructureRow ? (
+                <WorkspaceReviewSelectedDetails
+                  activity={activity}
+                  candidate={candidate}
+                  model={structureModel}
+                  row={activeStructureRow}
+                />
+              ) : null}
               <WorkspaceReviewSummary
                 candidate={candidate}
                 controller={controller}
@@ -3469,8 +3481,9 @@ function ReviewSurface({
           inspectedSchema
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
-            candidate={candidate}
-            review={comparisonReview}
+            model={structureModel}
+            selectedRow={activeStructureRow}
+            onSelectRow={setSelectedStructureRowId}
             controller={controller}
             onModeChange={onModeChange}
           />
@@ -3757,13 +3770,7 @@ function ResultYamlPane({
   const yamlText = useMemo(() => buildCanonicalStateYaml(model.head), [model.head]);
   const selectPath = useCallback(
     (path: string) => {
-      const exact = model.rows.find((row) => row.path === path);
-      const row =
-        exact ??
-        model.rows.reduce<WorkspaceReviewStructureRow | null>((nearest, entry) => {
-          if (!path.startsWith(entry.path + '/')) return nearest;
-          return !nearest || entry.path.length > nearest.path.length ? entry : nearest;
-        }, null);
+      const row = findWorkspaceReviewRow(model.rows, path);
       if (row) onSelectRow(row.id);
     },
     [model.rows, onSelectRow]
@@ -3804,6 +3811,97 @@ interface WorkspaceReviewStructureModel {
   rows: WorkspaceReviewStructureRow[];
 }
 
+function findWorkspaceReviewRow(rows: WorkspaceReviewStructureRow[], path: string) {
+  return (
+    rows.find((row) => row.path === path) ??
+    rows.reduce<WorkspaceReviewStructureRow | null>((nearest, row) => {
+      if (!path.startsWith(`${row.path}/`)) return nearest;
+      return !nearest || row.path.length > nearest.path.length ? row : nearest;
+    }, null)
+  );
+}
+
+function WorkspaceReviewSelectedDetails({
+  activity,
+  candidate,
+  model,
+  row,
+}: {
+  activity: ReturnType<typeof useComposeActivity>;
+  candidate: WorkspaceCandidate;
+  model: WorkspaceReviewStructureModel;
+  row: WorkspaceReviewStructureRow;
+}) {
+  const before = readStatePointValue(model.baseline, row.path);
+  const after = readStatePointValue(model.head, row.path);
+  const current = after.exists ? (after.value as TransitionProtocolValue) : undefined;
+  const previous = before.exists ? (before.value as TransitionProtocolValue) : undefined;
+  const matchesBase = before.exists === after.exists && composeValuesEqual(previous, current);
+  const matchingAuthoring =
+    activity.view?.workspaceRevision === candidate.revision ? activity.view : null;
+  const action = matchingAuthoring
+    ? activity.actions?.find((entry) =>
+        (activity.cards?.[entry.actionId] ?? []).some((card) => {
+          const path = authoringSemanticPath(card.path) ?? card.path;
+          return (
+            row.path === path ||
+            (!matchesBase &&
+              (path === 'content' ||
+                row.path.startsWith(`${path}/`) ||
+                path.startsWith(`${row.path}/`)))
+          );
+        })
+      )
+    : undefined;
+  const title =
+    current &&
+    typeof current === 'object' &&
+    !Array.isArray(current) &&
+    typeof current.title === 'string' &&
+    current.title.trim()
+      ? current.title
+      : row.key;
+  const version = matchingAuthoring
+    ? `Content r${matchingAuthoring.compositionRevision}`
+    : `Workspace r${candidate.revision ?? '—'}`;
+
+  return (
+    <section aria-label="Selected review Details" className={workbenchStyles.selectedDetails}>
+      <header className={workbenchStyles.selectedDetailsHeader}>
+        <h2>Details</h2>
+      </header>
+      <ComposeChangeContext
+        title={title}
+        path={row.path}
+        revisionLabel={version}
+        current={current}
+        unknown={false}
+        comparison={{ before: previous, after: current }}
+        comparisonLabel={`Whole draft · Base → ${version}`}
+        matchesBase={matchesBase}
+      />
+      {action ? (
+        <div className={workbenchStyles.selectedDetailsReason}>
+          <ComposeChangeReason
+            reason={action.reason ?? ''}
+            actor={action.actor.id}
+            channel={action.channel}
+            timestamp={action.publishedAt}
+            action={action}
+            contextLabel={`Latest saved action affecting this path · A${action.sequence}. YOps describes the whole action.`}
+          />
+        </div>
+      ) : (
+        <p className={workbenchStyles.selectedDetailsUnavailable}>
+          {matchesBase
+            ? 'This path matches Base; no saved action is attributed to it.'
+            : 'Saved action details are unavailable for this path in the loaded history.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export interface WorkspaceReviewStructureRow extends StatePointRow {
   childCount?: number;
   collapseByDefault?: boolean;
@@ -3828,26 +3926,18 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
-  candidate,
-  review,
+  model,
+  selectedRow,
+  onSelectRow,
   controller,
   onModeChange,
 }: {
-  candidate: WorkspaceCandidate;
-  review: WorkspaceComposeReviewController['review'];
+  model: WorkspaceReviewStructureModel;
+  selectedRow: WorkspaceReviewStructureRow | null;
+  onSelectRow: (id: string) => void;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const structure = useMemo(
-    () => buildWorkspaceReviewStructureModel(candidate, review),
-    [candidate, review]
-  );
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const selectedRow =
-    structure.rows.find((row) => row.path === selectedPath) ??
-    structure.rows.find((row) => !row.expandable) ??
-    structure.rows[0] ??
-    null;
   const selectedKind = selectedRow?.diff?.kind;
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard)
@@ -3861,8 +3951,11 @@ function WorkspaceRenderedReview({
     <section aria-label="Rendered result">
       {controller.error ? <p role="alert">{controller.error}</p> : null}
       <WorkspaceReviewContentPreview
-        value={{ domain: 't3x.dev/semantic-content', version: 1, content: structure.head }}
-        onSelect={(path) => setSelectedPath(authoringSemanticPath(path) ?? path)}
+        value={{ domain: 't3x.dev/semantic-content', version: 1, content: model.head }}
+        onSelect={(path) => {
+          const row = findWorkspaceReviewRow(model.rows, authoringSemanticPath(path) ?? path);
+          if (row) onSelectRow(row.id);
+        }}
       />
       <details className={workbenchStyles.selection}>
         <summary>Selected change · actions</summary>

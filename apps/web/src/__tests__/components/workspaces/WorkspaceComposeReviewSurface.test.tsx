@@ -2138,6 +2138,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(within(selectedChange).getByText('Previous outcome')).toBeInTheDocument();
     expect(within(selectedChange).getByText('Auditable rollout outcome')).toBeInTheDocument();
+    const reviewDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(reviewDetails).toHaveTextContent('prd/summary/outcome');
+    expect(reviewDetails).toHaveTextContent('Previous outcome');
+    expect(reviewDetails).toHaveTextContent('Auditable rollout outcome');
+    expect(screen.getByRole('region', { name: 'Review readiness' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse prd', exact: true }));
     expect(within(screen.getByRole('table')).queryByTitle('prd/summary/outcome')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand prd', exact: true }));
@@ -2180,6 +2185,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/requirements/canary/title'
+    );
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
@@ -2482,6 +2490,129 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(target.searchParams.get('workspace')).toBe(candidate.id);
     expect(controller.prepareReview).not.toHaveBeenCalled();
     expect(snapshotMocks.list).not.toHaveBeenCalled();
+  });
+
+  it('shows the matching saved action and original YOps beside a selected Review diff', () => {
+    enableComposeActivity();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: {
+        kind: 'service' as const,
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'human:local-user' },
+      },
+      publishedAt: '2026-10-09T11:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path: 'prd/summary/outcome', value: 'After' } }],
+      reason: 'Apply generated changes to Draft',
+      generation: {
+        transitionId: 'trn_1',
+        preparationDigest: 'sha256:test',
+        preparation: { bindings: [{ reason: 'Clarify the intended outcome.' }] },
+      },
+    };
+    const card = {
+      nodeId: 'outcome',
+      path: 'prd/summary/outcome',
+      before: 'Before',
+      after: 'After',
+    };
+    const otherCard = {
+      nodeId: 'title',
+      path: 'prd/summary/title',
+      before: 'Old title',
+      after: 'New title',
+    };
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = {
+      a1: [
+        {
+          ...card,
+          path: 'content/trees/[key=prd]/children/[key=summary]/slots/outcome',
+        },
+      ],
+    };
+    Object.assign(activityMocks.value!.view!, {
+      base: { prd: { summary: { outcome: 'Before', title: 'Old title', priority: 'must' } } },
+      current: { prd: { summary: { outcome: 'After', title: 'New title', priority: 'must' } } },
+      actions: [action],
+      netDiff: [card, otherCard],
+      hasChanges: true,
+    });
+    const controller = {
+      candidate,
+      isBusy: false,
+      busyAction: null,
+      scenarios: { options: [], selectedId: candidate.id },
+      review: { content: null, deterministicValidation: null, reviewSnapshot: null, view: null },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/summary/outcome'
+    );
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/outcome').closest('tr')!
+    );
+    const details = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(details).toHaveTextContent('Before');
+    expect(details).toHaveTextContent('After');
+    const actionDetails = within(details).getByRole('region', { name: 'Action details' });
+    expect(actionDetails).toHaveTextContent('Latest saved action affecting this path · A1');
+    expect(actionDetails).toHaveTextContent('T3X proposal generator / AI');
+    expect(actionDetails).toHaveTextContent('Published by');
+    expect(actionDetails).toHaveTextContent('Clarify the intended outcome.');
+    fireEvent.click(within(actionDetails).getByText('View exact YOps · 1 operation'));
+    expect(actionDetails).toHaveTextContent('"prd/summary/outcome"');
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/title').closest('tr')!
+    );
+    const otherDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(otherDetails).toHaveTextContent('Old title');
+    expect(otherDetails).toHaveTextContent('New title');
+    expect(within(otherDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
+    expect(otherDetails).toHaveTextContent('Saved action details are unavailable');
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/priority').closest('tr')!
+    );
+    const unchangedDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(unchangedDetails).toHaveTextContent('prd/summary/priority');
+    expect(unchangedDetails).toHaveTextContent('Matches Base · no change');
+    expect(unchangedDetails).toHaveTextContent(
+      'This path matches Base; no saved action is attributed to it.'
+    );
+    expect(within(unchangedDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    const preview = screen.getByRole('region', { name: 'Content result preview' });
+    fireEvent.click(
+      within(preview)
+        .getByTitle('content/trees/[key=prd]/children/[key=summary]/slots/priority')
+        .closest('tr')!
+    );
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/summary/priority'
+    );
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'Matches Base · no change'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(within(screen.getByRole('table')).getByTitle('prd/summary').closest('tr')!);
+    expect(
+      within(screen.getByRole('region', { name: 'Selected review Details' })).getByRole('region', {
+        name: 'Action details',
+      })
+    ).toHaveTextContent('Clarify the intended outcome.');
   });
 
   it.each([
