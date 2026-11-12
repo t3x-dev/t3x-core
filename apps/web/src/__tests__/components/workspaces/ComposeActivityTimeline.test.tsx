@@ -92,6 +92,28 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
+  it('identifies the human publisher of an AI-generated change', () => {
+    const activity = fixture();
+    activity.actions[3] = {
+      ...activity.actions[3],
+      channel: 'assistant',
+      actor: {
+        kind: 'service',
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'human:local-user' },
+      },
+    };
+    render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="latest"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21T11:53:00Z"
+      />
+    );
+    expect(screen.getByText('You · AI')).toBeInTheDocument();
+  });
   it('confirms only the selected generated deletion and retains its confirmed state', async () => {
     const activity = fixture();
     activity.actions[3] = {

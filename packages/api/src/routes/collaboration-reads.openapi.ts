@@ -8,11 +8,13 @@ import {
   ListProjectGuestsResponseSchema,
   ListProjectInvitationsResponseSchema,
   ListReceivedCollaborationInvitationsResponseSchema,
+  ResolveCollaborationUsersResponseSchema,
   SearchCollaborationUsersResponseSchema,
 } from '@t3x-dev/api-client';
 import {
   findNamespaceById,
   findUserById,
+  findUserProfilesByIds,
   listNamespaceAccountFacts,
   listNamespaceInvitationViews,
   listNamespaceMemberViews,
@@ -175,6 +177,57 @@ collaborationReadRoutes.openapi(searchUsersRoute, async (c) => {
     success: true as const,
     data: {
       users: results.map((user) => ({
+        user_id: user.id,
+        username: user.username,
+        display_name: user.name,
+        avatar_url: user.avatarUrl,
+      })),
+    },
+  });
+});
+
+const resolveUsersRoute = createRoute({
+  method: 'post',
+  path: '/v1/users/resolve',
+  tags: ['Collaboration'],
+  summary: 'Resolve public usernames from recorded user IDs',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({ ids: z.array(z.string().trim().min(1).max(200)).min(1).max(100) })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Public usernames for known user IDs',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ResolveCollaborationUsersResponseSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+collaborationReadRoutes.openapi(resolveUsersRoute, async (c) => {
+  const principal = getNamespacePrincipal(c);
+  if (!principal || principal.kind !== 'human') {
+    return errorResponse(c, 'FORBIDDEN', 'A signed-in user is required');
+  }
+  const users = await findUserProfilesByIds(await getDB(), [...new Set(c.req.valid('json').ids)]);
+  return c.json({
+    success: true as const,
+    data: {
+      users: users.map((user) => ({
         user_id: user.id,
         username: user.username,
         display_name: user.name,

@@ -43,6 +43,8 @@ import {
   ListProjectInvitationsResponseSchema,
   type ListReceivedCollaborationInvitationsResponse,
   ListReceivedCollaborationInvitationsResponseSchema,
+  type ResolveCollaborationUsersResponse,
+  ResolveCollaborationUsersResponseSchema,
   type SearchCollaborationUsersResponse,
   SearchCollaborationUsersResponseSchema,
   type TransferNamespaceOwnershipRequest,
@@ -598,6 +600,20 @@ export class T3xClient {
       { q: query },
       options,
       SearchCollaborationUsersResponseSchema
+    );
+  }
+
+  async resolveCollaborationUsers(
+    ids: string[],
+    options?: T3xRequestOptions
+  ): Promise<ResolveCollaborationUsersResponse> {
+    return this.request<ResolveCollaborationUsersResponse>(
+      'POST',
+      '/v1/users/resolve',
+      { ids },
+      undefined,
+      options,
+      ResolveCollaborationUsersResponseSchema
     );
   }
 

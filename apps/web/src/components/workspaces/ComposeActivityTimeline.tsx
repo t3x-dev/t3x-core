@@ -10,17 +10,14 @@ import {
   composeEventCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
-import {
-  composeActorLabel,
-  composeNodeTitle,
-  composePathLabel,
-} from '@/domain/composePresentation';
+import { composeNodeTitle, composePathLabel } from '@/domain/composePresentation';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
   stagedObjectGroups,
 } from '@/domain/workspaces/manualStaging';
+import { useActorLabel } from '@/hooks/accounts/useActorLabel';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
@@ -190,6 +187,9 @@ export function ComposeActivityTimeline({
   staging?: ManualStagingControls;
   schemaEvent?: ComposeSchemaTimelineEvent;
 }) {
+  const actorLabel = useActorLabel(
+    (activity.actions ?? []).flatMap((action) => [action.actor.id, action.actor.delegator?.id])
+  );
   if (!activity.enabled)
     return scope === 'all' ? (
       <>
@@ -460,8 +460,9 @@ export function ComposeActivityTimeline({
           event.actions.length > 1
             ? 'Continuous manual edits'
             : latest.reason || `${activityChannelLabel(latest.channel)} changes`;
-        const actor =
-          latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
+        const actor = latest.actor.delegator
+          ? `${actorLabel(latest.actor.delegator.id)} · ${activityChannelLabel(latest.channel)}`
+          : actorLabel(latest.actor.id);
         const isLatest = !showStaging && index === 0;
         return (
           <Fragment key={event.id}>

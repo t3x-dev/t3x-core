@@ -1,8 +1,30 @@
-import type { WorkspaceAuthoringCard, WorkspaceAuthoringView } from '@t3x-dev/api-client';
+import type {
+  WorkspaceAuthoringAction,
+  WorkspaceAuthoringCard,
+  WorkspaceAuthoringView,
+} from '@t3x-dev/api-client';
 import { type SemanticContent, yamlToTree } from '@t3x-dev/core';
 import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
+
+export function generatedActionReasons(action: WorkspaceAuthoringAction): string[] {
+  const preparation = action.generation?.preparation;
+  if (!preparation || typeof preparation !== 'object' || !('bindings' in preparation)) return [];
+  if (!Array.isArray(preparation.bindings)) return [];
+  return [
+    ...new Set(
+      preparation.bindings.flatMap((binding) =>
+        binding &&
+        typeof binding === 'object' &&
+        typeof binding.reason === 'string' &&
+        binding.reason.trim()
+          ? [binding.reason]
+          : []
+      )
+    ),
+  ];
+}
 
 export function authoringSemanticContent(value: unknown): SemanticContent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;

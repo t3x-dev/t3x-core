@@ -642,6 +642,7 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  findUserProfilesByIds,
   normalizeEmail,
   normalizeUsername,
   searchUserProfiles,
