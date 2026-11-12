@@ -119,7 +119,7 @@ function ArtifactPreview({
             {projectName} · <code title={commitDigest}>{shortHash(commitDigest)}</code>
           </DialogDescription>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => void share()} disabled={!data}>
             <Share2 aria-hidden="true" /> Share
           </Button>
@@ -149,7 +149,7 @@ function ArtifactPreview({
           {feedback.text}
         </p>
       ) : null}
-      <div className="min-h-0 flex-1 overflow-auto bg-muted px-3 py-5 sm:px-6 sm:py-8">
+      <div className="min-h-0 flex-1 overflow-auto bg-muted px-4 py-5 sm:px-6 sm:py-8">
         {!result ? <output className="block text-center">Loading committed data…</output> : null}
         {result && 'error' in result ? (
           <div className="mx-auto flex max-w-xl flex-col items-start gap-3">
