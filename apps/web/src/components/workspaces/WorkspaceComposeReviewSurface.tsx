@@ -2693,6 +2693,7 @@ function ProposedDraftPanel({
   const editRequest = useRef(0);
   useEffect(() => {
     if (!activity.view || !activitySelection || schemaSelected) return;
+    if (activitySelection.meta.operationIndex !== undefined) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
       const changes = composeDraftChangeCards(
@@ -2843,6 +2844,8 @@ function ProposedDraftPanel({
       <ComposeActivityTimeline
         key={candidate.id}
         activity={activity}
+        selection={activitySelection}
+        onSelectOperationField={(selection) => onActivitySelect(selection, 'history')}
         filter={changeFilter}
         scope={changeScope}
         staging={staging}

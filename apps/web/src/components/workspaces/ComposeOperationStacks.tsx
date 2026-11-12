@@ -1,5 +1,6 @@
 import { ArrowRight, Box } from 'lucide-react';
 import type {
+  OperationFieldCard,
   OperationStack,
   OperationStackItem,
 } from '@/domain/workspaces/composeOperationStacks';
@@ -44,7 +45,15 @@ function FieldPreview({ item }: { item: OperationStackItem }) {
 }
 
 /** Recorded operations stay intact; the nested set/unset cards describe field changes. */
-export function ComposeOperationStacks({ stacks }: { stacks: readonly OperationStack[] }) {
+export function ComposeOperationStacks({
+  stacks,
+  onSelectField,
+  selectedField,
+}: {
+  stacks: readonly OperationStack[];
+  onSelectField?: (item: OperationStackItem, field: OperationFieldCard) => void;
+  selectedField?: { actionId: string; index: number; path: string };
+}) {
   return (
     <section aria-label="Recorded operation stacks" className={styles.section}>
       <p className={styles.note}>
@@ -84,16 +93,29 @@ export function ComposeOperationStacks({ stacks }: { stacks: readonly OperationS
                 ) : item.fields.length ? (
                   <ul className={styles.fields}>
                     {item.fields.map((field, index) => (
-                      <li className={styles.field} key={`${field.path}:${field.op}:${index}`}>
-                        <span className={styles.verb} data-op={field.op}>
-                          {field.op}
-                        </span>
-                        <code title={field.path}>{fieldName(field.path)}</code>
-                        <span className={styles.values}>
-                          <del title={value(field.before)}>{value(field.before)}</del>
-                          <span aria-hidden="true">→</span>
-                          <ins title={value(field.after)}>{value(field.after)}</ins>
-                        </span>
+                      <li key={`${field.path}:${field.op}:${index}`}>
+                        <button
+                          aria-label={`Inspect ${fieldName(field.path)}: ${field.path}`}
+                          aria-pressed={
+                            selectedField?.actionId === item.actionId &&
+                            selectedField.index === item.index &&
+                            selectedField.path === field.path
+                          }
+                          className={styles.field}
+                          disabled={!onSelectField}
+                          onClick={() => onSelectField?.(item, field)}
+                          type="button"
+                        >
+                          <span className={styles.verb} data-op={field.op}>
+                            {field.op}
+                          </span>
+                          <code title={field.path}>{fieldName(field.path)}</code>
+                          <span className={styles.values}>
+                            <del title={value(field.before)}>{value(field.before)}</del>
+                            <span aria-hidden="true">→</span>
+                            <ins title={value(field.after)}>{value(field.after)}</ins>
+                          </span>
+                        </button>
                       </li>
                     ))}
                   </ul>

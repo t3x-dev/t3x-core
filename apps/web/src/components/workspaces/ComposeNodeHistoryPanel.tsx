@@ -646,14 +646,15 @@ export function ComposeNodeHistoryPanel({
   const selectedPath = selection?.operation.path;
   const isStaged = selection?.meta.eventId === MANUAL_STAGING_EVENT_ID;
   const isObject = Boolean(selection?.operation.objectChange);
-  const nodeError = isStaged || isObject ? null : activity.nodeError;
+  const isOperationField = selection?.meta.operationIndex !== undefined;
+  const nodeError = isStaged || isObject || isOperationField ? null : activity.nodeError;
 
   useEffect(() => {
     setEditing(Boolean(selection?.meta.editRequest));
     setSaveError(null);
   }, [nodeId, selectedPath, selection?.meta.actionId, selection?.meta.editRequest]);
   useEffect(() => {
-    if (nodeId && !isStaged && !isObject)
+    if (nodeId && !isStaged && !isObject && !isOperationField)
       void activity.inspectNode(nodeId, selection?.meta.actionId);
   }, [
     activity.inspectNode,
@@ -663,6 +664,7 @@ export function ComposeNodeHistoryPanel({
     activity.compositionRevision,
     isStaged,
     isObject,
+    isOperationField,
   ]);
 
   if (!selection)
@@ -764,7 +766,7 @@ export function ComposeNodeHistoryPanel({
         : derivedEntries[0]?.after;
   const node =
     matchedNode ??
-    (isStaged || isObject || derivedEntries.length || netCard
+    (isStaged || isObject || isOperationField || derivedEntries.length || netCard
       ? {
           nodeId: selection.operation.id,
           path: currentPath,
@@ -824,8 +826,9 @@ export function ComposeNodeHistoryPanel({
         expandComposeActivityCards(activity.cards[selectedAction.actionId] ?? [])
       )[0]
     : undefined;
-  const comparison =
-    selection.meta.comparison === 'draft'
+  const comparison = isOperationField
+    ? { before: selection.operation.beforeValue, after: selection.operation.afterValue }
+    : selection.meta.comparison === 'draft'
       ? (netCard ?? { before: node.current, after: node.current })
       : (selectedCard ??
         selectedEntry ?? {
@@ -841,7 +844,7 @@ export function ComposeNodeHistoryPanel({
   const historyCursor = matchedNode ? activity.nodeCursor : activity.cursor;
   const historyLoading = matchedNode
     ? activity.nodeLoading
-    : activity.loading || (!isObject && activity.nodeLoading);
+    : activity.loading || (!isObject && !isOperationField && activity.nodeLoading);
   const editValue =
     isObject && workingCurrent !== undefined && path !== undefined
       ? composeDraftValueAtPath(workingCurrent, path)
@@ -945,7 +948,8 @@ export function ComposeNodeHistoryPanel({
               : 'Selected action' +
                 (selectedAction || selectedEntry
                   ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
-                  : '')
+                  : '') +
+                (isOperationField ? ' · YOp ' + selection.meta.operationIndex : '')
         }
       >
         {!editOpen ? (

@@ -516,6 +516,59 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   }
 
+  it('opens a separate shared Details card for each recorded operation field', () => {
+    enableComposeActivity();
+    const after = { acceptance: 'Remind users', priority: 'should', title: 'Learning reminder' };
+    const path = 'requirements/learning_reminder';
+    const card = { nodeId: 'reminder', path, after };
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: { id: 'service:t3x-proposal-generator', kind: 'service' as const },
+      publishedAt: '2026-10-29T00:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path, value: after } }],
+      reason: 'Add a learning reminder',
+    };
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = { a1: [card] };
+    activityMocks.value!.view!.current = { requirements: { learning_reminder: after } };
+    activityMocks.value!.view!.netDiff = [card];
+    activityMocks.value!.operationItems = [
+      {
+        actionId: 'a1',
+        sequence: 1,
+        index: 1,
+        name: 'set',
+        path,
+        fields: Object.entries(after).map(([field, value]) => ({
+          op: 'set' as const,
+          path: `${path}/${field}`,
+          after: value,
+        })),
+      },
+    ];
+    renderCompose();
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'All changes' }));
+    fireEvent.click(screen.getByText(/P-01 · YOp 1/));
+    for (const [field, value] of Object.entries(after)) {
+      fireEvent.click(screen.getByRole('button', { name: `Inspect ${field}: ${path}/${field}` }));
+      const details = screen.getByRole('region', { name: 'Selected field details' });
+      expect(
+        within(details).getByRole('heading', { name: new RegExp(`^${field}$`, 'i') })
+      ).toBeVisible();
+      const currentValue = within(details).getByRole('region', { name: 'Current Draft value' });
+      expect(currentValue).toHaveTextContent(value);
+      for (const other of Object.values(after).filter((entry) => entry !== value))
+        expect(currentValue).not.toHaveTextContent(other);
+      expect(within(details).getByText('Selected action · A1 · YOp 1')).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
+    }
+  });
+
   it('restores the change scope and stage on return, with explicit URL stages taking priority', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
     const first = renderCompose();

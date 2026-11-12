@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { ComposeOperationStacks } from '@/components/workspaces/ComposeOperationStacks';
 
 it('expands recorded operations into separate field-level set cards', () => {
+  const onSelectField = vi.fn();
   render(
     <ComposeOperationStacks
+      onSelectField={onSelectField}
+      selectedField={{
+        actionId: 'a1',
+        index: 1,
+        path: 'requirements/children/[key=first]/slots/priority',
+      }}
       stacks={[
         {
           name: 'append',
@@ -81,5 +88,15 @@ it('expands recorded operations into separate field-level set cards', () => {
     expect.stringContaining('set'),
     expect.stringContaining('set'),
   ]);
+  const priority = screen.getByRole('button', { name: /Inspect priority:/ });
+  expect(priority).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(priority);
+  expect(onSelectField).toHaveBeenCalledWith(
+    expect.objectContaining({ actionId: 'a1', index: 1 }),
+    expect.objectContaining({
+      path: 'requirements/children/[key=first]/slots/priority',
+      after: 'should',
+    })
+  );
   expect(group).not.toHaveTextContent('assert');
 });
