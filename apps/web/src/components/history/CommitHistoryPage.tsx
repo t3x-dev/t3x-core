@@ -31,7 +31,8 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { commitStructureHref } from '@/domain/project/objectLocation';
+import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -636,6 +637,10 @@ export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPagePr
             <CommitHistoryDiffCard
               key={selectedCommit.hash}
               commit={selectedCommit}
+              structureHref={commitStructureHref(
+                getCanonicalRepositoryPath(pathname),
+                selectedCommit
+              )}
               parentCommit={parentCommit}
               parentError={parentError}
               onParentSelect={handleNavOpen}

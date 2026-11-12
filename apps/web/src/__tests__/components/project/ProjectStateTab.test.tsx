@@ -19,6 +19,7 @@ const hookMocks = vi.hoisted(() => ({
   nativeView: null as unknown,
   committedSchema: { loading: false, snapshot: null, retry: vi.fn() } as CommittedSchemaState,
   createBranch: vi.fn(),
+  fetchStateExport: vi.fn(),
   loadCanvas: vi.fn(),
   loadCommit: vi.fn(),
   loadCommits: vi.fn(),
@@ -29,6 +30,11 @@ const hookMocks = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   schemaArtifacts: [] as SchemaArtifactPreview[],
   skillArtifact: null as SkillArtifact | null,
+}));
+
+vi.mock('@/infrastructure/stateExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/stateExport')>()),
+  fetchStateExport: hookMocks.fetchStateExport,
 }));
 
 vi.mock('@/hooks/commits/useCommittedSchema', () => ({
@@ -552,6 +558,56 @@ function deferred<T>() {
 }
 
 describe('ProjectStateTab', () => {
+  it('opens the share card for the exact historical revision and restores the Structure selection', async () => {
+    const commit = { ...PRD_COMMIT, hash: `sha256:${'a'.repeat(64)}`, parents: [] };
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    hookMocks.fetchStateExport.mockResolvedValue({
+      content: 'list:\n  title: Weekly goals\nitems:\n  - goal: Walk outside\n',
+    });
+    navigationMocks.search = new URLSearchParams({
+      view: 'structure',
+      commit: commit.hash,
+    }).toString();
+    renderStateTab();
+
+    const structure = await screen.findByRole('region', { name: 'State structure' });
+    const row = within(structure).getByText('problem').closest('tr')!;
+    fireEvent.click(row);
+    const trigger = within(structure).getByRole('button', { name: 'View share card' });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Share card' });
+    expect(await within(dialog).findByText('Weekly goals')).toBeVisible();
+    expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
+      'proj_test',
+      commit.hash,
+      'yaml',
+      expect.any(AbortSignal)
+    );
+    fireEvent.click(within(dialog).getByText('Full data (YAML)'));
+    expect(within(dialog).getByText(/goal: Walk outside/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close share card' }));
+    expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
+    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('opens a fixed-version share link and removes its preview flag when closed', async () => {
+    const legacy = { ...PRD_COMMIT, hash: 'legacy-commit', parents: [] };
+    hookMocks.loadCommit.mockResolvedValue(legacy);
+    const query = new URLSearchParams({ view: 'structure', commit: legacy.hash });
+    navigationMocks.search = `${query}&artifact=1`;
+    renderStateTab();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share card' });
+    expect(await within(dialog).findByText('Structure data (YAML)')).toBeVisible();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close share card' }));
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      `${navigationMocks.pathname}?${query}`,
+      { scroll: false }
+    );
+  });
+
   it('shows the pointed State before slow change evidence and starts evidence requests in parallel', async () => {
     const operations = deferred<{ commit_hash: string; operations: [] }>();
     const parent = deferred<ApiCommit>();
@@ -1088,6 +1144,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('checkbox', { name: 'Details', exact: true })).toBeChecked();
     const loads = hookMocks.loadCommits.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'Code', exact: true }));
+    expect(screen.getByRole('button', { name: 'View share card' })).toBeVisible();
     expect(screen.getByRole('complementary', { name: 'Source information' })).toBeVisible();
     expect(screen.queryByRole('complementary', { name: 'Field trace' })).toBeNull();
     expect(new URLSearchParams(navigationMocks.search).get('commit')).toBe(PRD_COMMIT.hash);

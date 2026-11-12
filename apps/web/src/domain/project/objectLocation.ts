@@ -1,3 +1,5 @@
+import { getProjectIdRepoPath } from './repoPath';
+
 export function numberedRepositoryObject(suffix: string) {
   const match = /^\/(commits|history|reviews)\/([1-9][0-9]{0,17})\/?$/.exec(suffix);
   if (!match) return null;
@@ -40,4 +42,18 @@ export function historyCommitHref(
   }
   params.set('commit', commit.hash);
   return `${path}?${params}`;
+}
+export function commitStructureHref(
+  repositoryPath: string | undefined,
+  commit: { project_id: string; hash: string; branch: string; address_number?: string },
+  preview = false
+) {
+  const query = new URLSearchParams({ view: 'structure' });
+  if (commit.branch && commit.branch !== 'main') query.set('branch', commit.branch);
+  if (preview) query.set('artifact', '1');
+  if (repositoryPath && commit.address_number) {
+    return repositoryObjectHref(repositoryPath, 'commits', commit.address_number, query);
+  }
+  query.set('commit', commit.hash);
+  return `${repositoryPath ?? getProjectIdRepoPath(commit.project_id)}?${query}`;
 }

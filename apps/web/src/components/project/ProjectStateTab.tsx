@@ -41,7 +41,7 @@ import {
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
-import { historyCommitHref } from '@/domain/project/objectLocation';
+import { commitStructureHref, historyCommitHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
   getProjectIdHistoryPath,
@@ -90,6 +90,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
 import { BranchLoadError } from './BranchLoadError';
+import { StateArtifactDialog } from './StateArtifactDialog';
 import { StateEmptyContent } from './StateEmptyContent';
 import {
   StateFieldTable,
@@ -891,6 +892,26 @@ export function ProjectStateTab({
                 headCommit &&
                 (activeView === 'structure' || activeView === 'code') ? (
                   <StateStructureView
+                    artifactAction={
+                      <StateArtifactDialog
+                        key={`${projectId}:${headCommit.hash}`}
+                        projectId={projectId}
+                        projectName={projectName}
+                        commitDigest={headCommit.hash}
+                        structureYaml={yamlText}
+                        href={commitStructureHref(repositoryPath, headCommit, true)}
+                        initialOpen={
+                          searchParams.get('artifact') === '1' &&
+                          focusedCommitHash === headCommit.hash
+                        }
+                        onClose={() => {
+                          const params = new URLSearchParams(routeQueryRef.current);
+                          if (!params.has('artifact')) return;
+                          params.delete('artifact');
+                          replaceRoute(`${pathname}?${params}`, { scroll: false });
+                        }}
+                      />
+                    }
                     committedSchema={committedSchema}
                     workspaceHref={workspaceHref}
                     schemaHref={schemaHref}
@@ -1122,6 +1143,7 @@ function StateStructureHeader({
 }
 
 export function StateStructureView({
+  artifactAction,
   branch,
   changeReason,
   diffChanges,
@@ -1149,6 +1171,7 @@ export function StateStructureView({
   workspaceHref,
   schemaHref,
 }: {
+  artifactAction?: ReactNode;
   committedSchema?: CommittedSchemaState;
   workspaceHref?: string;
   schemaHref?: string;
@@ -1370,6 +1393,7 @@ export function StateStructureView({
             />
             Details
           </label>
+          {artifactAction}
         </StateStructureHeader>
         {!rows.length ? (
           <StateEmptyContent

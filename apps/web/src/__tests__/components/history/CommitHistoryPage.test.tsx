@@ -105,6 +105,10 @@ describe('History node navigation', () => {
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
     expect(await screen.findByRole('heading', { name: 'Update title' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Structure' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?view=structure&commit=sha256%3Asecond'
+    );
     expect(screen.getByText('"Original"', { exact: true })).toBeInTheDocument();
     expect(screen.getByText('"Revised"', { exact: true })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Structure YAML' }));

@@ -1,10 +1,22 @@
 import { StateExportArtifactSchema } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export async function fetchStateExport(projectId: string, digest: string, format: 'json' | 'yaml') {
+export function supportsExactStateExport(projectId: string, digest: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(digest) && Boolean(projectId);
+}
+
+export async function fetchStateExport(
+  projectId: string,
+  digest: string,
+  format: 'json' | 'yaml',
+  signal?: AbortSignal
+) {
   const query = new URLSearchParams({ project_id: projectId, format });
   const response = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(digest)}/export?${query}`
+    `${API_V1}/commits/${encodeURIComponent(digest)}/export?${query}`,
+    undefined,
+    undefined,
+    signal
   );
   const artifact = StateExportArtifactSchema.parse(await handleResponse(response));
   return verifyStateExport(artifact, digest, format);
