@@ -46,7 +46,7 @@ export function StateArtifactDialog({
         </Button>
       </DialogTrigger>
       <DialogContent
-        className="flex max-h-[calc(100dvh_-_1.5rem)] w-[calc(100%_-_1.5rem)] max-w-[48rem] flex-col gap-0 overflow-hidden rounded-xl bg-background/85 p-0 shadow-2xl backdrop-blur-md data-[state=closed]:animate-none! data-[state=open]:animate-none! sm:max-h-[calc(100dvh_-_3rem)] sm:max-w-[48rem] dark:bg-background/85 dark:backdrop-blur-md"
+        className="flex max-h-[calc(100dvh_-_1.5rem)] w-[calc(100%_-_1.5rem)] max-w-[48rem] flex-col gap-0 overflow-hidden rounded-xl bg-background/85 p-0 backdrop-blur-md data-[state=closed]:animate-none! data-[state=open]:animate-none! sm:max-h-[calc(100dvh_-_3rem)] sm:max-w-[48rem] dark:bg-background/85 dark:backdrop-blur-md"
         overlayClassName="backdrop-blur-[2px]"
         showCloseButton={false}
       >

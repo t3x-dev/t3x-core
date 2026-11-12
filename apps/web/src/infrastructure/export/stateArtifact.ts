@@ -9,6 +9,18 @@ export function downloadArtifact(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const cardColorTokens = [
+  '--accent-commit',
+  '--accent-conversation',
+  '--hover-bg',
+  '--stroke-default',
+  '--stroke-strong',
+  '--surface-elevated',
+  '--surface-panel',
+  '--text-primary',
+  '--text-secondary',
+];
+
 export async function exportArtifactCard(
   card: HTMLElement,
   styles: string,
@@ -18,6 +30,11 @@ export async function exportArtifactCard(
   const { width, height } = card.getBoundingClientRect();
   const copy = card.cloneNode(true) as HTMLElement;
   copy.style.width = `${width}px`;
+  // Standalone HTML and PNG cannot inherit the application's theme.
+  const theme = getComputedStyle(card);
+  for (const token of cardColorTokens) {
+    copy.style.setProperty(token, theme.getPropertyValue(token));
+  }
 
   if (format === 'html') {
     const doc = document.implementation.createHTMLDocument(title);
@@ -30,7 +47,8 @@ export async function exportArtifactCard(
     const style = doc.createElement('style');
     style.textContent = styles;
     doc.head.prepend(charset, viewport, style);
-    doc.body.style.cssText = 'margin: 16px; background: #f6f8fa;';
+    doc.body.style.margin = '16px';
+    doc.body.style.background = theme.getPropertyValue('--surface-panel');
     copy.style.marginInline = 'auto';
     const scrollTop = card.querySelector('pre')?.scrollTop ?? 0;
     doc.body.append(copy);

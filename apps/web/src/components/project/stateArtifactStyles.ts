@@ -2,32 +2,32 @@
 export const stateArtifactStyles = `
 .t3x-state-artifact {
   --card-padding: clamp(14px, 4cqw, 24px);
-  --card-divider: #d8dee4;
-  --card-muted: #4b5563;
+  --card-divider: var(--stroke-default);
+  --card-muted: var(--text-secondary);
   box-sizing: border-box; width: 100%; max-width: 44rem; container-type: inline-size;
-  color: #1f2328; background: #fff; border: 1px solid #d0d7de;
+  color: var(--text-primary); background: var(--surface-elevated); border: 1px solid var(--stroke-strong);
   border-radius: 12px; overflow: hidden; font: 14px/1.55 system-ui, sans-serif;
 }
 .t3x-state-artifact * { box-sizing: border-box; }
 .t3x-state-artifact header {
   display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; align-items: start;
   padding: 18px var(--card-padding); border-bottom: 1px solid var(--card-divider);
-  background: #f8fafc;
+  background: var(--surface-panel);
 }
 .t3x-state-artifact .t3x-artifact-icon {
   display: grid; place-items: center; width: 38px; height: 38px;
-  border-radius: 9px; color: #6338a4; background: #f1e8ff;
+  border-radius: 9px; color: var(--accent-conversation); background: color-mix(in oklab, var(--accent-conversation) 12%, transparent);
 }
 .t3x-state-artifact .t3x-artifact-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .t3x-state-artifact .t3x-artifact-tags > span {
-  padding: 2px 8px; border-radius: 12px; background: #eaeef2;
+  padding: 2px 8px; border-radius: 12px; background: var(--hover-bg);
   color: var(--card-muted); font-size: 12px; font-weight: 600; overflow-wrap: anywhere;
 }
 .t3x-state-artifact .t3x-artifact-tags > .t3x-artifact-tag-kind {
-  background: #f1e8ff; color: #6338a4;
+  background: color-mix(in oklab, var(--accent-conversation) 12%, transparent); color: var(--accent-conversation);
 }
 .t3x-state-artifact .t3x-artifact-tags > .t3x-artifact-tag-schema {
-  background: #ddf4ff; color: #0753a0;
+  background: color-mix(in oklab, var(--accent-commit) 12%, transparent); color: var(--accent-commit);
 }
 .t3x-state-artifact h2, .t3x-state-artifact h3, .t3x-state-artifact p,
 .t3x-state-artifact dl, .t3x-state-artifact dd { margin: 0; }
@@ -44,7 +44,7 @@ export const stateArtifactStyles = `
 .t3x-state-artifact dl > div {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr);
   gap: clamp(12px, 3cqw, 22px); align-items: baseline;
-  padding: 7px 0; border-bottom: 1px solid #e5e9ee;
+  padding: 7px 0; border-bottom: 1px solid var(--card-divider);
 }
 .t3x-state-artifact dl > div:last-child { border-bottom: 0; }
 .t3x-state-artifact dt, .t3x-state-artifact .t3x-artifact-value,
@@ -64,15 +64,15 @@ export const stateArtifactStyles = `
 .t3x-state-artifact details { border-top: 1px solid var(--card-divider); }
 .t3x-state-artifact summary {
   display: list-item; padding: 12px var(--card-padding);
-  cursor: pointer; color: #0753a0; font-weight: 600;
+  cursor: pointer; color: var(--accent-commit); font-weight: 600;
 }
-.t3x-state-artifact summary:hover { background: #f8fafc; }
+.t3x-state-artifact summary:hover { background: var(--surface-panel); }
 .t3x-state-artifact summary:focus-visible, .t3x-state-artifact pre:focus-visible {
-  outline: 2px solid #0969da; outline-offset: -2px;
+  outline: 2px solid var(--accent-commit); outline-offset: -2px;
 }
 .t3x-state-artifact pre {
   margin: 0 var(--card-padding) var(--card-padding); padding: 10px; max-height: 19rem; overflow: auto;
-  border: 1px solid var(--card-divider); border-radius: 7px; background: #f6f8fa;
+  border: 1px solid var(--card-divider); border-radius: 7px; background: var(--surface-panel);
   white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2;
 }
 .t3x-state-artifact code { font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
