@@ -2,6 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { dump, JSON_SCHEMA } from 'js-yaml';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
@@ -619,6 +620,38 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('keeps the full YAML and export available when the 110-level summary fails', async () => {
+    let payload: ApiCommit['content']['trees'][number]['slots'][string] = 'present';
+    for (let depth = 0; depth < 110; depth++) payload = { next: payload };
+    const content: ApiCommit['content'] = {
+      trees: [
+        { key: 'root', slots: { payload }, children: [] },
+        { key: 'target', slots: { value: false }, children: [] },
+      ],
+      relations: [{ from: 'root', to: 'target', type: 'references' }],
+    };
+    const commit = { ...PRD_COMMIT, hash: `sha256:${'d'.repeat(64)}`, parents: [], content };
+    const yaml = dump(
+      { domain: 't3x.dev/semantic-content', version: 1, content },
+      { schema: JSON_SCHEMA, noRefs: true }
+    );
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    hookMocks.fetchStateExport.mockResolvedValue({ content: yaml });
+    navigationMocks.search = new URLSearchParams({
+      view: 'structure',
+      artifact: commit.hash,
+    }).toString();
+    renderStateTab();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share card' });
+    expect(await within(dialog).findByText(/Content summary is unavailable/)).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
+    fireEvent.click(within(dialog).getByText('Full data (YAML)'));
+    const rawYaml = within(dialog).getByText(/next: present/);
+    expect(rawYaml).toBeVisible();
+    expect(rawYaml.textContent).toBe(yaml);
   });
 
   it('pins the Commit from a direct preview address and stays on that version after close', async () => {

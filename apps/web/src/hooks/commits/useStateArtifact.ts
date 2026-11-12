@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { summarizeArtifactState } from '@/domain/project/stateArtifact';
 import { downloadArtifact, exportArtifactCard } from '@/infrastructure/export/stateArtifact';
 import { fetchStateExport, supportsExactStateExport } from '@/infrastructure/stateExport';
 
-type CardData = ReturnType<typeof summarizeArtifactState> & { yaml: string; exact: boolean };
+type CardData = { yaml: string; exact: boolean };
 
 export function useStateArtifact(projectId: string, digest: string, structureYaml: string) {
   const [attempt, setAttempt] = useState(0);
@@ -18,7 +18,7 @@ export function useStateArtifact(projectId: string, digest: string, structureYam
           ? (await fetchStateExport(projectId, digest, 'yaml', controller.signal)).content
           : structureYaml;
         if (!controller.signal.aborted) {
-          setResult({ data: { ...summarizeArtifactState(yaml, structureYaml), yaml, exact } });
+          setResult({ data: { yaml, exact } });
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -32,8 +32,19 @@ export function useStateArtifact(projectId: string, digest: string, structureYam
     return () => controller.abort();
   }, [projectId, digest, structureYaml, attempt]);
 
+  const yaml = result && 'data' in result ? result.data.yaml : undefined;
+  const summary = useMemo(() => {
+    if (yaml === undefined) return null;
+    try {
+      return summarizeArtifactState(yaml, structureYaml);
+    } catch {
+      return null;
+    }
+  }, [yaml, structureYaml]);
+
   return {
     result,
+    summary,
     retry() {
       setResult(null);
       setAttempt((current) => current + 1);

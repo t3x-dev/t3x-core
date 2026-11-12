@@ -62,7 +62,7 @@ function ArtifactPreview({
 }: ArtifactProps) {
   const card = useRef<HTMLElement>(null);
   const exportInFlight = useRef(false);
-  const { result, retry } = useStateArtifact(projectId, commitDigest, structureYaml);
+  const { result, summary, retry } = useStateArtifact(projectId, commitDigest, structureYaml);
   const { copy } = useClipboard();
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
@@ -173,9 +173,13 @@ function ArtifactPreview({
               </header>
               <section aria-label="Content summary">
                 <h3>Content summary</h3>
-                {data.rows.length ? (
+                {!summary ? (
+                  <p className="t3x-artifact-note">
+                    Content summary is unavailable. You can still view the YAML below.
+                  </p>
+                ) : summary.rows.length ? (
                   <dl>
-                    {data.rows.map(({ path, fields }) => {
+                    {summary.rows.map(({ path, fields }) => {
                       const single = fields.length === 1 ? fields[0] : null;
                       const label = single ? [...path, single.name] : path;
                       return (
@@ -200,7 +204,7 @@ function ArtifactPreview({
                 ) : (
                   <p className="t3x-artifact-note">No fields in this version.</p>
                 )}
-                {data.hasMore ? (
+                {summary?.hasMore ? (
                   <p className="t3x-artifact-note">More fields are available in the data below.</p>
                 ) : null}
               </section>
