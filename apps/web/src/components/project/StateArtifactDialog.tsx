@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Download, PanelTop, Share2, X } from 'lucide-react';
+import { ChevronDown, Download, FileText, PanelTop, Share2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -98,9 +98,10 @@ function ArtifactPreview({
         commitDigest,
         format
       );
-    } catch (cause) {
+    } catch {
       setFeedback({
-        text: cause instanceof Error ? cause.message : 'Unable to export this card.',
+        text:
+          format === 'png' ? 'Could not export PNG. Try HTML instead.' : 'Could not export HTML.',
         error: true,
       });
     } finally {
@@ -163,32 +164,50 @@ function ArtifactPreview({
             <style>{stateArtifactStyles}</style>
             <article className="t3x-state-artifact" ref={card}>
               <header>
-                <h2>{projectName}</h2>
-                <p className="t3x-artifact-revision">
-                  Commit <code title={commitDigest}>{shortHash(commitDigest)}</code>
-                </p>
+                <span className="t3x-artifact-icon" aria-hidden="true">
+                  <FileText size={19} />
+                </span>
+                <div>
+                  <p className="t3x-artifact-tags">
+                    <span>State</span>
+                    <span>
+                      Commit <code title={commitDigest}>{shortHash(commitDigest)}</code>
+                    </span>
+                  </p>
+                  <h2>{projectName}</h2>
+                </div>
               </header>
-              <section aria-label="State summary">
-                <h3>State summary</h3>
+              <section aria-label="Content summary">
+                <h3>Content summary</h3>
                 {data.rows.length ? (
                   <dl>
-                    {data.rows.map((row) => (
-                      <div key={row.name}>
-                        <dt>{row.name}</dt>
-                        <dd>
-                          <span className="t3x-artifact-type" data-kind={row.type}>
-                            {row.type}
-                          </span>
-                          <span>{row.preview}</span>
-                        </dd>
-                      </div>
-                    ))}
+                    {data.rows.map(({ path, fields }) => {
+                      const single = fields.length === 1 ? fields[0] : null;
+                      const label = single ? [...path, single.name] : path;
+                      return (
+                        <div key={JSON.stringify(label)}>
+                          <dt>{label.join(' / ')}</dt>
+                          <dd>
+                            {single ? (
+                              <span className="t3x-artifact-value">{single.value}</span>
+                            ) : (
+                              fields.map(({ name, value }) => (
+                                <span className="t3x-artifact-field" key={name}>
+                                  <span>{name}</span>
+                                  <span className="t3x-artifact-value">{value}</span>
+                                </span>
+                              ))
+                            )}
+                          </dd>
+                        </div>
+                      );
+                    })}
                   </dl>
                 ) : (
                   <p className="t3x-artifact-note">No fields in this version.</p>
                 )}
-                {data.remaining ? (
-                  <p className="t3x-artifact-note">{data.remaining} more in the data below</p>
+                {data.hasMore ? (
+                  <p className="t3x-artifact-note">More fields are available in the data below.</p>
                 ) : null}
               </section>
               <details>

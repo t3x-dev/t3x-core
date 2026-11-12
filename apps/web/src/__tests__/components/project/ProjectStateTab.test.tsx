@@ -563,7 +563,11 @@ describe('ProjectStateTab', () => {
     hookMocks.branchHeads = { main: PRD_COMMIT.hash };
     hookMocks.loadCommit.mockResolvedValue(commit);
     hookMocks.fetchStateExport.mockResolvedValue({
-      content: 'list:\n  title: Weekly goals\nitems:\n  - goal: Walk outside\n',
+      content: JSON.stringify({
+        domain: 't3x.dev/semantic-content',
+        version: 1,
+        content: commit.content,
+      }),
     });
     navigationMocks.search = new URLSearchParams({
       view: 'structure',
@@ -577,7 +581,9 @@ describe('ProjectStateTab', () => {
     const trigger = within(structure).getByRole('button', { name: 'View share card' });
     fireEvent.click(trigger);
     const dialog = screen.getByRole('dialog', { name: 'Share card' });
-    expect(await within(dialog).findByText('Weekly goals')).toBeVisible();
+    const summary = await within(dialog).findByRole('region', { name: 'Content summary' });
+    expect(within(summary).getByText('You: i need food and drink')).toBeVisible();
+    expect(summary).not.toHaveTextContent('t3x.dev/semantic-content');
     expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
       'proj_test',
       commit.hash,
@@ -585,7 +591,7 @@ describe('ProjectStateTab', () => {
       expect.any(AbortSignal)
     );
     fireEvent.click(within(dialog).getByText('Full data (YAML)'));
-    expect(within(dialog).getByText(/goal: Walk outside/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/"domain":"t3x.dev\/semantic-content"/)).toBeVisible();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close share card' }));
     expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
     expect(row).toHaveAttribute('aria-selected', 'true');

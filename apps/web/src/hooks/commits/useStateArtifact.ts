@@ -18,12 +18,12 @@ export function useStateArtifact(projectId: string, digest: string, structureYam
           ? (await fetchStateExport(projectId, digest, 'yaml', controller.signal)).content
           : structureYaml;
         if (!controller.signal.aborted) {
-          setResult({ data: { ...summarizeArtifactState(yaml), yaml, exact } });
+          setResult({ data: { ...summarizeArtifactState(yaml, structureYaml), yaml, exact } });
         }
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
           setResult({
-            error: cause instanceof Error ? cause.message : 'Unable to load this State.',
+            error: 'Could not load the committed data. Try again.',
           });
         }
       }
