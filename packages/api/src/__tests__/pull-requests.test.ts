@@ -1,15 +1,19 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
-import { type ApiKey, createYOpsState, yvalueToTrees } from '@t3x-dev/core';
+import { type ApiKey, createYOpsState, prepareMerge, yvalueToTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   bindTransitionPolicy,
   createMaterial,
+  createMergeDraft,
+  createPullRequest,
   findBranchByName,
   getMergeDraft,
   insertBranch,
   insertProject,
   listCommitHistory,
+  replacePullRequestChecks,
+  updatePullRequest,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { t3xPrdP0Fixtures } from '@t3x-dev/yschema';
@@ -835,6 +839,10 @@ describe('Pull request routes', () => {
     const merged = (await response.json()) as ApiResponse;
     expect(merged.data.status).toBe('merged');
     expect(merged.data.merge_commit_id).toMatch(/^sha256:/);
+    expect(
+      (await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/merge-review`))
+        .status
+    ).toBe(200);
     const mergeCommit = await getRepositorySemanticCommit(
       mockDB,
       merged.data.merge_commit_id,
@@ -1352,5 +1360,187 @@ describe('Pull request routes', () => {
       status: 'ready',
       merge_commit_id: null,
     });
+  });
+
+  it('blocks a historical ready PR with missing Schema contract evidence', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Historical PR Schema demo' })
+    );
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'main',
+      workspaceId: 'historical-pr-base',
+      candidate: t3xPrdP0Fixtures.validCandidateTree,
+    });
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'dev',
+      parentBranch: 'main',
+    });
+    const devCandidate = structuredClone(t3xPrdP0Fixtures.validCandidateTree);
+    devCandidate.summary.outcome = 'Old dev change';
+    const baseContent = {
+      trees: yvalueToTrees({ prd: t3xPrdP0Fixtures.validCandidateTree }),
+      relations: [],
+    };
+    const devContent = { trees: yvalueToTrees({ prd: devCandidate }), relations: [] };
+    const source = await createRepositoryCommit({
+      projectId: project.projectId,
+      branch: 'dev',
+      content: devContent,
+      message: 'Legacy dev commit without Schema contract',
+    });
+    const oldMain = (await findBranchByName(mockDB, project.projectId, 'main'))!.headCommitHash!;
+    const draft = await createMergeDraft(mockDB, {
+      projectId: project.projectId,
+      sourceHash: source.hash,
+      targetHash: oldMain,
+      sourceBranch: 'dev',
+      targetBranch: 'main',
+      prepared: prepareMerge(baseContent, devContent, baseContent),
+    });
+    const pr = await createPullRequest(mockDB, {
+      projectId: project.projectId,
+      title: 'Merge dev',
+      sourceBranch: 'dev',
+      targetBranch: 'main',
+      sourceCommitHash: source.hash,
+      targetBaseCommitHash: oldMain,
+      status: 'ready',
+      authorId: 'human:test',
+    });
+    await updatePullRequest(mockDB, pr.pullRequestId, { mergeDraftId: draft.draftId });
+    await replacePullRequestChecks(
+      mockDB,
+      pr.pullRequestId,
+      Array.from({ length: 6 }, (_, index) => ({
+        kind: 'review_requirement' as const,
+        status: 'passed' as const,
+        title: `Historical check ${index + 1}`,
+      }))
+    );
+    const nextMainCandidate = structuredClone(t3xPrdP0Fixtures.validCandidateTree);
+    nextMainCandidate.summary.audience = 'Main advanced';
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'main',
+      workspaceId: 'historical-pr-next-main',
+      candidate: nextMainCandidate,
+    });
+    const newMain = (await findBranchByName(mockDB, project.projectId, 'main'))!.headCommitHash!;
+
+    const path = `/v1/projects/${project.projectId}/pull-requests/${pr.number}`;
+    const detail = (await (await app.request(path)).json()) as ApiResponse;
+    expect(detail.data).toMatchObject({
+      status: 'ready',
+      source_commit_id: source.hash,
+      target_base_commit_id: oldMain,
+      readiness_current: false,
+    });
+    expect(detail.data.checks).toHaveLength(6);
+    const comparison = await app.request(`${path}/merge-review`);
+    expect(comparison.status).toBe(409);
+    expect(((await comparison.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_HEAD_CHANGED');
+
+    const merge = await app.request(`${path}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expected_source_commit_id: source.hash,
+        expected_target_commit_id: oldMain,
+        strategy: 'deterministic_merge',
+      }),
+    });
+    expect(merge.status).toBe(409);
+    expect(((await merge.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_HEAD_CHANGED');
+
+    const currentDraft = await createMergeDraft(mockDB, {
+      projectId: project.projectId,
+      sourceHash: source.hash,
+      targetHash: newMain,
+      sourceBranch: 'dev',
+      targetBranch: 'main',
+      prepared: prepareMerge(baseContent, devContent, {
+        trees: yvalueToTrees({ prd: nextMainCandidate }),
+        relations: [],
+      }),
+    });
+    await updatePullRequest(mockDB, pr.pullRequestId, {
+      targetBaseCommitHash: newMain,
+      mergeDraftId: currentDraft.draftId,
+      status: 'ready',
+    });
+    const migrationReview = await app.request(`${path}/merge-review`);
+    expect(migrationReview.status).toBe(409);
+    expect(((await migrationReview.json()) as ApiResponse).error).toMatchObject({
+      code: 'SCHEMA_MIGRATION_REQUIRED',
+      details: { branch: 'dev' },
+    });
+    const migrationMerge = await app.request(`${path}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expected_source_commit_id: source.hash,
+        expected_target_commit_id: newMain,
+        strategy: 'deterministic_merge',
+      }),
+    });
+    expect(migrationMerge.status).toBe(409);
+    expect(((await migrationMerge.json()) as ApiResponse).error.code).toBe(
+      'SCHEMA_MIGRATION_REQUIRED'
+    );
+
+    const rerun = await app.request(`${path}/checks/rerun`, { method: 'POST' });
+    expect(rerun.status).toBe(200);
+    const rerunBody = (await rerun.json()) as ApiResponse;
+    expect(rerunBody.data).toMatchObject({
+      status: 'blocked',
+      merge_draft_id: null,
+      merge_commit_id: null,
+      readiness_current: true,
+      required_action: { kind: 'schema_migration', branch: 'dev' },
+    });
+    expect(rerunBody.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'schema_compatibility',
+          status: 'blocked',
+          message: expect.stringMatching(/explicit migration/i),
+        }),
+      ])
+    );
+    expect(newMain).not.toBe(oldMain);
+    expect((await findBranchByName(mockDB, project.projectId, 'main'))?.headCommitHash).toBe(
+      newMain
+    );
+
+    await createWorkspaceCommit({
+      projectId: project.projectId,
+      branch: 'dev',
+      workspaceId: 'historical-pr-migrated-dev',
+      candidate: devCandidate,
+    });
+    const afterCommit = (await (await app.request(path)).json()) as ApiResponse;
+    expect(afterCommit.data).toMatchObject({
+      status: 'blocked',
+      readiness_current: false,
+      required_action: null,
+    });
+    const migrated = await app.request(`${path}/checks/rerun`, { method: 'POST' });
+    expect(migrated.status).toBe(200);
+    const migratedBody = (await migrated.json()) as ApiResponse;
+    expect(migratedBody.data.required_action).toBeNull();
+    expect(migratedBody.data.source_commit_id).not.toBe(source.hash);
+    expect(migratedBody.data.checks).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'schema_compatibility',
+          status: 'blocked',
+          message: expect.stringMatching(/explicit migration/i),
+        }),
+      ])
+    );
   });
 });

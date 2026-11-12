@@ -36,9 +36,13 @@ afterEach(async () => {
 
 describe('PostgreSQL schema migrations', () => {
   it.each([
-    'standalone',
-    'bootstrap',
-  ])('upgrades v83 via %s while preserving private drafts and builtin templates', async (mode) => {
+    { version: 83, mode: 'standalone' },
+    { version: 84, mode: 'bootstrap' },
+    { version: 85, mode: 'bootstrap' },
+  ])('upgrades v$version via $mode while preserving private drafts and builtin templates', async ({
+    version,
+    mode,
+  }) => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
     await setup.sql.unsafe(`
@@ -50,7 +54,7 @@ describe('PostgreSQL schema migrations', () => {
       DROP TRIGGER assign_schema_validation_address ON yschema_validation_runs;
       DROP FUNCTION assign_repository_object_address();
       DROP TABLE repository_object_addresses, repository_object_address_counters;
-      UPDATE _schema_version SET version = 83;
+      UPDATE _schema_version SET version = ${version};
       INSERT INTO drafts (
         id, project_id, title, target_branch, workspace_id, workspace_state_json,
         status, owner_principal_kind, owner_principal_id, created_at, updated_at
@@ -60,6 +64,7 @@ describe('PostgreSQL schema migrations', () => {
         ('draft_b', 'numbered', 'B', 'main', 'workspace_b', '{"status":"draft"}',
           'editing', 'human', 'owner_b', '2026-11-01 02:00:00+00', '2026-11-01 02:00:00+00');
     `);
+    if (version < 85) await setup.sql.unsafe('DROP TABLE workspace_deployments');
     const drafts = () => setup.sql`
       SELECT workspace_id, owner_principal_id, status, revision, updated_at
       FROM drafts WHERE project_id = 'numbered' ORDER BY workspace_id
@@ -82,7 +87,12 @@ describe('PostgreSQL schema migrations', () => {
     } else {
       await migratePostgresStorage(config);
     }
-    expect(await setup.sql`SELECT version FROM _schema_version`).toEqual([{ version: 84 }]);
+    expect(await setup.sql`SELECT version FROM _schema_version`).toEqual([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(await setup.sql`SELECT count(*)::int AS count FROM workspace_deployments`).toEqual([
+      { count: 0 },
+    ]);
     expect(await drafts()).toEqual(beforeDrafts);
     expect(await builtinTemplates()).toEqual(beforeTemplates);
     const create = () => createValidationRun(db, input);
@@ -390,7 +400,7 @@ describe('PostgreSQL schema migrations', () => {
       "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
     );
     await setup.sql.unsafe(
-      'DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
+      'DROP TABLE workspace_deployments; DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
     );
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
@@ -412,9 +422,14 @@ describe('PostgreSQL schema migrations', () => {
     await expect(
       setup.sql.unsafe("UPDATE workspace_deliveries SET adapter = 'deploy' WHERE id = 'receipt'")
     ).rejects.toThrow();
+    await setup.sql.unsafe(`INSERT INTO workspace_deliveries
+      (id, project_id, workspace_id, target_id, commit_digest, idempotency_key, request_digest, adapter, format, artifact_digest, status, attempt)
+      VALUES ('portable-receipt', 'migration-delivery', 'ws', 'portable', 'commit', 'portable-key', 'portable-request', 't3x.portable/v1', 'bundle', 'portable-bytes', 'prepared', 1)`);
     expect(
-      await setup.sql.unsafe("SELECT id FROM workspace_deliveries WHERE id = 'receipt'")
-    ).toHaveLength(1);
+      await setup.sql.unsafe(
+        "SELECT id FROM workspace_deliveries WHERE id IN ('receipt', 'portable-receipt')"
+      )
+    ).toHaveLength(2);
   });
 
   it('serializes concurrent first-run schema initialization', async () => {

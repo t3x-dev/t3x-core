@@ -191,7 +191,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 84;
+export const POSTGRES_SCHEMA_VERSION = 86;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -291,7 +291,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
 
   // v83 already supports one open draft per owner. Replaying the old
   // per-branch deduplication would abandon another owner's draft.
-  if (version === 83 && POSTGRES_SCHEMA_VERSION === 84) {
+  if (version !== undefined && version >= 83 && version < 86) {
+    if (version < 85) await ensurePortableDeliverySchema(sql);
     await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
     await recordSchemaVersion(sql);
     return false;
@@ -2648,6 +2649,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
       ON workspace_deliveries(project_id, workspace_id, created_at);
   `);
 
+  await ensurePortableDeliverySchema(sql);
+
   // Versioned author sidecars: payload stays separate from protocol State.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS state_presentations (
@@ -2862,10 +2865,50 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
     END $$;
   `);
 
-  if ((version ?? 0) < 84) await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+  await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
 
   await recordSchemaVersion(sql);
   return true;
+}
+
+async function ensurePortableDeliverySchema(sql: postgres.Sql): Promise<void> {
+  // Schema v84: the same immutable receipt can describe a portable State + Schema bundle.
+  await sql.unsafe(`
+    ALTER TABLE workspace_deliveries
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_adapter_check,
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_format_check;
+    ALTER TABLE workspace_deliveries
+      ADD CONSTRAINT workspace_deliveries_adapter_check
+        CHECK (adapter IN ('t3x.download/v1', 't3x.portable/v1')),
+      ADD CONSTRAINT workspace_deliveries_format_check
+        CHECK (format IN ('json', 'yaml', 'bundle'));
+  `);
+
+  // Schema v85: append-only desired/actual history for fixed portable artifact deployment.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS workspace_deployments (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      environment TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('deploy', 'rollback')),
+      delivery_id TEXT NOT NULL REFERENCES workspace_deliveries(id) ON DELETE RESTRICT,
+      artifact_digest TEXT NOT NULL,
+      previous_artifact_digest TEXT,
+      idempotency_key TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      adapter TEXT NOT NULL CHECK (adapter = 't3x.fixed-slot/v1'),
+      desired_artifact_digest TEXT NOT NULL,
+      actual_artifact_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (artifact_digest = desired_artifact_digest),
+      CHECK (desired_artifact_digest = actual_artifact_digest)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS workspace_deployments_idempotency
+      ON workspace_deployments(project_id, workspace_id, environment, idempotency_key);
+    CREATE INDEX IF NOT EXISTS workspace_deployments_history
+      ON workspace_deployments(project_id, workspace_id, environment, created_at);
+  `);
 }
 
 async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {

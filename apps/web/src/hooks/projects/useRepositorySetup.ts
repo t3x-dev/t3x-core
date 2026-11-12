@@ -60,6 +60,17 @@ export function useRepositorySetup() {
           null,
           getSessionUser()?.id
         );
+        if (config.starter === 'prd-v1') {
+          starter.schemaBindings = [
+            {
+              rootKey: 'prd',
+              canonicalName: 't3x/prd',
+              schemaName: 'PRD Schema',
+              version: 'v2',
+              mode: 'pinned',
+            },
+          ];
+        }
         state.workspace = (await saveWorkspaceDraft(id, starter.id, starter)).workspace;
       }
       if (!state.conversation) {

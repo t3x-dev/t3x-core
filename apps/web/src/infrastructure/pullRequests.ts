@@ -30,6 +30,7 @@ export interface ApiProjectPullRequest {
   merge_draft_id: string | null;
   merge_commit_id: string | null;
   status: ProjectPullRequestStatus;
+  readiness_current?: boolean;
   author_id: string;
   author_kind?: 'human' | 'agent' | 'service';
   author_delegator_id?: string | null;
@@ -83,6 +84,7 @@ export interface ApiProjectPullRequestActivity {
 }
 
 export interface ApiProjectPullRequestDetail extends ApiProjectPullRequest {
+  required_action?: { kind: 'schema_migration'; branch: string } | null;
   diff_summary: {
     changed_nodes: number;
     yops_operations: number;

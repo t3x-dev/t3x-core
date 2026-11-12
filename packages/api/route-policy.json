@@ -2296,6 +2296,22 @@
       "action": "project:edit"
     },
     {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deployments",
+      "policy": "project",
+      "rationale": "Project edit authority assigns an already prepared portable artifact to the fixed preview deployment slot.",
+      "action": "project:edit"
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deployments/rollback",
+      "policy": "project",
+      "rationale": "Project edit authority appends an auditable rollback assignment to an earlier recorded portable artifact.",
+      "action": "project:edit"
+    },
+    {
       "source": "state-presentations.openapi.ts",
       "method": "GET",
       "path": "/v1/projects/{projectId}/commits/{commitDigest}/presentation",

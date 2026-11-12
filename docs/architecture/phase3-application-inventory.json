@@ -29,9 +29,9 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 80,
-    "filesUsingGetDB": 71,
-    "filesUsingAssertProjectAccess": 56,
+    "routeFiles": 81,
+    "filesUsingGetDB": 72,
+    "filesUsingAssertProjectAccess": 57,
     "filesUsingRequireTransitionAuthority": 6,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
@@ -204,6 +204,8 @@
     "apps/web/e2e/flows/workspace-complex-flow.spec.ts",
     "apps/web/e2e/smoke/schema-delivery-no-ai.spec.ts",
     "apps/web/e2e/smoke/schema-edit-review-loop.spec.ts",
+    "apps/web/src/app/[owner]/[[...repoPath]]/page.tsx",
+    "apps/web/src/app/project/[projectId]/page.tsx",
     "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",
     "apps/web/src/components/project/ProjectWorkspacesTab.tsx",
     "apps/web/src/components/schemas/SchemaCatalogExperience.tsx",
@@ -213,6 +215,8 @@
     "apps/web/src/components/workspaces/TransitionReviewPanel.tsx",
     "apps/web/src/components/workspaces/WorkspaceComposeReviewSurface.tsx",
     "apps/web/src/components/workspaces/YOpsDraftTab.tsx",
+    "apps/web/src/domain/project/objectLocation.ts",
+    "apps/web/src/domain/project/repoPath.ts",
     "apps/web/src/domain/workspaces/reviewNavigation.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceComposeReviewController.ts",
     "apps/web/src/hooks/workspaces/useWorkspaceReviewSnapshot.ts",

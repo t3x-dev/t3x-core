@@ -42,7 +42,9 @@ import { readMergeDraftDecision } from '../lib/merge-draft-decisions';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   hasRepositorySchemaChanges,
+  RepositorySchemaEvidenceError,
   RepositorySchemaMergeError,
+  RepositorySchemaMigrationRequiredError,
 } from '../lib/repository-schema-merge';
 import {
   getRepositorySemanticCommit,
@@ -102,6 +104,7 @@ const PullRequestSchema = z.object({
   merge_draft_id: z.string().nullable(),
   merge_commit_id: z.string().nullable(),
   status: PullRequestStatusSchema,
+  readiness_current: z.boolean().optional(),
   author_id: z.string(),
   author_kind: z.enum(['human', 'agent', 'service']),
   author_delegator_id: z.string().nullable(),
@@ -167,6 +170,7 @@ const PullRequestDetailSchema = PullRequestSchema.extend({
   diff_summary: PullRequestDiffSummarySchema,
   checks: z.array(PullRequestCheckSchema),
   activity: z.array(PullRequestActivitySchema),
+  required_action: z.object({ kind: z.literal('schema_migration'), branch: z.string() }).nullable(),
 });
 
 const PullRequestCompareCandidateSchema = z.object({
@@ -264,15 +268,36 @@ function toApiActivity(activity: StoredPullRequestActivity): ApiPullRequestActiv
 }
 
 async function toApiDetail(db: AnyDB, pullRequest: StoredPullRequest) {
-  const [checks, activity] = await Promise.all([
+  const [checks, activity, source, target] = await Promise.all([
     listPullRequestChecks(db, pullRequest.pullRequestId),
     listPullRequestActivity(db, pullRequest.pullRequestId),
+    findBranchByName(db, pullRequest.projectId, pullRequest.sourceBranch),
+    findBranchByName(db, pullRequest.projectId, pullRequest.targetBranch),
   ]);
+  const latestRerun = [...activity].reverse().find((item) => item.type === 'checks_reran');
+  const action = latestRerun?.details?.required_action;
+  const readinessCurrent =
+    source?.headCommitHash === pullRequest.sourceCommitHash &&
+    target?.headCommitHash === pullRequest.targetBaseCommitHash;
   return {
     ...toApiPullRequest(pullRequest),
+    readiness_current: readinessCurrent,
     diff_summary: pullRequest.diffSummary,
     checks: checks.map(toApiCheck),
     activity: activity.map(toApiActivity),
+    required_action:
+      pullRequest.status === 'blocked' &&
+      readinessCurrent &&
+      latestRerun?.details?.source_commit_id === pullRequest.sourceCommitHash &&
+      latestRerun.details.target_commit_id === pullRequest.targetBaseCommitHash &&
+      action &&
+      typeof action === 'object' &&
+      'kind' in action &&
+      action.kind === 'schema_migration' &&
+      'branch' in action &&
+      typeof action.branch === 'string'
+        ? { kind: 'schema_migration' as const, branch: action.branch }
+        : null,
   };
 }
 
@@ -614,12 +639,20 @@ pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
           .includes(normalizedQuery)
       )
     : scoped;
+  const branchesByName = new Map(
+    (await findBranchesByProject(db, { projectId })).map((branch) => [branch.name, branch])
+  );
 
   return c.json(
     {
       success: true as const,
       data: {
-        pull_requests: filtered.map(toApiPullRequest),
+        pull_requests: filtered.map((item) => ({
+          ...toApiPullRequest(item),
+          readiness_current:
+            branchesByName.get(item.sourceBranch)?.headCommitHash === item.sourceCommitHash &&
+            branchesByName.get(item.targetBranch)?.headCommitHash === item.targetBaseCommitHash,
+        })),
         counts: { active: active.length, merged: finished.length },
       },
     },
@@ -1272,6 +1305,16 @@ async function runPullRequestReadiness(
         error instanceof MergeError || error instanceof RepositorySchemaMergeError
           ? error.message
           : 'Deterministic merge preparation failed unexpectedly.';
+      const requiredAction =
+        error instanceof MergeError && error.code === 'SCHEMA_MIGRATION_REQUIRED'
+          ? {
+              kind: 'schema_migration' as const,
+              branch:
+                error.details?.missing_side === 'source'
+                  ? pullRequest.sourceBranch
+                  : pullRequest.targetBranch,
+            }
+          : null;
       await replacePullRequestChecks(tx, failed.pullRequestId, [
         {
           kind: 'source_commit',
@@ -1302,7 +1345,7 @@ async function runPullRequestReadiness(
               {
                 kind: 'schema_compatibility' as const,
                 status: 'blocked' as const,
-                title: 'Schema three-way merge',
+                title: requiredAction ? 'Schema migration required' : 'Schema three-way merge',
                 message: failureMessage,
                 startedAt: now,
                 completedAt: now,
@@ -1320,6 +1363,7 @@ async function runPullRequestReadiness(
           target_commit_id: failed.targetBaseCommitHash,
           outcome: 'blocked',
           error: failureMessage,
+          ...(requiredAction ? { required_action: requiredAction } : {}),
         },
         createdAt: now,
       });
@@ -1425,6 +1469,19 @@ pullRequestRoutes.openapi(mergeReviewRoute, async (c) => {
   const pullRequest = await findPullRequestByNumber(db, projectId, number);
   if (!pullRequest)
     return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  const [sourceBranch, targetBranch] = await Promise.all([
+    findBranchByName(db, projectId, pullRequest.sourceBranch),
+    findBranchByName(db, projectId, pullRequest.targetBranch),
+  ]);
+  if (
+    ACTIVE_STATUSES.includes(pullRequest.status as PullRequestStatus) &&
+    (sourceBranch?.headCommitHash !== pullRequest.sourceCommitHash ||
+      targetBranch?.headCommitHash !== pullRequest.targetBaseCommitHash)
+  )
+    return c.json(
+      errorBody('PULL_REQUEST_HEAD_CHANGED', 'A reviewed branch head changed. Rerun readiness.'),
+      409
+    );
   const draft = pullRequest.mergeDraftId ? await getMergeDraft(db, pullRequest.mergeDraftId) : null;
   if (
     !draft ||
@@ -1491,6 +1548,18 @@ pullRequestRoutes.openapi(mergeReviewRoute, async (c) => {
     if (error instanceof RepositoryMergeCommitNotFoundError) {
       return c.json(errorBody('PULL_REQUEST_COMMIT_NOT_FOUND', error.message), 404);
     }
+    if (error instanceof RepositorySchemaMigrationRequiredError)
+      return c.json(
+        errorBody('SCHEMA_MIGRATION_REQUIRED', error.message, {
+          branch:
+            error.missingSide === 'source' ? pullRequest.sourceBranch : pullRequest.targetBranch,
+          source_commit_id: pullRequest.sourceCommitHash,
+          target_commit_id: pullRequest.targetBaseCommitHash,
+        }),
+        409
+      );
+    if (error instanceof RepositorySchemaEvidenceError)
+      return c.json(errorBody('SCHEMA_EVIDENCE_INVALID', error.message), 409);
     throw error;
   }
 });
@@ -1956,9 +2025,11 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
         error.code === 'PULL_REQUEST_EXPECTATION_MISMATCH' ||
         error.code === 'PULL_REQUEST_HEAD_CHANGED' ||
         error.code === 'PULL_REQUEST_MERGE_NOT_PREPARED' ||
+        error.code === 'SCHEMA_MIGRATION_REQUIRED' ||
+        error.code === 'SCHEMA_EVIDENCE_INVALID' ||
         error.code === 'UNRESOLVED_CONFLICTS'
       ) {
-        return c.json(errorBody(error.code, error.message), 409);
+        return c.json(errorBody(error.code, error.message, error.details), 409);
       }
     }
     return c.json(

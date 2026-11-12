@@ -87,6 +87,11 @@ display projection. The browser verifies the returned revision, format, byte
 length and artifact hash. Download initiation does not prove deployment,
 validation or restoration.
 
+The separate portable-artifact target combines that exact State with the exact
+verified committed Schema binding. It fails closed rather than substituting a
+Workspace or UI default Schema, and its preparation receipt still does not
+claim deployment or rollback.
+
 ## Objects and task boundaries
 
 ### Vocabulary and identity

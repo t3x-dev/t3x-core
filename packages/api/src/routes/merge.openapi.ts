@@ -117,6 +117,10 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
       description: 'Project access denied',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'A branch needs Schema migration or its committed evidence is invalid',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
       description: 'Server error',
       content: {
@@ -143,6 +147,17 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
+    if (
+      error instanceof MergeError &&
+      (error.code === 'SCHEMA_MIGRATION_REQUIRED' || error.code === 'SCHEMA_EVIDENCE_INVALID')
+    )
+      return c.json(
+        {
+          success: false as const,
+          error: { code: error.code, message: error.message, details: error.details },
+        },
+        409
+      );
     if (error instanceof MergeError && error.code === 'NOT_FOUND') {
       return c.json(
         { success: false as const, error: { code: 'NOT_FOUND', message: error.message } },
@@ -328,6 +343,17 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       201
     );
   } catch (error) {
+    if (
+      error instanceof MergeError &&
+      (error.code === 'SCHEMA_MIGRATION_REQUIRED' || error.code === 'SCHEMA_EVIDENCE_INVALID')
+    )
+      return c.json(
+        {
+          success: false as const,
+          error: { code: error.code, message: error.message, details: error.details },
+        },
+        409
+      );
     if (
       error instanceof TransitionScopeDeniedError ||
       error instanceof TransitionProjectScopeDeniedError

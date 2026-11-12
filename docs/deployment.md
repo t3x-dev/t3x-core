@@ -145,11 +145,11 @@ additional schema work around this storage-owned job. These are integration
 contracts of the internal storage package; they do not add a stable public npm
 release surface.
 
-For an existing v83 database, both the standalone job and API bootstrap
-apply only the v84 repository numbering migration. The upgrade creates the
-address and counter tables, installs the numbering triggers, and backfills
-historical numbers. It preserves existing Workspace Drafts and built-in
-templates.
+For existing v83–v85 databases, the standalone job and API bootstrap
+upgrade directly to v86. The upgrade installs any missing portable delivery
+and deployment schema, creates the address and counter tables, installs the
+numbering triggers, and backfills historical numbers. It preserves existing
+Workspace Drafts and built-in templates.
 
 Application processes should set `T3X_POSTGRES_STARTUP_MODE=runtime` and use a
 separate login that is not the table owner and cannot inherit or set the migration
@@ -168,7 +168,7 @@ The migration owner must also arrange matching default privileges for tables or
 sequences introduced later. Granting DML does not transfer table ownership; do
 not grant membership in the migration-owner role to the runtime login.
 
-For an existing runtime role without default grants on the new v84 tables,
+For an existing runtime role without default grants on the repository numbering tables,
 apply these grants after migration and before starting the updated runtime:
 
 ```sql
