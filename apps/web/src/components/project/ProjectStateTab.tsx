@@ -1,11 +1,11 @@
 'use client';
 
+import type { TransitionProtocolValue } from '@t3x-dev/api-client';
 import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Code2,
-  Copy,
   ExternalLink,
   FileText,
   GitCommit,
@@ -36,6 +36,10 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tabs } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  ComposeChangeContext,
+  ComposeChangeReason,
+} from '@/components/workspaces/ComposeNodeHistoryPanel';
+import {
   buildStructuredStateDiff,
   type StructuredDiffChange,
   type StructuredDiffKind,
@@ -56,6 +60,7 @@ import {
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  readStatePointValue,
   resolveStateReaderKind,
   type StateOperationEntry,
   type StatePointRow,
@@ -68,6 +73,9 @@ import {
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { authoringSemanticPath } from '@/domain/workspaces/authoringReview';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
@@ -84,6 +92,7 @@ import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { useWorkspaceCommitChanges } from '@/hooks/workspaces/useWorkspaceCommitChanges';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -944,6 +953,7 @@ export function ProjectStateTab({
                     contextLoading={contextLoading}
                     contextError={context?.error}
                     headCommit={headCommit}
+                    parentCommit={context?.parentCommit ?? null}
                     modifiedLabel={relativeTime(headCommit.committed_at)}
                     modifiedTimes={modifiedTimes}
                     pathQuery={pathQuery}
@@ -1168,6 +1178,7 @@ export function StateStructureView({
   changeReason,
   diffChanges,
   headCommit,
+  parentCommit,
   modifiedLabel,
   modifiedTimes,
   onPathQueryChange,
@@ -1204,6 +1215,7 @@ export function StateStructureView({
   changeReason: string;
   diffChanges: StructuredDiffChange[];
   headCommit: ApiCommit;
+  parentCommit?: ApiCommit | null;
   modifiedLabel: string;
   modifiedTimes: ReadonlyMap<string, string>;
   onPathQueryChange?: (query: string) => void;
@@ -1313,14 +1325,6 @@ export function StateStructureView({
       }
     return counts;
   }, [historyPresentation, historyStepRows]);
-  const structureChildCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of structureRows) {
-      if (row.parentPath) counts.set(row.parentPath, (counts.get(row.parentPath) ?? 0) + 1);
-    }
-    return counts;
-  }, [structureRows]);
-
   const showWalkthroughStep = useCallback(
     (step: number | null) => {
       setWalkthroughStep(step);
@@ -1481,9 +1485,8 @@ export function StateStructureView({
       <StateFieldTracePanel
         branch={branch}
         changeReason={changeReason}
-        childCount={selectedRow ? structureChildCounts.get(selectedRow.path) : undefined}
         headCommit={headCommit}
-        modifiedLabel={modifiedLabel}
+        parentCommit={parentCommit}
         onClose={() => setDetailsVisible(false)}
         row={selectedRow}
         committedSchema={committedSchema}
@@ -1683,9 +1686,8 @@ type NormalizedStructuredDiffChange = StructuredDiffChange & { path: string };
 function StateFieldTracePanel({
   branch,
   changeReason,
-  childCount,
   headCommit,
-  modifiedLabel,
+  parentCommit,
   onClose,
   row,
   committedSchema,
@@ -1693,14 +1695,14 @@ function StateFieldTracePanel({
   committedSchema?: CommittedSchemaState;
   branch: string;
   changeReason: string;
-  childCount?: number;
   headCommit: ApiCommit;
-  modifiedLabel: string;
+  parentCommit?: ApiCommit | null;
   onClose: () => void;
   row: StateStructureRow | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const history = useWorkspaceCommitChanges(headCommit.project_id, headCommit.hash);
   if (!row) {
     return (
       <aside className={inspectionStyles.trace}>
@@ -1723,110 +1725,136 @@ function StateFieldTracePanel({
     : undefined;
   const sourceLabel = stateInspectorSourceLabel(row, headCommit);
   const sourceHref = stateInspectorSourceHref(row, headCommit, branch);
-  const currentValue = row.expandable
-    ? `${childCount ?? 0} ${row.type === 'array' ? 'item' : 'field'}${childCount === 1 ? '' : 's'}`
-    : stateInspectorResultValue(row);
-  const beforeValue = stateInspectorBeforeValue(row);
-  const lastChangeLabel = row.diff?.exact
-    ? `${row.diff.op || row.sourceOp || 'set'} ${row.path}`
-    : row.status !== 'unchanged'
-      ? `${row.sourceOp || row.statusLabel} ${row.path}`
-      : 'No direct field change recorded';
-  const pathParts = row.path.split('/').filter(Boolean);
+  const baseline =
+    parentCommit?.content ??
+    (headCommit.parents.length === 0 ? { trees: [], relations: [] } : null);
+  const before = baseline ? readStatePointValue(baseline, row.path) : null;
+  const after = readStatePointValue(headCommit.content, row.path);
+  const previous = before?.exists ? (before.value as TransitionProtocolValue) : undefined;
+  const current = after.exists ? (after.value as TransitionProtocolValue) : undefined;
+  const matchesParent = Boolean(
+    before && before.exists === after.exists && composeValuesEqual(previous, current)
+  );
+  const archivedAction =
+    history.data?.source === 'authoring'
+      ? history.data.actions
+          .filter(({ cards, before: actionBefore, after: actionAfter }) =>
+            composeDraftChangeCards(cards, actionBefore, actionAfter).some((card) => {
+              const path = normalizeStateStructurePath(
+                authoringSemanticPath(card.path) ?? card.path
+              );
+              return (
+                path === row.path ||
+                path.startsWith(`${row.path}/`) ||
+                ((card.before === undefined || card.after === undefined) &&
+                  row.path.startsWith(`${path}/`)) ||
+                ((path === 'content' || path === 'content/trees') && row.diff?.exact)
+              );
+            })
+          )
+          .sort((left, right) => right.action.sequence - left.action.sequence)[0]?.action
+      : undefined;
 
   return (
     <aside aria-label="Field trace" className={inspectionStyles.trace}>
       <header className={inspectionStyles.traceHeader}>
         <GitCommit />
-        <h2>Field trace</h2>
+        <h2>Details</h2>
         <button aria-label="Hide details" onClick={onClose} type="button">
           <X />
         </button>
       </header>
-      <div className={inspectionStyles.crumb}>
-        <span title={row.path}>root {pathParts.map((part) => ` / ${part}`).join('')}</span>
-        <button
-          aria-label="Copy field path"
-          onClick={() => void navigator.clipboard?.writeText(row.path)}
-          type="button"
-        >
-          <Copy />
-        </button>
-      </div>
-      <section className={inspectionStyles.big}>
-        <h3 className={inspectionStyles.l}>Current value</h3>
-        <p className={inspectionStyles.v}>{currentValue}</p>
-      </section>
-      <section className={inspectionStyles.sc}>
-        <h3 className={inspectionStyles.l}>Schema</h3>
-        {contract ? (
-          <>
-            <p className={inspectionStyles.ctr}>
-              {typeof contract.definition.type === 'string' ? contract.definition.type : row.type} ·{' '}
-              {contract.required ? 'Required' : 'Optional'}
-            </p>
-            {typeof contract.definition.description === 'string' ? (
-              <p className={inspectionStyles.ctr}>{contract.definition.description}</p>
-            ) : null}
-          </>
+      <ComposeChangeContext
+        title={row.key}
+        path={row.path}
+        revisionLabel={`Commit ${shortHash(headCommit.hash)} · Read-only`}
+        current={current}
+        unknown={false}
+        currentLabel="Value at this Commit"
+        comparison={{ before: previous, after: current }}
+        comparisonLabel={headCommit.parents.length ? 'Parent → Result' : 'Genesis → Result'}
+        matchesBase={matchesParent}
+      />
+      <div className={inspectionStyles.traceSupplement}>
+        {history.loading ? <output>Loading archived actions…</output> : null}
+        {archivedAction ? (
+          <ComposeChangeReason
+            reason={archivedAction.reason ?? changeReason}
+            actor={archivedAction.actor.id}
+            channel={archivedAction.channel}
+            timestamp={archivedAction.publishedAt}
+            action={archivedAction}
+            contextLabel={`Committed action · A${archivedAction.sequence}. YOps describes the whole action.`}
+          />
+        ) : row.diff ? (
+          <ComposeChangeReason
+            heading="Commit details"
+            reason={changeReason || 'No commit reason recorded.'}
+            channelLabel={stateInspectorAuthorLabel(headCommit)}
+            timestamp={headCommit.committed_at}
+          />
         ) : (
           <p className={inspectionStyles.ctr}>
-            {committedSchema?.loading
-              ? 'Loading Schema details…'
-              : committedSchema?.error
-                ? 'Schema details unavailable. Stored values remain readable.'
-                : 'No field definition available for this version.'}
+            No direct change recorded for this field in this Commit.
           </p>
         )}
-      </section>
-      <section className={inspectionStyles.lc}>
-        <h3 className={inspectionStyles.l}>Activity</h3>
-        <div>
-          <div className={inspectionStyles.ev}>
-            <div>
-              <h3>Last change</h3>
-              <p>{lastChangeLabel}</p>
-              {row.diff?.exact && beforeValue !== currentValue ? (
-                <p>
-                  {beforeValue} → {currentValue}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className={inspectionStyles.ev}>
-            <div>
-              <h3>Reason</h3>
-              <p>{stateInspectorWhyText(row, changeReason)}</p>
-              <p>
-                {shortHash(headCommit.hash)} · {modifiedLabel}
+        {!archivedAction && history.data?.source === 'commit_diff' ? (
+          <p className={inspectionStyles.ctr}>
+            Original action records were not archived for this Commit.
+          </p>
+        ) : null}
+        {history.error ? <p role="alert">{history.error}</p> : null}
+        {!archivedAction && history.data?.nextBeforeSequence ? (
+          <button type="button" onClick={history.loadMore}>
+            Load earlier actions
+          </button>
+        ) : null}
+        <section className={inspectionStyles.sc}>
+          <h3 className={inspectionStyles.l}>Schema</h3>
+          {contract ? (
+            <>
+              <p className={inspectionStyles.ctr}>
+                {typeof contract.definition.type === 'string' ? contract.definition.type : row.type}{' '}
+                · {contract.required ? 'Required' : 'Optional'}
               </p>
-            </div>
-          </div>
-        </div>
-      </section>
-      {sourceHref || sourceLabel ? (
-        <div className={inspectionStyles.hint}>
-          <span>Source</span>
-          {sourceHref ? (
-            <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
+              {typeof contract.definition.description === 'string' ? (
+                <p className={inspectionStyles.ctr}>{contract.definition.description}</p>
+              ) : null}
+            </>
           ) : (
-            <span>{sourceLabel}</span>
+            <p className={inspectionStyles.ctr}>
+              {committedSchema?.loading
+                ? 'Loading Schema details…'
+                : committedSchema?.error
+                  ? 'Schema details unavailable. Stored values remain readable.'
+                  : 'No field definition available for this version.'}
+            </p>
           )}
-        </div>
-      ) : null}
-      <Link
-        className={inspectionStyles.lnk}
-        href={historyCommitHref(
-          getProjectIdHistoryPath(headCommit.project_id, {
-            branch,
-            repositoryPath: getCanonicalRepositoryPath(pathname),
-            returnTo: buildReturnTo(pathname, searchParams),
-          }),
-          headCommit
-        )}
-      >
-        View in history <ExternalLink />
-      </Link>
+        </section>
+        {sourceHref || sourceLabel ? (
+          <div className={inspectionStyles.hint}>
+            <span>Source</span>
+            {sourceHref ? (
+              <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
+            ) : (
+              <span>{sourceLabel}</span>
+            )}
+          </div>
+        ) : null}
+        <Link
+          className={inspectionStyles.lnk}
+          href={historyCommitHref(
+            getProjectIdHistoryPath(headCommit.project_id, {
+              branch,
+              repositoryPath: getCanonicalRepositoryPath(pathname),
+              returnTo: buildReturnTo(pathname, searchParams),
+            }),
+            headCommit
+          )}
+        >
+          View in history <ExternalLink />
+        </Link>
+      </div>
     </aside>
   );
 }

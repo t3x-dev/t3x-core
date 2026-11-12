@@ -31,6 +31,7 @@ import {
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
 import { workspaceLocation } from '@/domain/project/repoPath';
+import { usePendingInvitations } from '@/hooks/accounts/usePendingInvitations';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -86,6 +87,7 @@ export function DiscoverHeader({
   newProjectHref?: string;
   repositoriesNavigation?: boolean;
 }) {
+  const hasPendingInvitations = usePendingInvitations();
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
@@ -205,8 +207,15 @@ export function DiscoverHeader({
           </nav>
           <div className={styles.actions}>
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
-              <Link href="/invitations" aria-label="Invitations" title="Invitations">
+              <Link
+                href="/invitations"
+                aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
+                title="Invitations"
+              >
                 <Mail aria-hidden="true" />
+                {hasPendingInvitations && (
+                  <span className={styles.invitationDot} aria-hidden="true" />
+                )}
               </Link>
             </Button>
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
