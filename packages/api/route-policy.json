@@ -310,6 +310,13 @@
     },
     {
       "source": "collaboration-reads.openapi.ts",
+      "method": "POST",
+      "path": "/v1/users/resolve",
+      "policy": "authenticated",
+      "rationale": "Returns only safe public identity fields to an authenticated user resolving recorded action authors."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
       "method": "GET",
       "path": "/v1/invitations",
       "policy": "authenticated",

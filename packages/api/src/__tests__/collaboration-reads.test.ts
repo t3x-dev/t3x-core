@@ -204,6 +204,47 @@ describe('collaboration read routes', () => {
     expect(JSON.stringify(payload)).not.toContain('guest@example.com');
   });
 
+  it('resolves recorded user IDs to current public usernames for any signed-in collaborator', async () => {
+    const response = await appFor('user_collaboration_reader_owner').request('/v1/users/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids: [
+          'user_collaboration_reader_guest',
+          'user_collaboration_reader_outsider',
+          'user_missing',
+        ],
+      }),
+    });
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.data.users).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: 'user_collaboration_reader_guest',
+          username: 'grace-guest',
+        }),
+        expect.objectContaining({
+          user_id: 'user_collaboration_reader_outsider',
+          username: 'outside-reader',
+        }),
+      ])
+    );
+    expect(payload.data.users).toHaveLength(2);
+    expect(JSON.stringify(payload)).not.toContain('guest@example.com');
+  });
+
+  it('requires a signed-in principal to resolve user IDs', async () => {
+    const app = new Hono();
+    app.route('/', collaborationReadRoutes);
+    const response = await app.request('/v1/users/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: ['user_collaboration_reader_guest'] }),
+    });
+    expect(response.status).toBe(403);
+  });
+
   it('lists pending invitations received by the authenticated user', async () => {
     const response = await appFor('user_collaboration_reader_guest').request('/v1/invitations');
     expect(response.status).toBe(200);

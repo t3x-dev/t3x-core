@@ -99,6 +99,10 @@ export const SearchCollaborationUsersResponseSchema = z
   .object({ users: z.array(CollaborationUserSearchResultSchema).max(20) })
   .strict();
 
+export const ResolveCollaborationUsersResponseSchema = z
+  .object({ users: z.array(CollaborationUserSearchResultSchema).max(100) })
+  .strict();
+
 export const NamespaceMembershipSchema = z
   .object({
     membership_id: ResourceIdSchema,
@@ -468,6 +472,9 @@ export type CollaborationPrincipalView = z.infer<typeof CollaborationPrincipalVi
 export type CollaborationUserSearchResult = z.infer<typeof CollaborationUserSearchResultSchema>;
 export type SearchCollaborationUsersResponse = z.infer<
   typeof SearchCollaborationUsersResponseSchema
+>;
+export type ResolveCollaborationUsersResponse = z.infer<
+  typeof ResolveCollaborationUsersResponseSchema
 >;
 export type NamespaceMembership = z.infer<typeof NamespaceMembershipSchema>;
 export type ProjectGrant = z.infer<typeof ProjectGrantSchema>;

@@ -66,6 +66,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [pageCount, setPageCount] = useState(1);
   const [cursor, setCursor] = useState<number | null>(null);
   const [node, setNode] = useState<WorkspaceAuthoringView['node']>(null);
+  const [inspectedAction, setInspectedAction] = useState<WorkspaceAuthoringAction | null>(null);
   const [nodeLoading, setNodeLoading] = useState(false);
   const [nodeError, setNodeError] = useState<string | null>(null);
   const [nodeCursor, setNodeCursor] = useState<number | null>(null);
@@ -98,6 +99,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     setError(null);
     setCursor(null);
     setNode(null);
+    setInspectedAction(null);
     setNodeLoading(false);
     setNodeError(null);
     setNodeCursor(null);
@@ -431,6 +433,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         );
         if (isCurrent()) {
           setNode(result.node);
+          setInspectedAction(result.selected?.action ?? null);
           setNodeCursor(
             result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
           );
@@ -490,6 +493,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         if (!card) return null;
         setCards((current) => ({ ...current, [actionId]: projectedCards }));
         setNode(result.node);
+        setInspectedAction(result.selected.action);
         setNodeCursor(
           result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
         );
@@ -680,6 +684,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     loading: ownsState ? loading : enabled,
     cursor: ownsState ? cursor : null,
     node: ownsState ? node : null,
+    inspectedAction: ownsState ? inspectedAction : null,
     nodeLoading: ownsState ? nodeLoading : false,
     nodeError: ownsState ? nodeError : null,
     nodeCursor: ownsState ? nodeCursor : null,

@@ -565,6 +565,7 @@ it('projects scalar history and the net draft onto their snapshot object while p
       afterValue: after,
     });
   });
+  expect(result.current.inspectedAction?.actionId).toBe('a1');
   expect(read).toHaveBeenLastCalledWith('p', 'ws', { action_id: 'a1', node_id: 'actual-done-id' });
   unmount();
 });
