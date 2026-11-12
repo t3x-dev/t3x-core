@@ -12,6 +12,7 @@ import {
 } from '@/domain/composeActivity';
 import { composeNodeTitle, composePathLabel } from '@/domain/composePresentation';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import { composeOperationStacks } from '@/domain/workspaces/composeOperationStacks';
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
@@ -22,6 +23,7 @@ import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
 import draftStyles from './ComposeDraftChanges.module.css';
+import { ComposeOperationStacks } from './ComposeOperationStacks';
 
 function stagedFieldLabel(card: WorkspaceAuthoringCard) {
   const parts = parsePath(card.path);
@@ -263,6 +265,14 @@ export function ComposeActivityTimeline({
       activity.view?.base,
       activity.view?.current
     ).filter((card) => matchesFilter(card, filter));
+    const stacks = filter === 'all' ? composeOperationStacks(activity.operationItems ?? []) : [];
+    const resultRows = (
+      <ul className={draftStyles.list}>
+        {changes.map((card) =>
+          renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+        )}
+      </ul>
+    );
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
@@ -270,15 +280,30 @@ export function ComposeActivityTimeline({
           <header className={draftStyles.header}>
             <div>
               <h2>All draft changes</h2>
-              <p>The combined result of every saved action.</p>
+              <p>
+                {stacks.length
+                  ? 'Recorded operations and their field changes; expand the Base → Draft result below.'
+                  : 'The combined result of every saved action.'}
+              </p>
             </div>
             <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
           </header>
-          <ul className={draftStyles.list}>
-            {changes.map((card) =>
-              renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
-            )}
-          </ul>
+          {stacks.length ? (
+            <>
+              <ComposeOperationStacks stacks={stacks} />
+              {activity.cursor !== null ? (
+                <button className={styles.loadOlder} type="button" onClick={activity.loadOlder}>
+                  Load older operations
+                </button>
+              ) : null}
+              <details className={draftStyles.resultDisclosure}>
+                <summary>Base → Draft result · {changes.length} changed paths</summary>
+                {resultRows}
+              </details>
+            </>
+          ) : (
+            resultRows
+          )}
           {activity.actions
             .filter((action) => action.deletionConfirmation?.status === 'required')
             .map((action) => (
@@ -464,6 +489,27 @@ export function ComposeActivityTimeline({
           ? `${actorLabel(latest.actor.delegator.id)} · ${activityChannelLabel(latest.channel)}`
           : actorLabel(latest.actor.id);
         const isLatest = !showStaging && index === 0;
+        const eventStacks =
+          filter === 'all'
+            ? composeOperationStacks(
+                (activity.operationItems ?? []).filter((item) =>
+                  event.actions.some((action) => action.actionId === item.actionId)
+                )
+              )
+            : [];
+        const eventRows = eventCards.map((card) => {
+          const lastTouch = event.actions.findLast((action) =>
+            activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
+          )!;
+          return renderRow(activityOperation(card, lastTouch.reason), {
+            eventId: event.id,
+            actionId: lastTouch.actionId,
+            actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
+            channel: lastTouch.channel,
+            timestamp: lastTouch.publishedAt,
+            comparison: 'event',
+          });
+        });
         return (
           <Fragment key={event.id}>
             {dateHeading}
@@ -507,19 +553,15 @@ export function ComposeActivityTimeline({
                   </span>
                 </div>
                 <div className={styles.preview}>
-                  {eventCards.map((card) => {
-                    const lastTouch = event.actions.findLast((action) =>
-                      activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
-                    )!;
-                    return renderRow(activityOperation(card, lastTouch.reason), {
-                      eventId: event.id,
-                      actionId: lastTouch.actionId,
-                      actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
-                      channel: lastTouch.channel,
-                      timestamp: lastTouch.publishedAt,
-                      comparison: 'event',
-                    });
-                  })}
+                  {eventStacks.length ? <ComposeOperationStacks stacks={eventStacks} /> : null}
+                  {eventStacks.length ? (
+                    <details className={draftStyles.resultDisclosure}>
+                      <summary>Object changes &amp; Details · {eventCards.length} paths</summary>
+                      {eventRows}
+                    </details>
+                  ) : (
+                    eventRows
+                  )}
                 </div>
                 {event.actions.map((action) => (
                   <ConfirmDeletion
