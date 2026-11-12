@@ -537,7 +537,7 @@ function setupHookMocks() {
 }
 
 function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION) {
-  return render(
+  const element = () => (
     <ProjectStateTab
       initialView="structure"
       projectId="proj_test"
@@ -545,6 +545,14 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
       validation={validation}
     />
   );
+  const result = render(element());
+  return {
+    ...result,
+    updateSearch(search: string) {
+      navigationMocks.search = search;
+      result.rerender(element());
+    },
+  };
 }
 
 function deferred<T>() {
@@ -558,9 +566,9 @@ function deferred<T>() {
 }
 
 describe('ProjectStateTab', () => {
-  it('opens the share card for the exact historical revision and restores the Structure selection', async () => {
+  it('navigates to the share card of the inspected revision and restores the Structure selection', async () => {
     const commit = { ...PRD_COMMIT, hash: `sha256:${'a'.repeat(64)}`, parents: [] };
-    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.branchHeads = { main: commit.hash };
     hookMocks.loadCommit.mockResolvedValue(commit);
     hookMocks.fetchStateExport.mockResolvedValue({
       content: JSON.stringify({
@@ -569,17 +577,23 @@ describe('ProjectStateTab', () => {
         content: commit.content,
       }),
     });
-    navigationMocks.search = new URLSearchParams({
-      view: 'structure',
-      commit: commit.hash,
-    }).toString();
-    renderStateTab();
+    navigationMocks.search = 'view=structure';
+    const { updateSearch } = renderStateTab();
 
     const structure = await screen.findByRole('region', { name: 'State structure' });
     const row = within(structure).getByText('problem').closest('tr')!;
     fireEvent.click(row);
     const trigger = within(structure).getByRole('button', { name: 'View share card' });
+    const pushState = vi.spyOn(window.history, 'pushState').mockImplementationOnce(() => {});
     fireEvent.click(trigger);
+    const previewQuery = new URLSearchParams({
+      view: 'structure',
+      artifact: commit.hash,
+    }).toString();
+    const previewHref = `${navigationMocks.pathname}?${previewQuery}`;
+    expect(pushState).toHaveBeenCalledWith({ t3xStateArtifact: previewHref }, '', previewHref);
+    pushState.mockRestore();
+    updateSearch(previewQuery);
     const dialog = screen.getByRole('dialog', { name: 'Share card' });
     const summary = await within(dialog).findByRole('region', { name: 'Content summary' });
     expect(within(summary).getByText('You: i need food and drink')).toBeVisible();
@@ -590,12 +604,40 @@ describe('ProjectStateTab', () => {
       'yaml',
       expect.any(AbortSignal)
     );
+    expect(hookMocks.loadCommit).toHaveBeenCalledTimes(1);
     fireEvent.click(within(dialog).getByText('Full data (YAML)'));
     expect(within(dialog).getByText(/"domain":"t3x.dev\/semantic-content"/)).toBeVisible();
+    const historyState = vi
+      .spyOn(window.history, 'state', 'get')
+      .mockReturnValueOnce({ t3xStateArtifact: previewHref });
+    const back = vi.spyOn(window.history, 'back').mockImplementationOnce(() => {});
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close share card' }));
+    expect(back).toHaveBeenCalledOnce();
+    back.mockRestore();
+    historyState.mockRestore();
+    updateSearch('view=structure');
     expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('pins the Commit from a direct preview address and stays on that version after close', async () => {
+    const historical = { ...PRD_COMMIT, hash: 'historical-commit', parents: [] };
+    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
+    hookMocks.loadCommit.mockResolvedValue(historical);
+    navigationMocks.search = new URLSearchParams({
+      view: 'code',
+      artifact: historical.hash,
+    }).toString();
+    renderStateTab();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share card' });
+    expect(hookMocks.loadCommit).toHaveBeenCalledExactlyOnceWith(historical.hash, 'proj_test');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close share card' }));
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      `${navigationMocks.pathname}?view=code&commit=${historical.hash}`,
+      { scroll: false }
+    );
   });
 
   it('opens a fixed-version share link and removes its preview flag when closed', async () => {

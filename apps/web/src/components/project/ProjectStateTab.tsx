@@ -220,13 +220,21 @@ export function ProjectStateTab({
       : routeView
   );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
-  const focusedCommitHash = commitAddress?.id ?? (searchParams.get('commit')?.trim() || undefined);
+  const branchScope = JSON.stringify([projectId, branchFocus]);
+  const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
+  const addressedCommit = commitAddress?.id ?? (searchParams.get('commit')?.trim() || undefined);
+  const artifactParam = searchParams.get('artifact')?.trim();
+  const artifactCommit = artifactParam === '1' ? addressedCommit : artifactParam || undefined;
+  // A card opened over the inspected HEAD keeps the Structure view mounted.
+  // A direct preview address can still select its Commit independently of HEAD.
+  const focusedCommitHash =
+    addressedCommit ??
+    (artifactCommit === inspectedHeadByBranchRef.current[branchScope] ? undefined : artifactCommit);
   const [pathQuery, setPathQuery] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
   const [freshnessChecking, setFreshnessChecking] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
-  const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -245,7 +253,6 @@ export function ProjectStateTab({
     focusedCommitHash,
     snapshotRefreshVersion,
   ]);
-  const branchScope = JSON.stringify([projectId, branchFocus]);
   const [loadedSnapshot, setSnapshot] = useState<StateSnapshot>(EMPTY_SNAPSHOT);
   // Never render the previous branch/project while its replacement effect is starting.
   const snapshot = loadedSnapshot.scope === selectionScope ? loadedSnapshot : EMPTY_SNAPSHOT;
@@ -396,6 +403,25 @@ export function ProjectStateTab({
   ]);
 
   const headCommit = snapshot.headCommit;
+  function changeArtifactVisibility(open: boolean) {
+    if (!headCommit) return;
+    const params = new URLSearchParams(routeQueryRef.current);
+    const locationHash = window.location.hash;
+    if (open) {
+      params.set('view', activeView);
+      params.set('artifact', headCommit.hash);
+      const href = `${pathname}?${params}${locationHash}`;
+      window.history.pushState({ t3xStateArtifact: href }, '', href);
+      return;
+    }
+    if (window.history.state?.t3xStateArtifact === `${pathname}?${params}${locationHash}`) {
+      window.history.back();
+      return;
+    }
+    params.delete('artifact');
+    if (!addressedCommit) params.set('commit', headCommit.hash);
+    replaceRoute(`${pathname}?${params}${locationHash}`, { scroll: false });
+  }
   const context = loadedContext?.commit === headCommit ? loadedContext : null;
   const contextLoading = Boolean(headCommit) && (!context || context.loading);
   const modifiedTimes = useStateFieldModifiedTimes(
@@ -900,16 +926,8 @@ export function ProjectStateTab({
                         commitDigest={headCommit.hash}
                         structureYaml={yamlText}
                         href={commitStructureHref(repositoryPath, headCommit, true)}
-                        initialOpen={
-                          searchParams.get('artifact') === '1' &&
-                          focusedCommitHash === headCommit.hash
-                        }
-                        onClose={() => {
-                          const params = new URLSearchParams(routeQueryRef.current);
-                          if (!params.has('artifact')) return;
-                          params.delete('artifact');
-                          replaceRoute(`${pathname}?${params}`, { scroll: false });
-                        }}
+                        open={artifactCommit === headCommit.hash}
+                        onOpenChange={changeArtifactVisibility}
                       />
                     }
                     committedSchema={committedSchema}

@@ -31,26 +31,20 @@ interface ArtifactProps {
 }
 
 export function StateArtifactDialog({
-  initialOpen,
-  onClose,
+  open,
+  onOpenChange,
   ...props
-}: ArtifactProps & { initialOpen: boolean; onClose: () => void }) {
-  const [open, setOpen] = useState(initialOpen);
+}: ArtifactProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) onClose();
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           <PanelTop aria-hidden="true" /> View share card
         </Button>
       </DialogTrigger>
       <DialogContent
-        className="inset-0 flex h-dvh w-screen max-w-none translate-none flex-col gap-0 rounded-none border-0 p-0 data-[state=closed]:animate-none! data-[state=open]:animate-none! sm:max-w-none"
+        className="flex max-h-[calc(100dvh_-_1.5rem)] w-[calc(100%_-_1.5rem)] max-w-[48rem] flex-col gap-0 overflow-hidden rounded-xl bg-background/85 p-0 shadow-2xl backdrop-blur-md data-[state=closed]:animate-none! data-[state=open]:animate-none! sm:max-h-[calc(100dvh_-_3rem)] sm:max-w-[48rem] dark:bg-background/85 dark:backdrop-blur-md"
+        overlayClassName="backdrop-blur-[2px]"
         showCloseButton={false}
       >
         {open ? <ArtifactPreview {...props} /> : null}
@@ -112,7 +106,7 @@ function ArtifactPreview({
 
   return (
     <>
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3 sm:px-6">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-background/65 px-4 py-3 sm:px-6">
         <div className="min-w-0">
           <DialogTitle>Share card</DialogTitle>
           <DialogDescription className="mt-1 break-words">
@@ -149,7 +143,7 @@ function ArtifactPreview({
           {feedback.text}
         </p>
       ) : null}
-      <div className="min-h-0 flex-1 overflow-auto bg-muted px-4 py-5 sm:px-6 sm:py-8">
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-4 sm:px-6 sm:py-6">
         {!result ? <output className="block text-center">Loading committed data…</output> : null}
         {result && 'error' in result ? (
           <div className="mx-auto flex max-w-xl flex-col items-start gap-3">
