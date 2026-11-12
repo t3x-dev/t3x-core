@@ -61,6 +61,7 @@ it('expands recorded operations into separate field-level set cards', () => {
   expect(layers[0]!.querySelector('summary')).toHaveTextContent('Second');
   expect(layers[0]!.querySelector('summary')).toHaveTextContent('title:');
   const layer = screen.getByText(/P-01 · YOp 1/).closest('details')!;
+  expect(layer).toHaveAttribute('data-layers', '3');
   expect(layer.querySelector('summary')).toHaveTextContent('First');
   expect(layer.querySelector('summary')).toHaveTextContent('priority:');
   fireEvent.click(screen.getByText(/P-01 · YOp 1/));

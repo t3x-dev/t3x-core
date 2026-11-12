@@ -59,7 +59,11 @@ export function ComposeOperationStacks({ stacks }: { stacks: readonly OperationS
             key={`${stack.name}:${stack.path}`}
           >
             {stack.items.map((item) => (
-              <details className={styles.item} key={`${item.actionId}:${item.index}`}>
+              <details
+                className={styles.item}
+                data-layers={Math.min(item.fields.length, 3)}
+                key={`${item.actionId}:${item.index}`}
+              >
                 <summary>
                   <span className={styles.icon} aria-hidden="true">
                     <Box size={14} />
