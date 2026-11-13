@@ -310,6 +310,13 @@
     },
     {
       "source": "collaboration-reads.openapi.ts",
+      "method": "POST",
+      "path": "/v1/users/resolve",
+      "policy": "authenticated",
+      "rationale": "Returns only safe public identity fields to an authenticated user resolving recorded action authors."
+    },
+    {
+      "source": "collaboration-reads.openapi.ts",
       "method": "GET",
       "path": "/v1/invitations",
       "policy": "authenticated",
@@ -1188,6 +1195,14 @@
       "path": "/v1/projects/{projectId}/checks/{recordId}",
       "policy": "project",
       "rationale": "Read-only check evidence requires canonical project access and project-scoped record lookup.",
+      "action": "project:read"
+    },
+    {
+      "source": "repository-object-addresses.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/{projectId}/object-addresses/{kind}/{key}",
+      "policy": "project",
+      "rationale": "Exact Commit and Review addresses resolve only after the same project read check as their evidence.",
       "action": "project:read"
     },
     {
@@ -2285,6 +2300,22 @@
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deliveries",
       "policy": "project",
       "rationale": "Project edit authority for receipt creation and project-bound workspace/verified commit membership; only local download preparation.",
+      "action": "project:edit"
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deployments",
+      "policy": "project",
+      "rationale": "Project edit authority assigns an already prepared portable artifact to the fixed preview deployment slot.",
+      "action": "project:edit"
+    },
+    {
+      "source": "workspace-deliveries.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/deployments/rollback",
+      "policy": "project",
+      "rationale": "Project edit authority appends an auditable rollback assignment to an earlier recorded portable artifact.",
       "action": "project:edit"
     },
     {

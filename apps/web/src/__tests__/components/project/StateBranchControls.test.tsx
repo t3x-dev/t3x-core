@@ -89,3 +89,14 @@ it('waits for the draft navigation guard before creating and keeps failures visi
   await waitFor(() => expect(create).toHaveBeenCalledWith('feature/new', 'main'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Branch source changed. Try again.');
 });
+
+it('identifies a pinned commit in both search creation and the create dialog', () => {
+  renderControls({ sourceCommitHash: 'sha256:abcdef0123456789', showCreate: true });
+  fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
+  expect(screen.getByText(/Create from commit hash:abcdef0/)).toBeVisible();
+  expect(screen.queryByText(/latest commit/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close branch switcher' }));
+  fireEvent.click(screen.getByRole('button', { name: 'New branch' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent(/Start from commit hash:abcdef0/);
+  expect(screen.getByRole('dialog')).not.toHaveTextContent('latest commit');
+});

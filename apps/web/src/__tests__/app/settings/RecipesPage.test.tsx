@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RecipesPage from '@/app/settings/recipes/page';
@@ -10,12 +10,12 @@ const listRecipes = vi.fn();
 const createRecipe = vi.fn();
 const updateRecipe = vi.fn();
 const deleteRecipe = vi.fn();
-const fetchProjects = vi.fn();
+const refreshProjects = vi.fn();
 let searchParams = new URLSearchParams('project=proj_test');
 
 const projects = [
   {
-    id: 'proj_test',
+    project_id: 'proj_test',
     name: 'test-bug',
     description: '',
     updatedAt: 'today',
@@ -27,6 +27,7 @@ const projects = [
     branchesCount: 1,
   },
 ];
+projects.push({ ...projects[0], project_id: 'proj_second', name: 'second-project' });
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams,
@@ -38,14 +39,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/store/projectStore', () => ({
-  useProjectStore: (
-    selector: (state: { projects: typeof projects; initialized: boolean }) => unknown
-  ) => selector({ projects, initialized: true }),
-}));
-
-vi.mock('@/hooks/projects/useProjectCrud', () => ({
-  useProjectCrud: () => ({ list: fetchProjects }),
+vi.mock('@/hooks/projects/useProjects', () => ({
+  useProjects: () => ({ projects, loading: false, error: null, refresh: refreshProjects }),
 }));
 
 vi.mock('@/hooks/recipes/useRecipeCommands', () => ({
@@ -61,19 +56,23 @@ describe('RecipesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchParams = new URLSearchParams('project=proj_test');
-    listRecipes.mockResolvedValue([
-      {
-        id: 'recipe_1',
-        project_id: 'proj_test',
-        name: 'After commit created',
-        description: 'Notify release channel',
-        trigger: { event: 'commit.created' },
-        steps: [{ action: 'send_webhook', config: {} }],
-        enabled: true,
-        created_at: '2026-09-16T00:00:00.000Z',
-        updated_at: '2026-09-16T00:00:00.000Z',
-      },
-    ]);
+    listRecipes.mockImplementation(async (projectId: string) =>
+      projectId === 'proj_test'
+        ? [
+            {
+              id: 'recipe_1',
+              project_id: 'proj_test',
+              name: 'After commit created',
+              description: 'Notify release channel',
+              trigger: { event: 'commit.created' },
+              steps: [{ action: 'send_webhook', config: {} }],
+              enabled: true,
+              created_at: '2026-09-16T00:00:00.000Z',
+              updated_at: '2026-09-16T00:00:00.000Z',
+            },
+          ]
+        : []
+    );
   });
 
   it('renders the project-scoped recipe table', async () => {
@@ -84,7 +83,7 @@ describe('RecipesPage', () => {
     expect(await screen.findByText('After commit created')).toBeInTheDocument();
     expect(screen.getByText('Commit created')).toBeInTheDocument();
     expect(screen.getByText('Send webhook')).toBeInTheDocument();
-    expect(screen.getByText('Enabled')).toBeInTheDocument();
+    expect(screen.getByText('Trigger unavailable')).toBeInTheDocument();
   });
 
   it('opens an integrated project-scoped creation drawer', async () => {
@@ -128,14 +127,15 @@ describe('RecipesPage', () => {
     expect(opener).toHaveFocus();
   });
 
-  it('creates a recipe with supported API trigger and action identifiers', async () => {
+  it('requires a target across projects and shows the project returned by creation', async () => {
+    searchParams = new URLSearchParams();
     createRecipe.mockResolvedValue({
       id: 'recipe_2',
-      project_id: 'proj_test',
-      name: 'Notify after commit',
+      project_id: 'proj_second',
+      name: 'Notify after merge',
       description: null,
-      trigger: { event: 'commit.created' },
-      steps: [{ action: 'send_webhook', config: {} }],
+      trigger: { event: 'merge.completed' },
+      steps: [{ action: 'send_webhook', config: { url: 'https://example.com/webhook' } }],
       enabled: true,
       created_at: '2026-09-16T00:00:00.000Z',
       updated_at: '2026-09-16T00:00:00.000Z',
@@ -145,21 +145,29 @@ describe('RecipesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New recipe' }));
     fireEvent.change(screen.getByLabelText('Name'), {
-      target: { value: 'Notify after commit' },
+      target: { value: 'Notify after merge' },
     });
     fireEvent.change(screen.getByLabelText('Webhook URL'), {
       target: { value: 'https://example.com/webhook' },
     });
+    const target = screen.getByLabelText('Target project');
+    expect(target).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Create recipe' })).toBeDisabled();
+    expect(createRecipe).not.toHaveBeenCalled();
+    fireEvent.change(target, { target: { value: 'proj_second' } });
+    expect(screen.getByText('Destination host · example.com')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create recipe' }));
 
     await waitFor(() => {
-      expect(createRecipe).toHaveBeenCalledWith('proj_test', {
-        name: 'Notify after commit',
+      expect(createRecipe).toHaveBeenCalledWith('proj_second', {
+        name: 'Notify after merge',
         description: undefined,
-        trigger: { event: 'commit.created' },
+        trigger: { event: 'merge.completed' },
         steps: [{ action: 'send_webhook', config: { url: 'https://example.com/webhook' } }],
         enabled: true,
       });
     });
+    const row = await screen.findByRole('row', { name: /Notify after merge/ });
+    expect(within(row).getByText('second-project')).toBeInTheDocument();
   });
 });

@@ -15,3 +15,20 @@ export const StateExportArtifactSchema = z.object({
   serialization: z.enum(['t3x.json-value/v1', 't3x.yaml-value/v1']),
 });
 export type StateExportArtifact = z.infer<typeof StateExportArtifactSchema>;
+
+export const PortableArtifactSchema = z.object({
+  format: z.literal('bundle'),
+  scope: z.literal('portable-commit'),
+  mimeType: z.literal('application/json'),
+  filename: z.string(),
+  content: z.string(),
+  byteLength: z.number().int().nonnegative(),
+  byteDigest: digest,
+  sourceCommit: StateExportArtifactSchema.shape.sourceCommit,
+  sourceState: StateExportArtifactSchema.shape.sourceState,
+  schemaDigest: digest,
+  serialization: z.literal('t3x.portable-artifact/v1'),
+});
+export type PortableArtifact = z.infer<typeof PortableArtifactSchema>;
+export const DownloadArtifactSchema = z.union([StateExportArtifactSchema, PortableArtifactSchema]);
+export type DownloadArtifact = z.infer<typeof DownloadArtifactSchema>;

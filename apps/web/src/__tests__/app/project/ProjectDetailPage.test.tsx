@@ -249,6 +249,36 @@ describe('ProjectDetailPage — project-first shell states', () => {
   const renderProjectContent = () =>
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
+  it('uses the same Settings link on State and a specific PR', async () => {
+    const base = '/t3x-dev/test-project';
+    useProjectStore.setState({
+      projects: [{ id: 'proj_test', name: 'Test Project', canonical_path: base } as never],
+    });
+    vi.mocked(fetchProject).mockResolvedValue({
+      project_id: 'proj_test',
+      name: 'Test Project',
+      canonical_path: base,
+      created_at: '2026-05-28T00:00:00.000Z',
+    } as never);
+    routeParamsValue = {};
+    searchParamsValue = new URLSearchParams();
+    const view = render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+    expect(await screen.findByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${base}/settings`
+    );
+
+    pathnameValue = `${base}/pull-requests`;
+    searchParamsValue = new URLSearchParams('pr=7&prTab=checks');
+    view.rerender(
+      <ProjectDetailPageContent initialTabOverride="reviews" projectIdOverride="proj_test" />
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      `${base}/settings`
+    );
+  });
+
   it('keeps project ID routes independent of namespace directory access', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces&zoom=1.00&x=10&y=20');
     pathnameValue = '/project/proj_test';
@@ -262,51 +292,6 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('link', { name: 'Schema' })).toHaveAttribute(
       'href',
       '/project/proj_test?tab=schemas'
-    );
-  });
-
-  it.each([
-    { schemaView: '', hash: '', tab: 'schemas' },
-    { schemaView: '&schemaView=browse', hash: '#releases', tab: 'browse' },
-  ])('normalizes legacy $tab links under the actual repository owner', async ({
-    schemaView,
-    hash,
-    tab,
-  }) => {
-    searchParamsValue = new URLSearchParams(
-      `tab=schemas&branch=feature%2Frelease&workspace=workspace_7${schemaView}`
-    );
-    window.history.replaceState({}, '', `/${hash}`);
-    pathnameValue = '/orbit-labs/test-project';
-    useProjectStore.setState({
-      details: {},
-      projects: [
-        {
-          id: 'proj_test',
-          name: 'Test Project',
-          canonical_path: '/orbit-labs/test-project',
-          namespace: 'orbit-labs',
-        } as never,
-      ],
-    });
-    vi.mocked(fetchProject).mockResolvedValue({
-      project_id: 'proj_test',
-      name: 'Test Project',
-      canonical_path: '/orbit-labs/test-project',
-      namespace: 'orbit-labs',
-      created_at: '2026-01-01T00:00:00Z',
-    } as never);
-    routeParamsValue = {};
-
-    render(
-      <ProjectDetailPageContent ownerSlugOverride="orbit-labs" projectIdOverride="proj_test" />
-    );
-
-    await waitFor(() =>
-      expect(replaceMock).toHaveBeenCalledWith(
-        `/orbit-labs/test-project/${tab}?branch=feature%2Frelease&workspace=workspace_7${hash}`,
-        { scroll: false }
-      )
     );
   });
 
@@ -647,7 +632,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   ])('redirects legacy catalog address %s to global Explore', (query, view) => {
     searchParamsValue = new URLSearchParams(query);
     renderProjectContent();
-    const destination = `/explore?view=${view}&type=schemas&studioTarget=proj_test`;
+    const destination = `${view === 'browse' ? '/explore/browse' : '/explore'}?type=schemas&studioTarget=proj_test`;
     expect(replaceMock).toHaveBeenCalledWith(destination);
     expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', destination);
     expect(screen.queryByRole('region', { name: 'Schema Studio' })).not.toBeInTheDocument();

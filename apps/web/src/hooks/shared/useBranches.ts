@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { createBranch, listBranches } from '@/infrastructure/branches';
 import type { Branch } from '@/infrastructure/types';
 
@@ -25,7 +26,8 @@ export interface UseBranchesResult {
   branchHeads: Readonly<Record<string, string | null>>;
   branches: string[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  error: string | null;
+  refresh: () => Promise<boolean>;
   create: (name: string, parentBranch: string, headCommitHash?: string) => Promise<Branch>;
 }
 
@@ -41,10 +43,11 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
     branches: string[];
     branchHeads: Record<string, string | null>;
     loading: boolean;
+    error: string | null;
   }>();
 
   const refresh = useCallback(async () => {
-    if (!projectId || !enabled || !scope.active || activeScope.current !== scope) return;
+    if (!projectId || !enabled || !scope.active || activeScope.current !== scope) return false;
     const request = ++scope.read;
     const isCurrent = () => scope.active && activeScope.current === scope && request === scope.read;
     setSnapshot((current) => ({
@@ -52,10 +55,11 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
       branches: current?.scope === scope ? current.branches : [],
       branchHeads: current?.scope === scope ? current.branchHeads : {},
       loading: true,
+      error: current?.scope === scope ? current.error : null,
     }));
     try {
       const branchData = await listBranches(projectId);
-      if (!isCurrent()) return;
+      if (!isCurrent()) return false;
       const registeredBranches = (branchData.branches ?? []) as Branch[];
       scope.completedRead = request;
       setSnapshot({
@@ -65,9 +69,19 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
           registeredBranches.map((branch) => [branch.name, branch.head_commit_hash ?? null])
         ),
         loading: false,
+        error: null,
       });
-    } catch {
-      if (isCurrent()) setSnapshot({ scope, branches: [], branchHeads: {}, loading: false });
+      return true;
+    } catch (cause) {
+      if (isCurrent())
+        setSnapshot((current) => ({
+          scope,
+          branches: current?.scope === scope ? current.branches : [],
+          branchHeads: current?.scope === scope ? current.branchHeads : {},
+          loading: false,
+          error: formatUserFacingError(cause, 'Could not load branches.'),
+        }));
+      return false;
     }
   }, [projectId, enabled, scope]);
 
@@ -117,6 +131,7 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
                 : (branch.head_commit_hash ?? null),
           },
           loading: false,
+          error: current?.scope === scope ? current.error : null,
         }));
         return branch;
       } finally {
@@ -131,6 +146,7 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
     branchHeads: current?.branchHeads ?? {},
     branches: current?.branches ?? [],
     loading: Boolean(enabled && projectId && (current?.loading ?? true)),
+    error: current?.error ?? null,
     refresh,
     create,
   };

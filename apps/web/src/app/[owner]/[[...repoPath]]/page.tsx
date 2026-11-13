@@ -11,14 +11,17 @@ import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage'
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/projectTabModel';
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import { numberedRepositoryObject, repositoryObjectHref } from '@/domain/project/objectLocation';
+import { getProjectIdRepoPath, workspaceBranchFromSuffix } from '@/domain/project/repoPath';
 import {
   isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
 import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
+import { useRepositoryObjectAddress } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useProjectStore } from '@/store/projectStore';
+import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner: string; repoPath?: string[] }>();
@@ -42,36 +45,82 @@ function OwnerRepoProjectPageContent() {
       Object.values(state.details).find((project) => project.canonical_path === repositoryPath) ??
       state.projects.find((project) => project.canonical_path === repositoryPath)
   );
-  const view = segments[1] ?? 'state';
+  const workspaceBranch = workspaceBranchFromSuffix(suffix);
+  const numbered = numberedRepositoryObject(suffix);
+  const view =
+    workspaceBranch || numbered?.section === 'reviews'
+      ? 'workspaces'
+      : numbered?.section === 'commits'
+        ? 'state'
+        : (segments[1] ?? 'state');
   const query = useSearchParams().toString();
   const { current, retry } = useRepositoryAddress(owner, name, !special);
   const address = current?.address;
   const supported = isSupportedRepositorySuffix(suffix);
+  const search = new URLSearchParams(query);
+  const legacyView = segments[1] ? view : (search.get('tab') ?? view);
+  const legacySnapshot =
+    legacyView === 'workspaces' && search.get('reviewPane') !== 'checks'
+      ? search.get('reviewSnapshot')
+      : null;
+  const legacyCommit =
+    legacyView === 'state' || legacyView === 'history' ? search.get('commit') : null;
+  const exactSnapshot =
+    legacySnapshot && /^rvs_[0-9a-f]{32}$/.test(legacySnapshot) ? legacySnapshot : undefined;
+  const exactCommit =
+    legacyCommit && /^sha256:[0-9a-f]{64}$/.test(legacyCommit) ? legacyCommit : undefined;
+  const object = useRepositoryObjectAddress(
+    supported && address?.canonical_path ? address.project_id : undefined,
+    numbered?.kind ?? (exactSnapshot ? 'review' : 'commit'),
+    numbered?.number ?? exactSnapshot ?? exactCommit
+  );
+  let target =
+    address && supported
+      ? repositoryLocation(
+          address.canonical_path ?? getProjectIdRepoPath(address.project_id),
+          suffix,
+          query,
+          '',
+          repositoryPath
+        )
+      : null;
+  if (target && address?.canonical_path && !numbered && object.data) {
+    if (exactSnapshot && object.data.workspaceId === search.get('workspace')) {
+      target = repositoryObjectHref(address.canonical_path, 'reviews', object.data.number, search);
+    } else if (exactCommit) {
+      target = repositoryObjectHref(
+        address.canonical_path,
+        legacyView === 'history' ? 'history' : 'commits',
+        object.data.number,
+        search
+      );
+    }
+  }
+  const canonicalizing = target !== null && target !== `${pathname}${query ? `?${query}` : ''}`;
   useEffect(() => {
-    if (!address || !supported) return;
-    const target = repositoryLocation(
-      address.canonical_path ?? getProjectIdRepoPath(address.project_id),
-      suffix,
-      query,
-      window.location.hash
-    );
-    const here = `${pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-    if (target !== here) router.replace(target, { scroll: false });
-  }, [address, supported, suffix, pathname, query, router]);
+    if (!canonicalizing || !target) return;
+    if (address && suffix === '/settings') {
+      carryRepositorySettingsReturn(address.project_id, target.split('?')[0], repositoryPath);
+    }
+    router.replace(`${target}${window.location.hash}`, { scroll: false });
+  }, [address, canonicalizing, repositoryPath, router, suffix, target]);
 
   if (!special && isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
   if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
-  if (!current) {
+  if (!current || canonicalizing) {
     const loading = <LoadingSpinner message="Loading repository..." />;
     // Keep only the known header during navigation; repository content still
     // waits for a fresh address lookup and its access checks.
     return knownProject ? (
       <ProjectShell
-        activeTab={resolveProjectRouteTab(segments[1] ?? null, new URLSearchParams(query))}
-        branch={new URLSearchParams(query).get('branch')}
-        settingsReturnTo={`${pathname}${query ? `?${query}` : ''}`}
+        activeTab={resolveProjectRouteTab(
+          workspaceBranch ? view : (segments[1] ?? null),
+          new URLSearchParams(query)
+        )}
+        branch={workspaceBranch ?? new URLSearchParams(query).get('branch')}
+        pageTitle={null}
         project={knownProject}
       >
         {loading}
@@ -93,6 +142,15 @@ function OwnerRepoProjectPageContent() {
     );
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
+  if (numbered && object.isLoading)
+    return <LoadingSpinner message="Loading repository object..." />;
+  if (numbered && (!object.data || (numbered.kind === 'review' && !object.data.workspaceId)))
+    return (
+      <ErrorMessage
+        error={object.error ?? new Error('Repository object not found.')}
+        onRetry={object.refetch}
+      />
+    );
   if (
     [
       'settings',
@@ -110,6 +168,7 @@ function OwnerRepoProjectPageContent() {
         key={address.project_id}
         projectId={address.project_id}
         segments={segments.slice(1)}
+        commitHash={numbered?.kind === 'commit' ? object.data?.id : undefined}
       />
     );
   return (
@@ -118,6 +177,17 @@ function OwnerRepoProjectPageContent() {
       initialTabOverride={parseProjectTab(view)}
       ownerSlugOverride={address.namespace ?? undefined}
       projectIdOverride={address.project_id}
+      workspaceBranch={workspaceBranch}
+      commitAddress={numbered?.kind === 'commit' && object.data ? object.data : undefined}
+      fixedReview={
+        numbered?.kind === 'review' && object.data?.workspaceId
+          ? {
+              workspaceId: object.data.workspaceId,
+              snapshotId: object.data.id,
+              number: numbered.number,
+            }
+          : undefined
+      }
     />
   );
 }

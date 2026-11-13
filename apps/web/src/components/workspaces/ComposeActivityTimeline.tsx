@@ -7,24 +7,31 @@ import {
   activityChannelLabel,
   activityOperation,
   type ComposeActivityMeta,
+  type ComposeActivitySelection,
   composeEventCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
+import { composeNodeTitle, composePathLabel } from '@/domain/composePresentation';
 import {
-  composeActorLabel,
-  composeNodeTitle,
-  composePathLabel,
-} from '@/domain/composePresentation';
-import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+  composeCardsAtPath,
+  composeDraftChangeCards,
+} from '@/domain/workspaces/composeDraftChanges';
+import {
+  composeOperationStacks,
+  type OperationFieldCard,
+  type OperationStackItem,
+} from '@/domain/workspaces/composeOperationStacks';
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
   stagedObjectGroups,
 } from '@/domain/workspaces/manualStaging';
+import { useActorLabel } from '@/hooks/accounts/useActorLabel';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import type { WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import styles from './ComposeActivityTimeline.module.css';
 import draftStyles from './ComposeDraftChanges.module.css';
+import { ComposeOperationStacks } from './ComposeOperationStacks';
 
 function stagedFieldLabel(card: WorkspaceAuthoringCard) {
   const parts = parsePath(card.path);
@@ -180,6 +187,8 @@ export function ComposeActivityTimeline({
   updatedAt,
   staging,
   schemaEvent,
+  selection,
+  onSelectOperationField,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
@@ -189,7 +198,12 @@ export function ComposeActivityTimeline({
   updatedAt: string;
   staging?: ManualStagingControls;
   schemaEvent?: ComposeSchemaTimelineEvent;
+  selection?: ComposeActivitySelection | null;
+  onSelectOperationField?: (selection: ComposeActivitySelection) => void;
 }) {
+  const actorLabel = useActorLabel(
+    (activity.actions ?? []).flatMap((action) => [action.actor.id, action.actor.delegator?.id])
+  );
   if (!activity.enabled)
     return scope === 'all' ? (
       <>
@@ -238,14 +252,14 @@ export function ComposeActivityTimeline({
         </section>
       </div>
     );
-  if (activity.loading)
+  if (activity.loading && !(activity.awaitingPublishRefresh && activity.view))
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
         <p className={styles.message}>Loading change activity…</p>
       </>
     );
-  if (activity.error)
+  if (activity.error && !(activity.awaitingPublishRefresh && activity.view))
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
@@ -257,12 +271,54 @@ export function ComposeActivityTimeline({
         </div>
       </>
     );
+  const selectedField =
+    selection?.meta.operationIndex === undefined || !selection.meta.actionId
+      ? undefined
+      : {
+          actionId: selection.meta.actionId,
+          index: selection.meta.operationIndex,
+          path: selection.operation.path,
+        };
+  const selectField = onSelectOperationField
+    ? (item: OperationStackItem, field: OperationFieldCard) => {
+        const action = activity.actions.find((entry) => entry.actionId === item.actionId);
+        const owner = composeCardsAtPath(activity.cards[item.actionId] ?? [], field.path)[0];
+        onSelectOperationField({
+          operation: activityOperation(
+            {
+              nodeId: owner?.nodeId ?? item.actionId,
+              path: field.path,
+              before: field.before,
+              after: field.after,
+            },
+            action?.reason
+          ),
+          meta: {
+            eventId: item.actionId,
+            actionId: item.actionId,
+            actor: action?.actor.id,
+            channel: action?.channel,
+            timestamp: action?.publishedAt,
+            comparison: 'event',
+            operationIndex: item.index,
+          },
+        });
+      }
+    : undefined;
   if (scope === 'all') {
     const changes = composeDraftChangeCards(
       activity.view?.netDiff ?? [],
       activity.view?.base,
       activity.view?.current
     ).filter((card) => matchesFilter(card, filter));
+    const stacks = filter === 'all' ? composeOperationStacks(activity.operationItems ?? []) : [];
+    const resultRows = (
+      <ul className={draftStyles.list}>
+        {changes.map((card) =>
+          renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
+        )}
+      </ul>
+    );
     return (
       <>
         <SchemaTimeline event={schemaEvent} />
@@ -270,15 +326,34 @@ export function ComposeActivityTimeline({
           <header className={draftStyles.header}>
             <div>
               <h2>All draft changes</h2>
-              <p>The combined result of every saved action.</p>
+              <p>
+                {stacks.length
+                  ? 'Recorded operations and their field changes; expand the Base → Draft result below.'
+                  : 'The combined result of every saved action.'}
+              </p>
             </div>
             <span>Base → Draft r{activity.compositionRevision ?? '—'}</span>
           </header>
-          <ul className={draftStyles.list}>
-            {changes.map((card) =>
-              renderRow(activityOperation(card), { eventId: 'all', comparison: 'draft' })
-            )}
-          </ul>
+          {stacks.length ? (
+            <>
+              <ComposeOperationStacks
+                stacks={stacks}
+                onSelectField={selectField}
+                selectedField={selectedField}
+              />
+              {activity.cursor !== null ? (
+                <button className={styles.loadOlder} type="button" onClick={activity.loadOlder}>
+                  Load older operations
+                </button>
+              ) : null}
+              <details className={draftStyles.resultDisclosure}>
+                <summary>Base → Draft result · {changes.length} changed paths</summary>
+                {resultRows}
+              </details>
+            </>
+          ) : (
+            resultRows
+          )}
           {activity.actions
             .filter((action) => action.deletionConfirmation?.status === 'required')
             .map((action) => (
@@ -408,15 +483,20 @@ export function ComposeActivityTimeline({
               </div>
               <div className={styles.stagingActions}>
                 <button
-                  disabled={Boolean(staging?.pending) || selectedCount === 0}
+                  disabled={
+                    Boolean(staging?.pending || staging?.blocked) ||
+                    (selectedCount === 0 && !staging?.retryOriginal)
+                  }
                   onClick={() => staging?.onSaveSelected()}
                   type="button"
                 >
                   {staging?.pending
                     ? 'Saving…'
-                    : selectedCount
-                      ? `Save selected as P (${selectedCount})`
-                      : 'Save selected as P'}
+                    : staging?.retryOriginal
+                      ? 'Retry original save'
+                      : selectedCount
+                        ? `Save selected as P (${selectedCount})`
+                        : 'Save selected as P'}
                 </button>
                 {staging?.error ? <p role="alert">{staging.error}</p> : null}
               </div>
@@ -455,9 +535,31 @@ export function ComposeActivityTimeline({
           event.actions.length > 1
             ? 'Continuous manual edits'
             : latest.reason || `${activityChannelLabel(latest.channel)} changes`;
-        const actor =
-          latest.actor.id === 'human:local-user' ? 'You' : composeActorLabel(latest.actor.id);
+        const actor = latest.actor.delegator
+          ? `${actorLabel(latest.actor.delegator.id)} · ${activityChannelLabel(latest.channel)}`
+          : actorLabel(latest.actor.id);
         const isLatest = !showStaging && index === 0;
+        const eventStacks =
+          filter === 'all'
+            ? composeOperationStacks(
+                (activity.operationItems ?? []).filter((item) =>
+                  event.actions.some((action) => action.actionId === item.actionId)
+                )
+              )
+            : [];
+        const eventRows = eventCards.map((card) => {
+          const lastTouch = event.actions.findLast((action) =>
+            activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
+          )!;
+          return renderRow(activityOperation(card, lastTouch.reason), {
+            eventId: event.id,
+            actionId: lastTouch.actionId,
+            actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
+            channel: lastTouch.channel,
+            timestamp: lastTouch.publishedAt,
+            comparison: 'event',
+          });
+        });
         return (
           <Fragment key={event.id}>
             {dateHeading}
@@ -501,19 +603,21 @@ export function ComposeActivityTimeline({
                   </span>
                 </div>
                 <div className={styles.preview}>
-                  {eventCards.map((card) => {
-                    const lastTouch = event.actions.findLast((action) =>
-                      activity.cards[action.actionId]?.some((item) => item.nodeId === card.nodeId)
-                    )!;
-                    return renderRow(activityOperation(card, lastTouch.reason), {
-                      eventId: event.id,
-                      actionId: lastTouch.actionId,
-                      actor: lastTouch.actor.id === 'human:local-user' ? 'You' : lastTouch.actor.id,
-                      channel: lastTouch.channel,
-                      timestamp: lastTouch.publishedAt,
-                      comparison: 'event',
-                    });
-                  })}
+                  {eventStacks.length ? (
+                    <ComposeOperationStacks
+                      stacks={eventStacks}
+                      onSelectField={selectField}
+                      selectedField={selectedField}
+                    />
+                  ) : null}
+                  {eventStacks.length ? (
+                    <details className={draftStyles.resultDisclosure}>
+                      <summary>Object changes &amp; Details · {eventCards.length} paths</summary>
+                      {eventRows}
+                    </details>
+                  ) : (
+                    eventRows
+                  )}
                 </div>
                 {event.actions.map((action) => (
                   <ConfirmDeletion

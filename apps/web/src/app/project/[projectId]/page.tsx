@@ -13,14 +13,17 @@ import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import {
-  getProjectTabSegment,
   type ProjectTabId,
   parseProjectTab,
   resolveProjectTab,
 } from '@/components/project/projectTabModel';
 import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
-import { getProjectIdRepoPath, getProjectRepoPath } from '@/domain/project/repoPath';
-import { repositoryLocation } from '@/domain/project/repositoryLocation';
+import { repositoryObjectHref } from '@/domain/project/objectLocation';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  getProjectRepoPath,
+} from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -35,7 +38,6 @@ import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -48,10 +50,13 @@ export default function ProjectDetailPage() {
 }
 
 interface ProjectDetailPageContentProps {
+  commitAddress?: { id: string; number: string };
+  fixedReview?: { workspaceId: string; snapshotId: string; number: string };
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
   ownerSlugOverride?: string;
   surface?: 'canvas' | 'repository';
+  workspaceBranch?: string | null;
 }
 
 function isNotFoundError(error: Error | null): boolean {
@@ -60,33 +65,14 @@ function isNotFoundError(error: Error | null): boolean {
   return normalized.includes('404') || normalized.includes('not found');
 }
 
-function withCurrentQuery(path: string, searchParams: { toString: () => string }) {
-  const params = new URLSearchParams(searchParams.toString());
-  params.delete('tab');
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
-}
-
-function getProjectCanonicalPath(
-  project: { id?: string; name: string },
-  searchParams: URLSearchParams,
-  ownerSlug?: string,
-  hash = ''
-) {
-  const next = new URLSearchParams(searchParams);
-  next.set('tab', getProjectTabSegment(parseProjectTab(next.get('tab'))));
-  return repositoryLocation(getProjectRepoPath(project, ownerSlug), '', next.toString(), hash);
-}
-
-function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
-  return searchParams.has('tab');
-}
-
 export function ProjectDetailPageContent({
+  commitAddress,
+  fixedReview,
   initialTabOverride,
   projectIdOverride,
   ownerSlugOverride,
   surface = 'repository',
+  workspaceBranch,
 }: ProjectDetailPageContentProps = {}) {
   const params = useParams<{ projectId?: string }>();
   const pathname = usePathname();
@@ -140,10 +126,6 @@ export function ProjectDetailPageContent({
   const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
   const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
   const projectBase = projectFromStore ?? fetchedProject;
-  const liveSchemaBindings = useProjectWorkspaceSchemaBindingsStore(
-    (state) => state.bindingsByProjectId[projectId]
-  );
-  const schemaBindings = liveSchemaBindings;
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
@@ -180,22 +162,6 @@ export function ProjectDetailPageContent({
     if (!isCanvasActive || !showIntroDemo) return;
     closeNodeModal();
   }, [closeNodeModal, isCanvasActive, showIntroDemo]);
-
-  useEffect(() => {
-    if (routeProjectId || isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
-    if (searchParams.has('tab') && !project) return;
-
-    const nextPath =
-      project && searchParams.has('tab')
-        ? getProjectCanonicalPath(
-            project,
-            new URLSearchParams(searchParams.toString()),
-            ownerSlugOverride,
-            window.location.hash
-          )
-        : withCurrentQuery(pathname, searchParams);
-    router.replace(nextPath, { scroll: false });
-  }, [isCanvasSurface, ownerSlugOverride, pathname, project, routeProjectId, router, searchParams]);
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -428,7 +394,17 @@ export function ProjectDetailPageContent({
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          stateHref={`${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`}
+          focusedCommitHash={commitAddress?.id}
+          stateHref={
+            commitAddress && project.canonical_path
+              ? repositoryObjectHref(
+                  project.canonical_path,
+                  'commits',
+                  commitAddress.number,
+                  new URLSearchParams({ view: 'overview' })
+                )
+              : `${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`
+          }
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
         />
@@ -450,12 +426,14 @@ export function ProjectDetailPageContent({
         key={projectId}
         onRunValidation={handleRunYSchemaValidation}
         projectId={projectId}
+        commitAddress={commitAddress}
         projectName={project.name}
         projectDescription={project.description}
         projectOwner={project.owner}
         repositoryNamespace={project.namespace ?? ownerSlugOverride}
         projectVisibility={project.visibility}
         repositoryProfile={project.repositoryProfile}
+        repositoryPath={project.canonical_path ?? undefined}
         canEditRepository={project.canEdit}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
@@ -471,15 +449,15 @@ export function ProjectDetailPageContent({
       case 'schemas':
       case 'discover':
       case 'browse':
+        return <ProjectSchemasTab projectId={projectId} tab={activeTab} />;
+      case 'workspaces':
         return (
-          <ProjectSchemasTab
+          <ProjectWorkspacesTab
             projectId={projectId}
-            schemaBindings={schemaBindings}
-            tab={activeTab}
+            workspaceBranch={workspaceBranch}
+            fixedReview={fixedReview}
           />
         );
-      case 'workspaces':
-        return <ProjectWorkspacesTab projectId={projectId} schemaBindings={schemaBindings} />;
       case 'reviews':
         return (
           <ProjectReviewsTab
@@ -496,9 +474,12 @@ export function ProjectDetailPageContent({
               if (number) next.set('pr', String(number));
               else next.delete('pr');
               const query = next.toString();
-              router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+              const href = query ? `${pathname}?${query}` : pathname;
+              if (number) router.push(href, { scroll: false });
+              else router.replace(href, { scroll: false });
             }}
             projectId={projectId}
+            repositoryPath={getCanonicalRepositoryPath(pathname)}
           />
         );
       case 'community':
@@ -512,9 +493,20 @@ export function ProjectDetailPageContent({
     <>
       <ProjectShell
         activeTab={activeTab}
-        branch={searchParams.get('branch')}
+        branch={workspaceBranch ?? searchParams.get('branch')}
         immersive={isSchemaStudio || isSchemaRelease}
         ownerSlug={project.namespace ?? ownerSlugOverride}
+        pageTitle={
+          fixedReview
+            ? `Review #${fixedReview.number}`
+            : commitAddress
+              ? `Commit #${commitAddress.number}`
+              : activeTab === 'workspaces' && searchParams.get('reviewSnapshot')
+                ? 'Review'
+                : workspaceBranch
+                  ? `Workspace · ${workspaceBranch}`
+                  : undefined
+        }
         project={project}
         projectIdNavigation={!!routeProjectId}
         pullRequestNumber={Number(searchParams.get('pr')) || undefined}

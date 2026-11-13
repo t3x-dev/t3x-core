@@ -21,6 +21,7 @@ export {
 } from './deployment-capabilities.js';
 export * from './explore.js';
 export * from './merge-workspace';
+export * from './recipe-triggers.js';
 export * from './repository-profile.js';
 export * from './schema-catalog.js';
 export {
@@ -30,7 +31,14 @@ export {
   SchemaSourceCommitSchema,
 } from './schema-provenance';
 export * from './schema-studio';
-export { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
+export {
+  type DownloadArtifact,
+  DownloadArtifactSchema,
+  type PortableArtifact,
+  PortableArtifactSchema,
+  type StateExportArtifact,
+  StateExportArtifactSchema,
+} from './state-export.js';
 export * from './state-overview';
 export * from './state-presentation.js';
 export type * from './types.js';

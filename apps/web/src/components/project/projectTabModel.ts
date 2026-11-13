@@ -45,6 +45,10 @@ export function getProjectTabSegment(tabId: ProjectTabId): string {
   return PROJECT_TAB_BY_ID.get(tabId)?.segment ?? tabId;
 }
 
+export function getProjectTabLabel(tabId: ProjectTabId): string {
+  return PROJECT_TAB_BY_ID.get(tabId)?.label ?? tabId;
+}
+
 export function isProjectTabSegment(value: string | null): boolean {
   return Boolean(value && PROJECT_TAB_SEGMENTS.has(value));
 }

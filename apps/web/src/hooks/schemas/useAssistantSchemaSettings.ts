@@ -7,6 +7,7 @@ import {
   confirmAssistantSchemaSettings,
   readAssistantSchemaSettings,
 } from '@/infrastructure/workspaceAssistant';
+import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
 
 export function useAssistantSchemaSettings(
   projectId: string,
@@ -103,17 +104,7 @@ export function useAssistantSchemaSettings(
           if (started !== epoch.current) return;
           loadedSettingsId.current = saved.settingsId;
           setRecord(saved);
-          window.dispatchEvent(
-            new CustomEvent('t3x-schema-candidate-updated', { detail: { projectId, workspaceId } })
-          );
-          try {
-            localStorage.setItem(
-              't3x-schema-candidate-updated',
-              JSON.stringify({ projectId, workspaceId, at: Date.now() })
-            );
-          } catch {
-            /* Focus refresh remains available. */
-          }
+          notifySchemaCandidateUpdated(projectId, workspaceId);
           return saved;
         } catch (failure) {
           const latest = conversationId

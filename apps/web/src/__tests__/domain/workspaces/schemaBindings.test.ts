@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
 import {
-  applyProjectWorkspaceSchemaBindings,
   DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID,
   isDefaultWorkspaceSchemaBinding,
   listWorkspaceSchemaChoices,
-  mergeProjectWorkspaceSchemaBindings,
   rebindWorkspaceCandidate,
   schemaReleaseToWorkspaceBinding,
 } from '@/domain/workspaces/schemaBindings';
@@ -86,38 +84,6 @@ describe('workspace schema bindings', () => {
     expect(() =>
       schemaReleaseToWorkspaceBinding({ ...release, runtimeAvailable: false }, 'pinned')
     ).toThrow('is not available for binding');
-  });
-
-  it('pins a selected schema to the current workspace', () => {
-    const updated = applyProjectWorkspaceSchemaBindings(candidates, {
-      byWorkspaceId: {
-        workspace_pinned: schemaReleaseToWorkspaceBinding(release, 'pinned'),
-      },
-    });
-
-    expect(updated[0].schemaBindings).toEqual([
-      {
-        canonicalName: 't3x/prompt',
-        schemaHash: PROMPT_SCHEMA_HASH,
-        schemaName: 'Prompt Schema',
-        version: 'v1',
-        mode: 'pinned',
-      },
-    ]);
-    expect(updated[1].schemaBindings).toEqual(candidates[1].schemaBindings);
-  });
-
-  it('merges only live Workspace-specific bindings', () => {
-    const workspaceBinding = schemaReleaseToWorkspaceBinding(release, 'pinned');
-
-    expect(
-      mergeProjectWorkspaceSchemaBindings(
-        { byWorkspaceId: {} },
-        { byWorkspaceId: { workspace_pinned: workspaceBinding } }
-      )
-    ).toEqual({
-      byWorkspaceId: { workspace_pinned: workspaceBinding },
-    });
   });
 
   it('marks generated candidate and YOps state stale when a Workspace changes Schema', () => {

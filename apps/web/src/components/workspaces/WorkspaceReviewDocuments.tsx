@@ -8,12 +8,14 @@ import { dump } from 'js-yaml';
 import { useMemo, useState } from 'react';
 import { StateFieldTable } from '@/components/project/StateFieldTable';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
+import { shortHash } from '@/domain/format/formatters';
 import {
   filterCollapsedStateRows,
   filterStateStructureRows,
   isStateStructureRowExpanded,
   type StateFieldTreeRow,
 } from '@/domain/project/stateFieldTable';
+import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
 import {
   formatDraftValue,
   isSemanticEnvelope,
@@ -23,6 +25,36 @@ import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';
 import styles from './WorkspaceReviewWorkbench.module.css';
 
+export function WorkspaceReviewBaseline({
+  commitHash,
+  stateDigest,
+  available,
+  empty,
+}: {
+  commitHash?: string | null;
+  stateDigest?: string;
+  available: boolean;
+  empty: boolean;
+}) {
+  const hash = commitHash || stateDigest;
+  return (
+    <>
+      {hash && (commitHash || (available && !empty)) ? (
+        <>
+          {commitHash ? 'Base commit' : 'Base state'} <code title={hash}>{shortHash(hash)}</code>
+          {!available ? ' (Content unavailable)' : empty ? ' (empty Content)' : ''}
+        </>
+      ) : !available ? (
+        'Baseline unavailable'
+      ) : empty ? (
+        'Empty base'
+      ) : (
+        'Workspace baseline (no base commit)'
+      )}
+    </>
+  );
+}
+
 /** Both inputs must come from the same Draft read or the same frozen Review. */
 export function WorkspaceReviewYaml({
   base,
@@ -30,12 +62,14 @@ export function WorkspaceReviewYaml({
   subject,
   branch,
   frozen = false,
+  versionLabel,
 }: {
   base: unknown;
   result: unknown;
   subject: 'Content' | 'Schema';
   branch: string;
   frozen?: boolean;
+  versionLabel?: string;
 }) {
   return (
     <div className={styles.yamlPair}>
@@ -53,10 +87,19 @@ export function WorkspaceReviewYaml({
             <div className={styles.codeFrame}>
               <WorkspaceReviewCodeView
                 branch={branch}
-                rootKey={label.toLowerCase().replaceAll(' ', '-')}
+                documentLabel={`${label} YAML`}
+                rootKey={[label.toLowerCase().replaceAll(' ', '-'), versionLabel]
+                  .filter(Boolean)
+                  .join('-')}
                 validationReady={false}
-                statusLabel={frozen ? 'Fixed snapshot' : 'Draft preview'}
-                yamlText={dump(value, { noRefs: true, sortKeys: true })}
+                statusLabel={frozen ? 'Fixed snapshot' : 'Saved Draft'}
+                yamlText={dump(
+                  subject === 'Content' ? (authoringSemanticContent(value) ?? value) : value,
+                  {
+                    noRefs: true,
+                    sortKeys: true,
+                  }
+                )}
               />
             </div>
           )}
@@ -151,12 +194,14 @@ export function WorkspaceReviewSchemaView({
   pane,
   branch,
   frozen = false,
+  versionLabel,
 }: {
   review?: WorkspaceFullSchemaReview | null;
   current?: WorkspaceSchemaDefinitionSnapshot;
   pane: WorkspaceReviewPane;
   branch: string;
   frozen?: boolean;
+  versionLabel?: string;
 }) {
   // Never substitute current Draft definitions for missing historical facts.
   const draft = review?.draft ?? (frozen ? undefined : current);
@@ -210,6 +255,7 @@ export function WorkspaceReviewSchemaView({
           branch={branch}
           subject="Schema"
           frozen={frozen}
+          versionLabel={versionLabel}
           base={review?.base.status === 'unknown' ? undefined : review?.base.definition}
           result={definition}
         />

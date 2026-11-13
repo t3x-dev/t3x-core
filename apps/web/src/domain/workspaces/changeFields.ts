@@ -85,20 +85,16 @@ function slotChanges(
 
 function relationGroup(before: unknown[], after: unknown[]): FieldChangeGroup[] {
   if (sameValue(before, after)) return [];
+  const previous = before.length ? before : undefined;
+  const next = after.length ? after : undefined;
+  const kind = kindOf(previous, next);
   return [
     {
       id: 'relations',
       label: 'Relations',
       breadcrumb: null,
-      kind: before.length === 0 ? 'added' : after.length === 0 ? 'removed' : 'changed',
-      fields: [
-        {
-          name: 'Count',
-          before: before.length || undefined,
-          after: after.length || undefined,
-          kind: kindOf(before.length || undefined, after.length || undefined),
-        },
-      ],
+      kind,
+      fields: [{ name: 'Relations', before: previous, after: next, kind }],
     },
   ];
 }

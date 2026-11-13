@@ -88,6 +88,7 @@ export function WorkspaceCommitChangeDetails({
             channel={action?.channel}
             channelLabel={action ? undefined : 'Commit'}
             timestamp={inspection.timestamp}
+            action={action}
           />
         </div>
         <footer className={styles.footer}>Historical change · Read-only</footer>

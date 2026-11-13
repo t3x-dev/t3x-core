@@ -3,6 +3,7 @@ import { getProjectIdRepoPath } from './repoPath';
 export type CheckRecordKind = 'review' | 'validation' | 'schema' | 'pull-request';
 export interface CheckRecord {
   id: string;
+  address?: string | null;
   kind: CheckRecordKind;
   created_at: string;
   payload: Record<string, unknown>;
@@ -210,6 +211,7 @@ export function checkRecordView(record: CheckRecord) {
 export function checksHref(
   projectId: string,
   options: {
+    repositoryPath?: string;
     recordId?: string;
     workspace?: string;
     pr?: number;
@@ -217,12 +219,14 @@ export function checksHref(
     returnTo?: string;
   } = {}
 ): string {
+  const listPath = `${options.repositoryPath ?? getProjectIdRepoPath(projectId)}/checks`;
   const params = new URLSearchParams();
   if (options.workspace) params.set('workspace', options.workspace);
   if (options.pr) params.set('pr', String(options.pr));
   if (options.commit) params.set('commit', options.commit);
-  if (options.returnTo) params.set('returnTo', options.returnTo);
-  return `${getProjectIdRepoPath(projectId)}/checks${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
+  const usesDefaultReturn = options.recordId && params.size === 0 && options.returnTo === listPath;
+  if (options.returnTo && !usesDefaultReturn) params.set('returnTo', options.returnTo);
+  return `${listPath}${options.recordId ? `/${encodeURIComponent(options.recordId)}` : ''}${params.size ? `?${params}` : ''}`;
 }
 
 /** Only a path within this repository (canonical or ID address) can be a return target. */

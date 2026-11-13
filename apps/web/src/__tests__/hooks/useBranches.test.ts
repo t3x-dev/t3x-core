@@ -263,3 +263,61 @@ it.each([
   expect(result.current.branches).toEqual(['main', 'feature']);
   expect(result.current.branchHeads.feature).toBe(listed ? 'sha256:advanced' : 'sha256:original');
 });
+
+it('distinguishes an initial failure from empty inventory and clears the error on retry', async () => {
+  vi.mocked(listBranches).mockRejectedValueOnce(new Error('Branch service offline'));
+  const { result } = renderHook(() => useBranches('project-a', true));
+  await waitForHook();
+  expect(result.current.loading).toBe(false);
+  expect(result.current.error).toBe('Branch service offline');
+  vi.mocked(listBranches).mockResolvedValueOnce({ branches: [] } as never);
+  await act(async () => {
+    expect(await result.current.refresh()).toBe(true);
+  });
+  expect(result.current.branches).toEqual([]);
+  expect(result.current.error).toBeNull();
+});
+
+it('retains only the same project inventory on failure and keeps retry uncertainty until success', async () => {
+  vi.mocked(listBranches).mockResolvedValueOnce(inventory('main'));
+  const { result, rerender } = renderHook(({ projectId }) => useBranches(projectId, true), {
+    initialProps: { projectId: 'project-a' },
+  });
+  await waitForHook();
+  vi.mocked(listBranches).mockRejectedValueOnce(new Error('Offline'));
+  await act(async () => {
+    expect(await result.current.refresh()).toBe(false);
+  });
+  expect(result.current.branches).toEqual(['main']);
+  expect(result.current.branchHeads).toEqual({ main: 'sha256:main' });
+  expect(result.current.error).toBe('Offline');
+  const retry = deferred<Awaited<ReturnType<typeof listBranches>>>();
+  vi.mocked(listBranches).mockImplementationOnce(() => retry.promise);
+  let pending!: Promise<boolean>;
+  act(() => {
+    pending = result.current.refresh();
+  });
+  expect(result.current.loading).toBe(true);
+  expect(result.current.error).toBe('Offline');
+  vi.mocked(listBranches).mockResolvedValueOnce(inventory('other'));
+  rerender({ projectId: 'project-b' });
+  await waitForHook();
+  await act(async () => {
+    retry.reject(new Error('Old failure'));
+    await pending;
+  });
+  expect(result.current.branches).toEqual(['other']);
+  expect(result.current.error).toBeNull();
+});
+
+it('does not erase an inventory error merely because one branch was created', async () => {
+  vi.mocked(listBranches).mockRejectedValue(new Error('Offline'));
+  vi.mocked(createBranch).mockResolvedValue(branch('feature'));
+  const { result } = renderHook(() => useBranches('project-a', true));
+  await waitForHook();
+  await act(async () => {
+    await result.current.create('feature', 'main');
+  });
+  expect(result.current.branches).toEqual(['feature']);
+  expect(result.current.error).toBe('Offline');
+});

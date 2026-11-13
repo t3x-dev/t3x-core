@@ -197,8 +197,8 @@ describe('Deploy Page API Usage', () => {
     expect(deployPageCode).not.toMatch(/useState<RunTrace\[\]>/);
   });
 
-  it('calls listEngineRuns for loading runs', () => {
-    expect(deployPageCode).toMatch(/listEngineRuns\(\)/);
+  it('passes project scope when loading evaluation runs', () => {
+    expect(deployPageCode).toMatch(/listEngineRuns\(\{\s*project_id: projectId/);
   });
 });
 

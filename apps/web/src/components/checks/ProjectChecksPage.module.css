@@ -317,3 +317,31 @@
     gap: 4px;
   }
 }
+
+.runGroup {
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.runGroup:last-child {
+  border-bottom: 0;
+}
+.runGroup > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-panel);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  list-style: none;
+}
+.runGroup > summary::-webkit-details-marker {
+  display: none;
+}
+.runGroup[open] > summary svg {
+  transform: rotate(90deg);
+}
+.runGroup > summary span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}

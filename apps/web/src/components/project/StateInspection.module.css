@@ -16,6 +16,12 @@
   flex-wrap: wrap;
   padding: 8px 0;
 }
+.viewNavigation {
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.viewNavigation > div {
+  border-bottom: 0;
+}
 .revisionContext {
   display: inline-flex;
   align-items: center;
@@ -35,6 +41,7 @@
   align-items: center;
   gap: 10px;
   min-height: 36px;
+  margin-top: 10px;
   padding: 8px 12px;
   border: 1px solid var(--stroke-divider);
   border-radius: var(--radius-md);
@@ -178,7 +185,7 @@
 }
 .tree {
   --tree-indent: 22px;
-  --tree-columns: 280px minmax(0, 1fr) 72px;
+  --tree-columns: 280px minmax(0, 1fr) var(--tree-meta-width, 72px);
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -269,11 +276,21 @@
   color: var(--text-secondary);
   font-style: italic;
 }
-.ty {
+.modifiedTree {
+  --tree-meta-width: 100px;
+}
+.ty,
+.modifiedAt {
   justify-self: end;
-  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
+}
+.ty {
+  font-family: var(--font-mono);
+}
+.modifiedAt {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .tnote {
   display: flex;
@@ -288,14 +305,18 @@
   position: sticky;
   top: 0;
   min-width: 0;
-  padding: 0 0 0 12px;
   background: var(--surface-card);
 }
 .traceHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.traceSupplement {
+  padding: 0 20px 20px;
 }
 .traceHeader h2 {
   font-size: 14px;
@@ -399,7 +420,10 @@
 @container (max-width: 680px) {
   .tree {
     --tree-indent: 14px;
-    --tree-columns: minmax(0, 1.3fr) minmax(0, 1fr) 52px;
+    --tree-columns: minmax(0, 1.3fr) minmax(0, 1fr) var(--tree-meta-width, 52px);
+  }
+  .modifiedTree {
+    --tree-meta-width: 84px;
   }
   .th2,
   .rw {

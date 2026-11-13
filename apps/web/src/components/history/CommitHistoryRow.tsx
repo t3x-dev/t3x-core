@@ -7,7 +7,7 @@
  * Clickable → opens the shared State structure and audit view inside History.
  */
 
-import { ChevronRight, GitBranch } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { commitTitle, formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
 import { cn } from '@/utils/cn';
 import styles from './HistoryList.module.css';
@@ -38,6 +38,7 @@ export interface CommitHistoryRowProps {
   isLast: boolean;
   /** Whether this row is keyboard-active */
   isActive?: boolean;
+  isSelected?: boolean;
   /** Opens this commit in the History diff review. */
   onOpen: (hash: string) => void;
 }
@@ -55,13 +56,12 @@ export function CommitHistoryRow({
   parentCount,
   diffStats,
   nodeCount,
-  isFirst,
   isLast,
   isActive,
+  isSelected,
   onOpen,
 }: CommitHistoryRowProps) {
   const authorName = author?.name || author?.type || 'Unknown';
-  const authorInitial = authorName.trim().charAt(0).toUpperCase() || 'U';
   const date = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -72,23 +72,14 @@ export function CommitHistoryRow({
     <button
       type="button"
       onClick={() => onOpen(hash)}
+      aria-current={isSelected || undefined}
       data-commit-hash={hash}
       data-history-last={isLast || undefined}
       className={cn(styles.row, isActive && styles.rowActive)}
     >
       <span className={styles.date} title={formatDate(committedAt)}>
         <span>{date}</span>
-        <span className={styles.dateRelative}>{relativeTime(committedAt)}</span>
-      </span>
-
-      <span className={styles.rail}>
-        <span
-          className={cn(
-            styles.dot,
-            isFirst && styles.dotFirst,
-            parentCount === 0 && styles.dotRoot
-          )}
-        />
+        <span>{relativeTime(committedAt)}</span>
       </span>
 
       <span className={styles.commit}>
@@ -96,10 +87,8 @@ export function CommitHistoryRow({
         <span className={styles.meta}>
           <span className={styles.hash}>{shortHash(hash)}</span>
           <span className={styles.author}>
-            <span className={styles.avatar}>{authorInitial}</span>
             <span>{authorName}</span>
           </span>
-          <span className={styles.metaDivider} />
           {branch && (
             <span className={styles.branch}>
               <GitBranch size={13} strokeWidth={2} />
@@ -116,24 +105,22 @@ export function CommitHistoryRow({
         {diffStats && diffStats.addedCount > 0 && (
           <span className={`${styles.stat} ${styles.added}`}>
             <strong>+{diffStats.addedCount}</strong>
-            <span>{diffStats.addedCount} added</span>
+            <span className="sr-only">{diffStats.addedCount} added</span>
           </span>
         )}
         {diffStats && diffStats.modifiedCount > 0 && (
           <span className={`${styles.stat} ${styles.modified}`}>
             <strong>~{diffStats.modifiedCount}</strong>
-            <span>{diffStats.modifiedCount} modified</span>
+            <span className="sr-only">{diffStats.modifiedCount} modified</span>
           </span>
         )}
         {diffStats && diffStats.removedCount > 0 && (
           <span className={`${styles.stat} ${styles.removed}`}>
             <strong>−{diffStats.removedCount}</strong>
-            <span>{diffStats.removedCount} removed</span>
+            <span className="sr-only">{diffStats.removedCount} removed</span>
           </span>
         )}
       </span>
-
-      <ChevronRight className={styles.chevron} size={20} strokeWidth={2} />
     </button>
   );
 }

@@ -1,11 +1,11 @@
 'use client';
 
+import type { TransitionProtocolValue } from '@t3x-dev/api-client';
 import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Code2,
-  Copy,
   ExternalLink,
   FileText,
   GitCommit,
@@ -33,14 +33,21 @@ import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Tabs } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  ComposeChangeContext,
+  ComposeChangeReason,
+} from '@/components/workspaces/ComposeNodeHistoryPanel';
 import {
   buildStructuredStateDiff,
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { shortHash } from '@/domain/format/formatters';
+import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitStructureHref, historyCommitHref } from '@/domain/project/objectLocation';
 import {
+  getCanonicalRepositoryPath,
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
@@ -53,6 +60,7 @@ import {
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  readStatePointValue,
   resolveStateReaderKind,
   type StateOperationEntry,
   type StatePointRow,
@@ -65,11 +73,15 @@ import {
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
+import { authoringSemanticPath } from '@/domain/workspaces/authoringReview';
+import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
+import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { type CommittedSchemaState, useCommittedSchema } from '@/hooks/commits/useCommittedSchema';
+import { useStateFieldModifiedTimes } from '@/hooks/commits/useStateFieldModifiedTimes';
 import {
   useRepositoryDescription,
   useRepositoryProfile,
@@ -80,11 +92,14 @@ import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { useWorkspaceCommitChanges } from '@/hooks/workspaces/useWorkspaceCommitChanges';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { BranchLoadError } from './BranchLoadError';
+import { StateArtifactDialog } from './StateArtifactDialog';
 import { StateEmptyContent } from './StateEmptyContent';
 import {
   StateFieldTable,
@@ -101,6 +116,8 @@ type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
+  commitAddress?: { id: string; number: string };
+  repositoryPath?: string;
   repositoryProfile?: import('@t3x-dev/api-client').RepositoryProfile;
   canEditRepository?: boolean;
   initialView?: ProjectStateView;
@@ -163,6 +180,8 @@ function parseStateView(value: string | null, fallback: ProjectStateView): Proje
 }
 
 export function ProjectStateTab({
+  commitAddress,
+  repositoryPath,
   initialView,
   onRunValidation,
   projectId,
@@ -210,18 +229,27 @@ export function ProjectStateTab({
       : routeView
   );
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
-  const focusedCommitHash = searchParams.get('commit')?.trim() || undefined;
+  const branchScope = JSON.stringify([projectId, branchFocus]);
+  const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
+  const addressedCommit = commitAddress?.id ?? (searchParams.get('commit')?.trim() || undefined);
+  const artifactParam = searchParams.get('artifact')?.trim();
+  const artifactCommit = artifactParam === '1' ? addressedCommit : artifactParam || undefined;
+  // A card opened over the inspected HEAD keeps the Structure view mounted.
+  // A direct preview address can still select its Commit independently of HEAD.
+  const focusedCommitHash =
+    addressedCommit ??
+    (artifactCommit === inspectedHeadByBranchRef.current[branchScope] ? undefined : artifactCommit);
   const [pathQuery, setPathQuery] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
   const [freshnessChecking, setFreshnessChecking] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
-  const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
     create: createBranch,
     loading: branchesLoading,
+    error: branchesError,
     refresh,
   } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -234,7 +262,6 @@ export function ProjectStateTab({
     focusedCommitHash,
     snapshotRefreshVersion,
   ]);
-  const branchScope = JSON.stringify([projectId, branchFocus]);
   const [loadedSnapshot, setSnapshot] = useState<StateSnapshot>(EMPTY_SNAPSHOT);
   // Never render the previous branch/project while its replacement effect is starting.
   const snapshot = loadedSnapshot.scope === selectionScope ? loadedSnapshot : EMPTY_SNAPSHOT;
@@ -278,9 +305,12 @@ export function ProjectStateTab({
       if (focus === 'main') params.delete('branch');
       else params.set('branch', focus);
       const query = params.toString();
-      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+      replaceRoute(
+        `${commitAddress && repositoryPath ? repositoryPath : pathname}${query ? `?${query}` : ''}`,
+        { scroll: false }
+      );
     },
-    [branchCreationScope, pathname, replaceRoute]
+    [branchCreationScope, commitAddress, pathname, replaceRoute, repositoryPath]
   );
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
@@ -303,6 +333,7 @@ export function ProjectStateTab({
     const load = async () => {
       setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
+        if (!selectedHead && branchesError) throw new Error(branchesError);
         const requestedBranch = branchFocus || 'main';
         const branchHeadHash = selectedHead;
         let commits: ApiCommit[] = [];
@@ -369,6 +400,7 @@ export function ProjectStateTab({
     branchFocus,
     branchScope,
     waitingForBranch,
+    branchesError,
     selectionScope,
     snapshotTargetHead,
     focusedCommitHash,
@@ -380,8 +412,31 @@ export function ProjectStateTab({
   ]);
 
   const headCommit = snapshot.headCommit;
+  function changeArtifactVisibility(open: boolean) {
+    if (!headCommit) return;
+    const params = new URLSearchParams(routeQueryRef.current);
+    const locationHash = window.location.hash;
+    if (open) {
+      params.set('view', activeView);
+      params.set('artifact', headCommit.hash);
+      const href = `${pathname}?${params}${locationHash}`;
+      window.history.pushState({ t3xStateArtifact: href }, '', href);
+      return;
+    }
+    if (window.history.state?.t3xStateArtifact === `${pathname}?${params}${locationHash}`) {
+      window.history.back();
+      return;
+    }
+    params.delete('artifact');
+    if (!addressedCommit) params.set('commit', headCommit.hash);
+    replaceRoute(`${pathname}?${params}${locationHash}`, { scroll: false });
+  }
   const context = loadedContext?.commit === headCommit ? loadedContext : null;
   const contextLoading = Boolean(headCommit) && (!context || context.loading);
+  const modifiedTimes = useStateFieldModifiedTimes(
+    activeView === 'structure' ? headCommit : null,
+    context?.parentCommit ?? null
+  );
   useEffect(() => {
     if (!headCommit) return;
     let cancelled = false;
@@ -537,19 +592,21 @@ export function ProjectStateTab({
   const stateWarning = joinWarnings(projectWorkspaces.error, validationError);
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = getProjectIdHistoryPath(projectId, {
+    repositoryPath,
     branch: branchFocus,
     returnTo: currentStateReturnTo,
   });
-  const canvasQuery = new URLSearchParams(routeQuery);
-  canvasQuery.set('view', 'canvas');
-  const canvasHref = `${pathname}?${canvasQuery.toString()}`;
   const snapshotQuery = new URLSearchParams(routeQuery);
   snapshotQuery.set('view', lastSnapshotView);
   const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
-  const schemaHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus }).toString()}`;
-  const workspaceHref = getProjectIdWorkspacePath(projectId, { branch: branchFocus });
-  const mainHeadCommitHash = branchHeads.main ?? null;
+  const schemaHref = repositoryPath
+    ? `${repositoryPath}/schemas?${new URLSearchParams({ branch: branchFocus })}`
+    : `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus })}`;
+  const workspaceHref = getProjectIdWorkspacePath(projectId, {
+    branch: branchFocus,
+    repositoryPath,
+  });
   const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
   const availableHeadHash =
     latestBranchHeadHash &&
@@ -569,9 +626,17 @@ export function ProjectStateTab({
       if (focusedCommitHash) await createBranch(name, fromBranch, focusedCommitHash);
       else await createBranch(name, fromBranch);
       if (!isCurrent()) return;
-      pushRoute(getProjectIdWorkspacePath(projectId, { branch: name }));
+      pushRoute(getProjectIdWorkspacePath(projectId, { branch: name, repositoryPath }));
     },
-    [branchCreationScope, branchFocus, createBranch, focusedCommitHash, projectId, pushRoute]
+    [
+      branchCreationScope,
+      branchFocus,
+      createBranch,
+      focusedCommitHash,
+      projectId,
+      pushRoute,
+      repositoryPath,
+    ]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
     setFreshnessChecking(true);
@@ -646,6 +711,7 @@ export function ProjectStateTab({
     : lastCheckedAt
       ? 'Just now'
       : 'Not checked';
+  const statePanel = activeView === 'overview' ? 'overview' : 'structure';
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
@@ -658,8 +724,17 @@ export function ProjectStateTab({
         />
       </div>
 
+      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)]">
+        <Tabs
+          activationMode="manual"
+          className="flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden bg-[var(--surface-card)]"
+          role="main"
+          value={statePanel}
+          onValueChange={(value) =>
+            updateActiveView(value === 'overview' ? 'overview' : 'structure')
+          }
+        >
           {activeView !== 'canvas' ? (
             <>
               <StatePageToolbar
@@ -667,14 +742,13 @@ export function ProjectStateTab({
                 activeView={activeView}
                 branch={branchFocus || 'main'}
                 branchOptions={branchOptions}
-                canvasHref={canvasHref}
                 headCommit={headCommit}
-                headCommitHash={mainHeadCommitHash}
+                headCommitHash={branchHeads[branchFocus] ?? null}
+                sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
-                onViewChange={updateActiveView}
                 workspaceHref={workspaceHref}
               />
               {focusedCommitHash ? (
@@ -727,7 +801,11 @@ export function ProjectStateTab({
                   onViewLatest={handleViewLatest}
                 />
               ) : null}
-              <StatePageFrame projectName={projectName} branch={branchFocus || 'main'}>
+              <StatePageFrame
+                projectName={projectName}
+                branch={branchFocus || 'main'}
+                view={statePanel}
+              >
                 {activeView !== 'overview' &&
                 (snapshot.primaryError || snapshot.loading || !headCommit) ? (
                   <section
@@ -759,7 +837,6 @@ export function ProjectStateTab({
                     hideHeader
                     navigation={null}
                     historyHref={historyHref}
-                    alternateHistoryHref={canvasHref}
                     historyReturnTo={currentStateReturnTo}
                     workspaceHref={workspaceHref}
                     commits={snapshot.commits}
@@ -793,7 +870,7 @@ export function ProjectStateTab({
                       const params = new URLSearchParams(routeQueryRef.current);
                       params.set('commit', digest);
                       params.set('view', 'overview');
-                      replaceRoute(`${pathname}?${params.toString()}`, { scroll: false });
+                      replaceRoute(`${repositoryPath ?? pathname}?${params}`, { scroll: false });
                     }}
                     reader={
                       skillRenderModel || prdRenderModel || promptRenderModel
@@ -850,6 +927,20 @@ export function ProjectStateTab({
                 headCommit &&
                 (activeView === 'structure' || activeView === 'code') ? (
                   <StateStructureView
+                    artifactAction={
+                      <StateArtifactDialog
+                        key={`${projectId}:${headCommit.hash}`}
+                        projectId={projectId}
+                        projectName={projectName}
+                        projectDescription={projectDescription}
+                        schemaBindings={committedSchema.snapshot?.bindings}
+                        commitDigest={headCommit.hash}
+                        structureYaml={yamlText}
+                        href={commitStructureHref(repositoryPath, headCommit, true)}
+                        open={artifactCommit === headCommit.hash}
+                        onOpenChange={changeArtifactVisibility}
+                      />
+                    }
                     committedSchema={committedSchema}
                     workspaceHref={workspaceHref}
                     schemaHref={schemaHref}
@@ -862,7 +953,9 @@ export function ProjectStateTab({
                     contextLoading={contextLoading}
                     contextError={context?.error}
                     headCommit={headCommit}
-                    modifiedLabel={formatRelativeTime(headCommit.committed_at)}
+                    parentCommit={context?.parentCommit ?? null}
+                    modifiedLabel={relativeTime(headCommit.committed_at)}
+                    modifiedTimes={modifiedTimes}
                     pathQuery={pathQuery}
                     onPathQueryChange={setPathQuery}
                     rows={pointRows}
@@ -885,7 +978,7 @@ export function ProjectStateTab({
               stateHref={snapshotHref}
             />
           )}
-        </main>
+        </Tabs>
       </div>
     </section>
   );
@@ -1080,11 +1173,14 @@ function StateStructureHeader({
 }
 
 export function StateStructureView({
+  artifactAction,
   branch,
   changeReason,
   diffChanges,
   headCommit,
+  parentCommit,
   modifiedLabel,
+  modifiedTimes,
   onPathQueryChange,
   pathQuery,
   rows,
@@ -1106,6 +1202,7 @@ export function StateStructureView({
   workspaceHref,
   schemaHref,
 }: {
+  artifactAction?: ReactNode;
   committedSchema?: CommittedSchemaState;
   workspaceHref?: string;
   schemaHref?: string;
@@ -1118,7 +1215,9 @@ export function StateStructureView({
   changeReason: string;
   diffChanges: StructuredDiffChange[];
   headCommit: ApiCommit;
+  parentCommit?: ApiCommit | null;
   modifiedLabel: string;
+  modifiedTimes: ReadonlyMap<string, string>;
   onPathQueryChange?: (query: string) => void;
   pathQuery: string;
   rows: StatePointRow[];
@@ -1226,14 +1325,6 @@ export function StateStructureView({
       }
     return counts;
   }, [historyPresentation, historyStepRows]);
-  const structureChildCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of structureRows) {
-      if (row.parentPath) counts.set(row.parentPath, (counts.get(row.parentPath) ?? 0) + 1);
-    }
-    return counts;
-  }, [structureRows]);
-
   const showWalkthroughStep = useCallback(
     (step: number | null) => {
       setWalkthroughStep(step);
@@ -1326,6 +1417,7 @@ export function StateStructureView({
             />
             Details
           </label>
+          {artifactAction}
         </StateStructureHeader>
         {!rows.length ? (
           <StateEmptyContent
@@ -1361,6 +1453,7 @@ export function StateStructureView({
       ) : (
         <StateFieldTable
           rows={visibleRows}
+          getModifiedAt={(row) => (row.virtualGroup ? undefined : modifiedTimes.get(row.path))}
           query={pathQuery}
           onQueryChange={(query) => onPathQueryChange?.(query)}
           selectedRowId={selectedRow?.id}
@@ -1392,9 +1485,8 @@ export function StateStructureView({
       <StateFieldTracePanel
         branch={branch}
         changeReason={changeReason}
-        childCount={selectedRow ? structureChildCounts.get(selectedRow.path) : undefined}
         headCommit={headCommit}
-        modifiedLabel={modifiedLabel}
+        parentCommit={parentCommit}
         onClose={() => setDetailsVisible(false)}
         row={selectedRow}
         committedSchema={committedSchema}
@@ -1594,9 +1686,8 @@ type NormalizedStructuredDiffChange = StructuredDiffChange & { path: string };
 function StateFieldTracePanel({
   branch,
   changeReason,
-  childCount,
   headCommit,
-  modifiedLabel,
+  parentCommit,
   onClose,
   row,
   committedSchema,
@@ -1604,14 +1695,14 @@ function StateFieldTracePanel({
   committedSchema?: CommittedSchemaState;
   branch: string;
   changeReason: string;
-  childCount?: number;
   headCommit: ApiCommit;
-  modifiedLabel: string;
+  parentCommit?: ApiCommit | null;
   onClose: () => void;
   row: StateStructureRow | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const history = useWorkspaceCommitChanges(headCommit.project_id, headCommit.hash);
   if (!row) {
     return (
       <aside className={inspectionStyles.trace}>
@@ -1634,107 +1725,136 @@ function StateFieldTracePanel({
     : undefined;
   const sourceLabel = stateInspectorSourceLabel(row, headCommit);
   const sourceHref = stateInspectorSourceHref(row, headCommit, branch);
-  const currentValue = row.expandable
-    ? `${childCount ?? 0} ${row.type === 'array' ? 'item' : 'field'}${childCount === 1 ? '' : 's'}`
-    : stateInspectorResultValue(row);
-  const beforeValue = stateInspectorBeforeValue(row);
-  const lastChangeLabel = row.diff?.exact
-    ? `${row.diff.op || row.sourceOp || 'set'} ${row.path}`
-    : row.status !== 'unchanged'
-      ? `${row.sourceOp || row.statusLabel} ${row.path}`
-      : 'No direct field change recorded';
-  const pathParts = row.path.split('/').filter(Boolean);
+  const baseline =
+    parentCommit?.content ??
+    (headCommit.parents.length === 0 ? { trees: [], relations: [] } : null);
+  const before = baseline ? readStatePointValue(baseline, row.path) : null;
+  const after = readStatePointValue(headCommit.content, row.path);
+  const previous = before?.exists ? (before.value as TransitionProtocolValue) : undefined;
+  const current = after.exists ? (after.value as TransitionProtocolValue) : undefined;
+  const matchesParent = Boolean(
+    before && before.exists === after.exists && composeValuesEqual(previous, current)
+  );
+  const archivedAction =
+    history.data?.source === 'authoring'
+      ? history.data.actions
+          .filter(({ cards, before: actionBefore, after: actionAfter }) =>
+            composeDraftChangeCards(cards, actionBefore, actionAfter).some((card) => {
+              const path = normalizeStateStructurePath(
+                authoringSemanticPath(card.path) ?? card.path
+              );
+              return (
+                path === row.path ||
+                path.startsWith(`${row.path}/`) ||
+                ((card.before === undefined || card.after === undefined) &&
+                  row.path.startsWith(`${path}/`)) ||
+                ((path === 'content' || path === 'content/trees') && row.diff?.exact)
+              );
+            })
+          )
+          .sort((left, right) => right.action.sequence - left.action.sequence)[0]?.action
+      : undefined;
 
   return (
     <aside aria-label="Field trace" className={inspectionStyles.trace}>
       <header className={inspectionStyles.traceHeader}>
         <GitCommit />
-        <h2>Field trace</h2>
+        <h2>Details</h2>
         <button aria-label="Hide details" onClick={onClose} type="button">
           <X />
         </button>
       </header>
-      <div className={inspectionStyles.crumb}>
-        <span title={row.path}>root {pathParts.map((part) => ` / ${part}`).join('')}</span>
-        <button
-          aria-label="Copy field path"
-          onClick={() => void navigator.clipboard?.writeText(row.path)}
-          type="button"
-        >
-          <Copy />
-        </button>
-      </div>
-      <section className={inspectionStyles.big}>
-        <h3 className={inspectionStyles.l}>Current value</h3>
-        <p className={inspectionStyles.v}>{currentValue}</p>
-      </section>
-      <section className={inspectionStyles.sc}>
-        <h3 className={inspectionStyles.l}>Schema</h3>
-        {contract ? (
-          <>
-            <p className={inspectionStyles.ctr}>
-              {typeof contract.definition.type === 'string' ? contract.definition.type : row.type} ·{' '}
-              {contract.required ? 'Required' : 'Optional'}
-            </p>
-            {typeof contract.definition.description === 'string' ? (
-              <p className={inspectionStyles.ctr}>{contract.definition.description}</p>
-            ) : null}
-          </>
+      <ComposeChangeContext
+        title={row.key}
+        path={row.path}
+        revisionLabel={`Commit ${shortHash(headCommit.hash)} · Read-only`}
+        current={current}
+        unknown={false}
+        currentLabel="Value at this Commit"
+        comparison={{ before: previous, after: current }}
+        comparisonLabel={headCommit.parents.length ? 'Parent → Result' : 'Genesis → Result'}
+        matchesBase={matchesParent}
+      />
+      <div className={inspectionStyles.traceSupplement}>
+        {history.loading ? <output>Loading archived actions…</output> : null}
+        {archivedAction ? (
+          <ComposeChangeReason
+            reason={archivedAction.reason ?? changeReason}
+            actor={archivedAction.actor.id}
+            channel={archivedAction.channel}
+            timestamp={archivedAction.publishedAt}
+            action={archivedAction}
+            contextLabel={`Committed action · A${archivedAction.sequence}. YOps describes the whole action.`}
+          />
+        ) : row.diff ? (
+          <ComposeChangeReason
+            heading="Commit details"
+            reason={changeReason || 'No commit reason recorded.'}
+            channelLabel={stateInspectorAuthorLabel(headCommit)}
+            timestamp={headCommit.committed_at}
+          />
         ) : (
           <p className={inspectionStyles.ctr}>
-            {committedSchema?.loading
-              ? 'Loading Schema details…'
-              : committedSchema?.error
-                ? 'Schema details unavailable. Stored values remain readable.'
-                : 'No field definition available for this version.'}
+            No direct change recorded for this field in this Commit.
           </p>
         )}
-      </section>
-      <section className={inspectionStyles.lc}>
-        <h3 className={inspectionStyles.l}>Activity</h3>
-        <div>
-          <div className={inspectionStyles.ev}>
-            <div>
-              <h3>Last change</h3>
-              <p>{lastChangeLabel}</p>
-              {row.diff?.exact && beforeValue !== currentValue ? (
-                <p>
-                  {beforeValue} → {currentValue}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className={inspectionStyles.ev}>
-            <div>
-              <h3>Reason</h3>
-              <p>{stateInspectorWhyText(row, changeReason)}</p>
-              <p>
-                {shortHash(headCommit.hash)} · {modifiedLabel}
+        {!archivedAction && history.data?.source === 'commit_diff' ? (
+          <p className={inspectionStyles.ctr}>
+            Original action records were not archived for this Commit.
+          </p>
+        ) : null}
+        {history.error ? <p role="alert">{history.error}</p> : null}
+        {!archivedAction && history.data?.nextBeforeSequence ? (
+          <button type="button" onClick={history.loadMore}>
+            Load earlier actions
+          </button>
+        ) : null}
+        <section className={inspectionStyles.sc}>
+          <h3 className={inspectionStyles.l}>Schema</h3>
+          {contract ? (
+            <>
+              <p className={inspectionStyles.ctr}>
+                {typeof contract.definition.type === 'string' ? contract.definition.type : row.type}{' '}
+                · {contract.required ? 'Required' : 'Optional'}
               </p>
-            </div>
-          </div>
-        </div>
-      </section>
-      {sourceHref || sourceLabel ? (
-        <div className={inspectionStyles.hint}>
-          <span>Source</span>
-          {sourceHref ? (
-            <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
+              {typeof contract.definition.description === 'string' ? (
+                <p className={inspectionStyles.ctr}>{contract.definition.description}</p>
+              ) : null}
+            </>
           ) : (
-            <span>{sourceLabel}</span>
+            <p className={inspectionStyles.ctr}>
+              {committedSchema?.loading
+                ? 'Loading Schema details…'
+                : committedSchema?.error
+                  ? 'Schema details unavailable. Stored values remain readable.'
+                  : 'No field definition available for this version.'}
+            </p>
           )}
-        </div>
-      ) : null}
-      <Link
-        className={inspectionStyles.lnk}
-        href={getProjectIdHistoryPath(headCommit.project_id, {
-          branch,
-          commit: headCommit.hash,
-          returnTo: buildReturnTo(pathname, searchParams),
-        })}
-      >
-        View in history <ExternalLink />
-      </Link>
+        </section>
+        {sourceHref || sourceLabel ? (
+          <div className={inspectionStyles.hint}>
+            <span>Source</span>
+            {sourceHref ? (
+              <Link href={sourceHref}>{sourceLabel || 'Linked source'}</Link>
+            ) : (
+              <span>{sourceLabel}</span>
+            )}
+          </div>
+        ) : null}
+        <Link
+          className={inspectionStyles.lnk}
+          href={historyCommitHref(
+            getProjectIdHistoryPath(headCommit.project_id, {
+              branch,
+              repositoryPath: getCanonicalRepositoryPath(pathname),
+              returnTo: buildReturnTo(pathname, searchParams),
+            }),
+            headCommit
+          )}
+        >
+          View in history <ExternalLink />
+        </Link>
+      </div>
     </aside>
   );
 }
@@ -3579,21 +3699,6 @@ export function inferSchemaName(commit: ApiCommit | null): string {
     return 't3x/skill';
   }
   return rootKeys.has('prd') ? 't3x/prd' : 't3x/state';
-}
-
-function formatRelativeTime(value: string | undefined): string {
-  if (!value) return 'not committed';
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'recently';
-  const diffMs = Date.now() - timestamp;
-  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return String(diffMinutes) + ' min ago';
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 48) return String(diffHours) + ' hours ago';
-  const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 14) return String(diffDays) + ' days ago';
-  return new Date(timestamp).toLocaleDateString();
 }
 
 function formatError(error: unknown, fallback: string): string {

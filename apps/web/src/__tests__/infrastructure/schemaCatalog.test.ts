@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fetchExploreRelease } from '@/infrastructure/explore';
 import {
   fetchSchemaCatalog,
   fetchSchemaIntroduction,
@@ -90,4 +91,50 @@ it('reads an exact source without creating a Studio candidate and rejects a chan
   await expect(fetchSchemaReleaseReading('p', 'team/template', '1', commit)).rejects.toThrow(
     'selected hash'
   );
+});
+
+it('accepts the server-verified hash of a short public link and still checks the exact identity', async () => {
+  const item = {
+    identity: {
+      artifactId: 'template',
+      canonicalName: 'team/template',
+      ownerProjectId: null,
+      displayName: 'Template',
+      description: null,
+      tags: [],
+      family: 'open',
+      publisher: 'team',
+      visibility: 'community',
+      metadataRevision: 1,
+    },
+    release: {
+      artifactVersionId: 'template-1',
+      version: '1.0.0',
+      hash: digest,
+      kind: 'schema',
+      status: 'published',
+      publishedAt: '2026-01-01',
+    },
+    presentationRef: null,
+    contentKind: 'definition',
+    definition: { pathCount: 0, nodes: [], provides: [], requires: [] },
+    formats: ['yaml'],
+    validation: 'not-run',
+    license: null,
+  };
+  const response = { item, artifactHash: digest, readme: null, manifest: {} };
+  mocks.fetch.mockResolvedValue(response);
+  const query = 'canonicalName=team%2Ftemplate&version=1.0.0';
+  await expect(fetchExploreRelease(query)).resolves.toMatchObject({ artifactHash: digest });
+  await expect(fetchExploreRelease(query + '&expectedHash=' + commit)).rejects.toThrow(
+    'does not match'
+  );
+  await expect(fetchExploreRelease('canonicalName=team%2Ftemplate&version=2.0.0')).rejects.toThrow(
+    'does not match'
+  );
+  mocks.fetch.mockResolvedValue({
+    ...response,
+    item: { ...item, identity: { ...item.identity, ownerProjectId: 'p' } },
+  });
+  await expect(fetchExploreRelease(query)).rejects.toThrow('does not match');
 });

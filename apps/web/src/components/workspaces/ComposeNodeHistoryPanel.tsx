@@ -1,4 +1,4 @@
-import type { TransitionProtocolValue } from '@t3x-dev/api-client';
+import type { TransitionProtocolValue, WorkspaceAuthoringAction } from '@t3x-dev/api-client';
 import * as yaml from 'js-yaml';
 import {
   ArrowRight,
@@ -21,12 +21,11 @@ import {
   type ComposeActivitySelection,
   expandComposeActivityCards,
 } from '@/domain/composeActivity';
+import { composeNodeTitle, composePathLabel } from '@/domain/composePresentation';
 import {
-  composeActorLabel,
-  composeNodeTitle,
-  composePathLabel,
-} from '@/domain/composePresentation';
-import { authoringSemanticContent } from '@/domain/workspaces/authoringReview';
+  authoringSemanticContent,
+  generatedActionReasons,
+} from '@/domain/workspaces/authoringReview';
 import {
   composeCardsAtPath,
   composeDraftChangeCards,
@@ -42,15 +41,12 @@ import {
 } from '@/domain/workspaces/composeObjectChanges';
 import type { DraftYOp } from '@/domain/workspaces/draftStructure';
 import { MANUAL_STAGING_EVENT_ID } from '@/domain/workspaces/manualStaging';
+import { useActorLabel } from '@/hooks/accounts/useActorLabel';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { ComposeDraftObjectEditor } from './ComposeDraftObjectEditor';
 import { ComposeDraftValueEditor, isSimpleDraftValue } from './ComposeDraftValueEditor';
 import styles from './ComposeFieldDetails.module.css';
 import { ComposeObjectFieldSummary } from './ComposeObjectFieldSummary';
-
-function actorLabel(id: string) {
-  return id === 'human:local-user' ? 'You' : composeActorLabel(id);
-}
 
 function valueLabel(value: unknown, formatted = false) {
   if (value === undefined) return 'Absent';
@@ -424,30 +420,101 @@ export function ComposeChangeContext({
 }
 
 export function ComposeChangeReason({
+  heading = 'Action details',
   reason,
   actor,
   channel,
   channelLabel,
   timestamp,
+  action,
+  contextLabel,
 }: {
+  heading?: string;
   reason: string;
   actor?: string;
   channel?: ComposeActivitySelection['meta']['channel'];
   channelLabel?: string;
   timestamp?: string;
+  action?: WorkspaceAuthoringAction;
+  contextLabel?: string;
 }) {
+  const actorLabel = useActorLabel([actor, action?.actor.delegator?.id]);
+  const reasons = action ? generatedActionReasons(action) : [];
+  const operations = Array.isArray(action?.operations) ? action.operations : [];
+  const operationNames = [
+    ...new Set(
+      operations.flatMap((operation) => (isPlainRecord(operation) ? Object.keys(operation) : []))
+    ),
+  ];
   return (
-    <section className={styles.reason}>
-      <h3>Reason for this action</h3>
-      <ExpandableText text={reason} label="Reason for this action" className={styles.reasonText} />
-      <span>
-        {actor ? actorLabel(actor) + ' / ' : ''}
-        {channelLabel ?? activityChannelLabel(channel)}
-        {timestamp
-          ? ' · ' +
-            new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : ''}
-      </span>
+    <section className={styles.reason} aria-label={heading}>
+      <h3>{heading}</h3>
+      {contextLabel && <p className={styles.reasonText}>{contextLabel}</p>}
+      <dl>
+        {timestamp && (
+          <div>
+            <dt>When</dt>
+            <dd>
+              <time dateTime={timestamp}>
+                {new Date(timestamp).toLocaleString(undefined, {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZoneName: 'short',
+                })}
+              </time>
+            </dd>
+          </div>
+        )}
+        <div>
+          <dt>Who</dt>
+          <dd>
+            {actor ? actorLabel(actor) + ' / ' : ''}
+            {channelLabel ?? activityChannelLabel(channel)}
+          </dd>
+        </div>
+        {action?.actor.delegator && (
+          <div>
+            <dt>Published by</dt>
+            <dd>{actorLabel(action.actor.delegator.id)}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Why</dt>
+          <dd>
+            {reasons.length > 1 ? (
+              <ul>
+                {reasons.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <ExpandableText
+                text={reasons[0] ?? reason}
+                label="Reason for this action"
+                className={styles.reasonText}
+              />
+            )}
+          </dd>
+        </div>
+        {operationNames.length > 0 && (
+          <div>
+            <dt>How</dt>
+            <dd>{operationNames.join(' · ')}</dd>
+          </div>
+        )}
+      </dl>
+      {operationNames.length > 0 && (
+        <details className={styles.yops}>
+          <summary>
+            View exact YOps · {operations.length}{' '}
+            {operations.length === 1 ? 'operation' : 'operations'}
+          </summary>
+          <pre>{JSON.stringify(operations, null, 2)}</pre>
+        </details>
+      )}
     </section>
   );
 }
@@ -550,6 +617,7 @@ export function ComposeNodeHistoryPanel({
   onDiscuss,
   onOpenStructure,
   onSubmit,
+  onEditingChange,
   workingCurrent,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
@@ -558,24 +626,35 @@ export function ComposeNodeHistoryPanel({
   onDiscuss: () => void;
   onOpenStructure: (view: 'structure' | 'yaml') => void;
   onSubmit?: (operations: DraftYOp[], reason: string) => Promise<boolean>;
+  onEditingChange?: (editing: boolean) => void;
   /** Pending local operations participate in editing, but never replace published history. */
   workingCurrent?: TransitionProtocolValue;
 }) {
+  const actorLabel = useActorLabel([
+    selection?.meta.actor,
+    ...activity.actions.map((entry) => entry.actor.id),
+    ...(activity.node?.entries ?? []).map((entry) => entry.actor.id),
+  ]);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    onEditingChange?.(editing);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
   const nodeId = selection?.operation.id;
   const selectedPath = selection?.operation.path;
   const isStaged = selection?.meta.eventId === MANUAL_STAGING_EVENT_ID;
   const isObject = Boolean(selection?.operation.objectChange);
-  const nodeError = isStaged || isObject ? null : activity.nodeError;
+  const isOperationField = selection?.meta.operationIndex !== undefined;
+  const nodeError = isStaged || isObject || isOperationField ? null : activity.nodeError;
 
   useEffect(() => {
     setEditing(Boolean(selection?.meta.editRequest));
     setSaveError(null);
   }, [nodeId, selectedPath, selection?.meta.actionId, selection?.meta.editRequest]);
   useEffect(() => {
-    if (nodeId && !isStaged && !isObject)
+    if (nodeId && !isStaged && !isObject && !isOperationField)
       void activity.inspectNode(nodeId, selection?.meta.actionId);
   }, [
     activity.inspectNode,
@@ -585,6 +664,7 @@ export function ComposeNodeHistoryPanel({
     activity.compositionRevision,
     isStaged,
     isObject,
+    isOperationField,
   ]);
 
   if (!selection)
@@ -686,7 +766,7 @@ export function ComposeNodeHistoryPanel({
         : derivedEntries[0]?.after;
   const node =
     matchedNode ??
-    (isStaged || isObject || derivedEntries.length || netCard
+    (isStaged || isObject || isOperationField || derivedEntries.length || netCard
       ? {
           nodeId: selection.operation.id,
           path: currentPath,
@@ -721,25 +801,34 @@ export function ComposeNodeHistoryPanel({
   const latest = node.entries[0];
   const selectedAction =
     selection.meta.comparison === 'event'
-      ? activity.actions.find((action) => action.actionId === selection.meta.actionId)
+      ? (activity.actions.find((action) => action.actionId === selection.meta.actionId) ??
+        (activity.inspectedAction?.actionId === selection.meta.actionId
+          ? (activity.inspectedAction ?? undefined)
+          : undefined))
       : undefined;
+  const latestDraftAction =
+    selection.meta.comparison === 'draft' && !isStaged && latest
+      ? activity.actions.find((action) => action.actionId === latest.actionId)
+      : undefined;
+  const detailAction = selectedAction ?? latestDraftAction;
   const selectedEntry =
     selection.meta.comparison === 'event'
       ? node.entries.find((entry) => entry.actionId === selection.meta.actionId)
       : undefined;
   const selectedReason =
-    selectedAction?.reason ??
+    detailAction?.reason ??
     (selection.meta.comparison === 'event' ? selection.operation.reason : undefined);
-  const selectedActor = selectedAction?.actor.id ?? selection.meta.actor;
-  const selectedChannel = selectedAction?.channel ?? selection.meta.channel;
-  const selectedTime = selectedAction?.publishedAt ?? selection.meta.timestamp;
+  const selectedActor = detailAction?.actor.id ?? selection.meta.actor;
+  const selectedChannel = detailAction?.channel ?? selection.meta.channel;
+  const selectedTime = detailAction?.publishedAt ?? selection.meta.timestamp;
   const selectedCard = selectedAction
     ? cardsForSelection(
         expandComposeActivityCards(activity.cards[selectedAction.actionId] ?? [])
       )[0]
     : undefined;
-  const comparison =
-    selection.meta.comparison === 'draft'
+  const comparison = isOperationField
+    ? { before: selection.operation.beforeValue, after: selection.operation.afterValue }
+    : selection.meta.comparison === 'draft'
       ? (netCard ?? { before: node.current, after: node.current })
       : (selectedCard ??
         selectedEntry ?? {
@@ -755,7 +844,7 @@ export function ComposeNodeHistoryPanel({
   const historyCursor = matchedNode ? activity.nodeCursor : activity.cursor;
   const historyLoading = matchedNode
     ? activity.nodeLoading
-    : activity.loading || (!isObject && activity.nodeLoading);
+    : activity.loading || (!isObject && !isOperationField && activity.nodeLoading);
   const editValue =
     isObject && workingCurrent !== undefined && path !== undefined
       ? composeDraftValueAtPath(workingCurrent, path)
@@ -859,7 +948,8 @@ export function ComposeNodeHistoryPanel({
               : 'Selected action' +
                 (selectedAction || selectedEntry
                   ? ' · A' + (selectedAction?.sequence ?? selectedEntry?.sequence)
-                  : '')
+                  : '') +
+                (isOperationField ? ' · YOp ' + selection.meta.operationIndex : '')
         }
       >
         {!editOpen ? (
@@ -933,12 +1023,18 @@ export function ComposeNodeHistoryPanel({
           </p>
         ) : null}
         {activity.notice ? <output className={styles.helper}>{activity.notice}</output> : null}
-        {!editing && selectedReason ? (
+        {!editing && (selectedReason || detailAction) ? (
           <ComposeChangeReason
-            reason={selectedReason}
+            reason={selectedReason ?? ''}
             actor={selectedActor}
             channel={selectedChannel}
             timestamp={selectedTime}
+            action={detailAction}
+            contextLabel={
+              latestDraftAction
+                ? `Latest saved action · A${latestDraftAction.sequence}. The comparison above covers the whole Draft.`
+                : undefined
+            }
           />
         ) : null}
         <details className={styles.disclosure}>

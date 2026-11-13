@@ -9,6 +9,7 @@ import {
   createRepositoryYOpsStateFromSemanticContent,
 } from '../lib/repository-state-transition';
 import { commitRoutes } from '../routes/commits.openapi';
+import { repositoryObjectAddressRoutes } from '../routes/repository-object-addresses.openapi';
 import { setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
@@ -23,6 +24,7 @@ const ACTOR = { kind: 'human' as const, id: 'user:commit-history-test' };
 describe('CommitV2 read routes', () => {
   const app = new Hono();
   app.route('/', commitRoutes);
+  app.route('/', repositoryObjectAddressRoutes);
   let cleanup: () => Promise<void>;
   let projectId: string;
   let rootDigest: string;
@@ -129,6 +131,29 @@ describe('CommitV2 read routes', () => {
         expect.objectContaining({ format: 'transition_v2', schema: 't3x/commit/v2' }),
       ])
     );
+  });
+
+  it('resolves persistent Commit numbers in both directions within their repository', async () => {
+    const base = `/v1/projects/${projectId}/object-addresses/commit/`;
+    const exact = await app.request(base + encodeURIComponent(childDigest));
+    expect(exact.status).toBe(200);
+    const { data } = await exact.json();
+    expect(data).toEqual({ id: childDigest, number: '2' });
+    const numbered = await app.request(base + data.number);
+    expect((await numbered.json()).data).toEqual(data);
+    const other = await insertProject(mockDB, testData.project({ name: 'Other address scope' }));
+    expect(
+      (await app.request(`/v1/projects/${other.projectId}/object-addresses/commit/2`)).status
+    ).toBe(404);
+    expect((await app.request(base + childDigest.slice(7, 15))).status).toBe(404);
+    const authDisabled = process.env.AUTH_DISABLED;
+    process.env.AUTH_DISABLED = 'false';
+    try {
+      expect((await app.request(base + '2')).status).toBe(403);
+    } finally {
+      if (authDisabled === undefined) delete process.env.AUTH_DISABLED;
+      else process.env.AUTH_DISABLED = authDisabled;
+    }
   });
 
   it('returns a stable non-retryable conflict when a ref head is unverifiable', async () => {

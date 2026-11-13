@@ -10,7 +10,6 @@ import {
   Settings,
   User,
   Users,
-  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -18,10 +17,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SettingsReturnLink } from '@/components/settings/SettingsReturnLink';
-import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useSettingsNamespace } from '@/hooks/settings/useSettingsNamespace';
 import { useSession } from '@/hooks/shared/useSession';
 import palette from '@/styles/management-palette.module.css';
-import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import styles from './SettingsLayout.module.css';
 
 interface SettingsNavItem {
@@ -46,29 +44,6 @@ const PERSONAL_NAV: SettingsNavItem[] = [
     activePaths: ['/settings/providers'],
   },
   {
-    href: '/settings/provider-credentials',
-    label: 'Provider credentials',
-    icon: KeyRound,
-    activePaths: ['/settings/provider-credentials'],
-  },
-  { href: '/settings/help', label: 'Help', icon: HelpCircle, activePaths: ['/settings/help'] },
-];
-
-const ORGANIZATION_NAV: SettingsNavItem[] = [
-  { href: '/settings', label: 'General', icon: Settings, activePaths: ['/settings'] },
-  {
-    href: '/settings/members',
-    label: 'Members',
-    icon: Users,
-    activePaths: ['/settings/members'],
-  },
-  {
-    href: '/settings/model-access',
-    label: 'Model access',
-    icon: Box,
-    activePaths: ['/settings/model-access'],
-  },
-  {
     href: '/settings/api-tokens',
     label: 'API tokens',
     icon: KeyRound,
@@ -79,6 +54,32 @@ const ORGANIZATION_NAV: SettingsNavItem[] = [
     label: 'Usage',
     icon: PanelLeft,
     activePaths: ['/settings/usage'],
+  },
+  { href: '/settings/help', label: 'Help', icon: HelpCircle, activePaths: ['/settings/help'] },
+];
+
+const NAMESPACE_NAV: SettingsNavItem[] = [
+  { href: '/settings', label: 'General', icon: Settings, activePaths: ['/settings'] },
+  {
+    href: '/settings/members',
+    label: 'Members',
+    icon: Users,
+    activePaths: ['/settings/members'],
+  },
+];
+
+const DEPLOYMENT_NAV: SettingsNavItem[] = [
+  {
+    href: '/settings/model-access',
+    label: 'Model access',
+    icon: Box,
+    activePaths: ['/settings/model-access'],
+  },
+  {
+    href: '/settings/provider-credentials',
+    label: 'Provider credentials',
+    icon: KeyRound,
+    activePaths: ['/settings/provider-credentials'],
   },
 ];
 
@@ -99,7 +100,6 @@ const AUTOMATION_NAV: SettingsNavItem[] = [
 
 function withSettingsContext(href: string, context: URLSearchParams): string {
   const params = new URLSearchParams(context);
-  if (href !== '/settings/provider-credentials') params.delete('owner');
   if (!AUTOMATION_NAV.some((item) => item.href === href)) params.delete('project');
   return params.size ? `${href}?${params.toString()}` : href;
 }
@@ -133,33 +133,32 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { canAdministerProviderCredentials } = useDeploymentCapabilities();
-  // Provider credentials accepts an owner as navigation context, not as an account selector.
-  // Namespace settings always use the account selected by useNamespaceAccounts.
-  const credentialOwner =
-    currentPath === '/settings/provider-credentials'
-      ? searchParams.get('owner')?.trim()
-      : undefined;
+  const { account, requested, returnTo } = useSettingsNamespace();
   const context = new URLSearchParams();
-  if (credentialOwner) context.set('owner', credentialOwner);
-  const returnTo = safeInternalReturnTo(searchParams.get('returnTo'), '');
+  if (requested) context.set('namespace', requested);
   if (returnTo) context.set('returnTo', returnTo);
   const projectId = searchParams.get('project')?.trim();
   if (projectId && AUTOMATION_NAV.some((item) => item.href === currentPath)) {
     context.set('project', projectId);
   }
   const { clear } = useSession();
-  const { activeAccount } = useNamespaceAccounts();
-  const headerOwner = credentialOwner || activeAccount?.namespace.slug;
+  const headerOwner = account?.namespace.slug;
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
-  const personalNav = PERSONAL_NAV.filter(
+  const deploymentNav = DEPLOYMENT_NAV.filter(
     (item) => item.href !== '/settings/provider-credentials' || canAdministerProviderCredentials
   );
-  const namespaceLabel = activeAccount
-    ? `${activeAccount.namespace.kind === 'organization' ? 'Organization' : 'Namespace'}: ${activeAccount.namespace.display_name}`
-    : 'No active namespace';
-  const mobileDestination = [...personalNav, ...ORGANIZATION_NAV, ...AUTOMATION_NAV].find((item) =>
-    item.activePaths.includes(currentPath)
-  )?.href;
+  const namespaceLabel = account
+    ? `${account.namespace.kind === 'organization' ? 'Organization' : 'Namespace'}: ${account.namespace.display_name}`
+    : 'Namespace';
+  const groups = [
+    { id: 'personal', label: 'Personal', items: PERSONAL_NAV },
+    { id: 'namespace', label: namespaceLabel, items: NAMESPACE_NAV },
+    { id: 'deployment', label: 'Deployment', items: deploymentNav },
+    { id: 'automation', label: 'Automations', items: AUTOMATION_NAV },
+  ];
+  const mobileDestination = groups
+    .flatMap(({ items }) => items)
+    .find((item) => item.activePaths.includes(currentPath))?.href;
 
   useEffect(
     () => setIsAuthEnabled(process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() !== 'true'),
@@ -171,7 +170,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
       <DiscoverHeader
         owner={headerOwner}
         namespaceTab="settings"
-        settingsHref={withSettingsContext('/settings/provider-credentials', context)}
+        settingsHref={withSettingsContext('/settings', context)}
         newProjectHref={headerOwner ? `/${encodeURIComponent(headerOwner)}/new` : '/'}
         contextLabel="Account"
       />
@@ -183,27 +182,15 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
           onChange={(event) => router.push(withSettingsContext(event.target.value, context))}
         >
           {!mobileDestination && <option value={currentPath}>Current settings page</option>}
-          <optgroup label="Personal">
-            {personalNav.map((item) => (
-              <option key={item.href} value={item.href}>
-                {item.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label={namespaceLabel}>
-            {ORGANIZATION_NAV.map((item) => (
-              <option key={item.href} value={item.href}>
-                {item.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Automations">
-            {AUTOMATION_NAV.map((item) => (
-              <option key={item.href} value={item.href}>
-                {item.label}
-              </option>
-            ))}
-          </optgroup>
+          {groups.map(({ id, label, items }) => (
+            <optgroup key={id} label={label}>
+              {items.map((item) => (
+                <option key={item.href} value={item.href}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
         {isAuthEnabled && (
           <button
@@ -218,49 +205,23 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
       </div>
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Settings navigation">
-          <section>
-            <h2 className={styles.groupTitle}>Personal</h2>
-            <nav className={styles.navList}>
-              {personalNav.map((item) => (
-                <SettingsNavLink
-                  key={item.label}
-                  item={item}
-                  currentPath={currentPath}
-                  context={context}
-                />
-              ))}
-            </nav>
-          </section>
-
-          <section>
-            <h2 className={styles.groupTitle}>{namespaceLabel}</h2>
-            <nav className={styles.navList}>
-              {ORGANIZATION_NAV.map((item) => (
-                <SettingsNavLink
-                  key={item.label}
-                  item={item}
-                  currentPath={currentPath}
-                  context={context}
-                />
-              ))}
-            </nav>
-            <div className={styles.automationSection}>
-              <div className={styles.automationTitle}>
-                <Zap aria-hidden="true" size={18} strokeWidth={2} />
-                <span>Automations</span>
-              </div>
-              <nav className={styles.automationNav} aria-label="Automations">
-                {AUTOMATION_NAV.map((item) => (
+          {groups.map(({ id, label, items }) => (
+            <section key={id} aria-labelledby={`settings-${id}-group`}>
+              <h2 className={styles.groupTitle} id={`settings-${id}-group`}>
+                {label}
+              </h2>
+              <nav className={id === 'automation' ? styles.automationNav : styles.navList}>
+                {items.map((item) => (
                   <SettingsNavLink
-                    key={item.label}
+                    key={item.href}
                     item={item}
                     currentPath={currentPath}
                     context={context}
                   />
                 ))}
               </nav>
-            </div>
-          </section>
+            </section>
+          ))}
 
           {isAuthEnabled ? (
             <button type="button" className={styles.signOut} onClick={() => void clear()}>

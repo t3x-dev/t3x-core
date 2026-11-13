@@ -9,6 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { isRecipeTriggerAvailable, RECIPE_TRIGGER_EVENTS } from '@t3x-dev/api-client';
 import {
   createRecipe,
   deleteRecipe,
@@ -47,10 +48,7 @@ const RecipeStepSchema = z
   });
 
 const RecipeTriggerSchema = z.object({
-  event: z
-    .string()
-    .min(1)
-    .openapi({ description: 'Event name, e.g. merge.completed, leaf.generated, commit.created' }),
+  event: z.string().min(1),
   filter: z
     .record(z.string(), z.string())
     .optional()
@@ -75,7 +73,9 @@ const CreateRecipeRequest = z
   .object({
     name: z.string().min(1).max(200).openapi({ description: 'Recipe name' }),
     description: z.string().max(1000).optional().openapi({ description: 'Recipe description' }),
-    trigger: RecipeTriggerSchema.openapi({ description: 'Event trigger configuration' }),
+    trigger: RecipeTriggerSchema.extend({ event: z.enum(RECIPE_TRIGGER_EVENTS) }).openapi({
+      description: 'Project-scoped completion from the Merge API or failure from the Check API.',
+    }),
     steps: z
       .array(RecipeStepSchema)
       .min(1)
@@ -92,7 +92,9 @@ const UpdateRecipeRequest = z
   .object({
     name: z.string().min(1).max(200).optional(),
     description: z.string().max(1000).optional(),
-    trigger: RecipeTriggerSchema.optional(),
+    trigger: RecipeTriggerSchema.openapi({
+      description: 'Use an available event when changing the saved trigger.',
+    }).optional(),
     steps: z.array(RecipeStepSchema).min(1).optional(),
     enabled: z.boolean().optional(),
   })
@@ -214,7 +216,8 @@ const updateRecipeRoute = createRoute({
   path: '/v1/projects/{projectId}/recipes/{recipeId}',
   tags: ['Recipes'],
   summary: 'Update a recipe',
-  description: 'Update recipe name, trigger, steps, or enabled status.',
+  description:
+    'Update recipe name, trigger, steps, or enabled status. Existing unavailable events can be retained.',
   request: {
     params: RecipeIdParam,
     body: {
@@ -222,6 +225,10 @@ const updateRecipeRoute = createRoute({
     },
   },
   responses: {
+    400: {
+      description: 'Invalid recipe update or unavailable trigger',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     200: {
       description: 'Recipe updated',
       content: {
@@ -245,8 +252,15 @@ recipesRoutes.openapi(updateRecipeRoute, async (c) => {
     if (accessResult instanceof Response) return accessResult;
 
     const existing = await findRecipeById(db, recipeId);
-    if (!existing) {
+    if (existing?.project_id !== projectId) {
       return errorResponse(c, 'NOT_FOUND', `Recipe not found: ${recipeId}`);
+    }
+    if (
+      body.trigger &&
+      body.trigger.event !== existing.trigger.event &&
+      !isRecipeTriggerAvailable(body.trigger.event)
+    ) {
+      return errorResponse(c, 'INVALID_REQUEST', 'This recipe trigger is unavailable.');
     }
 
     const updated = await updateRecipe(db, recipeId, body);
@@ -298,7 +312,7 @@ recipesRoutes.openapi(deleteRecipeRoute, async (c) => {
     if (accessResult instanceof Response) return accessResult;
 
     const existing = await findRecipeById(db, recipeId);
-    if (!existing) {
+    if (existing?.project_id !== projectId) {
       return errorResponse(c, 'NOT_FOUND', `Recipe not found: ${recipeId}`);
     }
 

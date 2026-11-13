@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react';
-import { downloadStateExport, fetchStateExport } from '@/infrastructure/stateExport';
+import {
+  downloadStateExport,
+  fetchStateExport,
+  supportsExactStateExport,
+} from '@/infrastructure/stateExport';
 
 export function useStateExport(projectId: string, commitDigest: string) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const requestInFlight = useRef(false);
-  const supported = /^sha256:[0-9a-f]{64}$/.test(commitDigest) && Boolean(projectId);
+  const supported = supportsExactStateExport(projectId, commitDigest);
 
   async function download(format: 'json' | 'yaml') {
     if (requestInFlight.current) return;

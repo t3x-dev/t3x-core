@@ -1,24 +1,24 @@
-.identity[data-tone="0"] {
+.identity[data-tone="violet"] {
   --identity-fg: var(--identity-violet);
   --identity-bg: var(--identity-violet-muted);
 }
-.identity[data-tone="1"] {
+.identity[data-tone="teal"] {
   --identity-fg: var(--identity-teal);
   --identity-bg: var(--identity-teal-muted);
 }
-.identity[data-tone="2"] {
+.identity[data-tone="sky"] {
   --identity-fg: var(--identity-sky);
   --identity-bg: var(--identity-sky-muted);
 }
-.identity[data-tone="3"] {
+.identity[data-tone="amber"] {
   --identity-fg: var(--identity-amber);
   --identity-bg: var(--identity-amber-muted);
 }
-.identity[data-tone="4"] {
+.identity[data-tone="rose"] {
   --identity-fg: var(--identity-rose);
   --identity-bg: var(--identity-rose-muted);
 }
-.identity[data-tone="5"] {
+.identity[data-tone="slate"] {
   --identity-fg: var(--identity-slate);
   --identity-bg: var(--identity-slate-muted);
 }

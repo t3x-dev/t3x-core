@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Account, User } from '@t3x-dev/core';
-import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type AccountRecord, accounts, type UserRecord, users } from '../schema-trees';
 
@@ -180,6 +180,24 @@ export async function findUserById(db: AnyDB, id: string): Promise<User | null> 
   const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 
   return row ? rowToUser(row) : null;
+}
+
+/** Resolve public identity fields for known user IDs without exposing private account data. */
+export async function findUserProfilesByIds(
+  db: AnyDB,
+  ids: string[]
+): Promise<UserSearchProfile[]> {
+  if (!ids.length) return [];
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(inArray(users.id, ids));
+  return rows.flatMap((row) => (row.username ? [{ ...row, username: row.username }] : []));
 }
 
 /** Search safe public identity fields for the collaborator picker. */

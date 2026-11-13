@@ -15,7 +15,7 @@ import {
   parseNativeYOpsPath,
 } from './yopsAuthoring';
 
-type SchemaAuthoringDigest = `sha256:${string}`;
+export type SchemaAuthoringDigest = `sha256:${string}`;
 function hasOwn(value: object, key: PropertyKey): boolean {
   // biome-ignore lint/suspicious/noPrototypeBuiltins: core targets ES2021 without Object.hasOwn.
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -90,6 +90,13 @@ export interface AppliedWorkspaceSchemaYOps {
   readonly schema: YSchema;
   readonly schemaHash: SchemaAuthoringDigest;
   readonly operations: readonly NativeYOp[];
+}
+
+/** Keep YSchema hashing behind Core's one-way adapter boundary. */
+export async function hashWorkspaceSchemaDefinition(
+  schema: unknown
+): Promise<SchemaAuthoringDigest> {
+  return (await sha256CompositionValue(schema)) as SchemaAuthoringDigest;
 }
 
 function clone<T>(value: T): T {
@@ -366,7 +373,7 @@ export async function applyWorkspaceSchemaYOps(
   }
   return {
     schema,
-    schemaHash: (await sha256CompositionValue(schema)) as SchemaAuthoringDigest,
+    schemaHash: await hashWorkspaceSchemaDefinition(schema),
     operations,
   };
 }

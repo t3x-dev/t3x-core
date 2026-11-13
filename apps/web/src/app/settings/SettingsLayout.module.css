@@ -39,7 +39,6 @@
 }
 
 .navList,
-.automationSection,
 .automationNav {
   display: flex;
   flex-direction: column;
@@ -93,21 +92,6 @@
   background: var(--accent-commit);
   border-radius: var(--radius-full);
   content: "";
-}
-
-.automationSection {
-  margin-top: 16px;
-}
-
-.automationTitle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
 }
 
 .automationNav {

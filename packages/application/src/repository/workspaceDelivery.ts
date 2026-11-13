@@ -27,3 +27,4 @@ export function resolveWorkspaceDeliveryTarget(target: Record<string, unknown>) 
 }
 
 export const WORKSPACE_STATE_DOWNLOAD_TARGET = 't3x:committed-state';
+export const WORKSPACE_PORTABLE_ARTIFACT_TARGET = 't3x:portable-artifact';

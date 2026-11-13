@@ -1,10 +1,22 @@
-import { StateExportArtifactSchema } from '@t3x-dev/api-client';
+import { type DownloadArtifact, StateExportArtifactSchema } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export async function fetchStateExport(projectId: string, digest: string, format: 'json' | 'yaml') {
+export function supportsExactStateExport(projectId: string, digest: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(digest) && Boolean(projectId);
+}
+
+export async function fetchStateExport(
+  projectId: string,
+  digest: string,
+  format: 'json' | 'yaml',
+  signal?: AbortSignal
+) {
   const query = new URLSearchParams({ project_id: projectId, format });
   const response = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(digest)}/export?${query}`
+    `${API_V1}/commits/${encodeURIComponent(digest)}/export?${query}`,
+    undefined,
+    undefined,
+    signal
   );
   const artifact = StateExportArtifactSchema.parse(await handleResponse(response));
   return verifyStateExport(artifact, digest, format);
@@ -14,6 +26,15 @@ export async function verifyStateExport(
   artifact: import('@t3x-dev/api-client').StateExportArtifact,
   digest: string,
   format: 'json' | 'yaml'
+) {
+  await verifyDownloadArtifact(artifact, digest, format);
+  return artifact;
+}
+
+export async function verifyDownloadArtifact(
+  artifact: DownloadArtifact,
+  digest: string,
+  format: DownloadArtifact['format']
 ) {
   if (artifact.sourceCommit.digest !== digest || artifact.format !== format) {
     throw new Error('Export does not match the selected revision');
@@ -30,6 +51,10 @@ export async function verifyStateExport(
 }
 
 export function downloadStateExport(artifact: Awaited<ReturnType<typeof fetchStateExport>>) {
+  downloadArtifact(artifact);
+}
+
+export function downloadArtifact(artifact: DownloadArtifact) {
   const url = URL.createObjectURL(new Blob([artifact.content], { type: artifact.mimeType }));
   const link = document.createElement('a');
   link.href = url;

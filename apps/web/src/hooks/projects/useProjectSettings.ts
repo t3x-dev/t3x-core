@@ -13,6 +13,7 @@ import { verifyProjectHashChain } from '@/infrastructure/projects';
 import type { ProjectDetail } from '@/infrastructure/types';
 import { fetchProject } from '@/queries/project';
 import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
+import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 export type ProjectExportKind = 'cfpack' | 'ledger';
 
@@ -69,21 +70,17 @@ export function useProjectSettings(projectId: string) {
         path_status: updated.path_status,
       });
       if (updated.canonical_path) {
-        const query = new URLSearchParams(searchParams.toString());
-        // Return links to the old name are kept local to the now-current repository.
-        if (query.has('returnTo')) {
-          const old = project?.canonical_path;
-          const value = query.get('returnTo')!;
-          if (old && (value === old || value.startsWith(`${old}/`) || value.startsWith(`${old}?`)))
-            query.set('returnTo', updated.canonical_path + value.slice(old.length));
+        const pathname = `${updated.canonical_path}/settings`;
+        if (pathname !== window.location.pathname) {
+          const query = searchParams.toString();
+          carryRepositorySettingsReturn(projectId, pathname);
+          router.replace(`${pathname}${query ? `?${query}` : ''}${window.location.hash}`, {
+            scroll: false,
+          });
         }
-        router.replace(
-          `${updated.canonical_path}/settings${query.size ? `?${query}` : ''}${window.location.hash}`,
-          { scroll: false }
-        );
       }
     },
-    [project?.metadata, project?.name, project?.canonical_path, projectId, router, searchParams]
+    [project?.name, projectId, router, searchParams]
   );
 
   const verify = useCallback(() => verifyProjectHashChain(projectId), [projectId]);

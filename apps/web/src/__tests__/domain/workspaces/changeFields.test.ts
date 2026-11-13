@@ -53,10 +53,20 @@ describe('fieldChangeGroups', () => {
         label: 'Relations',
         breadcrumb: null,
         kind: 'added',
-        fields: [{ name: 'Count', before: undefined, after: 1, kind: 'added' }],
+        fields: [
+          { name: 'Relations', before: undefined, after: [{ from: 'a', to: 'b' }], kind: 'added' },
+        ],
       },
     ]);
     expect(fieldChangeCount(groups)).toBe(4);
+  });
+
+  it('shows the changed relation values when the count stays the same', () => {
+    const before = [{ from: 'a', to: 'b' }];
+    const after = [{ from: 'a', to: 'c' }];
+    expect(fieldChangeGroups(semantic([], before), semantic([], after))[0]?.fields).toEqual([
+      { name: 'Relations', before, after, kind: 'changed' },
+    ]);
   });
 
   it('reports removed nodes against the base document', () => {

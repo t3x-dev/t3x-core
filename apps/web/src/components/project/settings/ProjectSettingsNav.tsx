@@ -7,13 +7,15 @@ import {
   Info,
   type LucideIcon,
   PackageOpen,
+  Shapes,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
   Users,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/cn';
+import { repositorySettingsHistoryData } from '@/utils/repositorySettingsReturn';
 import styles from './ProjectSettingsNav.module.css';
 
 export const PROJECT_SETTINGS_GROUPS: Array<{
@@ -24,6 +26,7 @@ export const PROJECT_SETTINGS_GROUPS: Array<{
     label: 'Repository',
     items: [
       { id: 'general', label: 'General', icon: Info },
+      { id: 'appearance', label: 'Appearance', icon: Shapes },
       { id: 'visibility', label: 'Visibility', icon: Eye },
       { id: 'access', label: 'Access', icon: Users },
       { id: 'branch-rules', label: 'Branch rules', icon: GitBranch },
@@ -106,6 +109,19 @@ function useActiveSection(present: Set<string>): string {
 export function ProjectSettingsNav() {
   const present = usePresentSections();
   const active = useActiveSection(present);
+  const restoredSection = useRef(false);
+  useEffect(() => {
+    if (restoredSection.current) return;
+    const id = window.location.hash.slice(1);
+    if (!present.has(id)) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+
+    // Direct links can load the Settings sections after the browser handles the fragment.
+    restoredSection.current = true;
+    target.scrollIntoView({ behavior: 'instant', block: 'start' });
+    target.focus({ preventScroll: true });
+  }, [present]);
   const groups = PROJECT_SETTINGS_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => present.has(item.id)),
@@ -114,12 +130,13 @@ export function ProjectSettingsNav() {
   function navigateToSection(id: string) {
     const target = document.getElementById(id);
     if (!target) return;
+    restoredSection.current = true;
     const reducedMotion =
       document.documentElement.dataset.reducedMotion === 'true' ||
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     target.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' });
     target.focus({ preventScroll: true });
-    window.history.replaceState(null, '', `#${id}`);
+    window.history.replaceState(repositorySettingsHistoryData(), '', `#${id}`);
   }
 
   return (

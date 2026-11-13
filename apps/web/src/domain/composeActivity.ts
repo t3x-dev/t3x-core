@@ -24,6 +24,7 @@ export interface ComposeActivityMeta {
   timestamp?: string;
   comparison: 'event' | 'draft';
   editRequest?: number;
+  operationIndex?: number;
 }
 export interface ComposeActivitySelection {
   operation: WorkspaceYOpsDraftOperation;

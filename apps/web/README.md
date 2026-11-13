@@ -1,140 +1,70 @@
-# t3x-webui
+# T3X WebUI
 
-Web frontend for T3X structured-state workflows, built with Next.js.
+Web frontend for T3X structured-state workflows. This is a preview surface;
+see the repository's [stability summary](../../docs/stability.md).
 
-**Last Updated:** 2026-06-02
+## Documentation
 
-## Tech Stack
+| Document | Responsibility |
+| --- | --- |
+| [Agent guide](AGENTS.md) | Task scope, required reading and verification |
+| [Architecture](docs/architecture.md) | Module boundaries, state ownership, transport and frontend contracts |
+| [Business contracts](docs/business.md) | Core objects, workflow rules and frontend business contracts |
+| [Repository guide](../../AGENTS.md) | Project-wide architecture and development constraints |
 
-| Category | Current Usage |
-|----------|--------------|
-| Framework | Next.js 16 + React 19 (App Router) |
-| Canvas | xyflow v12 (ReactFlow) |
-| Styling | Tailwind CSS v4 + shadcn/ui |
-| State | Zustand |
-| Animation | Framer Motion |
-| Layout | ELK.js (auto layout) |
+The architecture and business documents distinguish normative contracts from
+descriptive implementation maps. They define the target for changes; adoption
+does not certify that existing code already conforms.
 
-## Directory Structure
+### Repository contracts relevant to WebUI
 
-The source tree follows a four-layer v2 architecture (L1 infrastructure /
-L2 domain / L3 composition / L4 view) enforced by Biome. See the
-**"WebUI Architecture"** section of the repo root `AGENTS.md` for the
-canonical folder map and import rules — that is the single source of truth.
+Use the references below when a task touches the corresponding system behavior.
+Routine WebUI work needs only the relevant frontend contracts and repository
+guidance. The rest of the root `docs/` directory is optional background for
+WebUI work unless a task explicitly touches its subject.
 
-Top-level layout under `src/`:
+| When changing | Read for |
+| --- | --- |
+| Review, decisions, or commits | [Transition Application Convergence](../../docs/architecture/transition-application-convergence.md) for immutable review evidence and the authoritative mutation path |
+| Workspace ownership, saving, or conflict recovery | [Reliable Workspace Gate 1](../../docs/architecture/reliable-workspace-gate-1.md#frozen-behavior) for private drafts, guarded writes, and reconciliation |
+| Roles, collaboration, or request identity | [Namespace Authority](../../docs/architecture/namespace-authority-v1.md) for roles and project grants, and [Request Principal](../../docs/architecture/request-principal-migration-baseline.md) when changing how WebUI forwards authenticated requests |
+| Committed State export | [Exact Committed State Export](../../docs/architecture/state-export.md) for version identity and complete export |
+| Repository names, addresses, or redirects | [Repository Addresses](../../docs/repository-addresses.md) for canonical names, stable identity, and historical addresses |
 
-- `app/` — Next.js App Router pages
-- `components/` — L4 view (canvas, leaf, merge, diff, shared, ui…)
-- `hooks/` — L3 composition, organised by aggregate (canvas, commits,
-  conversations, drafts, feedback, imports, knowledge-graph, leaves,
-  merge, pins, projects, shared, shares, templates)
-- `store/` — L3 Zustand containers (passive: state + setters only)
-- `queries/` — L3 reads (async fetch per aggregate)
-- `commands/` — L3 writes (yops/ + 9 other aggregates)
-- `domain/` — L2 pure functions (commit, diff, draft, format, leaf, tree,
-  yops, …). No React, no I/O.
-- `infrastructure/` — L1 I/O adapters (the only layer that calls `fetch()`)
-- `utils/` — cross-layer view helpers (cn, theme, motion, microcopy, …)
-- `types/`, `data/` — shared type re-exports / static data
-- `__tests__/` — mirrors the src layout above
+## Development
 
-## API Connection
-
-WebUI calls the standalone Hono API service via the
-`@/infrastructure/*` adapters (the only layer that may call `fetch()`):
-
-| Environment | API Address |
-|-------------|-------------|
-| Development | `http://localhost:8000/api/v1` |
-
-## Local Shared Access
-
-In a one-machine local setup, WebUI can manage the standalone API host's
-machine-local API URL and API key from `/settings/access`, and CLI/MCP can read
-that same file.
-
-Source precedence is:
-
-```text
-T3X_API_URL / T3X_API_KEY (environment)
--> ~/.t3x/config.json
--> built-in defaults
-```
-
-This means the settings page shows the effective values, not just the file
-contents. If an environment variable is present, UI saves still update the
-shared file, but the environment value remains active until removed.
-
-The same page now includes a `Test Access` action so local users can confirm
-whether the configured API is reachable, and whether the current deployment
-requires or accepts the configured key.
-
-## State Management
-
-| Store | Purpose |
-|-------|---------|
-| `canvasStore` | Nodes, edges, selection state, canvas operations |
-| `projectStore` | Project list, current project, CRUD operations |
-| `agentDemoStore` | Agent Demo page state |
-| `mergeWorkspaceStore` | Merge Workspace state (decisions, preview) |
-| `optimiserStore` | Agent Optimiser state (runs, filter) |
-| `pinsStore` | Pin state management (fetch, add, remove, update) |
-
-## Getting Started
+Run these in separate terminals from the repository root:
 
 ```bash
-# Need to start API service simultaneously
-pnpm dev:api     # Terminal 1 - API (port 8000)
-pnpm dev:webui   # Terminal 2 - WebUI (port 3000)
+pnpm dev:api
 ```
-
-## Demo Screenshots
-
-The WebUI documentation screenshots are maintained in the docs repository. The
-local screenshot script is for review/regeneration and should not make the core
-repository carry generated image assets.
 
 ```bash
-# From the repo root, with pnpm dev:api and pnpm dev:webui already running
-pnpm screenshots:demo
+pnpm dev:webui
 ```
 
-The stable landing-only script writes ignored local review copies to
-`tmp/screenshots/demo/`:
+Default development ports are `8000` for the API and `3000` for WebUI. Browser
+HTTP requests use WebUI's same-origin `/api` proxy. For environment variables,
+authentication and self-hosted evaluation, use the [deployment guide](../../docs/deployment.md).
 
-- `tmp/screenshots/demo/repository-light.png`
-- `tmp/screenshots/demo/repository-dark.png`
-- `tmp/screenshots/demo/repository-mobile.png`
+The app uses Next.js 16, React 19 and TypeScript, with Tailwind CSS, CSS Modules,
+shared UI components and Zustand. See [package.json](package.json) for current
+dependencies and scripts, and the [source map](docs/architecture.md#source-map)
+for directory responsibilities.
 
-The broader workflow screenshot set lives in the docs repository under
-`static/img/screenshots/`.
+## Checks
 
-## Testing
+Run from the repository root; select checks according to the
+[repository verification policy](../../AGENTS.md#verification).
 
 ```bash
-pnpm --filter t3x-webui test
+pnpm check
+pnpm --filter t3x-webui typecheck
+pnpm --filter t3x-webui check:boundaries
+pnpm test:webui
 ```
 
-## Module Boundaries
-
-This app follows the v2 four-layer architecture (L1 infrastructure /
-L2 domain / L3 composition / L4 view) enforced by Biome
-`noRestrictedImports`. See repo-root `AGENTS.md` -> "WebUI Architecture"
-for the canonical rules.
-
-Sources of truth for stable interfaces (don't change casually):
-
-- **Wire types** — `src/types/api.ts` (re-export surface) and the API's
-  OpenAPI schema in `apps/api/docs/openapi-summary.md`.
-- **Infrastructure adapters** — `src/infrastructure/*.ts` (only layer
-  that calls `fetch()`; renaming or removing exports breaks callers in
-  `queries/`, `commands/`, and `hooks/`).
-- **Canvas store shape** — `src/store/canvasStore.ts` + slice files
-  (`canvasStoreTypes.ts`, `canvasMergeSlice.ts`, `canvasLeafSlice.ts`,
-  `canvasCommitSlice.ts`, `canvasNodeSlice.ts`).
-- **Domain primitives** — `src/domain/**` pure functions consumed by
-  hooks and stores; changing signatures here ripples upward.
-
-Internal implementations (non-exported helpers, intra-layer utilities)
-can be refactored freely.
+For a focused test, use `pnpm --filter t3x-webui exec vitest run <test-file>`.
+Use `pnpm build:webui` when a build is relevant to the change. Browser business
+acceptance is a separate activity with agreed scenarios; automated checks and
+screenshots do not establish it.

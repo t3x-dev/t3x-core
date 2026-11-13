@@ -1,13 +1,30 @@
-import type { WorkspaceAuthoringCard, WorkspaceAuthoringView } from '@t3x-dev/api-client';
+import type {
+  WorkspaceAuthoringAction,
+  WorkspaceAuthoringCard,
+  WorkspaceAuthoringView,
+} from '@t3x-dev/api-client';
 import { type SemanticContent, yamlToTree } from '@t3x-dev/core';
 import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
 
-export const EMPTY_AUTHORING_SEMANTIC_CONTENT: SemanticContent = Object.freeze({
-  trees: [],
-  relations: [],
-});
+export function generatedActionReasons(action: WorkspaceAuthoringAction): string[] {
+  const preparation = action.generation?.preparation;
+  if (!preparation || typeof preparation !== 'object' || !('bindings' in preparation)) return [];
+  if (!Array.isArray(preparation.bindings)) return [];
+  return [
+    ...new Set(
+      preparation.bindings.flatMap((binding) =>
+        binding &&
+        typeof binding === 'object' &&
+        typeof binding.reason === 'string' &&
+        binding.reason.trim()
+          ? [binding.reason]
+          : []
+      )
+    ),
+  ];
+}
 
 export function authoringSemanticContent(value: unknown): SemanticContent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -57,12 +74,9 @@ export function authoringReviewDocuments(
       relations: [],
     };
   };
+  const baseline = project(view.selected?.before ?? view.base);
   const current = project(view.selected?.after ?? view.current);
-  if (!current) return null;
-  return {
-    baseline: project(view.selected?.before ?? view.base) ?? EMPTY_AUTHORING_SEMANTIC_CONTENT,
-    current,
-  };
+  return baseline && current ? { baseline, current } : null;
 }
 
 export function authoringVisibleCards(cards: readonly WorkspaceAuthoringCard[]) {

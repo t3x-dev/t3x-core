@@ -70,6 +70,18 @@ beforeEach(() => {
   mocks.preview.mockImplementation(async (_p, _w, input) => preview(input.commands.length > 0));
   mocks.apply.mockResolvedValue({ outcome: 'prepared' });
 });
+it('does not allow Schema adoption against a different inspected branch head', async () => {
+  mocks.preview.mockResolvedValue({ ...preview(true), refHead: hash });
+  render(
+    <SchemaContentPreparationDialog
+      {...props}
+      inspectedDraft={{ compositionRevision: 2, refHead: null }}
+    />
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent('The Draft or branch changed');
+  expect(screen.getByRole('button', { name: 'Save prepared Draft' })).toBeDisabled();
+  expect(mocks.apply).not.toHaveBeenCalled();
+});
 it('previews explicit mappings and invalidates approval as soon as the input changes', async () => {
   render(<SchemaContentPreparationDialog {...props} />);
   await addMove();
@@ -116,6 +128,22 @@ it('retries a lost response with the same request identity and saves through the
       previewHash: hash,
     },
   ]);
+});
+it('retries only the refresh after the prepared Draft was saved', async () => {
+  mocks.preview.mockResolvedValue(preview(true));
+  mocks.prepared
+    .mockRejectedValueOnce(new Error('Refresh unavailable'))
+    .mockResolvedValueOnce(undefined);
+  render(<SchemaContentPreparationDialog {...props} />);
+  const save = screen.getByRole('button', { name: 'Save prepared Draft' });
+  await waitFor(() => expect(save).toBeEnabled());
+  fireEvent.click(save);
+  expect(
+    await screen.findByText('Draft saved. Refresh to see the updated Draft.')
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh Draft' }));
+  await waitFor(() => expect(mocks.close).toHaveBeenCalledWith(false));
+  expect(mocks.apply).toHaveBeenCalledTimes(1);
 });
 it('discards delayed responses from another Workspace revision and invalidates approval on focus', async () => {
   let finishOld!: (value: unknown) => void;

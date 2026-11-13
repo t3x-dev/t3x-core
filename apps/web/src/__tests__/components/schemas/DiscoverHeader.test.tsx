@@ -1,13 +1,55 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const listReceivedCollaborationInvitations = vi.hoisted(() => vi.fn());
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({ listReceivedCollaborationInvitations }),
+}));
+
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 
 describe('DiscoverHeader navigation', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    listReceivedCollaborationInvitations.mockReset();
+    listReceivedCollaborationInvitations.mockResolvedValue({ invitations: [] });
+  });
+
+  it('marks pending invitations and clears the dot after they are handled', async () => {
+    render(<DiscoverHeader />);
+    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute(
+      'href',
+      '/invitations'
+    );
+
+    listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [{}] });
+    fireEvent.focus(window);
+    expect(await screen.findByRole('link', { name: 'Invitations, pending' })).toBeInTheDocument();
+
+    listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [] });
+    fireEvent.focus(window);
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Invitations' })).toBeInTheDocument()
+    );
+  });
+
+  it('finds a new invitation while the recipient keeps the page open', async () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<DiscoverHeader />);
+    try {
+      expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(1);
+      listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [{}] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(screen.getByRole('link', { name: 'Invitations, pending' })).toBeInTheDocument();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
   });
 
   it('links home to t3x-dev when local auth is disabled', () => {
@@ -45,8 +87,14 @@ describe('DiscoverHeader navigation', () => {
     for (const label of ['Schema', 'Workspace']) {
       const link = tabs.getByRole('link', { name: label });
       const target = new URL(link.getAttribute('href')!, 'http://localhost');
-      expect(target.pathname).toBe(`/orbit/release/${label.toLowerCase()}s`);
-      expect(target.searchParams.get('branch')).toBe('feature/release');
+      expect(target.pathname).toBe(
+        label === 'Workspace'
+          ? '/orbit/release/branches/feature%2Frelease/workspaces'
+          : '/orbit/release/schemas'
+      );
+      expect(target.searchParams.get('branch')).toBe(
+        label === 'Workspace' ? null : 'feature/release'
+      );
       expect(target.searchParams.get('workspace')).toBe('workspace_branch:feature/release');
     }
     const pullRequests = new URL(
@@ -61,11 +109,11 @@ describe('DiscoverHeader navigation', () => {
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',
-      '/explore?view=discover'
+      '/explore'
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
       'href',
-      '/explore?view=browse'
+      '/explore/browse'
     );
     expect(globalNavigation.getByRole('link', { name: 'Your repositories' })).toHaveAttribute(
       'href',
@@ -119,7 +167,7 @@ describe('DiscoverHeader navigation', () => {
     const globalNavigation = within(screen.getByRole('navigation', { name: 'Global' }));
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'href',
-      '/explore?view=discover'
+      '/explore'
     );
     expect(globalNavigation.getByRole('link', { name: 'Discover' })).toHaveAttribute(
       'aria-current',
@@ -127,7 +175,7 @@ describe('DiscoverHeader navigation', () => {
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).toHaveAttribute(
       'href',
-      '/explore?view=browse'
+      '/explore/browse'
     );
     expect(globalNavigation.getByRole('link', { name: 'Browse' })).not.toHaveAttribute(
       'aria-current'

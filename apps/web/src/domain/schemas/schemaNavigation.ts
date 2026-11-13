@@ -1,11 +1,11 @@
-import { safeExploreReturn } from '@/domain/project/exploreLocation';
+import { exploreListHref, safeExploreReturn } from '@/domain/project/exploreLocation';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function schemaBrowseHref(projectId: string, workspace?: string, branch?: string) {
-  const params = new URLSearchParams({ view: 'browse', type: 'schemas', studioTarget: projectId });
+  const params = new URLSearchParams({ type: 'schemas', studioTarget: projectId });
   if (branch) params.set('branch', branch);
   if (workspace) params.set('workspace', workspace);
-  return `/explore?${params}`;
+  return exploreListHref('browse', params);
 }
 
 /** A source return keeps its exact release/filter, but uses the current adoption target. */
@@ -17,7 +17,8 @@ export function schemaSourceHref(
 ) {
   const safe = safeExploreReturn(returnTo);
   if (!safe) return undefined;
-  const params = new URLSearchParams(safe.split('?')[1]);
+  const target = new URL(safe, 'http://local');
+  const params = target.searchParams;
   params.set('studioTarget', projectId);
   for (const [key, value] of [
     ['workspace', workspace],
@@ -26,7 +27,7 @@ export function schemaSourceHref(
     if (value) params.set(key, value);
     else params.delete(key);
   }
-  return `/explore?${params}`;
+  return `${target.pathname}?${params}${target.hash}`;
 }
 
 export function schemaWorkspaceHref(
@@ -36,7 +37,7 @@ export function schemaWorkspaceHref(
   switching = false
 ) {
   const params = new URLSearchParams(query);
-  params.set('schemaView', 'studio');
+  params.delete('schemaView');
   params.set('workspace', workspace.id);
   params.set('branch', workspace.targetBranch);
   if (switching) {

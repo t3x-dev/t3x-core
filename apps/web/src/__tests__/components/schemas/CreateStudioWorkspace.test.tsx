@@ -4,13 +4,19 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CreateStudioWorkspace } from '@/components/schemas/CreateStudioWorkspace';
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), branches: ['main', 'staging'] }));
+const mocks = vi.hoisted(() => ({
+  save: vi.fn(),
+  refresh: vi.fn(),
+  branchesError: null as string | null,
+  branches: ['main', 'staging'],
+}));
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branches: mocks.branches,
     branchHeads: { main: null, staging: 'sha256:base' },
     loading: false,
-    refresh: vi.fn(),
+    refresh: mocks.refresh,
+    error: mocks.branchesError,
   }),
 }));
 vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
@@ -19,6 +25,8 @@ vi.mock('@/hooks/workspaces/useWorkspaceFlow', () => ({
 beforeEach(() => {
   mocks.branches = ['main', 'staging'];
   mocks.save.mockReset();
+  mocks.branchesError = null;
+  mocks.refresh.mockReset();
 });
 it('persists a fresh draft at the chosen branch head before handing it to Studio', async () => {
   const created = vi.fn();
@@ -53,4 +61,21 @@ it('does not invent a branch when the branch inventory is unavailable', () => {
   render(<CreateStudioWorkspace projectId="p" onCreated={vi.fn()} />);
   expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Retry branches' })).toBeEnabled();
+});
+
+it.each([
+  { branches: [] },
+  { branches: ['main'] },
+])('blocks creation with a retryable inventory error even with cached branches $branches', ({
+  branches,
+}) => {
+  mocks.branches = branches;
+  mocks.branchesError = 'Offline';
+  render(<CreateStudioWorkspace projectId="p" onCreated={vi.fn()} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Branch list unavailable');
+  expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeDisabled();
+  expect(screen.queryByText('No branches available')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+  expect(mocks.save).not.toHaveBeenCalled();
 });

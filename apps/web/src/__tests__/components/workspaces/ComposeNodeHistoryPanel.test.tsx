@@ -1,12 +1,20 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposeNodeHistoryPanel } from '@/components/workspaces/ComposeNodeHistoryPanel';
 import { activityOperation, type ComposeActivitySelection } from '@/domain/composeActivity';
 import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChanges';
 import { MANUAL_STAGING_EVENT_ID } from '@/domain/workspaces/manualStaging';
+import { clearQueryCache } from '@/hooks/shared/useQuery';
 import type { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
+
+const actorProfiles = vi.hoisted(() => ({ resolveCollaborationUsers: vi.fn() }));
+vi.mock('@/infrastructure/sharedApiClient', () => ({
+  getSharedApiClient: () => ({
+    resolveCollaborationUsers: actorProfiles.resolveCollaborationUsers,
+  }),
+}));
 
 function activityFixture() {
   const actions = [
@@ -29,7 +37,7 @@ function activityFixture() {
       channel: 'manual',
       actor: { id: 'human:local-user', kind: 'human' },
       publishedAt: '2026-10-09T11:00:00Z',
-      operations: [],
+      operations: [{ set: { path: 'rollout/allocation', value: 25 } }],
       reason: 'Start a smaller canary',
     },
   ];
@@ -85,6 +93,11 @@ const selection: ComposeActivitySelection = {
 };
 
 describe('Compose field Details', () => {
+  beforeEach(() => {
+    clearQueryCache();
+    actorProfiles.resolveCollaborationUsers.mockReset().mockResolvedValue({ users: [] });
+  });
+
   it('keeps the current value distinct from a historical action and edits the current value', async () => {
     const activity = activityFixture();
     render(
@@ -99,6 +112,14 @@ describe('Compose field Details', () => {
     expect(screen.getByRole('region', { name: 'Current Draft value' })).toHaveTextContent('30');
     expect(screen.getByText('Selected action · A1')).toBeInTheDocument();
     expect(screen.getByText('Start a smaller canary')).toBeInTheDocument();
+    const details = screen.getByRole('region', { name: 'Action details' });
+    expect(details).toHaveTextContent('2026');
+    expect(details).toHaveTextContent('Who');
+    expect(details).toHaveTextContent('You / Manual');
+    expect(details).toHaveTextContent('How');
+    expect(details).toHaveTextContent('set');
+    fireEvent.click(screen.getByText('View exact YOps · 1 operation'));
+    expect(details).toHaveTextContent('"rollout/allocation"');
     expect(screen.queryByText('Raise allocation again')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
     expect(screen.getByLabelText('New value')).toHaveValue(30);
@@ -113,6 +134,41 @@ describe('Compose field Details', () => {
         })
       )
     );
+  });
+
+  it('shows one recorded operation field in the shared Details card', () => {
+    const activity = activityFixture();
+    const path = 'requirements/learning_reminder';
+    const after = { acceptance: 'Remind users', priority: 'should', title: 'Learning reminder' };
+    activity.node = null;
+    activity.nodeError = 'No node inspection for operation fields';
+    activity.cards.a1 = [{ nodeId: 'reminder', path, after }];
+    activity.view!.current = { requirements: { learning_reminder: after } };
+    activity.view!.netDiff = activity.cards.a1;
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{
+          operation: activityOperation({
+            nodeId: 'reminder',
+            path: `${path}/priority`,
+            after: 'must',
+          }),
+          meta: { eventId: 'a1', actionId: 'a1', comparison: 'event', operationIndex: 1 },
+        }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(activity.inspectNode).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Selected field details')).toBeInTheDocument();
+    const current = screen.getByRole('region', { name: 'Current Draft value' });
+    expect(current).toHaveTextContent('should');
+    expect(current).not.toHaveTextContent('Remind users');
+    expect(current).not.toHaveTextContent('Learning reminder');
+    expect(screen.getByText('Selected action · A1 · YOp 1')).toBeInTheDocument();
+    expect(screen.getByText('must')).toBeInTheDocument();
   });
 
   it('opens Chat and historical actions with the selected field context', () => {
@@ -146,8 +202,103 @@ describe('Compose field Details', () => {
       />
     );
     expect(screen.getByText('Whole draft · Base → r2')).toBeInTheDocument();
-    expect(screen.queryByText('Reason for this action')).not.toBeInTheDocument();
+    const details = screen.getByRole('region', { name: 'Action details' });
+    expect(details).toHaveTextContent('Latest saved action · A2');
+    expect(details).toHaveTextContent('The comparison above covers the whole Draft.');
+    expect(details).toHaveTextContent('Raise allocation again');
+    expect(details).not.toHaveTextContent('Start a smaller canary');
     expect(screen.queryByText('Selected action · A1')).not.toBeInTheDocument();
+  });
+
+  it('shows generated provenance and real YOps in the default single-action Draft details', async () => {
+    const activity = activityFixture();
+    actorProfiles.resolveCollaborationUsers.mockResolvedValue({
+      users: [{ user_id: 'user_fbe808916687', username: 'ui-test-b1' }],
+    });
+    const generated = {
+      ...activity.actions[1],
+      channel: 'assistant' as const,
+      actor: {
+        kind: 'service' as const,
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'user:user_fbe808916687' },
+      },
+      reason: 'Apply generated changes to Draft',
+      operations: [{ append: { path: 'requirements/children', value: { key: 'new-card' } } }],
+      generation: {
+        transitionId: 'trn_1',
+        preparationDigest: 'sha256:test',
+        preparation: { bindings: [{ reason: 'Capture the requested learning goal.' }] },
+      },
+    };
+    activity.actions = [generated];
+    activity.node!.entries = [activity.node!.entries[1]];
+    activity.compositionRevision = 1;
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{ ...selection, meta: { eventId: 'all', comparison: 'draft' } }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Whole draft · Base → r1')).toBeInTheDocument();
+    const details = screen.getByRole('region', { name: 'Action details' });
+    expect(details).toHaveTextContent('Latest saved action · A1');
+    expect(details).toHaveTextContent('2026');
+    expect(details).toHaveTextContent('T3X proposal generator / AI');
+    expect(details).toHaveTextContent('Published by');
+    await waitFor(() => expect(details).toHaveTextContent('@ui-test-b1'));
+    expect(actorProfiles.resolveCollaborationUsers).toHaveBeenCalledWith(['user_fbe808916687']);
+    expect(details).not.toHaveTextContent('User fbe808916687');
+    expect(details).toHaveTextContent('Capture the requested learning goal.');
+    expect(details).toHaveTextContent('append');
+    fireEvent.click(screen.getByText('View exact YOps · 1 operation'));
+    expect(details).toHaveTextContent('"requirements/children"');
+  });
+
+  it('shows the generated reason, publishing principal, and original append operation for an older action', () => {
+    const activity = activityFixture();
+    const generated = {
+      ...activity.actions[1],
+      channel: 'assistant' as const,
+      actor: {
+        kind: 'service' as const,
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'human:local-user' },
+      },
+      reason: 'Apply generated changes to Draft',
+      operations: [{ append: { path: 'requirements/children', value: { key: 'new-card' } } }],
+      generation: {
+        transitionId: 'trn_1',
+        preparationDigest: 'sha256:test',
+        preparation: {
+          bindings: [{ reason: 'Capture the requested learning goal.' }],
+        },
+      },
+    };
+    activity.actions = [activity.actions[0]];
+    activity.inspectedAction = generated;
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={selection}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+
+    const details = screen.getByRole('region', { name: 'Action details' });
+    expect(details).toHaveTextContent('T3X proposal generator / AI');
+    expect(details).toHaveTextContent('Published by');
+    expect(details).toHaveTextContent('Capture the requested learning goal.');
+    expect(details).toHaveTextContent('append');
+    expect(details).not.toHaveTextContent('Apply generated changes to Draft');
+    fireEvent.click(screen.getByText('View exact YOps · 1 operation'));
+    expect(details).toHaveTextContent('"requirements/children"');
   });
 
   it('preserves primitive types when a field is expanded from a container action', () => {
@@ -285,6 +436,30 @@ describe('Compose object Details', () => {
       } as ComposeActivitySelection,
     };
   }
+
+  it('shows the latest saved action in the default object Draft details', () => {
+    const { activity, selected } = objectFixture();
+    activity.actions = [activity.actions[1]];
+    activity.cards = { a1: activity.cards.a1 };
+    activity.compositionRevision = 1;
+    activity.view!.current = { tasks: [after] };
+    activity.view!.netDiff = composeObjectChangeCards([{ nodeId: 'task', path, before, after }]);
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{ ...selected, meta: { eventId: 'all', comparison: 'draft' } }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Selected object details')).toBeInTheDocument();
+    expect(screen.getByText('Whole draft · Base → r1')).toBeInTheDocument();
+    const details = screen.getByRole('region', { name: 'Action details' });
+    expect(details).toHaveTextContent('Latest saved action · A1');
+    expect(details).toHaveTextContent('Start a smaller canary');
+  });
 
   it('shows every selected field, the latest actual object, and history without requesting a fake object ID', () => {
     const { activity, selected } = objectFixture();

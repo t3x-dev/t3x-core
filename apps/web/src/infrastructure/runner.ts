@@ -538,11 +538,12 @@ export async function listEngineRuns(options?: {
  *
  * v2.1: Returns distinct values for populating filter dropdowns in the UI.
  */
-export async function getRunFilterOptions(): Promise<{
+export async function getRunFilterOptions(projectId?: string): Promise<{
   models: string[];
   prompt_versions: string[];
 }> {
-  const res = await fetchWithTimeout(`${API_V1}/runs/filters`);
+  const params = projectId ? `?${buildQueryString({ project_id: projectId })}` : '';
+  const res = await fetchWithTimeout(`${API_V1}/runs/filters${params}`);
   const data = await handleResponse<{
     models: string[];
     prompt_versions: string[];
@@ -611,9 +612,9 @@ export interface ComparisonResult {
  *
  * v2.2: Used for selecting which configurations to compare in A/B test
  */
-export async function getConfigurations(projectId?: string): Promise<ConfigurationStats[]> {
-  const query = projectId ? buildQueryString({ project_id: projectId }) : '';
-  const res = await fetchWithTimeout(`${API_V1}/runs/configurations${query ? `?${query}` : ''}`);
+export async function getConfigurations(projectId: string): Promise<ConfigurationStats[]> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/runs/configurations?${query}`);
   const data = await handleResponse<{ configurations: ConfigurationStats[] }>(res);
   return data.configurations;
 }
@@ -625,12 +626,12 @@ export async function getConfigurations(projectId?: string): Promise<Configurati
  *
  * @param control - Control configuration (A)
  * @param treatment - Treatment configuration (B)
- * @param projectId - Optional project ID filter
+ * @param projectId - Project that owns both configurations
  */
 export async function compareConfigurations(
   control: { model: string; prompt_version: string },
   treatment: { model: string; prompt_version: string },
-  projectId?: string
+  projectId: string
 ): Promise<ComparisonResult> {
   const res = await fetchWithTimeout(`${API_V1}/runs/compare`, {
     method: 'POST',
@@ -661,7 +662,7 @@ export interface SavedComparison {
 }
 
 export async function createSavedComparison(input: {
-  project_id?: string | null;
+  project_id: string;
   title: string;
   control_config: { model: string; prompt_version: string };
   treatment_config: { model: string; prompt_version: string };
@@ -677,20 +678,33 @@ export async function createSavedComparison(input: {
   return handleResponse<SavedComparison>(res);
 }
 
-export async function listSavedComparisons(projectId?: string): Promise<SavedComparison[]> {
-  const params = projectId ? `?${buildQueryString({ project_id: projectId })}` : '';
-  const res = await fetchWithTimeout(`${API_V1}/comparisons${params}`);
+export async function listSavedComparisons(projectId: string): Promise<SavedComparison[]> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(`${API_V1}/comparisons?${query}`);
   return handleResponse<SavedComparison[]>(res);
 }
 
-export async function getSavedComparison(comparisonId: string): Promise<SavedComparison> {
-  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`);
+export async function getSavedComparison(
+  comparisonId: string,
+  projectId: string
+): Promise<SavedComparison> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(
+    `${API_V1}/comparisons/${encodeURIComponent(comparisonId)}?${query}`
+  );
   return handleResponse<SavedComparison>(res);
 }
 
-export async function deleteSavedComparison(comparisonId: string): Promise<void> {
-  const res = await fetchWithTimeout(`${API_V1}/comparisons/${comparisonId}`, {
-    method: 'DELETE',
-  });
+export async function deleteSavedComparison(
+  comparisonId: string,
+  projectId: string
+): Promise<void> {
+  const query = buildQueryString({ project_id: projectId });
+  const res = await fetchWithTimeout(
+    `${API_V1}/comparisons/${encodeURIComponent(comparisonId)}?${query}`,
+    {
+      method: 'DELETE',
+    }
+  );
   await handleResponse(res);
 }

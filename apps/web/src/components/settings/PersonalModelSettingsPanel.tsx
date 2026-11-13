@@ -2,13 +2,19 @@
 
 import { GripVertical, Loader2, UserRound } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
+import { safeAuthCallbackUrl } from '@/domain/authCallback';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import {
+  getPersonalModelRecovery,
   type PersonalModelPreferences,
   usePersonalModelPreferences,
 } from '@/hooks/settings/usePersonalModelPreferences';
+import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import styles from './PersonalModelSettingsPanel.module.css';
 
 function labelFor(model: string): string {
@@ -64,16 +70,32 @@ function ModelSelect({
 
 export function PersonalModelSettingsPanel() {
   const { data, loading, saving, error, retry, save } = usePersonalModelPreferences();
+  const { capabilities, status, refresh, canAdministerProviderCredentials } =
+    useDeploymentCapabilities();
+  const params = useSearchParams();
+  const pageHref = buildReturnTo('/settings/providers', params?.toString());
+  const generalHref = namespaceSettingsHref(
+    params?.get('namespace') ?? null,
+    safeInternalReturnTo(params?.get('returnTo'), '')
+  );
   const [draft, setDraft] = useState<PersonalModelPreferences | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<unknown>(null);
 
   useEffect(() => setDraft(data), [data]);
 
   const available =
     draft?.quick_switcher.filter((item) => item.available).map((item) => item.model) ?? [];
+  const failure = saveError ?? error;
+  const recovery = getPersonalModelRecovery(failure);
+  const canSignIn =
+    status === 'ready' &&
+    capabilities.identity.mode === 'local' &&
+    capabilities.identity.auth_operations.includes('sign_in');
 
   async function saveChanges() {
-    if (!draft) return;
+    if (!draft || saving) return;
+    setSaveError(null);
     try {
       await save({
         compose_default: draft.compose_default,
@@ -82,7 +104,7 @@ export function PersonalModelSettingsPanel() {
       });
       toast.success('Default model preferences saved');
     } catch (cause) {
-      toast.error(formatUserFacingError(cause, 'Failed to save model preferences.'));
+      setSaveError(cause);
     }
   }
 
@@ -100,7 +122,7 @@ export function PersonalModelSettingsPanel() {
     <div className={styles.page}>
       <div className={styles.inner}>
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-          <Link href="/settings">Settings</Link>
+          <Link href={generalHref}>Settings</Link>
           <span>/</span>
           <span>Personal</span>
           <span>/</span>
@@ -120,12 +142,61 @@ export function PersonalModelSettingsPanel() {
             Loading preferences
           </div>
         ) : null}
-        {error && !draft ? (
+        {failure ? (
           <div className={styles.error} role="alert">
-            <span>{formatUserFacingError(error, 'Failed to load model preferences.')}</span>
-            <button type="button" onClick={() => void retry()}>
-              Retry
-            </button>
+            {recovery === 'local' ? (
+              <>
+                <span>
+                  Personal model preferences are unavailable while local authentication is disabled.
+                </span>
+                {canAdministerProviderCredentials ? (
+                  <Link href={withReturnTo('/settings/model-access', pageHref)}>
+                    Open deployment model access
+                  </Link>
+                ) : (
+                  <Link href={safeInternalReturnTo(params?.get('returnTo'), '/repositories')}>
+                    Leave personal model settings
+                  </Link>
+                )}
+              </>
+            ) : recovery === 'sign-in' ? (
+              <>
+                <span>
+                  {saveError
+                    ? 'Your session is no longer valid. Your changes have not been saved.'
+                    : 'Sign in to load your personal model preferences.'}
+                </span>
+                {canSignIn ? (
+                  <Link
+                    href={`/login?${new URLSearchParams({ callbackUrl: safeAuthCallbackUrl(pageHref) })}`}
+                  >
+                    Sign in
+                  </Link>
+                ) : status === 'error' ? (
+                  <button type="button" onClick={refresh}>
+                    Check sign-in availability
+                  </button>
+                ) : status === 'ready' ? (
+                  <span>Use your deployment’s sign-in entry to restore your session.</span>
+                ) : null}
+              </>
+            ) : recovery === 'forbidden' ? (
+              <span>This account does not have access to personal model preferences.</span>
+            ) : (
+              <>
+                <span>
+                  {formatUserFacingError(
+                    failure,
+                    saveError ? 'Could not confirm the save.' : 'Failed to load model preferences.'
+                  )}
+                </span>
+                {!saveError && (
+                  <button type="button" onClick={() => void retry()}>
+                    Retry
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : null}
 
@@ -205,7 +276,11 @@ export function PersonalModelSettingsPanel() {
               />
             </section>
             <div className={styles.saveRow}>
-              <button type="button" disabled={saving} onClick={() => void saveChanges()}>
+              <button
+                type="button"
+                disabled={saving || Boolean(failure && recovery !== 'read')}
+                onClick={() => void saveChanges()}
+              >
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
             </div>

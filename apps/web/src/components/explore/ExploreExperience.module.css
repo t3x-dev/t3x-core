@@ -39,7 +39,7 @@
   font-size: 13px;
   cursor: pointer;
 }
-.types button[aria-current],
+.types button[aria-pressed="true"],
 .viewSwitch button[aria-pressed="true"] {
   background: var(--surface-card);
   color: var(--text-primary);
@@ -242,7 +242,8 @@
   overflow: hidden;
   min-height: 39px;
 }
-.tags {
+.tags,
+.projectTags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -489,61 +490,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
-.projectCard {
-  display: flex;
-  flex-direction: column;
-  --project-color: #447d8a;
-  --project-bg: #e8f1f3;
-}
-.projectCard[data-tone="1"] {
-  --project-color: #8662b1;
-  --project-bg: #f0eaf8;
-}
-.projectCard[data-tone="2"] {
-  --project-color: #927137;
-  --project-bg: #f4eede;
-}
-.projectCard[data-tone="3"] {
-  --project-color: #4d74a3;
-  --project-bg: #e8eff8;
-}
-.projectPattern {
-  height: 77px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 24px;
-  overflow: hidden;
-  color: var(--project-color);
-  background: var(--project-bg);
-}
-.projectPattern > span {
-  position: absolute;
-  width: 180px;
-  height: 180px;
-  border: 1px solid currentColor;
-  border-radius: 40px;
-  opacity: 0.2;
-  left: 24px;
-  transform: rotate(30deg);
-}
-.projectPattern > span:nth-child(2) {
-  left: 66px;
-}
-.projectIcon {
-  display: grid;
-  place-items: center;
+.cardHead .projectIcon {
   width: 40px;
   height: 40px;
-  flex-shrink: 0;
-  color: var(--project-color);
-  background: var(--project-bg);
-  border-radius: 10px;
-}
-.projectCard .cardBody {
-  flex: 1;
-  height: auto;
 }
 .browseLayout {
   display: grid;
@@ -721,14 +670,10 @@
 .projectHero {
   margin: 24px 0 32px;
 }
-.projectHeroArt {
-  height: 150px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: repeating-linear-gradient(30deg, #4d74a311 0 30px, #4d74a322 30px 31px);
-  color: #4d74a3;
-  margin-bottom: 26px;
+.projectHeroHeading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .projectHero h1 {
   font-size: 30px;

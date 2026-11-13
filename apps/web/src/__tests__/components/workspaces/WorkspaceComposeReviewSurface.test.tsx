@@ -20,9 +20,6 @@ import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWor
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit } from '@/types/api';
 
-vi.mock('@/components/workspaces/WorkspaceContentEditor', () => ({
-  WorkspaceContentEditor: () => <div>Edit structured content</div>,
-}));
 vi.mock('@/components/workspaces/OutputTargetsTab', () => ({
   OutputTargetsTab: () => <div>Committed State delivery</div>,
 }));
@@ -185,6 +182,7 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
     candidate: savedSchemaMock.candidate,
     loading: false,
     error: undefined,
+    refresh: vi.fn(),
   }),
 }));
 const schemaDiscussion = vi.fn();
@@ -350,7 +348,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     };
     const rows = buildWorkspaceReviewStructureRows(
       buildStatePointRows(head),
-      buildStructuredStateDiff({ baseline, head })
+      buildStructuredStateDiff({ baseline, head, includeEmptyArrayParent: true })
     );
     const descendants = rows.filter((row) => row.path.startsWith('candidate/inputs/'));
     expect(descendants.length).toBeGreaterThan(2);
@@ -430,8 +428,15 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     const head = content(after);
     const rows = buildWorkspaceReviewStructureRows(
       buildStatePointRows(head),
-      buildStructuredStateDiff({ baseline, head })
+      buildStructuredStateDiff({ baseline, head, includeEmptyArrayParent: true })
     );
+    if (before.length === 0)
+      expect(rows.find((row) => row.path === 'candidate/inputs')?.diff).toMatchObject({
+        kind: 'modified',
+        beforeValue: '[]',
+        afterValue: '- name: new',
+        exact: true,
+      });
     expect(rows.find((row) => row.path === `candidate/inputs/${path}`)?.diff).toMatchObject({
       kind,
       beforeValue,
@@ -510,6 +515,59 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it('opens a separate shared Details card for each recorded operation field', () => {
+    enableComposeActivity();
+    const after = { acceptance: 'Remind users', priority: 'should', title: 'Learning reminder' };
+    const path = 'requirements/learning_reminder';
+    const card = { nodeId: 'reminder', path, after };
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: { id: 'service:t3x-proposal-generator', kind: 'service' as const },
+      publishedAt: '2026-10-29T00:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path, value: after } }],
+      reason: 'Add a learning reminder',
+    };
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = { a1: [card] };
+    activityMocks.value!.view!.current = { requirements: { learning_reminder: after } };
+    activityMocks.value!.view!.netDiff = [card];
+    activityMocks.value!.operationItems = [
+      {
+        actionId: 'a1',
+        sequence: 1,
+        index: 1,
+        name: 'set',
+        path,
+        fields: Object.entries(after).map(([field, value]) => ({
+          op: 'set' as const,
+          path: `${path}/${field}`,
+          after: value,
+        })),
+      },
+    ];
+    renderCompose();
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'All changes' }));
+    fireEvent.click(screen.getByText(/P-01 · YOp 1/));
+    for (const [field, value] of Object.entries(after)) {
+      fireEvent.click(screen.getByRole('button', { name: `Inspect ${field}: ${path}/${field}` }));
+      const details = screen.getByRole('region', { name: 'Selected field details' });
+      expect(
+        within(details).getByRole('heading', { name: new RegExp(`^${field}$`, 'i') })
+      ).toBeVisible();
+      const currentValue = within(details).getByRole('region', { name: 'Current Draft value' });
+      expect(currentValue).toHaveTextContent(value);
+      for (const other of Object.values(after).filter((entry) => entry !== value))
+        expect(currentValue).not.toHaveTextContent(other);
+      expect(within(details).getByText('Selected action · A1 · YOp 1')).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
+    }
+  });
 
   it('restores the change scope and stage on return, with explicit URL stages taking priority', () => {
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
@@ -721,17 +779,18 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     enableComposeActivity();
     activityMocks.value!.view = null;
     renderCompose();
-    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent('0 operations');
-    expect(screen.queryByTitle('Changed Content objects')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveAccessibleDescription(
+      '0 Draft operations'
+    );
   });
 
-  it('labels object counts separately from content and Workspace revisions', () => {
+  it('labels change counts separately from content and Workspace revisions', () => {
     enableComposeActivity();
     activityMocks.value!.compositionRevision = 2;
     activityMocks.value!.view!.workspaceRevision = 7;
     renderCompose();
-    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent(
-      '0 changed objects'
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveAccessibleDescription(
+      '0 Content changes'
     );
     expect(screen.getByText('Content r2 · Workspace r7')).toBeInTheDocument();
   });
@@ -1527,8 +1586,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       operations: [],
     };
     const cards = [{ nodeId: 'allocation', path: 'rollout/allocation', before: 20, after: 25 }];
-    const publish = vi.fn().mockResolvedValue({ kind: 'published' });
-    const refreshFromServer = vi.fn().mockResolvedValue(undefined);
+    const publish = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Connection lost'))
+      .mockResolvedValue({ kind: 'published' });
+    const refreshFromServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Workspace read failed'))
+      .mockResolvedValue(undefined);
     activityMocks.value = {
       enabled: true,
       loading: false,
@@ -1563,6 +1628,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         actions: [action],
         selected: { action, cards },
         current: { rollout: { allocation: 25, channel: 'stable' } },
+        synchronization: { required: true, currentRefHead: 'sha256:latest' },
         netDiff: cards,
         node: null,
         nextBeforeSequence: null,
@@ -1605,6 +1671,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview branch changes' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved Content changes' })).toBeVisible();
+    expect(navigationMocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing', exact: true }));
+
     fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
     expect(screen.getByRole('dialog', { name: 'Unsaved Content changes' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing', exact: true }));
@@ -1665,20 +1736,37 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Regions in the next P' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save selected as P (1)' }));
-    await waitFor(() =>
-      expect(publish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
-        })
-      )
+    const retryOriginal = await screen.findByRole('button', { name: 'Retry original save' });
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operations: [{ set: { path: 'rollout/allocation', value: 30 } }],
+      })
     );
+    expect(refreshFromServer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Allocation in the next P' }));
+    expect(retryOriginal).toBeEnabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Review', exact: true }));
+    const guard = screen.getByRole('dialog', { name: 'Unsaved Content changes' });
+    fireEvent.click(
+      within(guard).getByRole('button', { name: 'Retry original save and continue' })
+    );
+    expect(await within(guard).findByText(/Local changes remain/)).toBeVisible();
+    fireEvent.click(within(guard).getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('tab', { name: 'Compose' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText(/Changes saved, but the Draft could not refresh/)).toBeVisible();
     expect(refreshFromServer).toHaveBeenCalledOnce();
+    expect(publish.mock.calls).toEqual([publish.mock.calls[0], publish.mock.calls[0]]);
     expect(
       screen.getByRole('checkbox', { name: 'Include Regions in the next P' })
     ).not.toBeChecked();
     expect(
       screen.queryByRole('checkbox', { name: 'Include Allocation in the next P' })
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }));
+    await waitFor(() =>
+      expect(screen.queryByText(/Changes saved, but the Draft could not refresh/)).toBeNull()
+    );
+    expect(publish).toHaveBeenCalledTimes(2);
   });
 
   it('stages object slot edits as one object row and publishes the selected field operations as P', async () => {
@@ -1967,7 +2055,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(prepareReview).not.toHaveBeenCalled();
     expect(onModeChange).toHaveBeenCalledWith('review');
     expect(navigationMocks.replace).toHaveBeenLastCalledWith(
-      '/t3x-dev/test-project/workspaces?workspaceMode=review',
+      '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
     );
 
@@ -2043,7 +2131,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
-      'Current draft — no review snapshot prepared. Prepare review to freeze this revision.'
+      'Saved Draft · No fixed review selected'
     );
     expect(within(screen.getByLabelText('YAML code view')).getByRole('heading')).toHaveTextContent(
       candidate.revision === undefined
@@ -2055,6 +2143,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       projectId: 'proj_1',
       workspaceId: candidate.id,
       snapshotId: 'rvs_ready',
+      review: {
+        precondition: {
+          workspaceRevision: candidate.revision,
+          refHead: candidate.baseCommitHash,
+          refName: candidate.targetBranch,
+        },
+      },
     } as never;
     rerender(
       <WorkspaceComposeReviewSurface
@@ -2096,13 +2191,41 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(within(selectedChange).getByText('Previous outcome')).toBeInTheDocument();
     expect(within(selectedChange).getByText('Auditable rollout outcome')).toBeInTheDocument();
+    const reviewDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(reviewDetails).toHaveTextContent('prd/summary/outcome');
+    expect(reviewDetails).toHaveTextContent('Previous outcome');
+    expect(reviewDetails).toHaveTextContent('Auditable rollout outcome');
+    expect(screen.getByRole('region', { name: 'Review readiness' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse prd', exact: true }));
     expect(within(screen.getByRole('table')).queryByTitle('prd/summary/outcome')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand prd', exact: true }));
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
     const code = screen.getByLabelText('YAML code view');
-    expect(code).toHaveTextContent('Current draft — matches prepared review snapshot');
+    expect(code).toHaveTextContent('Saved Draft · Matches the prepared snapshot');
+    controller.review.reviewSnapshot = {
+      ...controller.review.reviewSnapshot,
+      review: {
+        precondition: {
+          workspaceRevision: candidate.revision,
+          refHead: 'sha256:different-branch-base',
+          refName: candidate.targetBranch,
+        },
+      },
+    } as never;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
+    expect(code).toHaveTextContent(
+      'Saved Draft · Previous snapshot applies to a different version'
+    );
+    expect(code).not.toHaveTextContent('Matches the prepared snapshot');
+
     fireEvent.click(
       within(code)
         .getAllByRole('button', {
@@ -2115,23 +2238,30 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/requirements/canary/title'
+    );
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
+    const newer = {
+      workspaceRevision: 13,
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      compositionRevision: 1,
+      base: { title: 'Old' },
+      current: { title: 'New' },
+      netDiff: [],
+    };
+    const loadLatest = vi.fn().mockResolvedValue(newer);
     activityMocks.value = {
-      view: null,
-      newActivity: {
-        workspaceRevision: 13,
-        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
-        compositionRevision: 1,
-        base: { title: 'Old' },
-        current: { title: 'New' },
-        netDiff: [],
-      },
+      enabled: true,
+      view: { ...newer, workspaceRevision: 12, current: { title: 'Inspected' } },
+      newActivity: newer,
+      loadLatest,
     } as ReturnType<typeof useComposeActivity>;
     controller.review.reviewSnapshot = {
       ...controller.review.reviewSnapshot,
-      review: { precondition: { workspaceRevision: 12 } },
+      review: { precondition: { workspaceRevision: 12, refHead: null, refName: 'main' } },
     } as never;
     rerender(
       <WorkspaceComposeReviewSurface
@@ -2143,13 +2273,34 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     expect(
-      screen.getByText('The branch or Draft changed. Prepare review again.')
+      screen.getByText(
+        'The previous snapshot does not cover the current Draft, branch base, or saved Schema.'
+      )
     ).toBeInTheDocument();
     expect(screen.getByLabelText('YAML code view')).toHaveTextContent(
-      'Current draft — previous review snapshot is outdated. Prepare review again.'
+      'Saved Draft · Previous snapshot applies to a different version'
     );
     expect(prepareReview).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByText(/Workspace r13 is available/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Workspace draft r12/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prepare review' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
+    expect(prepareReview).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('YAML code view')).toHaveTextContent('Inspected');
+    fireEvent.click(screen.getByRole('button', { name: 'Load latest Draft' }));
+    expect(loadLatest).toHaveBeenCalledOnce();
+    activityMocks.value = { ...activityMocks.value, view: newer, newActivity: null } as ReturnType<
+      typeof useComposeActivity
+    >;
+    rerender(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={onModeChange}
+      />
+    );
     prepareReview.mockImplementationOnce(async (onPrepared) => {
       onPrepared({
         projectId: candidate.projectId,
@@ -2160,10 +2311,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       return true;
     });
     fireEvent.click(screen.getByRole('button', { name: 'Prepare review' }));
-    expect(navigationMocks.replace).toHaveBeenCalledWith(
-      `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
-      { scroll: false }
+    await waitFor(() =>
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        `/project/proj_1?tab=workspaces&workspace=${encodeURIComponent(candidate.id)}&workspaceMode=review&branch=feature%2Freview&reviewSnapshot=rvs_new&reviewPane=yaml`,
+        { scroll: false }
+      )
     );
+    expect(prepareReview).toHaveBeenCalledWith(expect.any(Function), newer);
     expect(decide).not.toHaveBeenCalled();
     unmount();
     navigationMocks.replace.mockClear();
@@ -2187,7 +2341,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       domain: 't3x.dev/semantic-content',
       version: 1,
       content: {
-        relations: [],
+        relations: [{ from: 'prd/temperature', to: 'prd', type: 'precedes' }],
         trees: [
           {
             key: 'prd',
@@ -2292,6 +2446,14 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(/1 modified/)).not.toBeInTheDocument();
     expect(within(structure).getAllByText('气温').length).toBeGreaterThan(0);
     expect(within(structure).getAllByText('低于20度').length).toBeGreaterThan(0);
+    expect(screen.getByText('Base and Draft relations')).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Review views' })).getByRole('button', {
+        name: 'YAML',
+      })
+    );
+    fireEvent.click(screen.getByText('Complete Content YAML · Workspace r7'));
+    expect(screen.getByLabelText('Draft Content YAML')).toHaveTextContent('precedes');
     expect(prepareReview).not.toHaveBeenCalled();
   });
 
@@ -2377,15 +2539,138 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalled());
     const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
-    expect(target.pathname).toBe('/project/proj_1/checks');
+    expect(target.pathname).toBe('/t3x-dev/test-project/checks');
     expect(target.searchParams.get('workspace')).toBe(candidate.id);
     expect(controller.prepareReview).not.toHaveBeenCalled();
     expect(snapshotMocks.list).not.toHaveBeenCalled();
   });
 
+  it('shows the matching saved action and original YOps beside a selected Review diff', () => {
+    enableComposeActivity();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const action = {
+      actionId: 'a1',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: {
+        kind: 'service' as const,
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'human:local-user' },
+      },
+      publishedAt: '2026-10-09T11:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path: 'prd/summary/outcome', value: 'After' } }],
+      reason: 'Apply generated changes to Draft',
+      generation: {
+        transitionId: 'trn_1',
+        preparationDigest: 'sha256:test',
+        preparation: { bindings: [{ reason: 'Clarify the intended outcome.' }] },
+      },
+    };
+    const card = {
+      nodeId: 'outcome',
+      path: 'prd/summary/outcome',
+      before: 'Before',
+      after: 'After',
+    };
+    const otherCard = {
+      nodeId: 'title',
+      path: 'prd/summary/title',
+      before: 'Old title',
+      after: 'New title',
+    };
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = {
+      a1: [
+        {
+          ...card,
+          path: 'content/trees/[key=prd]/children/[key=summary]/slots/outcome',
+        },
+      ],
+    };
+    Object.assign(activityMocks.value!.view!, {
+      base: { prd: { summary: { outcome: 'Before', title: 'Old title', priority: 'must' } } },
+      current: { prd: { summary: { outcome: 'After', title: 'New title', priority: 'must' } } },
+      actions: [action],
+      netDiff: [card, otherCard],
+      hasChanges: true,
+    });
+    const controller = {
+      candidate,
+      isBusy: false,
+      busyAction: null,
+      scenarios: { options: [], selectedId: candidate.id },
+      review: { content: null, deterministicValidation: null, reviewSnapshot: null, view: null },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/summary/outcome'
+    );
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/outcome').closest('tr')!
+    );
+    const details = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(details).toHaveTextContent('Before');
+    expect(details).toHaveTextContent('After');
+    const actionDetails = within(details).getByRole('region', { name: 'Action details' });
+    expect(actionDetails).toHaveTextContent('Latest saved action affecting this path · A1');
+    expect(actionDetails).toHaveTextContent('T3X proposal generator / AI');
+    expect(actionDetails).toHaveTextContent('Published by');
+    expect(actionDetails).toHaveTextContent('Clarify the intended outcome.');
+    fireEvent.click(within(actionDetails).getByText('View exact YOps · 1 operation'));
+    expect(actionDetails).toHaveTextContent('"prd/summary/outcome"');
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/title').closest('tr')!
+    );
+    const otherDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(otherDetails).toHaveTextContent('Old title');
+    expect(otherDetails).toHaveTextContent('New title');
+    expect(within(otherDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
+    expect(otherDetails).toHaveTextContent('Saved action details are unavailable');
+    fireEvent.click(
+      within(screen.getByRole('table')).getByTitle('prd/summary/priority').closest('tr')!
+    );
+    const unchangedDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    expect(unchangedDetails).toHaveTextContent('prd/summary/priority');
+    expect(unchangedDetails).toHaveTextContent('Matches Base · no change');
+    expect(unchangedDetails).toHaveTextContent(
+      'This path matches Base; no saved action is attributed to it.'
+    );
+    expect(within(unchangedDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    const preview = screen.getByRole('region', { name: 'Content result preview' });
+    fireEvent.click(
+      within(preview)
+        .getByTitle('content/trees/[key=prd]/children/[key=summary]/slots/priority')
+        .closest('tr')!
+    );
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'prd/summary/priority'
+    );
+    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+      'Matches Base · no change'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(within(screen.getByRole('table')).getByTitle('prd/summary').closest('tr')!);
+    expect(
+      within(screen.getByRole('region', { name: 'Selected review Details' })).getByRole('region', {
+        name: 'Action details',
+      })
+    ).toHaveTextContent('Clarify the intended outcome.');
+  });
+
   it.each([
-    ['sha256:abcdef0123456789', 'Base commit abcdef0'],
-    [null, 'Workspace baseline (no base commit)'],
+    ['sha256:abcdef0123456789', 'Base commit abcdef0 (empty Content)'],
+    [null, 'Empty base'],
   ])('identifies the comparison baseline %s without confusing the hash prefix or an imported base', (baseCommitHash, label) => {
     const candidate = { ...getWorkspacePreviewCandidates('proj_1')[0], baseCommitHash };
     const controller = {
@@ -2396,6 +2681,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         deterministicValidation: {
           ok: true,
           baselineTrees: [],
+          baselineRelations: [],
           previewTrees: [{ key: 'prd', slots: { title: 'New draft' }, children: [] }],
         },
         content: null,
@@ -2524,7 +2810,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         .map((button) => button.getAttribute('aria-label'))
     ).toEqual(['Changes', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project/workspaces?workspaceMode=review',
+      '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
     );
 
@@ -2541,7 +2827,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
   });
 
   it.each([
-    'edit',
     'source',
     'delivery',
   ] as const)('moves the legacy %s link out of Review and preserves its Workspace and branch', (tool) => {
@@ -2580,9 +2865,41 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     const back = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
     expect(back.searchParams.get('workspaceTool')).toBeNull();
-    expect(back.searchParams.get('reviewPane')).toBeNull();
+    expect(back.searchParams.get('reviewPane')).toBe(tool === 'delivery' ? 'changes' : null);
     expect(back.searchParams.get('workspace')).toBe('ws:main');
     expect(onModeChange).toHaveBeenCalledWith(tool === 'delivery' ? 'review' : 'compose');
+  });
+
+  it.each([
+    'reviewPane',
+    'workspaceTool',
+  ])('opens Compose without starting the editor or saving from a legacy %s=edit URL', (parameter) => {
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    navigationMocks.searchParams = new URLSearchParams(
+      `workspace=ws%3Amain&branch=feature&workspaceMode=review&${parameter}=edit`
+    );
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={
+          {
+            candidate,
+            isBusy: false,
+            materialSources: [],
+            scenarios: { options: [], selectedId: candidate.id },
+          } as unknown as WorkspaceComposeReviewController
+        }
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('dialog', { name: 'Edit Workspace Draft' })).not.toBeInTheDocument();
+    expect(bootstrapMocks.value.start).not.toHaveBeenCalled();
+    const target = new URL(navigationMocks.replace.mock.calls.at(-1)?.[0], 'http://localhost');
+    expect(target.searchParams.get('workspaceMode')).toBe('compose');
+    expect(target.searchParams.get('workspace')).toBe('ws:main');
+    expect(target.searchParams.get('branch')).toBe('feature');
+    expect(target.searchParams.get(parameter)).toBeNull();
   });
 
   it('returns from Delivery to the exact review snapshot, rejecting external return targets', () => {
@@ -2990,7 +3307,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
     savedSchemaMock.candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidate;
     schemaEditingMocks.read.mockResolvedValue({
-      workspace: { revision: candidate.revision },
+      workspace: { revision: 1 },
       edit: savedSchemaMock.candidate,
       unapplied: true,
       preview: {

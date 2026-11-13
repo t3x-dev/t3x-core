@@ -21,7 +21,7 @@ export function StudioChecks({
       {layers.map((layer) => (
         <div key={layer.id} className="space-y-2 border-t border-[var(--stroke-divider)] pt-3">
           <div className="flex items-center justify-between gap-3 font-medium">
-            <span>{layer.label}</span>
+            <span>{layer.id === 'freshness' ? 'Schema preview freshness' : layer.label}</span>
             <span
               className={
                 layer.status === 'passed'

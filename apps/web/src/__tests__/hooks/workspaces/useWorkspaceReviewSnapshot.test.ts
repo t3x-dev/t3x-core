@@ -149,7 +149,8 @@ describe('useWorkspaceReviewSnapshot', () => {
         policy_digest: `sha256:${'d'.repeat(64)}`,
       },
     });
-    expect(result.current.state.data?.change_projection.status).toBe('committed');
+    expect(result.current.state.data?.change_projection.status).toBe('reviewing');
+    expect(result.current.state.laterResult?.change_projection.status).toBe('committed');
     expect(result.current.state.data?.schema_review).toEqual(schemaReview);
     expect(commitCreated).toHaveBeenCalledOnce();
     window.removeEventListener('t3x:commit-created', commitCreated);
@@ -277,7 +278,8 @@ it('serializes rapid decisions and keeps refresh from replacing an in-flight dec
     await first;
   });
   expect(decideWorkspaceTransition).toHaveBeenCalledTimes(1);
-  expect(result.current.state.data?.snapshot.snapshotId).toBe(
+  expect(result.current.state.data?.snapshot.snapshotId).toBe(loaded.snapshot_id);
+  expect(result.current.state.laterResult?.snapshot.snapshotId).toBe(
     'rvs_99999999999999999999999999999999'
   );
 });
@@ -309,7 +311,8 @@ it('requires an override reason and preserves the recorded rejection without a c
     await act(async () => {
       expect(await result.current.decide('rejected')).toBeNull();
     });
-    expect(result.current.state.data?.snapshot.snapshotId).toBe('rvs_rejected');
+    expect(result.current.state.data?.snapshot.snapshotId).toBe(loaded.snapshot_id);
+    expect(result.current.state.laterResult?.snapshot.snapshotId).toBe('rvs_rejected');
     expect(result.current.state.data?.snapshot.objects.commit).toBeUndefined();
     expect(commitCreated).not.toHaveBeenCalled();
   } finally {
@@ -317,7 +320,7 @@ it('requires an override reason and preserves the recorded rejection without a c
   }
 });
 
-it('opens the latest result of the pinned Transition while retaining its frozen Schema content', async () => {
+it('shows frozen content while the decision loads and retains the confirmed result on refresh failure', async () => {
   const fixed = snapshotEnvelope('reviewing');
   const schema = {
     schema: 't3x.application/workspace-schema-review/v1',
@@ -327,31 +330,60 @@ it('opens the latest result of the pinned Transition while retaining its frozen 
     ...fixed,
     schema_review: schema,
   });
-  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue(
-    snapshotEnvelope('committed')
+  let resolveLatest!: (value: WorkspaceTransitionReviewSnapshotEnvelope) => void;
+  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveLatest = resolve;
+      })
   );
   const { result } = renderHook(() =>
     useWorkspaceReviewSnapshot('proj_1', 'workspace_prd_handoff', fixed.snapshot_id)
   );
-  await waitFor(() => expect(result.current.state.loading).toBe(false));
+  await waitFor(() => expect(result.current.state.data?.schema_review).toEqual(schema));
+  expect(result.current.state.loading).toBe(true);
+  expect(result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
   expect(fetchLatestWorkspaceTransitionReviewSnapshot).toHaveBeenCalledWith(
     'proj_1',
     'workspace_prd_handoff',
     fixed.transition_id
   );
-  expect(result.current.state.data?.change_projection.status).toBe('committed');
+  await act(async () => {
+    await result.current.decide('rejected');
+    resolveLatest(snapshotEnvelope('committed'));
+  });
+  expect(result.current.state.loading).toBe(false);
+  expect(result.current.state.data?.change_projection.status).toBe('reviewing');
+  expect(result.current.state.laterResult?.change_projection.status).toBe('committed');
   expect(result.current.state.data?.schema_review).toEqual(schema);
   await act(async () => {
     await result.current.decide('accepted');
   });
   expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockRejectedValueOnce(
+    new Error('Offline')
+  );
+  await act(async () => {
+    await result.current.load();
+  });
+  expect(result.current.state.latestUnavailable).toBe(true);
+  expect(result.current.state.data?.change_projection.status).toBe('reviewing');
+  expect(result.current.state.laterResult?.change_projection.status).toBe('committed');
+  expect(result.current.state.data?.schema_review).toEqual(schema);
 });
 
-it('keeps the fixed Review and blocks decisions if latest returns another Transition', async () => {
+it.each([
+  'transition',
+  'subject',
+])('keeps the fixed Review when latest changes its %s', async (difference) => {
   const fixed = snapshotEnvelope('reviewing');
   const other = snapshotEnvelope('committed');
-  other.transition_id = 'trn_other';
-  other.snapshot.transitionId = 'trn_other';
+  if (difference === 'transition') {
+    other.transition_id = 'trn_other';
+    other.snapshot.transitionId = 'trn_other';
+  } else {
+    other.snapshot.objects.result.digest = `sha256:${'f'.repeat(64)}`;
+  }
   vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(fixed);
   vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue(other);
   const { result } = renderHook(() =>
@@ -360,7 +392,7 @@ it('keeps the fixed Review and blocks decisions if latest returns another Transi
   await waitFor(() => expect(result.current.state.loading).toBe(false));
   expect(result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
   expect(result.current.state.latestUnavailable).toBe(true);
-  expect(result.current.state.error).toContain('different Review');
+  expect(result.current.state.error).toMatch(/different review/i);
   await act(async () => {
     await result.current.decide('rejected');
   });
@@ -387,7 +419,8 @@ it.each([
     await act(async () => {
       await result.current.decide(status === 'committed' ? 'accepted' : 'rejected');
     });
-    expect(result.current.state.data?.change_projection.status).toBe(status);
+    expect(result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
+    expect(result.current.state.laterResult?.change_projection.status).toBe(status);
     expect(result.current.state.error).toBeNull();
     expect(result.current.state.recovery).toBeUndefined();
     expect(window.sessionStorage.length).toBe(0);
@@ -433,7 +466,8 @@ it('locks an uncertain Decision to its original outcome, reason and precondition
     await result.current.retryDecision?.();
   });
   expect(vi.mocked(decideWorkspaceTransition).mock.calls[1]?.[2]).toEqual(original);
-  expect(result.current.state.data?.change_projection.status).toBe('committed');
+  expect(result.current.state.data?.change_projection.status).toBe('reviewing');
+  expect(result.current.state.laterResult?.change_projection.status).toBe('committed');
   expect(result.current.state.recovery).toBeUndefined();
   expect(window.sessionStorage.length).toBe(0);
 });
@@ -468,7 +502,8 @@ it('retains an uncertain original Decision after remount and does not switch its
   await act(async () => {
     await second.result.current.load();
   });
-  expect(second.result.current.state.data?.change_projection.status).toBe('rejected');
+  expect(second.result.current.state.data?.snapshot_id).toBe(fixed.snapshot_id);
+  expect(second.result.current.state.laterResult?.change_projection.status).toBe('rejected');
   expect(second.result.current.state.recovery).toBeUndefined();
   expect(original?.outcome).toBe('rejected');
   expect(window.sessionStorage.length).toBe(0);

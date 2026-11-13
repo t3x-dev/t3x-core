@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { showToast } from '@/components/layout/Toast';
@@ -30,9 +31,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { evaluationCompareHref } from '@/domain/evaluationLocation';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
+import { useQuery } from '@/hooks/shared/useQuery';
 import {
+  ApiError,
   checkRunnerHealth,
   createDeployAgent,
   type DeployAgent,
@@ -61,11 +65,24 @@ export default function DeployPage() {
 }
 
 function DeployPageContent() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('project')?.trim() || undefined;
+  return <DeployProjectContent key={projectId} projectId={projectId} />;
+}
+
+function DeployProjectContent({ projectId }: { projectId?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const prepare = searchParams.get('prepare') === '1';
   const initialLeafId = searchParams.get('leaf_id') || undefined;
-  const [runnerHealthy, setRunnerHealthy] = useState<boolean | null>(null);
+  const runner = useQuery({
+    queryKey: ['evaluation-runner-health'],
+    queryFn: checkRunnerHealth,
+    staleTime: 0,
+  });
+  const runnerHealthy = !runner.isLoading && !runner.error && runner.data?.status === 'ok';
   const [deployAgents, setDeployAgents] = useState<DeployAgent[]>([]);
+  const [agentsError, setAgentsError] = useState(false);
   const [runs, setRuns] = useState<EngineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddAgent, setShowAddAgent] = useState(false);
@@ -77,6 +94,9 @@ function DeployPageContent() {
 
   // Project store — ensure projects are loaded for RunsTable source column
   const projectsInitialized = useProjectStore((s) => s.initialized);
+  const projectName = useProjectStore((s) =>
+    projectId ? s.projects.find((project) => project.id === projectId)?.name : undefined
+  );
   const { list: fetchProjects } = useProjectCrud();
 
   // Filter states
@@ -89,7 +109,7 @@ function DeployPageContent() {
   // Load deploy agents from database and sync running status
   const loadDeployAgents = useCallback(async () => {
     try {
-      const data = await listDeployAgents();
+      const data = await listDeployAgents({ project_id: projectId });
       const agents = data.deploy_agents;
 
       // Check if any agents are stuck in 'running' status
@@ -97,7 +117,7 @@ function DeployPageContent() {
       const stuckAgents = agents.filter((a) => a.status === 'running' && a.last_run_id);
       if (stuckAgents.length > 0) {
         try {
-          const runsData = await listEngineRuns();
+          const runsData = await listEngineRuns({ project_id: projectId });
           for (const agent of stuckAgents) {
             const lastRun = runsData.runs.find((r) => r.run_id === agent.last_run_id);
             if (lastRun && (lastRun.status === 'completed' || lastRun.status === 'failed')) {
@@ -112,24 +132,27 @@ function DeployPageContent() {
       }
 
       setDeployAgents(agents);
-      return agents;
+      setAgentsError(false);
     } catch (_err) {
-      showToast('Failed to load deploy agents', 'error');
+      setAgentsError(true);
     }
-    return [];
-  }, []);
+  }, [projectId]);
 
   // Load runs with optional model filter
-  const loadRuns = useCallback(async (model?: string | null) => {
-    try {
-      const runsData = await listEngineRuns({
-        model: model || undefined,
-      });
-      setRuns(runsData.runs);
-    } catch (_err) {
-      showToast('Failed to load runs', 'error');
-    }
-  }, []);
+  const loadRuns = useCallback(
+    async (model?: string | null) => {
+      try {
+        const runsData = await listEngineRuns({
+          project_id: projectId,
+          model: model || undefined,
+        });
+        setRuns(runsData.runs);
+      } catch (_err) {
+        showToast('Failed to load runs', 'error');
+      }
+    },
+    [projectId]
+  );
 
   // Ensure project store is initialized (for RunsTable Source column)
   useEffect(() => {
@@ -138,38 +161,19 @@ function DeployPageContent() {
     }
   }, [projectsInitialized, fetchProjects]);
 
-  // Check runner health and load data
   useEffect(() => {
     async function loadData() {
+      await Promise.all([loadDeployAgents(), loadRuns()]);
       try {
-        const health = await checkRunnerHealth();
-        setRunnerHealthy(health.status === 'ok');
-
-        // Load deploy agents from database
-        await loadDeployAgents();
-
-        // Load Engine runs from database
-        await loadRuns();
-
-        // Load filter options for A/B test
-        try {
-          const options = await getRunFilterOptions();
-          setFilterOptions(options);
-        } catch (_err) {
-          // Filter options are non-critical; proceed without them
-        }
-      } catch (_err) {
-        setRunnerHealthy(false);
-        // Still try to load deploy agents even if runner is offline
-        await loadDeployAgents();
-        await loadRuns();
+        setFilterOptions(await getRunFilterOptions(projectId));
+      } catch {
+        // Filter options are optional; the runs list remains available.
       } finally {
         setLoading(false);
       }
     }
-
-    loadData();
-  }, [loadDeployAgents, loadRuns]);
+    void loadData();
+  }, [loadDeployAgents, loadRuns, projectId]);
 
   // Handle filter changes
   const handleFilterChange = useCallback(
@@ -191,6 +195,7 @@ function DeployPageContent() {
         name: newAgent.name,
         endpoint: newAgent.endpoint,
         type: 'http',
+        project_id: projectId,
       });
 
       setDeployAgents((prev) => [...prev, agent]);
@@ -228,19 +233,37 @@ function DeployPageContent() {
 
   return (
     <div className="flex h-full flex-col gap-[var(--space-section)] overflow-auto p-[var(--space-page)]">
+      {projectId && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm">
+            <strong>Project:</strong> {projectName ?? projectId}
+          </p>
+          <Button asChild variant="outline" size="sm">
+            <Link href={evaluationCompareHref(projectId)}>Open project comparison</Link>
+          </Button>
+        </div>
+      )}
       {/* Runner Offline Info */}
-      {runnerHealthy === false && (
+      {!runnerHealthy && !runner.isLoading && (
         <Card className="border-muted bg-muted/30">
           <CardContent className="flex items-start gap-3 py-4">
             <CloudOff className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium">Runner service is not connected</p>
-              <p className="text-sm text-muted-foreground">Connect the runner to enable:</p>
-              <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
-                <li>Agent deployment and execution</li>
-                <li>Real-time trace collection</li>
-                <li>Automated evaluation</li>
-              </ul>
+              <p className="text-sm text-muted-foreground">
+                {runner.error instanceof ApiError &&
+                runner.error.code === 'SERVICE_AUTH_NOT_CONFIGURED'
+                  ? 'Ask your deployment administrator to configure the Runner service credential.'
+                  : 'Connect the Runner service to start evaluation runs.'}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => window.location.reload()}
+              >
+                Refresh Runner status
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -291,7 +314,14 @@ function DeployPageContent() {
             </div>
           )}
 
-          {deployAgents.length === 0 ? (
+          {agentsError ? (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+              Could not load deploy agents.
+              <Button variant="outline" size="sm" onClick={() => void loadDeployAgents()}>
+                Retry agents
+              </Button>
+            </div>
+          ) : deployAgents.length === 0 ? (
             <EmptyState
               icon={Bot}
               title="No agents deployed"
@@ -341,45 +371,48 @@ function DeployPageContent() {
       </Card>
 
       {/* Leaf Selector — run from a Leaf's generated output */}
-      <LeafSelector
-        agents={deployAgents}
-        runnerHealthy={runnerHealthy === true}
-        initialLeafId={initialLeafId}
-        onRunComplete={async (runId) => {
-          await loadRuns(filterModel);
-          try {
-            const options = await getRunFilterOptions();
-            setFilterOptions(options);
-          } catch (_err) {
-            // Filter options refresh is best-effort
-          }
-          router.push(`/deploy/eval/${runId}`);
-        }}
-      />
+      {!projectId && (
+        <LeafSelector
+          agents={deployAgents}
+          runnerHealthy={runnerHealthy === true}
+          initialLeafId={initialLeafId}
+          onRunComplete={async (runId) => {
+            await loadRuns(filterModel);
+            try {
+              const options = await getRunFilterOptions(projectId);
+              setFilterOptions(options);
+            } catch (_err) {
+              // Filter options refresh is best-effort
+            }
+            router.push(`/deploy/eval/${runId}`);
+          }}
+        />
+      )}
 
       {/* E2E Quick Test (collapsible) */}
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-          <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-          Quick E2E Test (hardcoded prompt)
-        </summary>
-        <div className="mt-3">
-          <E2ETestCard
-            agents={deployAgents}
-            runnerHealthy={runnerHealthy === true}
-            onRunComplete={async (runId) => {
-              await loadRuns(filterModel);
-              try {
-                const options = await getRunFilterOptions();
-                setFilterOptions(options);
-              } catch (_err) {
-                // Filter options refresh is best-effort
-              }
-              router.push(`/deploy/eval/${runId}`);
-            }}
-          />
+      {projectId ? (
+        <details className="group" id="comparison-preparation" open={prepare || undefined}>
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+            Prepare comparison data
+          </summary>
+          <div className="mt-3">
+            <E2ETestCard
+              projectId={projectId}
+              agents={deployAgents}
+              runnerHealthy={runnerHealthy === true}
+              onRunCreated={() => void loadRuns(filterModel)}
+            />
+          </div>
+        </details>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          To prepare comparison data, choose a project first.
+          <Button asChild variant="outline" size="sm">
+            <Link href={evaluationCompareHref()}>Choose a project</Link>
+          </Button>
         </div>
-      </details>
+      )}
 
       {/* Quick Stats */}
       <QuickStatsBar runs={runs} />
@@ -388,6 +421,7 @@ function DeployPageContent() {
       <RecentRunsSection
         runs={runs}
         agents={deployAgents}
+        projectId={projectId}
         router={router}
         filterModel={filterModel}
         filterOptions={filterOptions}
@@ -403,6 +437,7 @@ function DeployPageContent() {
 function RecentRunsSection({
   runs,
   agents,
+  projectId,
   router,
   filterModel,
   filterOptions,
@@ -410,6 +445,7 @@ function RecentRunsSection({
 }: {
   runs: EngineRun[];
   agents: DeployAgent[];
+  projectId?: string;
   router: ReturnType<typeof useRouter>;
   filterModel: string | null;
   filterOptions: { models: string[]; prompt_versions: string[] };
@@ -465,7 +501,11 @@ function RecentRunsSection({
             ]}
           />
           <span className="h-4 w-px bg-[var(--stroke-divider)]" />
-          <Button variant="outline" size="sm" onClick={() => router.push('/deploy/compare')}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(evaluationCompareHref(projectId))}
+          >
             <GitCompare className="h-4 w-4" />
             Compare
           </Button>

@@ -416,6 +416,7 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+export * from './repository-object-addresses';
 export * from './repository-paths';
 // Runs (Engine → Runner → n8n flow)
 export {
@@ -641,6 +642,7 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  findUserProfilesByIds,
   normalizeEmail,
   normalizeUsername,
   searchUserProfiles,

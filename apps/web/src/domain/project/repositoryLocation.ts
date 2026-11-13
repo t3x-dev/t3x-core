@@ -1,3 +1,6 @@
+import { numberedRepositoryObject, repositoryObjectHref } from './objectLocation';
+import { workspaceBranchFromSuffix, workspaceLocation } from './repoPath';
+
 export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'discover' | 'browse' {
   if (schemaView === 'discover') return 'discover';
   if (schemaView === 'browse' || schemaView === 'release') return 'browse';
@@ -6,8 +9,12 @@ export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'dis
 
 /** Only routes with an explicit owner/name adapter may migrate from ID links. */
 export function isSupportedRepositorySuffix(suffix: string): boolean {
-  return /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
-    suffix
+  return (
+    workspaceBranchFromSuffix(suffix) !== null ||
+    numberedRepositoryObject(suffix) !== null ||
+    /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
+      suffix
+    )
   );
 }
 
@@ -22,7 +29,13 @@ export function isRetiredRepositoryLocation(
   );
 }
 
-export function repositoryLocation(base: string, suffix: string, query: string, hash = ''): string {
+export function repositoryLocation(
+  base: string,
+  suffix: string,
+  query: string,
+  hash = '',
+  sourceBase = base
+): string {
   const params = new URLSearchParams(query);
   let tail = suffix === '/state' ? '' : suffix;
   if ((!tail || tail === '/') && params.has('tab')) {
@@ -43,8 +56,15 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
       ].includes(tab)
     ) {
       tail = tab === 'state' ? '' : `/${tab}`;
-      params.delete('tab');
     }
+  }
+  params.delete('tab');
+  const numbered = numberedRepositoryObject(tail);
+  if (numbered && !base.startsWith('/project/'))
+    return `${repositoryObjectHref(base, numbered.section, numbered.number, params)}${hash}`;
+  const pathBranch = workspaceBranchFromSuffix(tail);
+  if (pathBranch || /^\/workspaces\/?$/.test(tail)) {
+    return `${workspaceLocation(base, pathBranch ?? (params.get('branch')?.trim() || null), params)}${hash}`;
   }
   if (/^\/schemas\/?$/.test(tail)) {
     tail = '/schemas';
@@ -55,6 +75,14 @@ export function repositoryLocation(base: string, suffix: string, query: string, 
         params.delete('schemaView');
       }
     }
+  }
+  const returnTo = params.get('returnTo');
+  if (
+    /^\/checks\/[^/]+\/?$/.test(tail) &&
+    (returnTo === `${base}/checks` || returnTo === `${sourceBase}/checks`) &&
+    [...params.keys()].every((key) => key === 'returnTo' || key === 'check')
+  ) {
+    params.delete('returnTo');
   }
   return `${base}${tail}${params.size ? `?${params}` : ''}${hash}`;
 }

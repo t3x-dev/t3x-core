@@ -30,7 +30,7 @@ function LegacyCatalogRedirect({
   const search = useSearchParams();
   const router = useRouter();
   const href = legacyExploreLocation(projectId, tab, search.toString());
-  useEffect(() => router.replace(href), [router, href]);
+  useEffect(() => router.replace(`${href}${window.location.hash}`), [router, href]);
   return (
     <p className="p-6 text-sm">
       Opening <Link href={href}>Explore</Link>…

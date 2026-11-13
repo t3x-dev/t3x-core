@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { REPOSITORY_OBJECT_ADDRESSES_SQL } from './repository-object-addresses-sql';
 import { ensureRepositoryPaths } from './repository-paths';
 
 export type PostgresDB = PostgresJsDatabase<typeof schema>;
@@ -80,8 +81,9 @@ async function activatePostgresStorage(
 
   try {
     if (mode === 'bootstrap') {
-      await initializeSchema(nextClient);
-      await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+      if (await initializeSchema(nextClient)) {
+        await seedBuiltinTemplates(nextDb as unknown as import('../adapters').AnyDB);
+      }
     } else {
       await validatePostgresSchema(nextClient);
     }
@@ -127,8 +129,9 @@ export async function migratePostgresStorage(
   const migrationDb = drizzle(migrationClient, { schema });
 
   try {
-    await initializeSchema(migrationClient);
-    await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    if (await initializeSchema(migrationClient)) {
+      await seedBuiltinTemplates(migrationDb as unknown as import('../adapters').AnyDB);
+    }
     return await inspectPostgresSchemaWithClient(migrationClient);
   } finally {
     await migrationClient.end().catch(() => {});
@@ -188,7 +191,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 83;
+export const POSTGRES_SCHEMA_VERSION = 86;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -261,19 +264,17 @@ async function validatePostgresSchema(sql: postgres.Sql): Promise<PostgresSchema
   );
 }
 
-/**
- * Initialize database schema (skips if already at current version)
- */
-async function initializeSchema(sql: postgres.Sql): Promise<void> {
-  await sql.begin(async (transaction) => {
+/** Apply schema changes and return whether to refresh built-in templates. */
+async function initializeSchema(sql: postgres.Sql): Promise<boolean> {
+  return sql.begin(async (transaction) => {
     await transaction.unsafe(
       `SELECT pg_advisory_xact_lock(${SCHEMA_INIT_LOCK_NAMESPACE}, hashtext(current_database()))`
     );
-    await initializeSchemaWithLock(transaction);
+    return initializeSchemaWithLock(transaction);
   });
 }
 
-async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
+async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
   // Schema version gate — avoid re-running 900+ lines of idempotent SQL on every restart.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS _schema_version (
@@ -286,14 +287,21 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
   const rows = await sql.unsafe<{ version: number }[]>(
     `SELECT version FROM _schema_version WHERE singleton = TRUE`
   );
+  const version = rows[0]?.version;
 
-  if (rows.length > 0) {
-    await ensureSourceTextRevisionsSchema(sql);
-    await ensurePullRequestsSchema(sql);
+  // v83 already supports one open draft per owner. Replaying the old
+  // per-branch deduplication would abandon another owner's draft.
+  if (version !== undefined && version >= 83 && version < 86) {
+    if (version < 85) await ensurePortableDeliverySchema(sql);
+    await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+    await recordSchemaVersion(sql);
+    return false;
   }
 
-  if (rows.length > 0 && rows[0].version >= POSTGRES_SCHEMA_VERSION) {
-    return;
+  if (version !== undefined) {
+    await ensureSourceTextRevisionsSchema(sql);
+    await ensurePullRequestsSchema(sql);
+    if (version >= POSTGRES_SCHEMA_VERSION) return true;
   }
 
   // First run or version bump — execute full schema init. v79 adds explicit
@@ -2641,6 +2649,8 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
       ON workspace_deliveries(project_id, workspace_id, created_at);
   `);
 
+  await ensurePortableDeliverySchema(sql);
+
   // Versioned author sidecars: payload stays separate from protocol State.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS state_presentations (
@@ -2855,7 +2865,53 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<void> {
     END $$;
   `);
 
-  // Record schema version so subsequent startups skip the init SQL.
+  await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+
+  await recordSchemaVersion(sql);
+  return true;
+}
+
+async function ensurePortableDeliverySchema(sql: postgres.Sql): Promise<void> {
+  // Schema v84: the same immutable receipt can describe a portable State + Schema bundle.
+  await sql.unsafe(`
+    ALTER TABLE workspace_deliveries
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_adapter_check,
+      DROP CONSTRAINT IF EXISTS workspace_deliveries_format_check;
+    ALTER TABLE workspace_deliveries
+      ADD CONSTRAINT workspace_deliveries_adapter_check
+        CHECK (adapter IN ('t3x.download/v1', 't3x.portable/v1')),
+      ADD CONSTRAINT workspace_deliveries_format_check
+        CHECK (format IN ('json', 'yaml', 'bundle'));
+  `);
+
+  // Schema v85: append-only desired/actual history for fixed portable artifact deployment.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS workspace_deployments (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL,
+      environment TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('deploy', 'rollback')),
+      delivery_id TEXT NOT NULL REFERENCES workspace_deliveries(id) ON DELETE RESTRICT,
+      artifact_digest TEXT NOT NULL,
+      previous_artifact_digest TEXT,
+      idempotency_key TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      adapter TEXT NOT NULL CHECK (adapter = 't3x.fixed-slot/v1'),
+      desired_artifact_digest TEXT NOT NULL,
+      actual_artifact_digest TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (artifact_digest = desired_artifact_digest),
+      CHECK (desired_artifact_digest = actual_artifact_digest)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS workspace_deployments_idempotency
+      ON workspace_deployments(project_id, workspace_id, environment, idempotency_key);
+    CREATE INDEX IF NOT EXISTS workspace_deployments_history
+      ON workspace_deployments(project_id, workspace_id, environment, created_at);
+  `);
+}
+
+async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())

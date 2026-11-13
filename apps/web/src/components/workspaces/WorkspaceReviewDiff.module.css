@@ -101,6 +101,9 @@
   border-spacing: 0;
   text-align: left;
 }
+.historyTree {
+  min-width: 600px;
+}
 .tree td {
   position: relative;
   vertical-align: middle;
@@ -121,13 +124,18 @@
 .treeHeader th {
   height: 40px;
   border-bottom: 1px solid var(--stroke-default);
-  padding: 0 24px;
+  padding: 4px 14px;
   background: var(--surface-card);
   text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.treeHeader th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  padding-left: 18px;
 }
 .selectedRow > td {
   border-top-color: var(--accent-commit-soft);
@@ -224,7 +232,7 @@
   background: var(--diff-added-bg);
   color: var(--diff-added-text);
 }
-.whyCell,
+.summaryCell,
 .changedCell {
   overflow: hidden;
   border-bottom: 1px solid var(--stroke-divider);
@@ -233,11 +241,9 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
-.whyText {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.summaryCell {
+  padding-block: 5px;
+  overflow-wrap: anywhere;
 }
 .valueCell {
   z-index: 11;

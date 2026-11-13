@@ -27,6 +27,31 @@ function renderSettings() {
   );
 }
 
+it('restores a Settings fragment when the addressed section loads', async () => {
+  window.history.replaceState(null, '', '/owner/repo/settings#autopilot');
+  const scroll = vi.fn();
+  const view = render(<ProjectSettingsNav />);
+  view.rerender(
+    <>
+      <ProjectSettingsNav />
+      <section
+        id="autopilot"
+        ref={(node) => {
+          if (node) node.scrollIntoView = scroll;
+        }}
+        tabIndex={-1}
+      >
+        Autopilot content
+      </section>
+    </>
+  );
+  await waitFor(() =>
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ behavior: 'instant', block: 'start' })
+  );
+  expect(document.getElementById('autopilot')).toHaveFocus();
+  expect(window.location.hash).toBe('#autopilot');
+});
+
 it('mobile section navigation preserves the route, focuses the destination, and respects reduced motion', async () => {
   window.history.replaceState(null, '', '/owner/repo/settings?returnTo=%2Fowner%2Frepo');
   document.documentElement.dataset.reducedMotion = 'true';

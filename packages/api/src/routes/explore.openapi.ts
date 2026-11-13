@@ -115,11 +115,18 @@ const schemaReleaseRoute = createRoute({
           .min(1)
           .max(100)
           .refine((value) => value !== 'latest', 'An exact version is required'),
-        expectedHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+        expectedHash: z
+          .string()
+          .regex(/^sha256:[0-9a-f]{64}$/)
+          .optional(),
         sourceProjectId: z.string().min(1).optional(),
         catalogProjectId: z.string().min(1).optional(),
       })
-      .strict(),
+      .strict()
+      .refine((query) => query.expectedHash || !(query.sourceProjectId || query.catalogProjectId), {
+        message: 'An exact hash is required for project-scoped releases',
+        path: ['expectedHash'],
+      }),
   },
   responses: {
     ...errors,
@@ -153,6 +160,7 @@ async function publicCard(
     description:
       typeof metadata?.description === 'string' ? metadata.description.slice(0, 4096) : '',
     tags: repository_profile.tags,
+    icon: repository_profile.icon,
     createdAt: project.createdAt.toISOString(),
     repositoryPath: access.allowed ? `/project/${encodeURIComponent(project.projectId)}` : null,
   };
@@ -239,13 +247,17 @@ exploreRoutes.openapi(schemaReleaseRoute, async (c) => {
     limit: 1,
   });
   const item = page.items[0];
-  if (!item || (query.sourceProjectId && item.identity.ownerProjectId !== query.sourceProjectId))
+  if (
+    !item ||
+    (!query.expectedHash && item.identity.ownerProjectId !== null) ||
+    (query.sourceProjectId && item.identity.ownerProjectId !== query.sourceProjectId)
+  )
     return errorResponse(c, 'NOT_FOUND', 'Release unavailable');
   const view = await resolveStudioSource(c, db, {
     sourceProjectId: item.identity.ownerProjectId,
     canonicalName: query.canonicalName,
     version: query.version,
-    artifactHash: query.expectedHash,
+    artifactHash: query.expectedHash ?? item.release.hash,
   });
   if (!view)
     return errorResponse(c, 'NOT_FOUND', 'This release is unavailable or no longer authorized.');

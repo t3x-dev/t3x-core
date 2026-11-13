@@ -29,6 +29,8 @@ export interface ManualStagingControls {
   items: StagedManualCard[];
   current?: TransitionProtocolValue;
   pending?: boolean;
+  blocked?: boolean;
+  retryOriginal?: boolean;
   error?: string | null;
   onToggle: (id: string) => void;
   onSaveSelected: () => void;
@@ -136,8 +138,8 @@ export function selectedStagedItems(items: readonly StagedManualCard[]) {
 }
 
 /** Keep browser-only edits, but never apply stale values over a changed branch silently. */
-export function assertStagedEditsCurrent(published: unknown, items: readonly StagedManualCard[]) {
-  let current = published;
+export function assertStagedEditsCurrent<T>(published: T, items: readonly StagedManualCard[]): T {
+  let current: unknown = published;
   const equal = (left: unknown, right: unknown) =>
     composeValuesEqual(
       left as TransitionProtocolValue | undefined,
@@ -156,6 +158,7 @@ export function assertStagedEditsCurrent(published: unknown, items: readonly Sta
       );
     current = applyDraftOpsToCurrent(current, [item.operation]);
   }
+  return current as T;
 }
 
 export function remainingStagedItems(items: readonly StagedManualCard[]) {

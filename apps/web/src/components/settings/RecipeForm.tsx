@@ -1,14 +1,13 @@
 'use client';
 
+import { isRecipeTriggerAvailable, RECIPE_TRIGGER_EVENTS } from '@t3x-dev/api-client';
 import {
   ArrowRight,
   FileOutput,
   Gauge,
-  GitCommitHorizontal,
   GitMerge,
   Loader2,
   Plus,
-  Sparkles,
   Trash2,
   Webhook,
   X,
@@ -37,29 +36,19 @@ import type {
 } from '@/types/api';
 import styles from './RecipeForm.module.css';
 
-const TRIGGER_EVENTS = [
-  { value: 'commit.created', label: 'Commit Created' },
-  { value: 'merge.completed', label: 'Merge Completed' },
-  { value: 'leaf.created', label: 'Leaf Created' },
-  { value: 'leaf.generated', label: 'Leaf Generated' },
-  { value: 'run.completed', label: 'Run Completed' },
-  { value: 'run.failed', label: 'Run Failed' },
-] as const;
+const TRIGGER_OPTIONS = {
+  'merge.completed': {
+    label: 'Merge completed',
+    description: 'When the Merge API completes a merge',
+  },
+  'check.failed': { label: 'Check failed', description: 'When the Check API reports a failure' },
+} satisfies Record<(typeof RECIPE_TRIGGER_EVENTS)[number], { label: string; description: string }>;
 
 const STEP_ACTIONS = [
   { value: 'send_webhook' as const, label: 'Send Webhook' },
   { value: 'run_eval' as const, label: 'Run Evaluation' },
   { value: 'export_report' as const, label: 'Export Report' },
 ] as const;
-
-const TRIGGER_DESCRIPTIONS: Record<string, string> = {
-  'commit.created': 'When a new commit is created',
-  'merge.completed': 'When a merge is completed',
-  'leaf.created': 'When a new leaf is created',
-  'leaf.generated': 'When leaf output is generated',
-  'run.completed': 'When an evaluation run completes',
-  'run.failed': 'When an evaluation run fails',
-};
 
 const ACTION_DESCRIPTIONS: Record<RecipeStep['action'], string> = {
   send_webhook: 'Send an event to a webhook',
@@ -73,6 +62,12 @@ interface RecipeFormProps {
   onCancel: () => void;
   loading?: boolean;
   projectName?: string;
+  projectSelection?: {
+    value: string;
+    onChange: (id: string) => void;
+    options: { id: string; label: string }[];
+  };
+  error?: string | null;
   variant?: 'default' | 'drawer';
 }
 
@@ -82,6 +77,8 @@ export function RecipeForm({
   onCancel,
   loading = false,
   projectName = 'Current project',
+  projectSelection,
+  error,
   variant = 'default',
 }: RecipeFormProps) {
   const isEdit = recipe !== null;
@@ -90,7 +87,7 @@ export function RecipeForm({
   const [name, setName] = useState(recipe?.name ?? '');
   const [description, setDescription] = useState(recipe?.description ?? '');
   const [triggerEvent, setTriggerEvent] = useState(
-    recipe?.trigger?.event ?? (isDrawer ? 'commit.created' : '')
+    recipe?.trigger?.event ?? (isDrawer ? RECIPE_TRIGGER_EVENTS[0] : '')
   );
   const [enabled, setEnabled] = useState(recipe?.enabled ?? true);
   const [steps, setSteps] = useState<RecipeStep[]>(
@@ -100,7 +97,7 @@ export function RecipeForm({
   useEffect(() => {
     setName(recipe?.name ?? '');
     setDescription(recipe?.description ?? '');
-    setTriggerEvent(recipe?.trigger?.event ?? (isDrawer ? 'commit.created' : ''));
+    setTriggerEvent(recipe?.trigger?.event ?? (isDrawer ? RECIPE_TRIGGER_EVENTS[0] : ''));
     setEnabled(recipe?.enabled ?? true);
     setSteps(recipe?.steps ?? [{ action: 'send_webhook', config: {} }]);
   }, [recipe, isDrawer]);
@@ -126,9 +123,22 @@ export function RecipeForm({
     }
   }, []);
 
+  const webhookDestinations = steps.map((step) => {
+    const url = typeof step.config.url === 'string' ? URL.parse(step.config.url) : null;
+    return url && (url.protocol === 'http:' || url.protocol === 'https:') ? url.host : null;
+  });
+  const isValid =
+    name.trim() !== '' &&
+    triggerEvent !== '' &&
+    (!projectSelection ||
+      projectSelection.options.some(({ id }) => id === projectSelection.value)) &&
+    steps.length > 0 &&
+    steps.every((step, index) => step.action !== 'send_webhook' || webhookDestinations[index]);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!isValid || loading) return;
 
       const trigger: RecipeTrigger = { event: triggerEvent };
 
@@ -136,7 +146,10 @@ export function RecipeForm({
         const data: UpdateRecipeInput = {
           name: name || undefined,
           description: description || undefined,
-          trigger,
+          trigger:
+            triggerEvent === recipe.trigger.event
+              ? undefined
+              : { ...recipe.trigger, event: triggerEvent },
           steps: steps.length > 0 ? steps : undefined,
           enabled,
         };
@@ -152,32 +165,18 @@ export function RecipeForm({
         await onSubmit(data);
       }
     },
-    [isEdit, name, description, triggerEvent, steps, enabled, onSubmit]
+    [isEdit, isValid, loading, name, description, recipe, triggerEvent, steps, enabled, onSubmit]
   );
 
-  const isValid =
-    name.trim() !== '' &&
-    triggerEvent !== '' &&
-    steps.length > 0 &&
-    steps.every(
-      (step) =>
-        step.action !== 'send_webhook' ||
-        (typeof step.config.url === 'string' && /^https?:\/\//i.test(step.config.url))
-    );
-
-  const triggerOption =
-    TRIGGER_EVENTS.find((event) => event.value === triggerEvent) ?? TRIGGER_EVENTS[0];
+  const availableEvent = RECIPE_TRIGGER_EVENTS.find((event) => event === triggerEvent);
+  const triggerLabel = availableEvent ? TRIGGER_OPTIONS[availableEvent].label : triggerEvent;
+  const triggerDescription = availableEvent
+    ? TRIGGER_OPTIONS[availableEvent].description
+    : 'Unavailable. Choose a supported event to run this recipe.';
   const primaryStep = steps[0] ?? { action: 'send_webhook' as const, config: {} };
   const actionOption =
     STEP_ACTIONS.find((action) => action.value === primaryStep.action) ?? STEP_ACTIONS[0];
-  const TriggerIcon =
-    triggerEvent === 'merge.completed'
-      ? GitMerge
-      : triggerEvent === 'run.failed'
-        ? XCircle
-        : triggerEvent.includes('leaf')
-          ? Sparkles
-          : GitCommitHorizontal;
+  const TriggerIcon = triggerEvent === 'merge.completed' ? GitMerge : XCircle;
   const ActionIcon =
     primaryStep.action === 'run_eval'
       ? Gauge
@@ -189,6 +188,30 @@ export function RecipeForm({
     return (
       <form onSubmit={handleSubmit} className={styles.drawerForm}>
         <div className={styles.drawerBody}>
+          <div className={styles.field}>
+            <Label htmlFor="recipe-target-project">Target project</Label>
+            {projectSelection ? (
+              <select
+                id="recipe-target-project"
+                className={styles.projectSelect}
+                required
+                value={projectSelection.value}
+                onChange={(event) => projectSelection.onChange(event.target.value)}
+                disabled={loading}
+              >
+                <option value="" disabled>
+                  Choose a project
+                </option>
+                {projectSelection.options.map(({ id, label }) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input id="recipe-target-project" value={projectName} readOnly tabIndex={-1} />
+            )}
+          </div>
           <div className={styles.field}>
             <Label htmlFor="recipe-name">Name</Label>
             <div className={styles.inputWrap}>
@@ -221,18 +244,19 @@ export function RecipeForm({
               <SelectTrigger className={styles.choiceTrigger} aria-label="When event">
                 <TriggerIcon aria-hidden="true" />
                 <span className={styles.choiceCopy}>
-                  <strong>{triggerOption.label}</strong>
-                  <small>{TRIGGER_DESCRIPTIONS[triggerOption.value]}</small>
+                  <strong>{triggerLabel}</strong>
+                  <small>{availableEvent ? triggerDescription : 'Trigger unavailable'}</small>
                 </span>
               </SelectTrigger>
               <SelectContent className={palette.scope}>
-                {TRIGGER_EVENTS.map((event) => (
-                  <SelectItem key={event.value} value={event.value}>
-                    {event.label}
+                {RECIPE_TRIGGER_EVENTS.map((event) => (
+                  <SelectItem key={event} value={event}>
+                    {TRIGGER_OPTIONS[event].label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!availableEvent && <p className={styles.fieldHint}>{triggerDescription}</p>}
           </div>
 
           <div className={styles.field}>
@@ -259,36 +283,38 @@ export function RecipeForm({
             </Select>
           </div>
 
-          {primaryStep.action === 'send_webhook' && (
-            <div className={styles.field}>
-              <Label htmlFor="recipe-webhook-url">Webhook URL</Label>
-              <Input
-                id="recipe-webhook-url"
-                type="url"
-                value={typeof primaryStep.config.url === 'string' ? primaryStep.config.url : ''}
-                onChange={(event) =>
-                  setSteps((previous) =>
-                    previous.map((step, index) =>
-                      index === 0
-                        ? { ...step, config: { ...step.config, url: event.target.value } }
-                        : step
-                    )
-                  )
-                }
-                placeholder="https://example.com/webhook"
-                required
-                disabled={loading}
-              />
-            </div>
+          {steps.map(
+            (step, index) =>
+              step.action === 'send_webhook' && (
+                // biome-ignore lint/suspicious/noArrayIndexKey: the drawer edits a fixed sequence of steps.
+                <div className={styles.field} key={`webhook-${index}`}>
+                  <Label htmlFor={`recipe-webhook-url-${index}`}>
+                    {steps.length === 1 ? 'Webhook URL' : `Webhook URL for step ${index + 1}`}
+                  </Label>
+                  <Input
+                    id={`recipe-webhook-url-${index}`}
+                    type="url"
+                    value={typeof step.config.url === 'string' ? step.config.url : ''}
+                    onChange={(event) =>
+                      setSteps((previous) =>
+                        previous.map((step, position) =>
+                          position === index
+                            ? { ...step, config: { ...step.config, url: event.target.value } }
+                            : step
+                        )
+                      )
+                    }
+                    placeholder="https://example.com/webhook"
+                    required
+                    disabled={loading}
+                  />
+                  <p className={styles.fieldHint}>
+                    Use an HTTP or HTTPS URL. This step sends to this URL independently of project
+                    Webhook subscriptions.
+                  </p>
+                </div>
+              )
           )}
-
-          <div className={styles.field}>
-            <Label htmlFor="recipe-target-project">Target project</Label>
-            <div className={styles.projectRow}>
-              <Input id="recipe-target-project" value={projectName} readOnly disabled />
-              <span>Fixed to this project</span>
-            </div>
-          </div>
 
           <div className={styles.enabledRow}>
             <Label htmlFor="recipe-enabled">Enabled</Label>
@@ -309,7 +335,7 @@ export function RecipeForm({
             <div className={styles.previewFlow}>
               <div>
                 <TriggerIcon aria-hidden="true" />
-                <span>{triggerOption.label}</span>
+                <span>{triggerLabel}</span>
               </div>
               <ArrowRight aria-hidden="true" className={styles.previewArrow} />
               <div>
@@ -317,7 +343,23 @@ export function RecipeForm({
                 <span>{actionOption.label}</span>
               </div>
             </div>
+            {steps.map(
+              (step, index) =>
+                step.action === 'send_webhook' && (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the preview follows the drawer's fixed step order.
+                  <p className={styles.fieldHint} key={`destination-${index}`}>
+                    {steps.length === 1 ? 'Destination host' : `Step ${index + 1} destination host`}
+                    {' · '}
+                    {webhookDestinations[index] ?? 'Enter a valid Webhook URL'}
+                  </p>
+                )
+            )}
           </div>
+          {error && (
+            <p role="alert" className="text-sm text-[var(--status-error)]">
+              {error}
+            </p>
+          )}
         </div>
 
         <div className={styles.drawerActions}>
@@ -376,9 +418,14 @@ export function RecipeForm({
             <SelectValue placeholder="Select an event" />
           </SelectTrigger>
           <SelectContent className={palette.scope}>
-            {TRIGGER_EVENTS.map((event) => (
-              <SelectItem key={event.value} value={event.value}>
-                {event.label}
+            {triggerEvent && !isRecipeTriggerAvailable(triggerEvent) && (
+              <SelectItem value={triggerEvent} disabled>
+                {triggerEvent} (unavailable)
+              </SelectItem>
+            )}
+            {RECIPE_TRIGGER_EVENTS.map((event) => (
+              <SelectItem key={event} value={event}>
+                {TRIGGER_OPTIONS[event].label}
               </SelectItem>
             ))}
           </SelectContent>

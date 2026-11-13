@@ -145,6 +145,12 @@ additional schema work around this storage-owned job. These are integration
 contracts of the internal storage package; they do not add a stable public npm
 release surface.
 
+For existing v83–v85 databases, the standalone job and API bootstrap
+upgrade directly to v86. The upgrade installs any missing portable delivery
+and deployment schema, creates the address and counter tables, installs the
+numbering triggers, and backfills historical numbers. It preserves existing
+Workspace Drafts and built-in templates.
+
 Application processes should set `T3X_POSTGRES_STARTUP_MODE=runtime` and use a
 separate login that is not the table owner and cannot inherit or set the migration
 role. A representative grant shape is:
@@ -161,6 +167,14 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO t3x_runtime;
 The migration owner must also arrange matching default privileges for tables or
 sequences introduced later. Granting DML does not transfer table ownership; do
 not grant membership in the migration-owner role to the runtime login.
+
+For an existing runtime role without default grants on the repository numbering tables,
+apply these grants after migration and before starting the updated runtime:
+
+```sql
+GRANT SELECT, INSERT ON public.repository_object_addresses TO t3x_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.repository_object_address_counters TO t3x_runtime;
+```
 
 Local embedded PostgreSQL and storage test fixtures continue to use explicit
 bootstrap behavior. The legacy `createPostgresStorage` constructor remains a

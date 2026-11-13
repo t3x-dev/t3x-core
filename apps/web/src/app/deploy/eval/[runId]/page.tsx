@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { evaluationCompareHref } from '@/domain/evaluationLocation';
 import { repositoryConversationSourceHref } from '@/domain/sourceEvidenceNavigation';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
@@ -529,7 +530,18 @@ export default function RunDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push(`/deploy/compare?v1=${runId}`)}
+              onClick={() => {
+                const model = run.metadata?.model;
+                const version = run.metadata?.prompt_version;
+                const eligible =
+                  (run.status === 'completed' || run.status === 'failed') && model && version;
+                router.push(
+                  evaluationCompareHref(
+                    run.project_id,
+                    eligible ? { a: `${model}|${version}` } : {}
+                  )
+                );
+              }}
             >
               <GitCompare className="h-4 w-4" />
               Compare

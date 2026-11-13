@@ -4,7 +4,6 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
 import type { PublishedSchemaVersionManifest } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -103,7 +102,6 @@ beforeEach(() => {
   refreshWorkspaces.mockReset().mockResolvedValue(undefined);
   refreshPublishedVersions.mockReset().mockResolvedValue([]);
   saveDraft.mockReset();
-  useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
 });
 
 describe('ProjectSchemasTab', () => {
@@ -298,14 +296,10 @@ describe('ProjectSchemasTab', () => {
     expect(savedWorkspace.schemaCandidate.fields).toEqual([]);
     expect(savedWorkspace.schemaReview.verdict).toBe('needs_review');
     expect(savedWorkspace.yopsDraft.operations).toEqual([]);
-    expect(
-      useProjectWorkspaceSchemaBindingsStore.getState().bindingsByProjectId.proj_test.byWorkspaceId
-        .workspace_main
-    ).toEqual(savedWorkspace.schemaBindings[0]);
     expect(refreshWorkspaces).toHaveBeenCalledTimes(1);
   });
 
-  it('restores a persisted Prompt binding after the client binding store is reset', () => {
+  it('shows the persisted Prompt binding when opening the Schema tab', () => {
     workspaces = [
       {
         ...workspace,
@@ -321,8 +315,6 @@ describe('ProjectSchemasTab', () => {
         ],
       },
     ];
-    useProjectWorkspaceSchemaBindingsStore.setState({ bindingsByProjectId: {} });
-
     render(<ProjectSchemasTab projectId="proj_test" />);
     fireEvent.click(screen.getByRole('button', { name: /Prompt Schema/ }));
     fireEvent.click(screen.getByRole('radio', { name: /v1 Published/i }));

@@ -98,6 +98,8 @@ interface ProjectPullRequest {
   mergeDraftId?: string;
   mergeCommitId?: string;
   status: PullRequestStatus;
+  readinessCurrent?: boolean;
+  requiredAction?: { kind: 'schema_migration'; branch: string } | null;
   author: string;
   steward?: string;
   reviewOwner?: string;
@@ -333,8 +335,11 @@ const INITIAL_COMPARE_CANDIDATES: PullRequestCompareCandidate[] = [
 ];
 
 function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
-  const readiness =
-    api.status === 'ready'
+  const outdated =
+    (api.status === 'ready' || api.status === 'blocked') && api.readiness_current === false;
+  const readiness = outdated
+    ? ({ label: 'checks outdated', tone: 'warning' } as const)
+    : api.status === 'ready'
       ? ({ label: 'ready to merge', tone: 'success' } as const)
       : api.status === 'blocked'
         ? ({ label: 'needs decision', tone: 'warning' } as const)
@@ -363,6 +368,7 @@ function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
     sourceBranch: api.source_branch,
     sourceCommitId: api.source_commit_id,
     status: api.status,
+    readinessCurrent: api.readiness_current,
     steward: api.steward_id ?? undefined,
     targetBaseCommitId: api.target_base_commit_id,
     targetBranch: api.target_branch,
@@ -387,6 +393,7 @@ const ACTIVITY_LABELS: Record<ApiProjectPullRequestActivity['type'], string> = {
 function toProjectPullRequestDetail(api: ApiProjectPullRequestDetail): ProjectPullRequest {
   return {
     ...toProjectPullRequest(api),
+    requiredAction: api.required_action,
     activity: api.activity.map((item) => ({
       actor: item.actor_id,
       ...(item.details ? { audit: item.details } : {}),
@@ -511,12 +518,14 @@ function toCompareCandidate(
 
 export function ProjectReviewsTab({
   projectId,
+  repositoryPath,
   initialPullRequestNumber,
   initialDetailTab,
   onDetailTabChange,
   onPullRequestNumberChange,
 }: {
   projectId?: string;
+  repositoryPath?: string;
   initialPullRequestNumber?: number;
   initialDetailTab?: string;
   onDetailTabChange?: (tab: PullRequestDetailTab) => void;
@@ -1053,6 +1062,8 @@ export function ProjectReviewsTab({
   };
 
   const canMergePullRequest = (pullRequest: ProjectPullRequest) =>
+    pullRequest.readinessCurrent !== false &&
+    !pullRequest.requiredAction &&
     (conflictProgress?.unresolved ?? 0) === 0 &&
     (pullRequest.status === 'ready' ||
       (pullRequest.status === 'blocked' && conflictDecision !== null));
@@ -1291,6 +1302,7 @@ export function ProjectReviewsTab({
         onRerun={() => rerunReadiness(selectedPullRequest)}
         projectId={projectId}
         pullRequest={selectedPullRequest}
+        repositoryPath={repositoryPath}
         readinessError={readinessError}
         resolutionError={resolutionError}
         rerunning={rerunningId === selectedPullRequest.id}
@@ -1620,6 +1632,9 @@ function ListReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }
     closed: XCircle,
   };
   const Icon = icons[pullRequest.status];
+  const outdated =
+    (pullRequest.status === 'ready' || pullRequest.status === 'blocked') &&
+    pullRequest.readinessCurrent === false;
 
   return (
     <span
@@ -1627,7 +1642,7 @@ function ListReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }
         listStyles.readiness,
         pullRequest.status === 'merged'
           ? listStyles.readinessMerged
-          : pullRequest.status === 'ready'
+          : pullRequest.status === 'ready' && !outdated
             ? listStyles.readinessSuccess
             : pullRequest.status === 'blocked'
               ? listStyles.readinessWarning
@@ -1638,7 +1653,7 @@ function ListReadinessBadge({ pullRequest }: { pullRequest: ProjectPullRequest }
         aria-hidden="true"
         className={pullRequest.status === 'checking' ? listStyles.checking : undefined}
       />
-      {LIST_STATUS_LABELS[pullRequest.status]}
+      {outdated ? 'Checks outdated' : LIST_STATUS_LABELS[pullRequest.status]}
     </span>
   );
 }
@@ -2167,6 +2182,7 @@ function PullRequestDetailView({
   projectId,
   pullRequest,
   readinessError,
+  repositoryPath,
   resolutionError,
   rerunning,
   saveMergeDecision,
@@ -2193,6 +2209,7 @@ function PullRequestDetailView({
   projectId?: string;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
+  repositoryPath?: string;
   resolutionError: string | null;
   rerunning: boolean;
   saveMergeDecision: PullRequestMergeReviewPanelProps['saveMergeDecision'];
@@ -2227,22 +2244,35 @@ function PullRequestDetailView({
           review: null,
           loading: Boolean(projectId && pullRequest.mergeDraftId),
           error: null,
+          requiredAction: null,
         };
   const saveState = savedDecision?.key === reviewKey ? savedDecision.state : 'idle';
   const terminal = ['merged', 'closed'].includes(pullRequest.status);
+  const checksOutdated =
+    !terminal &&
+    (pullRequest.status === 'ready' || pullRequest.status === 'blocked') &&
+    pullRequest.readinessCurrent === false;
+  const migrationAction = checksOutdated
+    ? null
+    : (pullRequest.requiredAction ?? reviewState.requiredAction);
   const comparisonBlocker =
     projectId && !terminal
-      ? reviewState.error
-        ? 'Merge is blocked until the comparison is available. Retry comparison in Changes or rerun readiness.'
-        : reviewState.loading
-          ? 'Loading the reviewed comparison before merging…'
-          : !reviewState.review
-            ? 'Prepare a merge comparison by rerunning readiness.'
-            : null
+      ? checksOutdated
+        ? 'Recorded checks apply to old branch versions. Rerun readiness for the current heads.'
+        : migrationAction
+          ? `Schema migration required on ${migrationAction.branch}. Commit a validated Schema on that branch, then rerun checks.`
+          : reviewState.error
+            ? 'Merge is blocked until the comparison is available. Retry comparison in Changes or rerun readiness.'
+            : reviewState.loading
+              ? 'Loading the reviewed comparison before merging…'
+              : !reviewState.review
+                ? 'Prepare a merge comparison by rerunning readiness.'
+                : null
       : null;
   const busy = closing || merging || rerunning || detailLoading || saveState === 'saving';
   const ready =
     !comparisonBlocker &&
+    !checksOutdated &&
     saveState !== 'saving' &&
     saveState !== 'error' &&
     (conflictProgress?.unresolved ?? 0) === 0 &&
@@ -2292,7 +2322,9 @@ function PullRequestDetailView({
         </button>
         <div className={detailStyles.titleRow}>
           <h1>{pullRequest.title}</h1>
-          <ListReadinessBadge pullRequest={{ ...pullRequest, status: readinessStatus }} />
+          <ListReadinessBadge
+            pullRequest={{ ...pullRequest, status: checksOutdated ? 'ready' : readinessStatus }}
+          />
         </div>
         <div className={detailStyles.refs} aria-label="Merge direction">
           <span>
@@ -2327,6 +2359,19 @@ function PullRequestDetailView({
         <div className={detailStyles.notice} role="alert">
           {error}
         </div>
+      ) : null}
+      {projectId && migrationAction ? (
+        <output className={detailStyles.notice}>
+          <span>
+            Schema migration required on {migrationAction.branch}.{' '}
+            <Link
+              href={`/project/${encodeURIComponent(projectId)}?tab=workspaces&branch=${encodeURIComponent(migrationAction.branch)}`}
+            >
+              Open {migrationAction.branch} Workspace
+            </Link>{' '}
+            to bind and validate Schema, commit, then rerun checks.
+          </span>
+        </output>
       ) : null}
       {closeConfirmationActive ? (
         <output className={detailStyles.notice}>
@@ -2406,8 +2451,9 @@ function PullRequestDetailView({
                       <Link
                         className="inline-flex items-center gap-2 underline"
                         href={checksHref(projectId, {
+                          repositoryPath,
                           recordId: `pull-request:${pullRequest.id}`,
-                          returnTo: `/project/${encodeURIComponent(projectId)}?tab=pull-requests&pr=${pullRequest.number}&prTab=checks`,
+                          returnTo: `${repositoryPath ? `${repositoryPath}/pull-requests?` : `/project/${encodeURIComponent(projectId)}?tab=pull-requests&`}pr=${pullRequest.number}&prTab=checks`,
                         })}
                       >
                         Open check details <ArrowRight size={14} />

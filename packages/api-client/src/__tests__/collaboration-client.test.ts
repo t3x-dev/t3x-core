@@ -151,6 +151,25 @@ describe('T3xClient collaboration methods', () => {
       expect.objectContaining({ method: 'GET' })
     );
 
+    const resolveFetch = mockFetch(
+      success({
+        users: [
+          { user_id: 'user_b', username: 'test-b3', display_name: 'Test B3', avatar_url: null },
+        ],
+      })
+    );
+    const resolveClient = new T3xClient({
+      baseUrl: 'https://api.example.test',
+      fetch: resolveFetch,
+    });
+    await expect(resolveClient.resolveCollaborationUsers(['user_b'])).resolves.toMatchObject({
+      users: [{ username: 'test-b3' }],
+    });
+    expect(resolveFetch).toHaveBeenCalledWith(
+      'https://api.example.test/v1/users/resolve',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ ids: ['user_b'] }) })
+    );
+
     const inboxFetch = mockFetch(success({ invitations: [] }));
     const inboxClient = new T3xClient({ baseUrl: 'https://api.example.test', fetch: inboxFetch });
     await inboxClient.listReceivedCollaborationInvitations();

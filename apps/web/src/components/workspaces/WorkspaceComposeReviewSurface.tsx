@@ -1,4 +1,10 @@
-import type { SchemaPreparationTarget } from '@t3x-dev/api-client';
+import {
+  type PublishWorkspaceAuthoringInput,
+  type ReviewSnapshotV1,
+  type SchemaPreparationTarget,
+  T3xApiError,
+  type TransitionProtocolValue,
+} from '@t3x-dev/api-client';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -40,7 +46,15 @@ import {
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ChangeEvent, CSSProperties, FormEvent, RefObject } from 'react';
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayout';
@@ -71,7 +85,6 @@ import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChang
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
-import { WorkspaceContentEditor } from '@/components/workspaces/WorkspaceContentEditor';
 import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
 import { WorkspaceReconciliationResolver } from '@/components/workspaces/WorkspaceReconciliationResolver';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
@@ -89,11 +102,12 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { shortHash } from '@/domain/format/formatters';
 import { checksHref, checksReturnTo } from '@/domain/project/checks';
+import { getCanonicalRepositoryPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
+  readStatePointValue,
   type StatePointRow,
   workspaceDraftOperationsToStateOperations,
 } from '@/domain/project/stateViewModel';
@@ -111,8 +125,6 @@ import {
   assertStagedEditsCurrent,
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
-  previewStagedCurrent,
-  remainingStagedItems,
   type StagedManualCard,
   selectedStagedItems,
   stageDraftOps,
@@ -127,14 +139,17 @@ import {
   listWorkspaceSchemaChoices,
   workspaceSchemaChoiceId,
 } from '@/domain/workspaces/schemaBindings';
+import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
-import { useSchemaReviewFlow } from '@/hooks/schemas/useSchemaReviewFlow';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
 import { useWorkspaceAuthoringBootstrap } from '@/hooks/workspaces/useWorkspaceAuthoringBootstrap';
-import type { WorkspaceComposeReviewController } from '@/hooks/workspaces/useWorkspaceComposeReviewController';
+import {
+  REVIEW_DRAFT_CHANGED,
+  type WorkspaceComposeReviewController,
+} from '@/hooks/workspaces/useWorkspaceComposeReviewController';
 import { useWorkspaceConversations } from '@/hooks/workspaces/useWorkspaceConversations';
 import { useWorkspaceSchemaEditingRequests } from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
 import { validateWorkspaceCandidateYOps } from '@/hooks/workspaces/useWorkspaceYOps';
@@ -159,7 +174,11 @@ import {
 } from './ComposeActivityTimeline';
 import { ComposeAuthoringAssistant } from './ComposeAuthoringAssistant';
 import { ComposeFieldDialog } from './ComposeFieldDialog';
-import { ComposeNodeHistoryPanel } from './ComposeNodeHistoryPanel';
+import {
+  ComposeChangeContext,
+  ComposeChangeReason,
+  ComposeNodeHistoryPanel,
+} from './ComposeNodeHistoryPanel';
 import { useWorkspaceContentNavigation } from './useWorkspaceContentNavigation';
 import { type PublishedTurnChanges, WorkspaceTurnChanges } from './WorkspaceAssistantActivity';
 import {
@@ -175,8 +194,10 @@ import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 import {
+  WorkspaceReviewBaseline,
   WorkspaceReviewContentPreview,
   WorkspaceReviewSchemaView,
+  WorkspaceReviewYaml,
 } from './WorkspaceReviewDocuments';
 import reviewStyles from './WorkspaceReviewReference.module.css';
 import {
@@ -271,9 +292,11 @@ export function WorkspaceComposeReviewSurface({
     REVIEW_VIEWS,
     'changes'
   );
-  const workspaceTool =
+  const requestedTool =
     parseWorkspaceTool(routeParams.get('workspaceTool')) ??
     parseWorkspaceTool(routeParams.get('reviewPane'));
+  const legacyContentEdit = requestedTool === 'edit';
+  const workspaceTool = legacyContentEdit ? null : requestedTool;
   const reconciliationPage = routeParams.get('workspaceReconcile') === '1';
   const toolReturnTo =
     workspaceTool === 'delivery'
@@ -290,6 +313,11 @@ export function WorkspaceComposeReviewSurface({
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
   const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
+
+  const requestNavigation = (navigate: () => void) => {
+    if (composeControls.current) composeControls.current.requestNavigation(navigate);
+    else navigate();
+  };
 
   const setReconciliationPage = useCallback(
     (open: boolean) => {
@@ -309,7 +337,7 @@ export function WorkspaceComposeReviewSurface({
       params.delete('returnTo');
       if (nextMode === 'review') {
         params.set('workspaceMode', 'review');
-        if (nextPane && nextPane !== 'changes') {
+        if (nextPane) {
           params.set('reviewPane', nextPane);
         } else {
           params.delete('reviewPane');
@@ -320,7 +348,9 @@ export function WorkspaceComposeReviewSurface({
       }
 
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.replace(`${pathname}${query ? `?${query}` : ''}${window.location.hash}`, {
+        scroll: false,
+      });
     },
     [pathname, routeQuery, router]
   );
@@ -340,8 +370,7 @@ export function WorkspaceComposeReviewSurface({
         const source = new URLSearchParams(routeQuery);
         source.set('workspaceMode', 'review');
         source.delete('workspaceTool');
-        if (reviewPane !== 'changes') source.set('reviewPane', reviewPane);
-        else source.delete('reviewPane');
+        source.set('reviewPane', reviewPane);
         const snapshotId = controller.review?.reviewSnapshot?.snapshotId;
         router.push(
           checksHref(candidate.projectId, {
@@ -376,6 +405,12 @@ export function WorkspaceComposeReviewSurface({
     lastSyncedRouteQueryRef.current = routeKey;
     const params = new URLSearchParams(routeQuery);
     const rawPane = params.get('reviewPane');
+    if (legacyContentEdit) {
+      rememberMode('compose');
+      writeWorkspaceSurfaceUrl('compose');
+      if (mode !== 'compose') onModeChange('compose');
+      return;
+    }
     const legacyTool = parseWorkspaceTool(rawPane);
     if (legacyTool) {
       params.set('workspaceTool', legacyTool);
@@ -394,6 +429,7 @@ export function WorkspaceComposeReviewSurface({
     }
   }, [
     mode,
+    legacyContentEdit,
     onModeChange,
     pathname,
     routeQuery,
@@ -404,6 +440,7 @@ export function WorkspaceComposeReviewSurface({
     preferenceKey,
     preferredMode,
     preferredReviewPane,
+    rememberMode,
   ]);
 
   useEffect(() => {
@@ -537,14 +574,17 @@ export function WorkspaceComposeReviewSurface({
           <WorkspaceStageHeader
             branchOptions={branchOptions}
             candidate={controller.candidate ?? candidate}
-            mode={workspaceTool === 'delivery' ? undefined : workspaceTool ? 'compose' : mode}
+            mode={
+              workspaceTool === 'delivery'
+                ? undefined
+                : workspaceTool || legacyContentEdit
+                  ? 'compose'
+                  : mode
+            }
             onBranchChange={onBranchChange}
             onCreateBranch={onCreateBranch}
             onModeChange={setSurfaceMode}
-            requestNavigation={(navigate) => {
-              if (composeControls.current) composeControls.current.requestNavigation(navigate);
-              else navigate();
-            }}
+            requestNavigation={requestNavigation}
             onEditDraft={
               !workspaceTool && mode === 'compose'
                 ? () => composeControls.current?.editDraft()
@@ -564,7 +604,7 @@ export function WorkspaceComposeReviewSurface({
                   size="sm"
                   variant="outline"
                   disabled={activity.reconciling}
-                  onClick={() => setReconciliationPage(true)}
+                  onClick={() => requestNavigation(() => setReconciliationPage(true))}
                 >
                   {activity.reconciliationPreview
                     ? 'Review branch changes'
@@ -599,22 +639,14 @@ export function WorkspaceComposeReviewSurface({
                       ? 'Review'
                       : 'Compose'}
                 </button>
-                <h1>
-                  {workspaceTool === 'delivery'
-                    ? 'Delivery'
-                    : workspaceTool === 'source'
-                      ? 'Source configuration'
-                      : 'Edit structured State'}
-                </h1>
+                <h1>{workspaceTool === 'delivery' ? 'Delivery' : 'Source configuration'}</h1>
                 <p>
                   {workspaceTool === 'delivery'
                     ? 'Download committed State and inspect delivery history.'
                     : 'Prepare a change in Compose, then review its exact result before deciding.'}
                 </p>
               </div>
-              {workspaceTool === 'edit' ? (
-                <WorkspaceContentEditor key={candidate.id} candidate={controller.candidate} />
-              ) : workspaceTool === 'source' ? (
+              {workspaceTool === 'source' ? (
                 <WorkspaceSourceTools key={candidate.id} controller={controller} />
               ) : (
                 <div className={reviewStyles.toolBody}>
@@ -622,7 +654,8 @@ export function WorkspaceComposeReviewSurface({
                 </div>
               )}
             </>
-          ) : mode === 'review' ? (
+          ) : null}
+          {!workspaceTool && !legacyContentEdit && mode === 'review' ? (
             <ReviewSurface
               key={`${candidate.projectId}:${candidate.id}`}
               activity={activity}
@@ -632,15 +665,18 @@ export function WorkspaceComposeReviewSurface({
               setPane={setReviewPane}
               onModeChange={setSurfaceMode}
             />
-          ) : (
+          ) : null}
+          {mode === 'compose' || legacyContentEdit ? (
             <ComposeSurface
+              key={`${candidate.projectId}:${candidate.id}`}
               activity={activity}
               authoringBootstrap={authoringBootstrap}
               controlsRef={composeControls}
               candidate={controller.candidate ?? candidate}
               controller={controller}
+              hidden={Boolean(workspaceTool)}
             />
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -650,10 +686,12 @@ export function WorkspaceComposeReviewSurface({
 function WorkspaceSchemaSelect({
   candidate,
   controller,
+  unbound,
   requestNavigation,
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
+  unbound?: boolean;
   requestNavigation?: (navigate: () => void) => void;
 }) {
   const published = useProjectYSchemaVersions(candidate.projectId);
@@ -668,9 +706,11 @@ function WorkspaceSchemaSelect({
       candidate.schemaBindings[0]
     );
   }, [candidate.projectId, candidate.schemaBindings, published.versions]);
-  const selectedId = candidate.schemaBindings[0]
-    ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
-    : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
+  const selectedId = unbound
+    ? ''
+    : candidate.schemaBindings[0]
+      ? workspaceSchemaChoiceId(candidate.schemaBindings[0])
+      : DEFAULT_WORKSPACE_SCHEMA_CHOICE_ID;
 
   return (
     <select
@@ -688,6 +728,11 @@ function WorkspaceSchemaSelect({
       }}
       value={selectedId}
     >
+      {unbound ? (
+        <option value="" disabled>
+          Choose a Schema
+        </option>
+      ) : null}
       {choices.map((choice) => (
         <option key={choice.id} value={choice.id}>
           {choice.label}
@@ -766,11 +811,7 @@ function WorkspaceStageHeader({
         }}
       />
       <div className={stageHeaderStyles.meta}>
-        <WorkspaceToolsMenu
-          candidate={candidate}
-          requestNavigation={requestNavigation}
-          onEditDraft={onEditDraft}
-        />
+        <WorkspaceToolsMenu candidate={candidate} onEditDraft={onEditDraft} />
       </div>
     </header>
   );
@@ -778,11 +819,9 @@ function WorkspaceStageHeader({
 
 function WorkspaceToolsMenu({
   candidate,
-  requestNavigation,
   onEditDraft,
 }: {
   candidate: WorkspaceCandidate;
-  requestNavigation?: (navigate: () => void) => void;
   onEditDraft?: () => void;
 }) {
   const router = useRouter();
@@ -795,9 +834,7 @@ function WorkspaceToolsMenu({
       params.set('workspaceMode', 'compose');
       params.delete('reviewPane');
     }
-    const navigate = () => router.push(`${pathname}?${params}`, { scroll: false });
-    if (requestNavigation) requestNavigation(navigate);
-    else navigate();
+    router.push(`${pathname}?${params}`, { scroll: false });
   };
   const hasYamlSource = candidate.sourceBundle.some(
     (source) =>
@@ -845,12 +882,14 @@ function ComposeSurface({
   controlsRef,
   candidate,
   controller,
+  hidden,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
   controlsRef: RefObject<ComposeSurfaceControls | null>;
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
+  hidden: boolean;
 }) {
   const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | 'schema' | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -992,20 +1031,31 @@ function ComposeSurface({
   const [schemaConversationId, setSchemaConversationId] = useState<string>();
   const [structureError, setStructureError] = useState<string | null>(null);
   const [staged, setStaged] = useState<StagedManualCard[]>([]);
-  const contentNavigation = useWorkspaceContentNavigation(staged.length > 0, () => setStaged([]));
+  const stagedRef = useRef(staged);
+  stagedRef.current = staged;
+  const [dialogInput, setDialogInput] = useState(false);
+  const [nodeInput, setNodeInput] = useState(false);
+  const saveAttempt = useRef<{
+    input: PublishWorkspaceAuthoringInput;
+    cardIds: Set<string>;
+  } | null>(null);
+  const savingContent = useRef(false);
+  const [saveRefreshError, setSaveRefreshError] = useState(false);
   const publishedCurrent = activity.view?.current;
-  const workingCurrent = useMemo(() => {
-    if (publishedCurrent === undefined) return undefined;
+  const workingCopy = useMemo(() => {
+    if (publishedCurrent === undefined) return { document: undefined, error: null };
     try {
-      return previewStagedCurrent(publishedCurrent, staged);
-    } catch {
-      return publishedCurrent;
+      return { document: assertStagedEditsCurrent(publishedCurrent, staged), error: null };
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : 'Could not apply local changes.';
+      return { document: undefined, error: `Local preview unavailable. ${reason}` };
     }
   }, [publishedCurrent, staged]);
+  const workingCurrent = workingCopy.document;
   const stageManualOps = useCallback(
     async (operations: DraftYOp[], reason: string) => {
       if (workingCurrent === undefined) {
-        setStructureError('Draft activity is not ready');
+        setStructureError(workingCopy.error ?? 'Draft activity is not ready');
         return false;
       }
       setStructureError(null);
@@ -1023,7 +1073,7 @@ function ComposeSurface({
         return false;
       }
     },
-    [workingCurrent, setChangeScope]
+    [workingCurrent, workingCopy.error, setChangeScope]
   );
   const toggleStaged = useCallback((id: string) => {
     setStaged((current) =>
@@ -1031,40 +1081,103 @@ function ComposeSurface({
     );
   }, []);
   const saveSelectedAsP = useCallback(async () => {
+    if (savingContent.current || activity.awaitingPublishRefresh || saveRefreshError) return false;
     const selected = selectedStagedItems(staged);
-    if (!selected.length) {
+    if (!saveAttempt.current && !selected.length) {
       setStructureError('Select at least one ungrouped change to save as a P.');
-      return;
+      return false;
     }
+    savingContent.current = true;
     setStructurePending(true);
     setStructureError(null);
     try {
-      assertStagedEditsCurrent(publishedCurrent, selected);
-      await activity.publish({
-        request_id: nextAuthoringRequestId(),
-        operations: selected.map((item) => item.operation),
-        reason: stagedManualReason(selected),
-      });
-      await controller.refreshFromServer();
-      setStaged(remainingStagedItems(staged));
+      if (!saveAttempt.current) {
+        const view = activity.view;
+        if (!view) throw new Error('Draft activity is not ready.');
+        assertStagedEditsCurrent(publishedCurrent, selected);
+        saveAttempt.current = {
+          cardIds: new Set(selected.map((item) => item.id)),
+          input: {
+            request_id: nextAuthoringRequestId(),
+            expected_workspace_revision: view.workspaceRevision,
+            expected_revision: view.compositionRevision,
+            expected_ref_head: view.basis.refHead,
+            operations: selected.map((item) => item.operation),
+            reason: stagedManualReason(selected),
+          },
+        };
+      }
+      const { input, cardIds } = saveAttempt.current;
+      const outcome = await activity.publish(input);
+      saveAttempt.current = null;
+      setStaged((current) => current.filter((item) => !cardIds.has(item.id)));
+      try {
+        await controller.refreshFromServer(outcome.workspaceRevision);
+      } catch {
+        setSaveRefreshError(true);
+      }
+      return stagedRef.current.every((item) => cardIds.has(item.id));
     } catch (cause) {
+      if (
+        cause instanceof T3xApiError &&
+        cause.status >= 400 &&
+        cause.status < 500 &&
+        cause.status !== 408
+      ) {
+        saveAttempt.current = null;
+      }
       setStructureError(
-        cause instanceof Error ? cause.message : 'Could not save the selected cards as a P.'
+        saveAttempt.current
+          ? 'Save is not yet confirmed. Retry the original save before saving other changes.'
+          : cause instanceof Error
+            ? cause.message
+            : 'Could not save the selected cards as a P.'
       );
+      return false;
     } finally {
+      savingContent.current = false;
       setStructurePending(false);
     }
-  }, [activity, controller, staged, publishedCurrent]);
+  }, [activity, controller, staged, publishedCurrent, saveRefreshError]);
+  const contentNavigation = useWorkspaceContentNavigation({
+    dirty: staged.length > 0 || dialogInput || nodeInput,
+    unapplied: dialogInput || nodeInput,
+    busy: structurePending,
+    retryOriginal: Boolean(saveAttempt.current),
+    canSave:
+      !activity.awaitingPublishRefresh &&
+      !saveRefreshError &&
+      (Boolean(saveAttempt.current) || staged.some((item) => item.selected)),
+    error: structureError,
+    save: saveSelectedAsP,
+    discard: () => {
+      setStaged([]);
+      setFieldDialog(null);
+      setActivitySelection(null);
+      saveAttempt.current = null;
+    },
+  });
   const stagingControls = useMemo(
     () => ({
       items: staged,
       current: publishedCurrent,
       pending: structurePending,
       error: structureError,
+      retryOriginal: Boolean(saveAttempt.current),
+      blocked: activity.awaitingPublishRefresh || saveRefreshError,
       onToggle: toggleStaged,
       onSaveSelected: () => void saveSelectedAsP(),
     }),
-    [staged, publishedCurrent, structurePending, structureError, toggleStaged, saveSelectedAsP]
+    [
+      activity.awaitingPublishRefresh,
+      staged,
+      publishedCurrent,
+      structurePending,
+      structureError,
+      saveRefreshError,
+      toggleStaged,
+      saveSelectedAsP,
+    ]
   );
   const openStructure = (view: 'structure' | 'yaml' | 'schema') => {
     setStructureError(null);
@@ -1151,6 +1264,7 @@ function ComposeSurface({
     )?.title ||
     activeConversationTitle ||
     'Chat';
+  const draftCountId = useId();
   const contentChangeCount = activity.view
     ? composeDraftChangeCards(activity.view.netDiff, activity.view.base, activity.view.current)
         .length
@@ -1215,6 +1329,7 @@ function ComposeSurface({
       ref={boardRef}
       style={
         {
+          display: hidden ? 'none' : undefined,
           '--draft-width': `${draftWidth}px`,
           '--discussion-width': `${discussionWidth}px`,
         } as CSSProperties
@@ -1389,14 +1504,15 @@ function ComposeSurface({
               type="button"
               className={composeStyles.draftToggle}
               aria-label="Open Draft"
+              aria-describedby={draftCountId}
               aria-expanded={inspectorOpen}
               ref={draftButton}
               onClick={openDraft}
               title="Inspect Workspace Draft"
             >
               <PanelRightOpen aria-hidden="true" /> Draft
-              <span title={activity.view ? 'Changed Content objects' : 'Draft operations'}>
-                {contentChangeCount} {activity.view ? 'changed objects' : 'operations'}
+              <span id={draftCountId}>
+                {contentChangeCount} {activity.view ? 'Content changes' : 'Draft operations'}
               </span>
               {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
                 <small>Schema</small>
@@ -1527,7 +1643,7 @@ function ComposeSurface({
               current={workingCurrent}
               revision={activity.compositionRevision}
               loading={activity.loading}
-              error={activity.error}
+              error={workingCopy.error ?? activity.error}
               enabled={activity.enabled}
               stagedCount={staged.length}
               authoring={activity.view}
@@ -1537,6 +1653,7 @@ function ComposeSurface({
                 <WorkspaceSchemaSelect
                   candidate={candidate}
                   controller={controller}
+                  unbound={activity.view?.currentSchema?.status === 'unbound'}
                   requestNavigation={contentNavigation.requestNavigation}
                 />
               }
@@ -1607,6 +1724,7 @@ function ComposeSurface({
                   onDiscuss={openChat}
                   onOpenStructure={setFieldDialog}
                   onSubmit={stageManualOps}
+                  onEditingChange={setNodeInput}
                   workingCurrent={workingCurrent}
                 />
               )}
@@ -1688,6 +1806,28 @@ function ComposeSurface({
               {schemaSettings.error && !schemaSettings.record ? (
                 <p role="alert">{schemaSettings.error}</p>
               ) : null}
+              {workingCopy.error ? <p role="alert">{workingCopy.error}</p> : null}
+              {saveRefreshError || (activity.awaitingPublishRefresh && activity.error) ? (
+                <div role="alert">
+                  Changes saved, but the Draft could not refresh.{' '}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void Promise.all([
+                        activity.loadLatest(),
+                        controller.refreshFromServer(activity.savedWorkspaceRevision),
+                      ]).then(
+                        () => setSaveRefreshError(false),
+                        () => setSaveRefreshError(true)
+                      )
+                    }
+                  >
+                    Retry refresh
+                  </button>
+                </div>
+              ) : activity.notice ? (
+                <output>{activity.notice}</output>
+              ) : null}
               {activity.newActivity ? (
                 <output className={composeStyles.newActivity}>
                   <span>
@@ -1765,6 +1905,8 @@ function ComposeSurface({
           }
           onSchemaChanged={refreshSchema}
           current={workingCurrent}
+          workingCopyError={workingCopy.error}
+          onContentInputChange={setDialogInput}
           error={structureError}
           pending={structurePending || !activity.view}
           onSubmit={stageManualOps}
@@ -2551,6 +2693,7 @@ function ProposedDraftPanel({
   const editRequest = useRef(0);
   useEffect(() => {
     if (!activity.view || !activitySelection || schemaSelected) return;
+    if (activitySelection.meta.operationIndex !== undefined) return;
     if (changeScope === 'all') {
       if (activitySelection?.meta.comparison === 'draft') return;
       const changes = composeDraftChangeCards(
@@ -2701,6 +2844,8 @@ function ProposedDraftPanel({
       <ComposeActivityTimeline
         key={candidate.id}
         activity={activity}
+        selection={activitySelection}
+        onSelectOperationField={(selection) => onActivitySelect(selection, 'history')}
         filter={changeFilter}
         scope={changeScope}
         staging={staging}
@@ -2793,6 +2938,8 @@ function formatRelativeTime(value: string | undefined): string {
   return `${String(Math.floor(elapsedHours / 24))}d ago`;
 }
 
+type DraftSnapshotStatus = 'none' | 'unknown' | 'outdated' | 'matching';
+
 function ReviewSurface({
   activity,
   compareScenarioId,
@@ -2808,13 +2955,30 @@ function ReviewSurface({
   pane: ReviewPane;
   setPane: (pane: ReviewPane) => void;
 }) {
-  const authoring = activity.newActivity ?? activity.view;
-  const schemaReview =
-    !authoring ||
-    controller.review.reviewSnapshot?.review.precondition.workspaceRevision ===
-      authoring.workspaceRevision
-      ? controller.review.schemaReview
-      : null;
+  const authoring = activity.view;
+  const newerRevision =
+    activity.newActivity && activity.newActivity.workspaceRevision !== authoring?.workspaceRevision
+      ? activity.newActivity.workspaceRevision
+      : authoring && (controller.candidate.revision ?? -1) > authoring.workspaceRevision
+        ? controller.candidate.revision
+        : undefined;
+  const newerDraft =
+    newerRevision !== undefined ||
+    Boolean(activity.newActivity || authoring?.synchronization?.required);
+  const snapshot = controller.review.reviewSnapshot;
+  const resolveObjectAddress = useRepositoryObjectAddressResolver();
+  const repositoryPath = getCanonicalRepositoryPath(usePathname());
+  const snapshotBasis = snapshot?.review?.precondition;
+  const inspectedRevision = authoring?.workspaceRevision ?? controller.candidate.revision;
+  const inspectedRefHead = authoring
+    ? authoring.basis.refHead
+    : controller.candidate.baseCommitHash;
+  const snapshotMatchesDraft =
+    snapshotBasis !== undefined &&
+    snapshotBasis.workspaceRevision === inspectedRevision &&
+    snapshotBasis.refHead === inspectedRefHead &&
+    snapshotBasis.refName === (authoring?.basis.refName ?? controller.candidate.targetBranch);
+  const schemaReview = !authoring || snapshotMatchesDraft ? controller.review.schemaReview : null;
   const authoringReview = useMemo(
     () =>
       buildAuthoringReviewProjection(
@@ -2837,41 +3001,59 @@ function ReviewSurface({
     controller.candidate.projectId,
     controller.candidate.id
   );
-  const schemaFlow = useSchemaReviewFlow(controller.candidate.projectId);
   const savedSchema = useStudioSchemaEditCandidate(
     controller.candidate.projectId,
     controller.candidate.id,
     controller.candidate.revision
   );
-  const hasSavedSchema = hasUnappliedSchemaEdit(
-    savedSchema.candidate,
-    controller.candidate,
-    authoring?.currentSchema?.schemaHash
-  );
+  const hasSavedSchema =
+    !newerDraft &&
+    hasUnappliedSchemaEdit(
+      savedSchema.candidate,
+      controller.candidate,
+      authoring?.currentSchema?.schemaHash
+    );
   const [preparationError, setPreparationError] = useState<string>();
   const [preparingSchema, setPreparingSchema] = useState(false);
   const preparationBusy = useRef(false);
-  const preparationAttempt = useRef<{ key: string; requestId: string } | null>(null);
   const [schemaPreparation, setSchemaPreparation] = useState<{
     revision: number;
+    compositionRevision: number;
+    refHead: string | null;
     target: SchemaPreparationTarget;
   }>();
   const prepareReview = async () => {
-    if (preparationBusy.current || controller.isBusy) return;
+    if (preparationBusy.current || controller.isBusy || savedSchema.loading || savedSchema.error)
+      return;
+    if (newerDraft) {
+      setPreparationError(REVIEW_DRAFT_CHANGED);
+      return;
+    }
+    if (!authoring || activity.loading || activity.awaitingPublishRefresh) {
+      setPreparationError('Load the saved Draft before preparing Review.');
+      return;
+    }
     preparationBusy.current = true;
     setPreparingSchema(true);
     setPreparationError(undefined);
-    const workspaceId = controller.candidate.id;
     try {
-      if (controller.candidate.revision !== undefined && (await schemaRequests.hasPendingEdit())) {
-        if (!reviewMounted.current) return;
-        await schemaFlow.ensureAuthoring(workspaceId);
+      if (await schemaRequests.hasPendingEdit()) {
         if (!reviewMounted.current) return;
         const latest = await schemaRequests.read();
         if (!reviewMounted.current) return;
         if (latest.unapplied && latest.edit) {
           const workspace = latest.preview.workspace;
-          if (!workspace) throw new Error('The target Workspace is unavailable.');
+          if (workspace?.revision !== authoring.workspaceRevision)
+            throw new Error(REVIEW_DRAFT_CHANGED);
+          if (
+            !hasSavedSchema ||
+            latest.edit.candidateId !== savedSchema.candidate?.candidateId ||
+            latest.edit.revision !== savedSchema.candidate?.revision
+          ) {
+            throw new Error(
+              'The saved Schema candidate changed. Load the latest Draft and Schema.'
+            );
+          }
           const target: SchemaPreparationTarget = {
             kind: 'studio',
             candidateIds: latest.candidateIds,
@@ -2881,46 +3063,40 @@ function ReviewSurface({
               revision: latest.edit.revision,
             },
           };
-          const input = {
+          setSchemaPreparation({
             target,
-            ifRevision: workspace.revision,
-            commands: [],
-            confirmedChanges: [],
-          };
-          const checked = await schemaFlow.previewContent(workspaceId, input);
-          if (!reviewMounted.current) return;
-          if (!checked.canPrepare) {
-            setSchemaPreparation({ revision: workspace.revision, target });
-            return;
-          }
-          const key = JSON.stringify([workspaceId, input, checked.previewHash]);
-          if (preparationAttempt.current?.key !== key) {
-            preparationAttempt.current = { key, requestId: crypto.randomUUID() };
-          }
-          await schemaFlow.prepareContent(workspaceId, {
-            ...input,
-            previewHash: checked.previewHash,
-            requestId: preparationAttempt.current.requestId,
+            revision: authoring.workspaceRevision,
+            compositionRevision: authoring.compositionRevision,
+            refHead: authoring.basis.refHead,
           });
-          if (!reviewMounted.current) return;
-          await controller.refreshFromServer();
-          if (!reviewMounted.current) return;
-          await activity.loadLatest();
-          if (!reviewMounted.current) return;
+          return;
         }
+        throw new Error('The saved Schema candidate changed. Load the latest Draft and Schema.');
       }
+      if (hasSavedSchema)
+        throw new Error('The saved Schema candidate changed. Load the latest Draft and Schema.');
       if (!reviewMounted.current) return;
+      const prepared: { snapshot?: ReviewSnapshotV1 } = {};
       await controller.prepareReview((snapshot) => {
-        if (!reviewMounted.current) return;
-        router.replace(
-          workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
-            snapshotId: snapshot.snapshotId,
-            branch: snapshot.review.precondition.refName,
-            pane,
-          }),
-          { scroll: false }
-        );
-      });
+        prepared.snapshot = snapshot;
+      }, authoring);
+      const snapshot = prepared.snapshot;
+      if (!snapshot || !reviewMounted.current) return;
+      const address =
+        repositoryPath && /^rvs_[0-9a-f]{32}$/.test(snapshot.snapshotId)
+          ? await resolveObjectAddress(snapshot.projectId, 'review', snapshot.snapshotId)
+          : null;
+      if (!reviewMounted.current) return;
+      router.replace(
+        workspaceReviewHref(snapshot.projectId, snapshot.workspaceId, {
+          snapshotId: snapshot.snapshotId,
+          snapshotNumber: address?.number,
+          repositoryPath: address ? repositoryPath : undefined,
+          branch: snapshot.review.precondition.refName,
+          pane,
+        }),
+        { scroll: false }
+      );
     } catch (cause) {
       if (reviewMounted.current)
         setPreparationError(cause instanceof Error ? cause.message : 'Could not prepare Review.');
@@ -2986,18 +3162,31 @@ function ReviewSurface({
     subjectChanges
   );
   const [selectedStructureRowId, setSelectedStructureRowId] = useState<string | null>(null);
+  const selectedStructureRow = selectedStructureRowId
+    ? (structureModel.rows.find((row) => row.id === selectedStructureRowId) ?? null)
+    : null;
   const view = controller.review.view;
   const checks = getReviewChecks(controller);
   const preparing = controller.busyAction === 'review.prepare';
-  const snapshotCurrent =
-    Boolean(controller.review.reviewSnapshot) &&
-    !preparing &&
-    !preparingSchema &&
-    !hasSavedSchema &&
-    (!authoring ||
-      (!authoring.synchronization?.required &&
-        controller.review.reviewSnapshot?.review?.precondition.workspaceRevision ===
-          authoring.workspaceRevision));
+  const draftLoading = activity.enabled && !authoring && activity.loading;
+  const draftUnavailable = activity.enabled && !draftLoading && (!authoring || !authoringReview);
+  const snapshotStatus: DraftSnapshotStatus = !snapshot
+    ? 'none'
+    : newerDraft || hasSavedSchema
+      ? 'outdated'
+      : !snapshotBasis ||
+          preparing ||
+          preparingSchema ||
+          savedSchema.loading ||
+          savedSchema.error ||
+          activity.error ||
+          draftUnavailable ||
+          draftLoading ||
+          activity.awaitingPublishRefresh
+        ? 'unknown'
+        : snapshotMatchesDraft
+          ? 'matching'
+          : 'outdated';
   const committedId =
     committedReviewId(view) ??
     (controller.candidate.status === 'committed'
@@ -3018,19 +3207,14 @@ function ReviewSurface({
     controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'source_chat:current';
   const materialLabel = sourceLabel.length > 36 ? `${sourceLabel.slice(0, 33)}…` : sourceLabel;
   const activeStructureRow =
-    (selectedStructureRowId
-      ? structureModel.rows.find((row) => row.id === selectedStructureRowId)
-      : null) ??
-    changedStructureRows[0] ??
-    structureModel.rows[0] ??
-    null;
+    selectedStructureRow ?? changedStructureRows[0] ?? structureModel.rows[0] ?? null;
 
   if (pane === 'checks') {
     return <WorkspaceChecksRedirect projectId={candidate.projectId} workspaceId={candidate.id} />;
   }
   const emptyDraft = authoring
-    ? authoring.hasChanges === false
-    : !activity.enabled && operations.length === 0;
+    ? !draftUnavailable && authoring.hasChanges === false
+    : !activity.enabled && candidate.revision === undefined && operations.length === 0;
   const showEmptyWorkbench =
     emptyDraft &&
     !subjectChanges.content &&
@@ -3067,6 +3251,17 @@ function ReviewSurface({
         )}
       </div>
     ) : null;
+  const inspectedSchema = (
+    <WorkspaceReviewSchemaView
+      pane={pane}
+      branch={candidate.targetBranch}
+      review={schemaReview}
+      current={authoring?.currentSchema}
+      versionLabel={
+        candidate.revision === undefined ? undefined : `workspace-r${candidate.revision}`
+      }
+    />
+  );
   return (
     <>
       <WorkspaceReviewWorkbench
@@ -3074,6 +3269,7 @@ function ReviewSurface({
           <>
             Workspace draft{candidate.revision !== undefined ? ` r${candidate.revision}` : ''} →{' '}
             {candidate.targetBranch || 'main'}
+            {authoring ? ` · Content r${authoring.compositionRevision}` : ''}
           </>
         }
         status={
@@ -3081,12 +3277,73 @@ function ReviewSurface({
             ? 'Content and Schema changes relative to the draft base.'
             : 'Review the saved Draft. Prepare review to freeze this revision and run checks.'
         }
+        notice={
+          newerDraft ||
+          preparationError ||
+          controller.error ||
+          activity.error ||
+          draftUnavailable ||
+          activity.awaitingPublishRefresh ? (
+            <div>
+              {newerDraft ? (
+                <p>
+                  {newerRevision === undefined
+                    ? REVIEW_DRAFT_CHANGED
+                    : `Workspace r${newerRevision} is available. The inspected Draft is unchanged.`}
+                </p>
+              ) : null}
+              {activity.awaitingPublishRefresh ? (
+                <p>Changes saved. Refresh the Draft before preparing Review.</p>
+              ) : null}
+              {activity.error && authoring && !draftUnavailable ? (
+                <p role="alert">
+                  Refresh failed. Still showing Workspace r{authoring.workspaceRevision}.
+                </p>
+              ) : null}
+              {activity.enabled ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={activity.loading || preparing || preparingSchema}
+                  onClick={() =>
+                    void Promise.all([activity.loadLatest(), savedSchema.refresh()]).then(
+                      () => {
+                        controller.clearPreparationError?.();
+                        setPreparationError(undefined);
+                      },
+                      () => setPreparationError('The Draft could not refresh. Retry loading it.')
+                    )
+                  }
+                >
+                  Load latest Draft
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => onModeChange('compose')}>
+                  Open Compose to load the Draft
+                </Button>
+              )}
+            </div>
+          ) : null
+        }
         pane={showEmptyWorkbench ? 'changes' : pane}
         viewsDisabled={showEmptyWorkbench}
         onPaneChange={setPane}
         subject={subject}
         subjectChanges={subjectChanges}
+        loading={!authoring && activity.loading}
         onSubjectChange={setSubject}
+        contentStatus={
+          subject === 'schema' && hasSavedSchema ? undefined : draftLoading ? (
+            <output>Loading the saved Draft…</output>
+          ) : draftUnavailable ? (
+            <p role="alert">The saved Draft or its exact comparison baseline is unavailable.</p>
+          ) : authoring &&
+            authoring.hasChanges === undefined &&
+            !subjectChanges.content &&
+            !subjectChanges.schema ? (
+            <p>The change status of this saved Draft is unavailable.</p>
+          ) : undefined
+        }
         emptyState={
           showEmptyWorkbench ? (
             <table
@@ -3113,7 +3370,7 @@ function ReviewSurface({
             </p>
           ) : comparisonStatus ? (
             comparisonStatus
-          ) : committedId ? (
+          ) : committedId && !draftLoading && !draftUnavailable ? (
             <div className="text-sm text-[var(--text-secondary)]">
               <p>No Content or Schema changes available to review.</p>
               <Button className="mt-4" size="sm" onClick={controller.viewCommit}>
@@ -3137,14 +3394,29 @@ function ReviewSurface({
             </section>
           ) : (
             <>
+              {subject === 'content' && activeStructureRow ? (
+                <WorkspaceReviewSelectedDetails
+                  activity={activity}
+                  candidate={candidate}
+                  model={structureModel}
+                  row={activeStructureRow}
+                />
+              ) : null}
               <WorkspaceReviewSummary
                 candidate={candidate}
                 controller={controller}
-                snapshotCurrent={snapshotCurrent}
+                snapshotStatus={snapshotStatus}
                 hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
                 preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-                schemaLoading={savedSchema.loading}
+                schemaLoading={Boolean(
+                  savedSchema.loading ||
+                    savedSchema.error ||
+                    activity.loading ||
+                    (activity.enabled && !authoring) ||
+                    newerDraft
+                )}
                 hasSavedSchema={hasSavedSchema}
+                draftUnavailable={Boolean(draftLoading || draftUnavailable)}
                 preparationError={
                   preparationError ?? savedSchema.error ?? controller.error ?? undefined
                 }
@@ -3170,26 +3442,51 @@ function ReviewSurface({
             {scenarioComparison?.comparisonOnlyCount ?? 0} comparison-only paths.
           </p>
         ) : null}
+        {subject !== 'schema' && authoringReview && pane === 'yaml' ? (
+          <details className={workbenchStyles.notice}>
+            <summary>Complete Content YAML · Workspace r{authoring?.workspaceRevision}</summary>
+            <WorkspaceReviewYaml
+              base={authoring?.base}
+              result={authoring?.current}
+              branch={candidate.targetBranch}
+              subject="Content"
+              versionLabel={`workspace-r${authoring?.workspaceRevision}`}
+            />
+          </details>
+        ) : null}
+        {subject !== 'schema' &&
+        pane === 'changes' &&
+        authoringReview &&
+        (structureModel.baseline.relations.length > 0 ||
+          structureModel.head.relations.length > 0) ? (
+          <details className={workbenchStyles.notice}>
+            <summary>Base and Draft relations</summary>
+            <WorkspaceReviewYaml
+              base={{ relations: structureModel.baseline.relations }}
+              result={{ relations: structureModel.head.relations }}
+              branch={candidate.targetBranch}
+              subject="Content"
+              versionLabel={`workspace-r${authoring?.workspaceRevision}-relations`}
+            />
+          </details>
+        ) : null}
         {subject === 'schema' && hasSavedSchema && savedSchema.candidate ? (
           <WorkspacePendingSchemaReview
             projectId={candidate.projectId}
             workspaceId={candidate.id}
-            revision={controller.candidate.revision}
+            revision={candidate.revision}
             candidate={savedSchema.candidate}
             branch={candidate.targetBranch}
             pane={pane}
+            inspectedSchema={authoring?.currentSchema ? inspectedSchema : undefined}
           />
         ) : subject === 'schema' ? (
-          <WorkspaceReviewSchemaView
-            pane={pane}
-            branch={candidate.targetBranch}
-            review={schemaReview}
-            current={authoring?.currentSchema}
-          />
+          inspectedSchema
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
-            candidate={candidate}
-            review={comparisonReview}
+            model={structureModel}
+            selectedRow={activeStructureRow}
+            onSelectRow={setSelectedStructureRowId}
             controller={controller}
             onModeChange={onModeChange}
           />
@@ -3210,14 +3507,22 @@ function ReviewSurface({
             query=""
             rows={structureModel.rows}
             sourceLabel={materialLabel}
-            yamlModel={pane === 'yaml' ? structureModel : undefined}
-            snapshotCurrent={snapshotCurrent}
+            model={structureModel}
+            baselineStateDigest={authoring?.basis.baseDigest}
+            showYaml={pane === 'yaml'}
+            snapshotStatus={snapshotStatus}
           />
         ) : (
           <div className="py-12 text-center text-sm">
-            <h2>No structured changes are prepared yet</h2>
+            <h2>
+              {authoringReview
+                ? 'No field-tree changes to display'
+                : 'No structured changes are prepared yet'}
+            </h2>
             <p className="mt-2 text-xs text-[var(--text-secondary)]">
-              Add source evidence in Compose, then prepare Review to inspect the structure tree.
+              {authoringReview
+                ? 'Use YAML or Preview to inspect the saved Content.'
+                : 'Add source evidence in Compose, then prepare Review to inspect the structure tree.'}
             </p>
             {committedId ? (
               <Button className="mt-4" size="sm" onClick={controller.viewCommit}>
@@ -3232,20 +3537,19 @@ function ReviewSurface({
           projectId={candidate.projectId}
           workspaceId={candidate.id}
           revision={schemaPreparation.revision}
+          inspectedDraft={schemaPreparation}
           target={schemaPreparation.target}
           open
-          continueToReview
           onOpenChange={(open) => {
             if (!open) setSchemaPreparation(undefined);
           }}
           onPrepared={async () => {
             if (!reviewMounted.current) return;
-            await controller.refreshFromServer();
+            const savedDraft = await activity.loadLatest();
             if (!reviewMounted.current) return;
-            await activity.loadLatest();
-            if (!reviewMounted.current) return;
-            setSchemaPreparation(undefined);
-            await prepareReview();
+            if (!savedDraft) throw new Error('The saved Draft could not be loaded.');
+            await controller.refreshFromServer(savedDraft.workspaceRevision);
+            if (reviewMounted.current) setSchemaPreparation(undefined);
           }}
         />
       ) : null}
@@ -3282,11 +3586,12 @@ function ReviewCheckList({
 function WorkspaceReviewSummary({
   candidate,
   controller,
-  snapshotCurrent,
+  snapshotStatus,
   hasChanges,
   preparingSchema,
   schemaLoading,
   hasSavedSchema,
+  draftUnavailable,
   preparationError,
   onEdit,
   onOpenChecks,
@@ -3294,28 +3599,33 @@ function WorkspaceReviewSummary({
 }: {
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
-  snapshotCurrent: boolean;
+  snapshotStatus: DraftSnapshotStatus;
   hasChanges: boolean | undefined;
   preparingSchema: boolean;
   schemaLoading: boolean;
   hasSavedSchema: boolean;
+  draftUnavailable: boolean;
   preparationError?: string;
   onEdit: () => void;
   onOpenChecks: () => void;
   onPrepare: () => void;
 }) {
-  const snapshot = controller.review.reviewSnapshot;
+  const snapshotCurrent = snapshotStatus === 'matching';
   const checks = getReviewChecks(controller);
   const preparing = preparingSchema || controller.busyAction === 'review.prepare';
   const status = preparing
     ? 'Preparing review…'
-    : hasChanges === false
-      ? EMPTY_WORKSPACE_REVIEW
-      : snapshot && !snapshotCurrent
-        ? 'The branch or Draft changed. Prepare review again.'
-        : snapshot
-          ? 'Review snapshot ready for decision.'
-          : 'Prepare a fixed snapshot to approve and commit here.';
+    : draftUnavailable
+      ? 'Waiting for the saved Draft and its comparison baseline.'
+      : hasChanges === false
+        ? EMPTY_WORKSPACE_REVIEW
+        : snapshotStatus === 'outdated'
+          ? 'The previous snapshot does not cover the current Draft, branch base, or saved Schema.'
+          : snapshotStatus === 'unknown'
+            ? 'The previous snapshot could not yet be matched to this Draft.'
+            : snapshotCurrent
+              ? 'These checks apply to the fixed snapshot of this Draft.'
+              : 'Prepare a fixed snapshot to approve and commit here.';
   return (
     <section aria-label="Review readiness" className={workbenchStyles.draftChecks}>
       <div>
@@ -3324,9 +3634,11 @@ function WorkspaceReviewSummary({
             ? 'Preparing review'
             : snapshotCurrent
               ? 'Review prepared'
-              : snapshot
-                ? 'Review outdated'
-                : 'Not reviewed'}
+              : snapshotStatus === 'outdated'
+                ? 'Previous snapshot outdated'
+                : snapshotStatus === 'unknown'
+                  ? 'Snapshot freshness unconfirmed'
+                  : 'No fixed review selected'}
         </h2>
         <p aria-live="polite">{status}</p>
       </div>
@@ -3353,7 +3665,13 @@ function WorkspaceReviewSummary({
         <Button
           size="sm"
           variant="commit"
-          disabled={controller.isBusy || preparing || schemaLoading || hasChanges === false}
+          disabled={
+            controller.isBusy ||
+            preparing ||
+            schemaLoading ||
+            draftUnavailable ||
+            hasChanges === false
+          }
           onClick={onPrepare}
           type="button"
         >
@@ -3433,50 +3751,43 @@ function WorkspaceSourceTools({ controller }: { controller: WorkspaceComposeRevi
 function ResultYamlPane({
   model,
   revision,
-  hasSnapshot,
   changeCounts,
   branch,
   selectedRow,
   onSelectRow,
   preparing,
-  snapshotCurrent,
+  snapshotStatus,
   validationReady,
 }: {
   model: WorkspaceReviewStructureModel;
   revision?: number;
-  hasSnapshot: boolean;
   changeCounts: { added: number; modified: number; removed: number };
   branch: string;
   selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
   preparing: boolean;
-  snapshotCurrent: boolean;
+  snapshotStatus: DraftSnapshotStatus;
   validationReady: boolean;
 }) {
   const lines = useMemo(() => buildStateYamlReview(model.baseline, model.head), [model]);
   const yamlText = useMemo(() => buildCanonicalStateYaml(model.head), [model.head]);
   const selectPath = useCallback(
     (path: string) => {
-      const exact = model.rows.find((row) => row.path === path);
-      const row =
-        exact ??
-        model.rows.reduce<WorkspaceReviewStructureRow | null>((nearest, entry) => {
-          if (!path.startsWith(entry.path + '/')) return nearest;
-          return !nearest || entry.path.length > nearest.path.length ? entry : nearest;
-        }, null);
+      const row = findWorkspaceReviewRow(model.rows, path);
       if (row) onSelectRow(row.id);
     },
     [model.rows, onSelectRow]
   );
   const statusLabel = preparing
-    ? 'Preparing review…'
+    ? 'Preparing fixed review…'
     : !model.hasReplayContent
-      ? 'Draft preview — base not verified'
-      : snapshotCurrent
-        ? 'Current draft — matches prepared review snapshot'
-        : hasSnapshot
-          ? 'Current draft — previous review snapshot is outdated. Prepare review again.'
-          : 'Current draft — no review snapshot prepared. Prepare review to freeze this revision.';
+      ? 'Base not verified'
+      : {
+          matching: 'Matches the prepared snapshot',
+          outdated: 'Previous snapshot applies to a different version',
+          unknown: 'Snapshot freshness unconfirmed',
+          none: 'No fixed review selected',
+        }[snapshotStatus];
 
   return (
     <WorkspaceReviewCodeView
@@ -3485,7 +3796,12 @@ function ResultYamlPane({
       rootKey={revision === undefined ? 'workspace-draft' : `workspace-draft-r${revision}`}
       validationReady={validationReady}
       yamlText={yamlText}
-      review={{ lines, selectedPath: selectedRow?.path, onSelectPath: selectPath, statusLabel }}
+      review={{
+        lines,
+        selectedPath: selectedRow?.path,
+        onSelectPath: selectPath,
+        statusLabel: `Saved Draft · ${statusLabel} · Field-tree projection`,
+      }}
     />
   );
 }
@@ -3496,6 +3812,97 @@ interface WorkspaceReviewStructureModel {
   hasReplayContent: boolean;
   rootKey: string;
   rows: WorkspaceReviewStructureRow[];
+}
+
+function findWorkspaceReviewRow(rows: WorkspaceReviewStructureRow[], path: string) {
+  return (
+    rows.find((row) => row.path === path) ??
+    rows.reduce<WorkspaceReviewStructureRow | null>((nearest, row) => {
+      if (!path.startsWith(`${row.path}/`)) return nearest;
+      return !nearest || row.path.length > nearest.path.length ? row : nearest;
+    }, null)
+  );
+}
+
+function WorkspaceReviewSelectedDetails({
+  activity,
+  candidate,
+  model,
+  row,
+}: {
+  activity: ReturnType<typeof useComposeActivity>;
+  candidate: WorkspaceCandidate;
+  model: WorkspaceReviewStructureModel;
+  row: WorkspaceReviewStructureRow;
+}) {
+  const before = readStatePointValue(model.baseline, row.path);
+  const after = readStatePointValue(model.head, row.path);
+  const current = after.exists ? (after.value as TransitionProtocolValue) : undefined;
+  const previous = before.exists ? (before.value as TransitionProtocolValue) : undefined;
+  const matchesBase = before.exists === after.exists && composeValuesEqual(previous, current);
+  const matchingAuthoring =
+    activity.view?.workspaceRevision === candidate.revision ? activity.view : null;
+  const action = matchingAuthoring
+    ? activity.actions?.find((entry) =>
+        (activity.cards?.[entry.actionId] ?? []).some((card) => {
+          const path = authoringSemanticPath(card.path) ?? card.path;
+          return (
+            row.path === path ||
+            (!matchesBase &&
+              (path === 'content' ||
+                row.path.startsWith(`${path}/`) ||
+                path.startsWith(`${row.path}/`)))
+          );
+        })
+      )
+    : undefined;
+  const title =
+    current &&
+    typeof current === 'object' &&
+    !Array.isArray(current) &&
+    typeof current.title === 'string' &&
+    current.title.trim()
+      ? current.title
+      : row.key;
+  const version = matchingAuthoring
+    ? `Content r${matchingAuthoring.compositionRevision}`
+    : `Workspace r${candidate.revision ?? '—'}`;
+
+  return (
+    <section aria-label="Selected review Details" className={workbenchStyles.selectedDetails}>
+      <header className={workbenchStyles.selectedDetailsHeader}>
+        <h2>Details</h2>
+      </header>
+      <ComposeChangeContext
+        title={title}
+        path={row.path}
+        revisionLabel={version}
+        current={current}
+        unknown={false}
+        comparison={{ before: previous, after: current }}
+        comparisonLabel={`Whole draft · Base → ${version}`}
+        matchesBase={matchesBase}
+      />
+      {action ? (
+        <div className={workbenchStyles.selectedDetailsReason}>
+          <ComposeChangeReason
+            reason={action.reason ?? ''}
+            actor={action.actor.id}
+            channel={action.channel}
+            timestamp={action.publishedAt}
+            action={action}
+            contextLabel={`Latest saved action affecting this path · A${action.sequence}. YOps describes the whole action.`}
+          />
+        </div>
+      ) : (
+        <p className={workbenchStyles.selectedDetailsUnavailable}>
+          {matchesBase
+            ? 'This path matches Base; no saved action is attributed to it.'
+            : 'Saved action details are unavailable for this path in the loaded history.'}
+        </p>
+      )}
+    </section>
+  );
 }
 
 export interface WorkspaceReviewStructureRow extends StatePointRow {
@@ -3522,26 +3929,18 @@ interface WorkspaceReviewDiffMeta {
 type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
-  candidate,
-  review,
+  model,
+  selectedRow,
+  onSelectRow,
   controller,
   onModeChange,
 }: {
-  candidate: WorkspaceCandidate;
-  review: WorkspaceComposeReviewController['review'];
+  model: WorkspaceReviewStructureModel;
+  selectedRow: WorkspaceReviewStructureRow | null;
+  onSelectRow: (id: string) => void;
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const structure = useMemo(
-    () => buildWorkspaceReviewStructureModel(candidate, review),
-    [candidate, review]
-  );
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const selectedRow =
-    structure.rows.find((row) => row.path === selectedPath) ??
-    structure.rows.find((row) => !row.expandable) ??
-    structure.rows[0] ??
-    null;
   const selectedKind = selectedRow?.diff?.kind;
   const copyPath = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard)
@@ -3555,8 +3954,11 @@ function WorkspaceRenderedReview({
     <section aria-label="Rendered result">
       {controller.error ? <p role="alert">{controller.error}</p> : null}
       <WorkspaceReviewContentPreview
-        value={{ domain: 't3x.dev/semantic-content', version: 1, content: structure.head }}
-        onSelect={(path) => setSelectedPath(authoringSemanticPath(path) ?? path)}
+        value={{ domain: 't3x.dev/semantic-content', version: 1, content: model.head }}
+        onSelect={(path) => {
+          const row = findWorkspaceReviewRow(model.rows, authoringSemanticPath(path) ?? path);
+          if (row) onSelectRow(row.id);
+        }}
       />
       <details className={workbenchStyles.selection}>
         <summary>Selected change · actions</summary>
@@ -3647,8 +4049,10 @@ function WorkspaceReviewStructureView({
   query,
   rows,
   sourceLabel,
-  yamlModel,
-  snapshotCurrent,
+  showYaml,
+  model,
+  snapshotStatus,
+  baselineStateDigest,
 }: {
   activeRowId: string | null;
   candidate: WorkspaceCandidate;
@@ -3662,8 +4066,10 @@ function WorkspaceReviewStructureView({
   query: string;
   rows: WorkspaceReviewStructureRow[];
   sourceLabel: string;
-  yamlModel?: WorkspaceReviewStructureModel;
-  snapshotCurrent: boolean;
+  showYaml: boolean;
+  model: WorkspaceReviewStructureModel;
+  snapshotStatus: DraftSnapshotStatus;
+  baselineStateDigest?: string;
 }) {
   const changedRows = useMemo(() => rows.filter((row) => row.diff?.exact), [rows]);
   const selectedRow =
@@ -3682,21 +4088,19 @@ function WorkspaceReviewStructureView({
     >
       <div className={diffStyles.reviewBody}>
         <div className={diffStyles.mainColumn}>
-          {!yamlModel ? (
+          {!showYaml ? (
             <header className={diffStyles.toolbar}>
               <div className={diffStyles.diffHeading}>
                 <h1>Structure diff</h1>
                 <p>
-                  {candidate.baseCommitHash ? (
-                    <>
-                      Base commit{' '}
-                      <code title={candidate.baseCommitHash}>
-                        {shortHash(candidate.baseCommitHash)}
-                      </code>
-                    </>
-                  ) : (
-                    'Workspace baseline (no base commit)'
-                  )}{' '}
+                  <WorkspaceReviewBaseline
+                    commitHash={candidate.baseCommitHash}
+                    stateDigest={baselineStateDigest}
+                    available={model.hasReplayContent}
+                    empty={
+                      model.baseline.trees.length === 0 && model.baseline.relations?.length === 0
+                    }
+                  />{' '}
                   compared with Workspace draft{' '}
                   <code>
                     {candidate.revision === undefined
@@ -3723,19 +4127,18 @@ function WorkspaceReviewStructureView({
               </div>
             </header>
           ) : null}
-          {yamlModel ? (
+          {showYaml ? (
             <ResultYamlPane
               changeCounts={changeCounts}
               branch={candidate.targetBranch}
-              model={yamlModel}
+              model={model}
               revision={candidate.revision}
-              hasSnapshot={Boolean(controller.review.reviewSnapshot)}
               onSelectRow={onSelectRow}
               preparing={preparing}
               selectedRow={selectedRow}
-              snapshotCurrent={snapshotCurrent}
+              snapshotStatus={snapshotStatus}
               validationReady={
-                snapshotCurrent &&
+                snapshotStatus === 'matching' &&
                 checks.some(
                   (check) => check.label === 'Schema validation' && check.status === 'passed'
                 )
@@ -3830,16 +4233,28 @@ export function WorkspaceReviewStructureTree({
   }, [expansionRequest, rows]);
 
   const table = (
-    <table className={cn(diffStyles.tree, reference && diffStyles.referenceTree)}>
+    <table
+      className={cn(diffStyles.tree, reference ? diffStyles.referenceTree : diffStyles.historyTree)}
+    >
       {reference ? (
         <ReviewDiffColumns />
       ) : (
-        <colgroup>
-          <col className="w-[29%]" />
-          <col className="w-[34%]" />
-          <col className="w-[25%]" />
-          <col className="w-[12%]" />
-        </colgroup>
+        <>
+          <colgroup>
+            <col className="w-[29%]" />
+            <col className="w-[34%]" />
+            <col />
+            <col className="w-[108px]" />
+          </colgroup>
+          <thead className={diffStyles.treeHeader}>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">Value</th>
+              <th scope="col">Auto-generated summary</th>
+              <th scope="col">Commit date</th>
+            </tr>
+          </thead>
+        </>
       )}
       <tbody>
         {visibleRows.map((row) => (
@@ -3862,7 +4277,7 @@ export function WorkspaceReviewStructureTree({
       {table}
     </section>
   ) : (
-    <StateScrollArea className={diffStyles.treePane} label="Workspace structure rows">
+    <StateScrollArea horizontal className={diffStyles.treePane} label="Structure diff rows">
       {table}
     </StateScrollArea>
   );
@@ -4006,9 +4421,7 @@ function WorkspaceReviewStructureTableRow({
           <td className={diffStyles.valueCell}>
             <WorkspaceReviewValueCell row={row} />
           </td>
-          <td className={diffStyles.whyCell}>
-            <WorkspaceReviewWhyCell row={row} />
-          </td>
+          <td className={diffStyles.summaryCell}>{row.diff?.summary ?? '—'}</td>
           <td className={diffStyles.changedCell}>{row.diff?.exact ? modifiedLabel : '—'}</td>
         </>
       )}
@@ -4049,16 +4462,6 @@ function WorkspaceReviewValueCell({ row }: { row: WorkspaceReviewStructureRow })
   return (
     <span className={diffStyles.plainValue} title={row.value}>
       {row.value === '-' ? '' : row.value}
-    </span>
-  );
-}
-
-function WorkspaceReviewWhyCell({ row }: { row: WorkspaceReviewStructureRow }) {
-  if (!row.diff && row.status === 'unchanged') return <span>—</span>;
-  const reason = workspaceReviewEffectText(row);
-  return (
-    <span className={diffStyles.whyText} title={reason}>
-      {reason}
     </span>
   );
 }
@@ -4208,6 +4611,7 @@ function buildWorkspaceReviewStructureModel(
     ? buildStructuredStateDiff({
         baseline: content.baseline,
         head: content.head,
+        includeEmptyArrayParent: true,
         workspace: candidate,
       })
     : [];

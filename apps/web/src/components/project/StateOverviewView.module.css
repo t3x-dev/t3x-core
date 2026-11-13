@@ -55,7 +55,6 @@
   gap: 8px;
   margin-left: auto;
 }
-.historyTrigger,
 .actions a {
   display: inline-flex;
   align-items: center;
@@ -68,7 +67,6 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.historyTrigger:hover,
 .actions a:hover {
   background: var(--hover-bg);
 }
@@ -77,12 +75,14 @@
   border-color: var(--accent-commit);
   color: var(--text-on-accent, #fff);
 }
-.historyTrigger svg,
 .actions svg {
   width: 14px;
   height: 14px;
 }
 .viewTabs {
+  height: auto;
+  padding: 0;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   gap: 0;
@@ -95,11 +95,14 @@
   min-height: 36px;
   padding: 6px 12px;
   font-size: 14px;
+  flex: none;
+  border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   color: var(--text-secondary);
 }
 .viewTabs button[aria-selected="true"] {
+  background: transparent;
   border-bottom-color: var(--accent-commit);
   color: var(--text-primary);
   font-weight: 600;
@@ -145,7 +148,7 @@
 }
 .descriptionRow {
   position: relative;
-  padding-right: 26px;
+  padding-right: 36px;
 }
 .description {
   font-size: 15px;
@@ -156,7 +159,7 @@
 .descriptionEdit {
   position: absolute;
   top: -3px;
-  right: -5px;
+  right: 5px;
   padding: 5px;
   width: 28px;
   height: 28px;

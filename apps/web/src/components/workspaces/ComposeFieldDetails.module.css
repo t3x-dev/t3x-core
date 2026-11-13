@@ -360,14 +360,54 @@
   font-size: 13px;
   font-weight: 600;
 }
+.reason dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+.reason dl > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.reason dt {
+  color: var(--text-tertiary);
+}
+.reason dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.reason ul {
+  margin: 0;
+  padding-left: 16px;
+}
 .reasonText {
-  margin: 8px 0;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
-.reason > span,
+.yops {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.yops summary {
+  cursor: pointer;
+}
+.yops pre {
+  max-height: 240px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  overflow: auto;
+  font-size: 11px;
+}
 .helper {
   color: var(--text-tertiary);
   font-size: 10px;

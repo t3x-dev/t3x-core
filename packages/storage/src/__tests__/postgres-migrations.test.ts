@@ -5,9 +5,27 @@ import {
   createPostgresRuntimeStorage,
   createPostgresStorage,
   getPostgresClient,
+  migratePostgresStorage,
   POSTGRES_SCHEMA_VERSION,
 } from '../adapters/postgres';
+import { findRepositoryObjectAddress } from '../queries/repository-object-addresses';
+import { createValidationRun } from '../queries/validation-runs';
 import { createTestDB } from './setup';
+
+function validationRunInput(projectId: string) {
+  return {
+    project_id: projectId,
+    workspace_id: 'ws:main',
+    subject_hash: 'subject',
+    workflow_name: 'config',
+    workflow_hash: 'workflow',
+    input_hash: 'input',
+    validator_hash: 'validator',
+    provider: 'local',
+    status: 'passed' as const,
+    gate_status: 'ready' as const,
+  };
+}
 
 let cleanup: (() => Promise<void>) | undefined;
 
@@ -17,6 +35,80 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it.each([
+    { version: 83, mode: 'standalone' },
+    { version: 84, mode: 'bootstrap' },
+    { version: 85, mode: 'bootstrap' },
+  ])('upgrades v$version via $mode while preserving private drafts and builtin templates', async ({
+    version,
+    mode,
+  }) => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('numbered', 'Numbered', 'ns_t3x_dev', NOW());
+      DROP TRIGGER assign_commit_address ON transition_commits;
+      DROP TRIGGER assign_review_address ON transition_review_snapshots;
+      DROP TRIGGER assign_validation_address ON validation_runs;
+      DROP TRIGGER assign_schema_validation_address ON yschema_validation_runs;
+      DROP FUNCTION assign_repository_object_address();
+      DROP TABLE repository_object_addresses, repository_object_address_counters;
+      UPDATE _schema_version SET version = ${version};
+      INSERT INTO drafts (
+        id, project_id, title, target_branch, workspace_id, workspace_state_json,
+        status, owner_principal_kind, owner_principal_id, created_at, updated_at
+      ) VALUES
+        ('draft_a', 'numbered', 'A', 'main', 'workspace_a', '{"status":"draft"}',
+          'editing', 'human', 'owner_a', '2026-11-01 01:00:00+00', '2026-11-01 01:00:00+00'),
+        ('draft_b', 'numbered', 'B', 'main', 'workspace_b', '{"status":"draft"}',
+          'editing', 'human', 'owner_b', '2026-11-01 02:00:00+00', '2026-11-01 02:00:00+00');
+    `);
+    if (version < 85) await setup.sql.unsafe('DROP TABLE workspace_deployments');
+    const drafts = () => setup.sql`
+      SELECT workspace_id, owner_principal_id, status, revision, updated_at
+      FROM drafts WHERE project_id = 'numbered' ORDER BY workspace_id
+    `;
+    const builtinTemplates = () => setup.sql`
+      SELECT template_id, updated_at FROM templates WHERE is_builtin ORDER BY template_id
+    `;
+    const beforeDrafts = await drafts();
+    const beforeTemplates = await builtinTemplates();
+    expect(beforeDrafts.map(({ status }) => status)).toEqual(['editing', 'editing']);
+    expect(beforeTemplates.length).toBeGreaterThan(0);
+
+    const config = { connectionString: setup.connectionString };
+    const input = validationRunInput('numbered');
+    const original = await createValidationRun(setup.db, input);
+    let db = setup.db;
+    if (mode === 'bootstrap') {
+      await closePostgresStorage();
+      db = await createPostgresBootstrapStorage(config);
+    } else {
+      await migratePostgresStorage(config);
+    }
+    expect(await setup.sql`SELECT version FROM _schema_version`).toEqual([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(await setup.sql`SELECT count(*)::int AS count FROM workspace_deployments`).toEqual([
+      { count: 0 },
+    ]);
+    expect(await drafts()).toEqual(beforeDrafts);
+    expect(await builtinTemplates()).toEqual(beforeTemplates);
+    const create = () => createValidationRun(db, input);
+    const address = (number: string) =>
+      findRepositoryObjectAddress(db, 'numbered', 'validation', { number });
+    expect(await address('1')).toEqual({ id: original.id, number: '1' });
+
+    const later = await Promise.all([create(), create()]);
+    expect([await address('2'), await address('3')].map((entry) => entry?.id).sort()).toEqual(
+      later.map(({ id }) => id).sort()
+    );
+    await setup.sql`DELETE FROM validation_runs WHERE id = ${original.id}`;
+    const next = await create();
+    expect(await address('4')).toEqual({ id: next.id, number: '4' });
+    expect(await address('1')).toEqual({ id: original.id, number: '1' });
+  });
   it('upgrades v82 identities to canonical values with account ownership enforced', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;
@@ -308,7 +400,7 @@ describe('PostgreSQL schema migrations', () => {
       "INSERT INTO projects (project_id, name, created_at) VALUES ('migration-delivery', 'Keep me', NOW())"
     );
     await setup.sql.unsafe(
-      'DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
+      'DROP TABLE workspace_deployments; DROP TABLE workspace_deliveries; UPDATE _schema_version SET version = 72'
     );
     await closePostgresStorage();
     await createPostgresBootstrapStorage({ connectionString: setup.connectionString });
@@ -330,9 +422,14 @@ describe('PostgreSQL schema migrations', () => {
     await expect(
       setup.sql.unsafe("UPDATE workspace_deliveries SET adapter = 'deploy' WHERE id = 'receipt'")
     ).rejects.toThrow();
+    await setup.sql.unsafe(`INSERT INTO workspace_deliveries
+      (id, project_id, workspace_id, target_id, commit_digest, idempotency_key, request_digest, adapter, format, artifact_digest, status, attempt)
+      VALUES ('portable-receipt', 'migration-delivery', 'ws', 'portable', 'commit', 'portable-key', 'portable-request', 't3x.portable/v1', 'bundle', 'portable-bytes', 'prepared', 1)`);
     expect(
-      await setup.sql.unsafe("SELECT id FROM workspace_deliveries WHERE id = 'receipt'")
-    ).toHaveLength(1);
+      await setup.sql.unsafe(
+        "SELECT id FROM workspace_deliveries WHERE id IN ('receipt', 'portable-receipt')"
+      )
+    ).toHaveLength(2);
   });
 
   it('serializes concurrent first-run schema initialization', async () => {
@@ -1122,7 +1219,7 @@ describe('PostgreSQL schema migrations', () => {
       const runtimeUrl = new URL(setup.connectionString);
       runtimeUrl.username = role;
       runtimeUrl.password = password;
-      await createPostgresRuntimeStorage({
+      const runtimeDb = await createPostgresRuntimeStorage({
         connectionString: runtimeUrl.toString(),
         maxConnections: 1,
         onnotice: () => {},
@@ -1164,6 +1261,32 @@ describe('PostgreSQL schema migrations', () => {
         "SELECT name FROM projects WHERE project_id = 'runtime_role_project'"
       );
       expect(project?.name).toBe('Runtime role project');
+
+      await setup.sql.unsafe(`
+        REVOKE ALL ON repository_object_addresses, repository_object_address_counters FROM "${role}";
+      `);
+      const createRun = () =>
+        createValidationRun(runtimeDb, validationRunInput('runtime_role_project'));
+      await expect(createRun()).rejects.toMatchObject({ cause: { code: '42501' } });
+      await setup.sql.unsafe(`
+        GRANT SELECT, INSERT, UPDATE ON repository_object_address_counters TO "${role}";
+      `);
+      await expect(createRun()).rejects.toMatchObject({ cause: { code: '42501' } });
+      await setup.sql.unsafe(`
+        GRANT SELECT, INSERT ON repository_object_addresses TO "${role}";
+      `);
+      const run = await createRun();
+      expect(
+        await findRepositoryObjectAddress(runtimeDb, 'runtime_role_project', 'validation', {
+          number: '1',
+        })
+      ).toEqual({ id: run.id, number: '1' });
+      expect(
+        await runtimeSql.unsafe(`
+        SELECT id FROM validation_runs WHERE project_id = 'runtime_role_project'
+      `)
+      ).toEqual([{ id: run.id }]);
+
       await runtimeSql.unsafe("DELETE FROM projects WHERE project_id = 'runtime_role_project'");
     } finally {
       await closePostgresStorage();

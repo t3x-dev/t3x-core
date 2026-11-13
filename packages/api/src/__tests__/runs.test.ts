@@ -21,6 +21,7 @@ vi.mock('../lib/db', () => ({
 const mockFetchFn = vi.fn();
 vi.stubGlobal('fetch', mockFetchFn);
 
+import { comparisonsRoutes } from '../routes/comparisons.openapi';
 import { runsRoutes } from '../routes/runs.openapi';
 
 describe('Runs Routes', () => {
@@ -29,6 +30,7 @@ describe('Runs Routes', () => {
   let projectId: string;
   const app = new Hono();
   app.route('/', runsRoutes);
+  app.route('/', comparisonsRoutes);
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -347,6 +349,103 @@ describe('Runs Routes', () => {
         body: JSON.stringify({}),
       });
       expect(res.status).toBe(400);
+    });
+
+    it('prepares two configurations from Runner callbacks and saves their project comparison', async () => {
+      const other = await insertProject(
+        mockDB,
+        testData.project({ name: 'Other evaluation project' })
+      );
+      const model = 'actual-runner-model';
+      const versions = ['v1', 'v2'] as const;
+      const headers = { 'Content-Type': 'application/json' };
+      const post = (path: string, body: unknown, runner = false) =>
+        app.request(path, {
+          method: 'POST',
+          headers: runner ? { ...headers, Authorization: 'Bearer runner-test-secret' } : headers,
+          body: JSON.stringify(body),
+        });
+      const runIds: string[] = [];
+      for (const prompt_version of versions) {
+        const runnerId = `runner-${prompt_version}`;
+        mockFetchFn.mockResolvedValueOnce(
+          Response.json({ success: true, data: { runner_run_id: runnerId } })
+        );
+        const created = await post('/v1/runs', {
+          project_id: projectId,
+          leaf: { id: `quick-${prompt_version}`, type: 'eval', content: 'Weather test' },
+          workflow: { type: 'n8n', webhook_id: 'https://workflow.example.test/eval' },
+          metadata: { prompt_version, test_case: 'weather-query' },
+        });
+        expect(created.status).toBe(200);
+        const {
+          data: { run_id },
+        } = (await created.json()) as { data: { run_id: string } };
+        runIds.push(run_id);
+        const ingest = await post(
+          '/v1/runs/ingest',
+          {
+            run_id,
+            runner_run_id: runnerId,
+            status: prompt_version === 'v1' ? 'failed' : 'completed',
+            metadata: { model },
+            run_report: { eval_result: { passed: prompt_version === 'v2', score: 0.8 } },
+          },
+          true
+        );
+        expect(ingest.status).toBe(200);
+      }
+
+      await insertRun(mockDB, {
+        run_id: 'other-project-sample',
+        project_id: other.projectId,
+        status: 'completed',
+        metadata_json: JSON.stringify({ model, prompt_version: 'v1' }),
+      });
+      const control = { model, prompt_version: 'v1' };
+      const treatment = { model, prompt_version: 'v2' };
+      const configs = await app.request(`/v1/runs/configurations?project_id=${projectId}`);
+      await expect(configs.json()).resolves.toMatchObject({
+        data: {
+          configurations: expect.arrayContaining([
+            expect.objectContaining({ ...control, run_count: 1 }),
+            expect.objectContaining({ ...treatment, run_count: 1 }),
+          ]),
+        },
+      });
+      const result = await post('/v1/runs/compare', { project_id: projectId, control, treatment });
+      expect(result.status).toBe(200);
+      const comparison = (await result.json()) as { data: Record<string, unknown> };
+      expect(comparison.data).toMatchObject({
+        control: { ...control, run_count: 1, pass_count: 0 },
+        treatment: { ...treatment, run_count: 1, pass_count: 1 },
+      });
+
+      const saved = await post('/v1/comparisons', {
+        project_id: projectId,
+        title: 'Weather v1 versus v2',
+        control_config: control,
+        treatment_config: treatment,
+        control_run_ids: [runIds[0]],
+        treatment_run_ids: [runIds[1]],
+        result_snapshot: comparison.data,
+      });
+      expect(saved.status).toBe(201);
+      const {
+        data: { comparison_id },
+      } = (await saved.json()) as { data: { comparison_id: string } };
+      const history = await app.request(`/v1/comparisons?project_id=${projectId}`);
+      await expect(history.json()).resolves.toMatchObject({
+        data: [{ comparison_id, project_id: projectId, control_run_ids: [runIds[0]] }],
+      });
+      const snapshot = `/v1/comparisons/${comparison_id}`;
+      const wrongProject = `${snapshot}?project_id=${other.projectId}`;
+      expect((await app.request(wrongProject)).status).toBe(404);
+      expect((await app.request(wrongProject, { method: 'DELETE' })).status).toBe(404);
+      const read = await app.request(`${snapshot}?project_id=${projectId}`);
+      await expect(read.json()).resolves.toMatchObject({
+        data: { comparison_id, project_id: projectId, result_snapshot: comparison.data },
+      });
     });
   });
 });

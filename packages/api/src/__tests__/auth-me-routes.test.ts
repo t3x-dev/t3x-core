@@ -69,8 +69,9 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { roomManager } from '../lib/room-manager';
 // Import routes after mocking
+import { localDevelopmentRequestPrincipal } from '../lib/request-principal';
+import { roomManager } from '../lib/room-manager';
 import { authMeRoutes } from '../routes/auth-me.openapi';
 
 describe('Auth Me Routes', () => {
@@ -331,6 +332,38 @@ describe('Auth Me Routes', () => {
   });
 
   describe('personal model preferences', () => {
+    it('reports the local identity limitation on both reads and writes', async () => {
+      const path = '/v1/auth/me/model-preferences';
+      const local = new Hono<{
+        Variables: { requestPrincipal: ReturnType<typeof localDevelopmentRequestPrincipal> };
+      }>();
+      local.use('*', async (c, next) => {
+        c.set('requestPrincipal', localDevelopmentRequestPrincipal());
+        await next();
+      });
+      local.route('/', authMeRoutes);
+
+      const read = await local.request(path);
+      const write = await local.request(path, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          compose_default: 'gpt-5.4',
+          fallback_model: null,
+          quick_switcher: [{ model: 'gpt-5.4', visible: true }],
+        }),
+      });
+      for (const response of [read, write]) {
+        expect(response.status).toBe(401);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: 'UNAUTHORIZED', details: { reason: 'local_auth_disabled' } },
+        });
+      }
+      const missingSession = await createAppWithAuth(null).request(path);
+      expect(missingSession.status).toBe(401);
+      expect((await missingSession.json()).error).not.toHaveProperty('details');
+    });
+
     it('persists quick switcher preferences and updates the runtime account default', async () => {
       const app = createAppWithAuth(testUserId);
       const preferences = {

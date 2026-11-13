@@ -9,6 +9,10 @@ import {
   type WorkspaceDeliveryInput,
   type WorkspaceDeliveryResult,
   WorkspaceDeliveryResultSchema,
+  type WorkspaceDeploymentInput,
+  type WorkspaceDeploymentResult,
+  WorkspaceDeploymentResultSchema,
+  type WorkspaceRollbackInput,
 } from './workspace-delivery.js';
 /**
  * T3X API Client
@@ -39,6 +43,8 @@ import {
   ListProjectInvitationsResponseSchema,
   type ListReceivedCollaborationInvitationsResponse,
   ListReceivedCollaborationInvitationsResponseSchema,
+  type ResolveCollaborationUsersResponse,
+  ResolveCollaborationUsersResponseSchema,
   type SearchCollaborationUsersResponse,
   SearchCollaborationUsersResponseSchema,
   type TransferNamespaceOwnershipRequest,
@@ -597,6 +603,20 @@ export class T3xClient {
     );
   }
 
+  async resolveCollaborationUsers(
+    ids: string[],
+    options?: T3xRequestOptions
+  ): Promise<ResolveCollaborationUsersResponse> {
+    return this.request<ResolveCollaborationUsersResponse>(
+      'POST',
+      '/v1/users/resolve',
+      { ids },
+      undefined,
+      options,
+      ResolveCollaborationUsersResponseSchema
+    );
+  }
+
   async listReceivedCollaborationInvitations(
     options?: T3xRequestOptions
   ): Promise<ListReceivedCollaborationInvitationsResponse> {
@@ -980,6 +1000,36 @@ export class T3xClient {
       undefined,
       undefined,
       WorkspaceDeliveryResultSchema
+    );
+  }
+
+  async deployWorkspaceArtifact(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceDeploymentInput
+  ): Promise<WorkspaceDeploymentResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deployments`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeploymentResultSchema
+    );
+  }
+
+  async rollbackWorkspaceArtifact(
+    projectId: string,
+    workspaceId: string,
+    input: WorkspaceRollbackInput
+  ): Promise<WorkspaceDeploymentResult> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deployments/rollback`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceDeploymentResultSchema
     );
   }
 

@@ -137,8 +137,12 @@ function FieldGroups({ groups }: { groups: readonly FieldChangeGroup[] }) {
                 >
                   <dt className="font-medium text-[var(--text-tertiary)]">{field.name}</dt>
                   <dd className="min-w-0 leading-5">
-                    {field.kind !== 'added' ? <ValueText removed value={field.before} /> : null}
-                    {field.kind !== 'removed' ? <ValueText value={field.after} /> : null}
+                    {field.kind !== 'added' ? (
+                      <ValueText exact={group.id === 'relations'} removed value={field.before} />
+                    ) : null}
+                    {field.kind !== 'removed' ? (
+                      <ValueText exact={group.id === 'relations'} value={field.after} />
+                    ) : null}
                   </dd>
                 </div>
               ))}
@@ -150,8 +154,17 @@ function FieldGroups({ groups }: { groups: readonly FieldChangeGroup[] }) {
   );
 }
 
-function ValueText({ removed = false, value }: { removed?: boolean; value: unknown }) {
-  const label = composeValueLabel(value, '—');
+function ValueText({
+  removed = false,
+  exact = false,
+  value,
+}: {
+  removed?: boolean;
+  exact?: boolean;
+  value: unknown;
+}) {
+  const raw = typeof value === 'string' ? value : JSON.stringify(value);
+  const label = exact && raw !== undefined ? raw : composeValueLabel(value, '—');
   return (
     <span
       className={`block break-words ${
@@ -159,7 +172,7 @@ function ValueText({ removed = false, value }: { removed?: boolean; value: unkno
           ? 'text-[var(--text-tertiary)] line-through decoration-[var(--status-error)]/50'
           : 'text-[var(--text-primary)]'
       }`}
-      title={typeof value === 'string' ? value : JSON.stringify(value)}
+      title={raw}
     >
       {label}
     </span>

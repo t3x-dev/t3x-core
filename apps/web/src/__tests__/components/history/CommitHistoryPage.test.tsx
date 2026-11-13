@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommitHistoryPage } from '@/components/history/CommitHistoryPage';
 import type { ApiCommit } from '@/types/api';
@@ -100,32 +100,81 @@ describe('History node navigation', () => {
       stats: { addedCount: 0, modifiedCount: 1, removedCount: 0 },
     });
   });
-  it('opens historical nodes in the YAML review and returns to the same history list', async () => {
+  it('keeps the commit list beside the comparison and switches revisions in place', async () => {
     mocks.loadCommits.mockResolvedValue([selected, root]);
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
+    expect(await screen.findByRole('heading', { name: 'Update title' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Structure' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?view=structure&commit=sha256%3Asecond'
+    );
+    expect(screen.getByText('"Original"', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('"Revised"', { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Structure YAML' }));
     expect(await screen.findByRole('region', { name: 'Commit YAML' })).toHaveTextContent('Revised');
     expect(screen.getByRole('region', { name: 'Parent YAML' })).toHaveTextContent('Original');
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: /Initial state/ }));
-    expect((await screen.findAllByText('empty', { exact: true })).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Empty base/)).toBeInTheDocument();
     expect(screen.queryByText('Revised')).not.toBeInTheDocument();
     expect(mocks.loadCommit).not.toHaveBeenCalled();
   });
+  it('distinguishes literal values, missing fields and array order in the commit diff', async () => {
+    const parent = {
+      ...root,
+      content: {
+        ...root.content,
+        trees: [{ key: 'prd', slots: { status: 'null', removed: false }, children: [] }],
+      },
+    };
+    const commit = {
+      ...selected,
+      message: '   ',
+      content: {
+        ...selected.content,
+        trees: [
+          {
+            key: 'prd',
+            slots: { status: null, reviewers: ['second', 'first'] },
+            children: [{ key: 'empty', slots: {}, children: [] }],
+          },
+        ],
+      },
+    };
+    mocks.loadCommits.mockResolvedValue([commit, parent]);
+    render(<CommitHistoryPage projectId="proj_test" />);
+
+    const list = screen.getByRole('region', { name: 'Commit list' });
+    const card = screen.getByRole('region', { name: 'Selected commit' });
+    expect(await within(list).findByRole('button', { name: /No commit message/ })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    expect(within(card).getByRole('heading', { name: 'No commit message' })).toBeInTheDocument();
+    const values = (path: string) => {
+      const change = within(card).getByText(path).closest('details');
+      return Array.from(change?.querySelectorAll('pre') ?? [], (value) => value.textContent);
+    };
+    expect(values('prd/empty')).toEqual(['Absent', '{}']);
+    expect(values('prd/status')).toEqual(['"null"', 'null']);
+    expect(values('prd/removed')).toEqual(['false', 'Absent']);
+    expect(values('prd/reviewers')).toEqual(['Absent', '- second\n- first']);
+  });
+
   it('never renders an unknown parent as an empty baseline', async () => {
     mocks.loadCommits.mockResolvedValue([selected]);
     mocks.loadCommit.mockRejectedValue(new Error('Parent unavailable'));
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
     await waitFor(() => expect(mocks.loadCommit).toHaveBeenCalledWith(root.hash, 'proj_test'));
-    expect(
-      await screen.findByRole('button', { name: 'Back to history', exact: true })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Comparison unavailable. Parent unavailable'
+    );
     expect(screen.queryByLabelText('Structured state tree')).not.toBeInTheDocument();
     expect(screen.queryByText(/Empty state →/)).not.toBeInTheDocument();
   });
 
-  it('filters the timeline and switches back to Canvas without replacing history data', async () => {
+  it('filters the list by search text and author', async () => {
     mocks.loadCommits.mockResolvedValue([selected, root]);
     render(<CommitHistoryPage projectId="proj_test" />);
 
@@ -141,20 +190,6 @@ describe('History node navigation', () => {
     expect(screen.getByRole('button', { name: /Update title/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Open Canvas/ }));
-    expect(window.history.replaceState).toHaveBeenLastCalledWith(
-      null,
-      '',
-      '/project/proj_test/history?branch=main&view=canvas&author=Maya+Chen'
-    );
-    expect(await screen.findByRole('heading', { name: 'History Canvas' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Commit graph canvas' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'List View' }));
-    expect(await screen.findByRole('searchbox', { name: 'Search commits' })).toBeInTheDocument();
-    expect(new URLSearchParams(mocks.search).get('view')).toBe('list');
-    expect(screen.getByRole('combobox', { name: 'Author filter' })).toHaveValue('Maya Chen');
-    expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
     expect(mocks.loadCommits).toHaveBeenCalledTimes(1);
   });
 
@@ -180,7 +215,7 @@ describe('History node navigation', () => {
     expect(screen.queryByRole('button', { name: /Update title/ })).not.toBeInTheDocument();
   });
 
-  it('restores filters from a permalink and preserves them through detail, State and back', async () => {
+  it('restores filters from a permalink and preserves them when selecting a commit', async () => {
     mocks.search = new URLSearchParams({
       branch: 'main',
       view: 'list',
@@ -190,18 +225,11 @@ describe('History node navigation', () => {
     }).toString();
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
-    await screen.findByRole('region', { name: 'Commit YAML' });
+    await screen.findByRole('heading', { name: 'Update title' });
     expect(new URLSearchParams(mocks.search).get('commit')).toBe(selected.hash);
-    const stateLink = new URL(
-      screen.getByRole('link', { name: 'View this version in State' }).getAttribute('href')!,
-      'http://localhost'
-    );
-    expect(stateLink.searchParams.get('commit')).toBe(selected.hash);
-    expect(stateLink.searchParams.get('branch')).toBe('main');
-    expect(stateLink.searchParams.get('returnTo')).toBe(
-      `/project/proj_test/history?${mocks.search}`
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    expect(
+      screen.queryByRole('link', { name: 'View this version in State' })
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search commits' })).toHaveValue('Update');
     expect(screen.getByRole('combobox', { name: 'Author filter' })).toHaveValue('Maya Chen');
     expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
@@ -213,12 +241,12 @@ describe('History node navigation', () => {
     mocks.search = `view=list&branch=main&commit=${encodeURIComponent(selected.hash)}`;
     mocks.loadCommits.mockResolvedValue([]);
     const first = render(<CommitHistoryPage projectId="proj_test" />);
-    expect(await screen.findByRole('region', { name: 'Commit YAML' })).toHaveTextContent('Revised');
+    expect(await screen.findByText('"Revised"', { exact: true })).toBeInTheDocument();
     expect(mocks.loadCommit).toHaveBeenCalledWith(selected.hash, 'proj_test');
     expect(mocks.loadCommit).toHaveBeenCalledWith(root.hash, 'proj_test');
     first.unmount();
     render(<CommitHistoryPage projectId="proj_test" />);
-    expect(await screen.findByRole('region', { name: 'Commit YAML' })).toHaveTextContent('Revised');
+    expect(await screen.findByText('"Revised"', { exact: true })).toBeInTheDocument();
   });
 
   it.each([
@@ -240,23 +268,26 @@ describe('History node navigation', () => {
   it('follows browser back and forward changes to the selected revision', async () => {
     render(<CommitHistoryPage projectId="proj_test" />);
     fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
-    await screen.findByRole('region', { name: 'Commit YAML' });
+    await screen.findByRole('heading', { name: 'Update title' });
     const detail = `/project/proj_test/history?${mocks.search}`;
     act(() => navigate('/project/proj_test/history?branch=main&view=list'));
     expect(await screen.findByRole('button', { name: /Update title/ })).toBeInTheDocument();
     act(() => navigate(detail));
-    expect(await screen.findByRole('region', { name: 'Commit YAML' })).toHaveTextContent('Revised');
+    expect(await screen.findByText('"Revised"', { exact: true })).toBeInTheDocument();
   });
 
-  it('returns to the graph with the selected commit focused', async () => {
-    mocks.search = 'branch=main&view=canvas';
+  it('uses the split History view for old canvas links and keeps the selected commit', async () => {
+    mocks.search = new URLSearchParams({
+      branch: 'main',
+      view: 'canvas',
+      commit: root.hash,
+    }).toString();
     render(<CommitHistoryPage projectId="proj_test" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Inspect Initial state' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View Diff Changes' }));
-    await screen.findByRole('region', { name: 'Commit YAML' });
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+
     expect(await screen.findByRole('heading', { name: 'Initial state' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'History Canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Commit list' })).toBeInTheDocument();
+    expect(screen.getByText('Empty base · initial commit')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'State evolution' })).not.toBeInTheDocument();
   });
 
   it('falls back to State for an unsafe return link and keeps branch filtering', async () => {
@@ -272,5 +303,22 @@ describe('History node navigation', () => {
     await waitFor(() =>
       expect(mocks.loadCommits).toHaveBeenLastCalledWith('proj_test', 'main', 100)
     );
+  });
+
+  it('shows a branch read failure and retries it', async () => {
+    mocks.search = 'branch=all';
+    mocks.loadBranches
+      .mockRejectedValueOnce(new Error('Branch service unavailable'))
+      .mockResolvedValueOnce({ branches: [{ branch_id: 'feature', name: 'feature' }] });
+    render(<CommitHistoryPage projectId="proj_test" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Branch service unavailable');
+    expect(
+      await screen.findByRole('combobox', { name: 'History branch filter' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
+    expect(await screen.findByRole('option', { name: 'feature' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

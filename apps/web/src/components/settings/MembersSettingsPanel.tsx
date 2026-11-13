@@ -20,9 +20,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { buildInvitationUrl } from '@/domain/collaboration/invitationLink';
 import { formatUserFacingError } from '@/domain/format/errors';
-import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useNamespaceCollaboration } from '@/hooks/accounts/useNamespaceCollaboration';
+import { useSettingsNamespace } from '@/hooks/settings/useSettingsNamespace';
 import styles from './MembersSettingsPanel.module.css';
+import { NamespaceSettingsRecovery } from './NamespaceSettingsRecovery';
 
 const MEMBER_ROLES: readonly NamespaceMemberRole[] = ['admin', 'editor', 'viewer'];
 
@@ -144,11 +145,12 @@ function InviteDialog({
 }
 
 export function MembersSettingsPanel() {
-  const {
-    activeAccount,
-    isLoading: accountsLoading,
-    error: accountsError,
-  } = useNamespaceAccounts();
+  const context = useSettingsNamespace();
+  return <NamespaceMembers key={context.account?.namespace.namespace_id} context={context} />;
+}
+
+function NamespaceMembers({ context }: { context: ReturnType<typeof useSettingsNamespace> }) {
+  const { account: activeAccount, isLoading: accountsLoading, error: accountsError } = context;
   const namespaceId = activeAccount?.namespace.namespace_id ?? null;
   const canReadMembers =
     activeAccount?.authorized_actions.includes('namespace:members:read') ?? false;
@@ -256,9 +258,9 @@ export function MembersSettingsPanel() {
     <div className={styles.page}>
       <div className={styles.inner}>
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-          <Link href="/settings">Settings</Link>
+          <Link href={context.generalHref}>Settings</Link>
           <span>/</span>
-          <Link href="/settings">{namespaceName}</Link>
+          <span>{namespaceName}</span>
           <span>/</span>
           <strong>Members</strong>
         </nav>
@@ -275,43 +277,45 @@ export function MembersSettingsPanel() {
               </span>
             )}
           </div>
-          <div className={styles.controls}>
-            <label className={styles.searchBox}>
-              <Search size={18} />
-              <input
-                type="search"
-                aria-label="Search members"
-                placeholder="Search members"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
-            <label className={styles.roleSelect}>
-              <select
-                aria-label="Filter by role"
-                value={roleFilter}
-                onChange={(event) => setRoleFilter(event.target.value)}
+          {activeAccount && (
+            <div className={styles.controls}>
+              <label className={styles.searchBox}>
+                <Search size={18} />
+                <input
+                  type="search"
+                  aria-label="Search members"
+                  placeholder="Search members"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+              <label className={styles.roleSelect}>
+                <select
+                  aria-label="Filter by role"
+                  value={roleFilter}
+                  onChange={(event) => setRoleFilter(event.target.value)}
+                >
+                  <option value="all">All roles</option>
+                  <option value="owner">Owner</option>
+                  {MEMBER_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {titleCase(role)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} />
+              </label>
+              <button
+                type="button"
+                className={styles.inviteButton}
+                disabled={!canManageInvitations}
+                onClick={() => setInviteOpen(true)}
               >
-                <option value="all">All roles</option>
-                <option value="owner">Owner</option>
-                {MEMBER_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {titleCase(role)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} />
-            </label>
-            <button
-              type="button"
-              className={styles.inviteButton}
-              disabled={!canManageInvitations}
-              onClick={() => setInviteOpen(true)}
-            >
-              <Plus size={18} />
-              Invite member
-            </button>
-          </div>
+                <Plus size={18} />
+                Invite member
+              </button>
+            </div>
+          )}
         </div>
 
         {invitationUrl ? (
@@ -333,27 +337,37 @@ export function MembersSettingsPanel() {
         ) : null}
 
         <section className={styles.tableCard} aria-label="Namespace members">
-          <div className={styles.memberHeader}>
-            <span>Member</span>
-            <span>Role</span>
-            <span>Projects</span>
-            <span>Status</span>
-            <span>Last active</span>
-            <span>Actions</span>
-          </div>
-          {error ? (
+          {activeAccount && (
+            <div className={styles.memberHeader}>
+              <span>Member</span>
+              <span>Role</span>
+              <span>Projects</span>
+              <span>Status</span>
+              <span>Last active</span>
+              <span>Actions</span>
+            </div>
+          )}
+          {!activeAccount ? (
+            <div className={styles.emptyState}>
+              <NamespaceSettingsRecovery context={context} />
+            </div>
+          ) : error ? (
             <div className={styles.emptyState}>
               {formatUserFacingError(error, 'Failed to load members.')}
+              <button
+                className="ml-2 underline"
+                type="button"
+                onClick={() => void membersQuery.refetch()}
+              >
+                Retry members
+              </button>
             </div>
           ) : null}
-          {!error && loading ? (
+          {activeAccount && !error && loading ? (
             <div className={styles.emptyState}>
               <Loader2 size={18} className={styles.spin} />
               Loading members
             </div>
-          ) : null}
-          {!error && !loading && !activeAccount ? (
-            <div className={styles.emptyState}>Select a namespace to manage its members.</div>
           ) : null}
           {!error && !loading && activeAccount && !canReadMembers ? (
             <div className={styles.emptyState}>
@@ -432,64 +446,77 @@ export function MembersSettingsPanel() {
             : null}
         </section>
 
-        <section className={styles.pendingCard} aria-labelledby="pending-title">
-          <header>
-            <h2 id="pending-title">Pending invitations</h2>
-          </header>
-          <div className={styles.pendingHeader}>
-            <span>Member</span>
-            <span>Role</span>
-            <span>Invited</span>
-            <span>Actions</span>
-          </div>
-          {invitationsQuery.isLoading ? (
-            <div className={styles.emptyState}>
-              <Loader2 size={18} className={styles.spin} />
-              Loading invitations
+        {activeAccount && canManageInvitations && (
+          <section className={styles.pendingCard} aria-labelledby="pending-title">
+            <header>
+              <h2 id="pending-title">Pending invitations</h2>
+            </header>
+            <div className={styles.pendingHeader}>
+              <span>Member</span>
+              <span>Role</span>
+              <span>Invited</span>
+              <span>Actions</span>
             </div>
-          ) : null}
-          {!invitationsQuery.isLoading && invitations.length === 0 ? (
-            <div className={styles.emptyState}>No pending invitations.</div>
-          ) : null}
-          {!invitationsQuery.isLoading
-            ? invitations.map((invitation, index) => {
-                const recipient =
-                  invitation.recipient.email ?? invitation.recipient.user_id ?? 'Pending member';
-                return (
-                  <div className={styles.pendingRow} key={invitation.invitation_id}>
-                    <div className={styles.identity}>
-                      <span className={styles.avatar} data-tone={(index + 1) % 5}>
-                        {initials(recipient.split('@')[0] ?? recipient)}
-                      </span>
-                      <div>
-                        <strong>{recipient.split('@')[0]}</strong>
-                        <span>{recipient}</span>
+            {invitationsQuery.error ? (
+              <div className={styles.emptyState} role="alert">
+                {formatUserFacingError(invitationsQuery.error, 'Failed to load invitations.')}
+                <button
+                  className="ml-2 underline"
+                  type="button"
+                  onClick={() => void invitationsQuery.refetch()}
+                >
+                  Retry invitations
+                </button>
+              </div>
+            ) : invitationsQuery.isLoading ? (
+              <div className={styles.emptyState}>
+                <Loader2 size={18} className={styles.spin} />
+                Loading invitations
+              </div>
+            ) : null}
+            {!invitationsQuery.error && !invitationsQuery.isLoading && invitations.length === 0 ? (
+              <div className={styles.emptyState}>No pending invitations.</div>
+            ) : null}
+            {!invitationsQuery.error && !invitationsQuery.isLoading
+              ? invitations.map((invitation, index) => {
+                  const recipient =
+                    invitation.recipient.email ?? invitation.recipient.user_id ?? 'Pending member';
+                  return (
+                    <div className={styles.pendingRow} key={invitation.invitation_id}>
+                      <div className={styles.identity}>
+                        <span className={styles.avatar} data-tone={(index + 1) % 5}>
+                          {initials(recipient.split('@')[0] ?? recipient)}
+                        </span>
+                        <div>
+                          <strong>{recipient.split('@')[0]}</strong>
+                          <span>{recipient}</span>
+                        </div>
+                      </div>
+                      <span>{titleCase(invitation.role)}</span>
+                      <span>{relativeDate(invitation.created_at)}</span>
+                      <div className={styles.invitationActions}>
+                        <button
+                          type="button"
+                          disabled
+                          title="Resend is not supported by the current API"
+                        >
+                          Resend
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.cancelButton}
+                          disabled={busyId === invitation.invitation_id}
+                          onClick={() => void cancelInvitation(invitation)}
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                    <span>{titleCase(invitation.role)}</span>
-                    <span>{relativeDate(invitation.created_at)}</span>
-                    <div className={styles.invitationActions}>
-                      <button
-                        type="button"
-                        disabled
-                        title="Resend is not supported by the current API"
-                      >
-                        Resend
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.cancelButton}
-                        disabled={busyId === invitation.invitation_id}
-                        onClick={() => void cancelInvitation(invitation)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            : null}
-        </section>
+                  );
+                })
+              : null}
+          </section>
+        )}
       </div>
 
       <InviteDialog

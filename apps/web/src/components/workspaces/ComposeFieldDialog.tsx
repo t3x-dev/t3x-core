@@ -3,7 +3,7 @@ import { highlightTree, tagHighlighter, tags } from '@lezer/highlight';
 import type { TransitionProtocolValue } from '@t3x-dev/api-client';
 import * as yaml from 'js-yaml';
 import { Code2, Copy, FileCode2, ListTree, MessageSquare } from 'lucide-react';
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { SchemaEditorNavigation } from '@/components/schemas/useSchemaNavigationGuard';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { composeValueLabel } from '@/domain/composePresentation';
@@ -48,6 +48,8 @@ export function ComposeFieldDialog({
   onClose,
   onDiscuss,
   current,
+  workingCopyError,
+  onContentInputChange,
   onSubmit,
   error,
   pending = false,
@@ -64,6 +66,8 @@ export function ComposeFieldDialog({
   onClose: () => void;
   onDiscuss: () => void;
   current?: TransitionProtocolValue;
+  workingCopyError?: string | null;
+  onContentInputChange?: (editing: boolean) => void;
   onSubmit?: (operations: DraftYOp[], reason: string) => Promise<boolean>;
   error?: string | null;
   pending?: boolean;
@@ -86,7 +90,12 @@ export function ComposeFieldDialog({
   const [saving, setSaving] = useState(false);
   const [editingStructure, setEditingStructure] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
-  const document = current ?? activity.view?.current;
+  const contentInputOpen = Boolean(selected || editingStructure);
+  useEffect(() => {
+    onContentInputChange?.(contentInputOpen);
+    return () => onContentInputChange?.(false);
+  }, [contentInputOpen, onContentInputChange]);
+  const document = workingCopyError ? undefined : (current ?? activity.view?.current);
   const renderedYaml = useMemo(
     () =>
       document === undefined
@@ -191,7 +200,7 @@ export function ComposeFieldDialog({
           ) : null}
           <div className={styles.body} data-view={view}>
             {document === undefined ? (
-              <output>{activity.error ?? 'Loading current Draft…'}</output>
+              <output>{workingCopyError ?? activity.error ?? 'Loading current Draft…'}</output>
             ) : view === 'yaml' ? (
               <section aria-label="Current Draft YAML" className={styles.yaml}>
                 <header className={styles.yamlHeading}>
@@ -282,7 +291,7 @@ export function ComposeFieldDialog({
           <div role="alert" className={styles.footer}>
             <span>Content input has not been added to your local changes.</span>
             <button type="button" onClick={() => setCloseRequested(false)}>
-              Keep editing
+              Return to editor to apply
             </button>
             <button
               type="button"

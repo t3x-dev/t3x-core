@@ -30,6 +30,7 @@ export function WorkspaceReviewCodeView({
   yamlText,
   review,
   statusLabel,
+  documentLabel = 'YAML code view',
 }: {
   branch: string;
   changeCounts?: { added: number; modified: number; removed: number };
@@ -38,6 +39,7 @@ export function WorkspaceReviewCodeView({
   yamlText: string;
   review?: StateCodeReview;
   statusLabel?: string;
+  documentLabel?: string;
 }) {
   const [codeMode, setCodeMode] = useState<StateCodeMode>('yaml');
   const [copied, setCopied] = useState(false);
@@ -102,7 +104,7 @@ export function WorkspaceReviewCodeView({
 
   return (
     <section
-      aria-label="YAML code view"
+      aria-label={documentLabel}
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface-app)]',
         review ? styles.reviewCode : 'p-4'
