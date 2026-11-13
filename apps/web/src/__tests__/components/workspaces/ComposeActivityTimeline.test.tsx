@@ -92,6 +92,28 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
+  it('identifies the human publisher of an AI-generated change', () => {
+    const activity = fixture();
+    activity.actions[3] = {
+      ...activity.actions[3],
+      channel: 'assistant',
+      actor: {
+        kind: 'service',
+        id: 'service:t3x-proposal-generator',
+        delegator: { kind: 'human', id: 'human:local-user' },
+      },
+    };
+    render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="latest"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21T11:53:00Z"
+      />
+    );
+    expect(screen.getByText('You · AI')).toBeInTheDocument();
+  });
   it('confirms only the selected generated deletion and retains its confirmed state', async () => {
     const activity = fixture();
     activity.actions[3] = {
@@ -296,6 +318,60 @@ describe('ComposeActivityTimeline', () => {
     );
     expect(screen.getByTestId('row-net')).toHaveTextContent('draft: 10 → 30');
     expect(screen.queryByLabelText('Change activity timeline')).not.toBeInTheDocument();
+  });
+  it('shows loaded operation layers while retaining the net Draft result', () => {
+    const activity = fixture();
+    activity.operationItems = [
+      {
+        actionId: 'a3',
+        sequence: 4,
+        index: 1,
+        name: 'append',
+        path: 'rollout/items',
+        fields: [{ op: 'set', path: 'rollout/items/[key=pilot]/title', after: 'Pilot' }],
+      },
+    ];
+    activity.cursor = 3;
+    render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="all"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21"
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Recorded operation stacks' })).toBeVisible();
+    expect(screen.getByText('Base → Draft result · 1 changed paths')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Base → Draft result · 1 changed paths'));
+    expect(screen.getByTestId('row-net')).toHaveTextContent('draft: 10 → 30');
+    fireEvent.click(screen.getByRole('button', { name: 'Load older operations' }));
+    expect(activity.loadOlder).toHaveBeenCalledOnce();
+  });
+  it('shows the field stack in Latest and keeps the original Details row available', () => {
+    const activity = fixture();
+    activity.operationItems = [
+      {
+        actionId: 'a3',
+        sequence: 4,
+        index: 1,
+        name: 'append',
+        path: 'rollout/items',
+        fields: [{ op: 'set', path: 'rollout/items/[key=pilot]/title', after: 'Pilot' }],
+      },
+    ];
+    render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="latest"
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21"
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Recorded operation stacks' })).toBeVisible();
+    fireEvent.click(screen.getByText('Object changes & Details · 1 paths'));
+    expect(screen.getByTestId('row-n3')).toHaveTextContent('event: 25 → 30');
   });
   it('keeps fallback rows without claiming historic actors, channels or idle gaps', () => {
     render(

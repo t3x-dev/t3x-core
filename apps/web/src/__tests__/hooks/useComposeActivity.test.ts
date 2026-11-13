@@ -23,6 +23,48 @@ vi.mock('@/infrastructure/sharedApiClient', () => ({
   }),
 }));
 
+it('projects the selected recorded append into field cards', async () => {
+  read.mockReset();
+  const before = { items: [] };
+  const action = {
+    actionId: 'a1',
+    sequence: 1,
+    channel: 'assistant',
+    actor: { kind: 'service', id: 'generator' },
+    publishedAt: '2026-11-12T01:00:00Z',
+    beforeRevision: 0,
+    afterRevision: 1,
+    operations: [
+      {
+        append: {
+          path: 'items',
+          value: { key: 'reminder', slots: { title: '提醒', priority: 'should' }, children: [] },
+        },
+      },
+    ],
+  };
+  read.mockResolvedValue({
+    actions: [action],
+    selected: {
+      action,
+      cards: [],
+      before,
+      after: {
+        items: [{ key: 'reminder', slots: { title: '提醒', priority: 'should' }, children: [] }],
+      },
+    },
+    netDiff: [],
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+  });
+  const { result, unmount } = renderHook(() =>
+    useComposeActivity({ id: 'ws', projectId: 'p' } as WorkspaceCandidate, true)
+  );
+  await waitFor(() => expect(result.current.operationItems?.[0]?.fields).toHaveLength(2));
+  expect(result.current.operationItems?.[0]?.name).toBe('append');
+  unmount();
+});
+
 it('does not let an old Workspace activity load replace the selected Workspace', async () => {
   read.mockReset();
   const old = deferred<unknown>();
@@ -565,6 +607,7 @@ it('projects scalar history and the net draft onto their snapshot object while p
       afterValue: after,
     });
   });
+  expect(result.current.inspectedAction?.actionId).toBe('a1');
   expect(read).toHaveBeenLastCalledWith('p', 'ws', { action_id: 'a1', node_id: 'actual-done-id' });
   unmount();
 });

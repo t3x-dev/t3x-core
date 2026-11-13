@@ -18,6 +18,10 @@ const hookMocks = vi.hoisted(() => ({
   branchesLoading: false,
   branchesError: null as string | null,
   nativeView: null as unknown,
+  commitChanges: {
+    loading: false,
+    data: { source: 'authoring', actions: [], nextBeforeSequence: null },
+  } as unknown,
   committedSchema: { loading: false, snapshot: null, retry: vi.fn() } as CommittedSchemaState,
   createBranch: vi.fn(),
   fetchStateExport: vi.fn(),
@@ -44,6 +48,10 @@ vi.mock('@/hooks/commits/useCommittedSchema', () => ({
 
 vi.mock('@/hooks/workspaces/useCommitTransitionView', () => ({
   useCommitTransitionView: () => ({ view: hookMocks.nativeView, loading: false, error: null }),
+}));
+
+vi.mock('@/hooks/workspaces/useWorkspaceCommitChanges', () => ({
+  useWorkspaceCommitChanges: () => hookMocks.commitChanges,
 }));
 
 vi.mock('@/components/project/StateOverviewView', () => ({
@@ -1054,6 +1062,10 @@ describe('ProjectStateTab', () => {
     hookMocks.schemaArtifacts = [];
     hookMocks.skillArtifact = null;
     hookMocks.nativeView = null;
+    hookMocks.commitChanges = {
+      loading: false,
+      data: { source: 'authoring', actions: [], nextBeforeSequence: null },
+    };
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({
       edges: [],
@@ -1197,12 +1209,58 @@ describe('ProjectStateTab', () => {
   });
 
   it('selects a state row and shows its change provenance', async () => {
+    hookMocks.commitChanges = {
+      loading: false,
+      data: {
+        source: 'authoring',
+        nextBeforeSequence: null,
+        actions: [
+          {
+            action: {
+              actionId: 'a1',
+              sequence: 1,
+              channel: 'assistant',
+              actor: {
+                kind: 'service',
+                id: 'service:t3x-proposal-generator',
+                delegator: { kind: 'human', id: 'human:local-user' },
+              },
+              publishedAt: '2026-07-09T07:55:00.000Z',
+              reason: 'Clarify the problem.',
+              operations: [
+                { set: { path: 'prd/summary/problem', value: 'You: i need food and drink' } },
+              ],
+            },
+            cards: [
+              {
+                nodeId: 'problem',
+                path: 'prd/summary/problem',
+                before: 'Users need food and drink',
+                after: 'You: i need food and drink',
+              },
+            ],
+            before: { prd: { summary: { problem: 'Users need food and drink' } } },
+            after: { prd: { summary: { problem: 'You: i need food and drink' } } },
+          },
+        ],
+      },
+    };
     renderStateTab();
     const tree = await screen.findByRole('region', { name: 'State structure' });
     const row = within(within(tree).getByRole('table')).getByText('problem').closest('tr')!;
     fireEvent.click(row);
     expect(row).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('complementary', { name: 'Field trace' })).toHaveTextContent('problem');
+    const details = screen.getByRole('complementary', { name: 'Field trace' });
+    expect(details).toHaveTextContent('prd/summary/problem');
+    expect(details).toHaveTextContent('Value at this Commit');
+    expect(details).toHaveTextContent('Users need food and drink');
+    expect(details).toHaveTextContent('You: i need food and drink');
+    const action = within(details).getByRole('region', { name: 'Action details' });
+    expect(action).toHaveTextContent('Clarify the problem.');
+    expect(action).toHaveTextContent('Published by');
+    expect(action).toHaveTextContent('You');
+    fireEvent.click(within(action).getByText('View exact YOps · 1 operation'));
+    expect(action).toHaveTextContent('"prd/summary/problem"');
   });
 
   it('traces the selected parent and leaf with their stored values', async () => {
@@ -1212,18 +1270,17 @@ describe('ProjectStateTab', () => {
       within(screen.getByRole('region', { name: 'State structure' })).getByRole('table');
     fireEvent.click(within(table()).getByTitle('prd').closest('tr')!);
     const trace = screen.getByRole('complementary', { name: 'Field trace' });
-    expect(trace).toHaveTextContent('root / prd');
-    expect(trace).toHaveTextContent('5 fields');
+    expect(trace).toHaveTextContent('Value at this Commit');
+    expect(trace).toHaveTextContent('Parent → Result');
     const expandRoot = within(table()).queryByRole('button', { name: 'Expand prd' });
     if (expandRoot) fireEvent.click(expandRoot);
     fireEvent.click(within(table()).getByText('summary').closest('tr')!);
-    expect(trace).toHaveTextContent('root / prd / summary');
-    expect(trace).toHaveTextContent('3 fields');
+    expect(trace).toHaveTextContent('prd/summary');
     const expand = within(table()).queryByRole('button', { name: 'Expand summary' });
     if (expand) fireEvent.click(expand);
     fireEvent.click(within(table()).getByTitle('prd/summary/audience').closest('tr')!);
-    expect(trace).toHaveTextContent('root / prd / summary / audience');
-    expect(trace).toHaveTextContent('empty');
+    expect(trace).toHaveTextContent('prd/summary/audience');
+    expect(trace).toHaveTextContent('Matches Base · no change');
   });
 
   it('shares Structure details across formats without changing the pinned revision or selected field', async () => {

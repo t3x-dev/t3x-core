@@ -16,6 +16,10 @@ import {
 } from '@/domain/composeActivity';
 import { composeCardsAtPath } from '@/domain/workspaces/composeDraftChanges';
 import { composeObjectChangeCards } from '@/domain/workspaces/composeObjectChanges';
+import {
+  composeActionOperationItems,
+  type OperationStackItem,
+} from '@/domain/workspaces/composeOperationStacks';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -61,11 +65,13 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   const [view, setView] = useState<WorkspaceAuthoringView | null>(null);
   const [actions, setActions] = useState<WorkspaceAuthoringAction[]>([]);
   const [cards, setCards] = useState<Record<string, WorkspaceAuthoringCard[]>>({});
+  const [operationItems, setOperationItems] = useState<OperationStackItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [pageCount, setPageCount] = useState(1);
   const [cursor, setCursor] = useState<number | null>(null);
   const [node, setNode] = useState<WorkspaceAuthoringView['node']>(null);
+  const [inspectedAction, setInspectedAction] = useState<WorkspaceAuthoringAction | null>(null);
   const [nodeLoading, setNodeLoading] = useState(false);
   const [nodeError, setNodeError] = useState<string | null>(null);
   const [nodeCursor, setNodeCursor] = useState<number | null>(null);
@@ -95,9 +101,11 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     setView(null);
     setActions([]);
     setCards({});
+    setOperationItems([]);
     setError(null);
     setCursor(null);
     setNode(null);
+    setInspectedAction(null);
     setNodeLoading(false);
     setNodeError(null);
     setNodeCursor(null);
@@ -166,12 +174,17 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           before = older.nextBeforeSequence;
         }
         const details: Record<string, WorkspaceAuthoringCard[]> = {};
-        if (first.selected)
+        const projectedItems: OperationStackItem[] = [];
+        if (first.selected) {
           details[first.selected.action.actionId] = composeObjectChangeCards(
             first.selected.cards,
             first.selected.before,
             first.selected.after
           );
+          projectedItems.push(
+            ...composeActionOperationItems(first.selected.action, first.selected.before)
+          );
+        }
         const missing = all.filter((a) => !details[a.actionId]);
         for (let i = 0; i < missing.length; i += 4) {
           await Promise.all(
@@ -189,6 +202,9 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
                 result.selected.before,
                 result.selected.after
               );
+              projectedItems.push(
+                ...composeActionOperationItems(result.selected.action, result.selected.before)
+              );
             })
           );
           if (!isCurrent()) return;
@@ -199,6 +215,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         );
         setActions(all);
         setCards(details);
+        setOperationItems(projectedItems);
         setCursor(before);
         setNewActivity(null);
         setError(null);
@@ -431,6 +448,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         );
         if (isCurrent()) {
           setNode(result.node);
+          setInspectedAction(result.selected?.action ?? null);
           setNodeCursor(
             result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
           );
@@ -490,6 +508,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         if (!card) return null;
         setCards((current) => ({ ...current, [actionId]: projectedCards }));
         setNode(result.node);
+        setInspectedAction(result.selected.action);
         setNodeCursor(
           result.node?.entries.length === 20 ? result.node.entries.at(-1)!.sequence : null
         );
@@ -676,10 +695,12 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     view: ownsState ? view : null,
     actions: ownsState ? actions : [],
     cards: ownsState ? cards : {},
+    ...(ownsState && operationItems.length ? { operationItems } : {}),
     error: ownsState ? error : null,
     loading: ownsState ? loading : enabled,
     cursor: ownsState ? cursor : null,
     node: ownsState ? node : null,
+    inspectedAction: ownsState ? inspectedAction : null,
     nodeLoading: ownsState ? nodeLoading : false,
     nodeError: ownsState ? nodeError : null,
     nodeCursor: ownsState ? nodeCursor : null,
