@@ -92,6 +92,45 @@ describe('ComposeActivityTimeline', () => {
       {meta.comparison}: {String(operation.beforeValue)} → {String(operation.afterValue)}
     </div>
   );
+  it('routes a recorded field card to its own Details selection', () => {
+    const activity = fixture();
+    const onSelectOperationField = vi.fn();
+    activity.operationItems = [
+      {
+        actionId: 'a3',
+        sequence: 4,
+        index: 1,
+        name: 'set',
+        path: 'rollout/allocation',
+        fields: [{ path: 'rollout/allocation', op: 'set', before: 25, after: 30 }],
+      },
+    ];
+    render(
+      <ComposeActivityTimeline
+        activity={activity}
+        scope="all"
+        onSelectOperationField={onSelectOperationField}
+        renderRow={renderRow}
+        fallback={null}
+        updatedAt="2026-09-21T11:53:00Z"
+      />
+    );
+    fireEvent.click(screen.getByText(/P-04 · YOp 1/));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect allocation: rollout/allocation' }));
+    expect(onSelectOperationField).toHaveBeenCalledWith({
+      operation: expect.objectContaining({
+        id: 'n3',
+        path: 'rollout/allocation',
+        beforeValue: 25,
+        afterValue: 30,
+      }),
+      meta: expect.objectContaining({
+        actionId: 'a3',
+        comparison: 'event',
+        operationIndex: 1,
+      }),
+    });
+  });
   it('identifies the human publisher of an AI-generated change', () => {
     const activity = fixture();
     activity.actions[3] = {

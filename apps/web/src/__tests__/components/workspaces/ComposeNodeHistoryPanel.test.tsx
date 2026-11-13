@@ -136,6 +136,41 @@ describe('Compose field Details', () => {
     );
   });
 
+  it('shows one recorded operation field in the shared Details card', () => {
+    const activity = activityFixture();
+    const path = 'requirements/learning_reminder';
+    const after = { acceptance: 'Remind users', priority: 'should', title: 'Learning reminder' };
+    activity.node = null;
+    activity.nodeError = 'No node inspection for operation fields';
+    activity.cards.a1 = [{ nodeId: 'reminder', path, after }];
+    activity.view!.current = { requirements: { learning_reminder: after } };
+    activity.view!.netDiff = activity.cards.a1;
+    render(
+      <ComposeNodeHistoryPanel
+        activity={activity}
+        selection={{
+          operation: activityOperation({
+            nodeId: 'reminder',
+            path: `${path}/priority`,
+            after: 'must',
+          }),
+          meta: { eventId: 'a1', actionId: 'a1', comparison: 'event', operationIndex: 1 },
+        }}
+        onOpenAction={vi.fn()}
+        onDiscuss={vi.fn()}
+        onOpenStructure={vi.fn()}
+      />
+    );
+    expect(activity.inspectNode).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Selected field details')).toBeInTheDocument();
+    const current = screen.getByRole('region', { name: 'Current Draft value' });
+    expect(current).toHaveTextContent('should');
+    expect(current).not.toHaveTextContent('Remind users');
+    expect(current).not.toHaveTextContent('Learning reminder');
+    expect(screen.getByText('Selected action · A1 · YOp 1')).toBeInTheDocument();
+    expect(screen.getByText('must')).toBeInTheDocument();
+  });
+
   it('opens Chat and historical actions with the selected field context', () => {
     const onDiscuss = vi.fn();
     const onOpenAction = vi.fn();

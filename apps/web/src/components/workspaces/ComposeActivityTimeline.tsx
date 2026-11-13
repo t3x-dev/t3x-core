@@ -7,12 +7,20 @@ import {
   activityChannelLabel,
   activityOperation,
   type ComposeActivityMeta,
+  type ComposeActivitySelection,
   composeEventCards,
   groupComposeActivity,
 } from '@/domain/composeActivity';
 import { composeNodeTitle, composePathLabel } from '@/domain/composePresentation';
-import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
-import { composeOperationStacks } from '@/domain/workspaces/composeOperationStacks';
+import {
+  composeCardsAtPath,
+  composeDraftChangeCards,
+} from '@/domain/workspaces/composeDraftChanges';
+import {
+  composeOperationStacks,
+  type OperationFieldCard,
+  type OperationStackItem,
+} from '@/domain/workspaces/composeOperationStacks';
 import {
   MANUAL_STAGING_EVENT_ID,
   type ManualStagingControls,
@@ -179,6 +187,8 @@ export function ComposeActivityTimeline({
   updatedAt,
   staging,
   schemaEvent,
+  selection,
+  onSelectOperationField,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   filter?: ComposeChangeFilter;
@@ -188,6 +198,8 @@ export function ComposeActivityTimeline({
   updatedAt: string;
   staging?: ManualStagingControls;
   schemaEvent?: ComposeSchemaTimelineEvent;
+  selection?: ComposeActivitySelection | null;
+  onSelectOperationField?: (selection: ComposeActivitySelection) => void;
 }) {
   const actorLabel = useActorLabel(
     (activity.actions ?? []).flatMap((action) => [action.actor.id, action.actor.delegator?.id])
@@ -259,6 +271,40 @@ export function ComposeActivityTimeline({
         </div>
       </>
     );
+  const selectedField =
+    selection?.meta.operationIndex === undefined || !selection.meta.actionId
+      ? undefined
+      : {
+          actionId: selection.meta.actionId,
+          index: selection.meta.operationIndex,
+          path: selection.operation.path,
+        };
+  const selectField = onSelectOperationField
+    ? (item: OperationStackItem, field: OperationFieldCard) => {
+        const action = activity.actions.find((entry) => entry.actionId === item.actionId);
+        const owner = composeCardsAtPath(activity.cards[item.actionId] ?? [], field.path)[0];
+        onSelectOperationField({
+          operation: activityOperation(
+            {
+              nodeId: owner?.nodeId ?? item.actionId,
+              path: field.path,
+              before: field.before,
+              after: field.after,
+            },
+            action?.reason
+          ),
+          meta: {
+            eventId: item.actionId,
+            actionId: item.actionId,
+            actor: action?.actor.id,
+            channel: action?.channel,
+            timestamp: action?.publishedAt,
+            comparison: 'event',
+            operationIndex: item.index,
+          },
+        });
+      }
+    : undefined;
   if (scope === 'all') {
     const changes = composeDraftChangeCards(
       activity.view?.netDiff ?? [],
@@ -290,7 +336,11 @@ export function ComposeActivityTimeline({
           </header>
           {stacks.length ? (
             <>
-              <ComposeOperationStacks stacks={stacks} />
+              <ComposeOperationStacks
+                stacks={stacks}
+                onSelectField={selectField}
+                selectedField={selectedField}
+              />
               {activity.cursor !== null ? (
                 <button className={styles.loadOlder} type="button" onClick={activity.loadOlder}>
                   Load older operations
@@ -553,7 +603,13 @@ export function ComposeActivityTimeline({
                   </span>
                 </div>
                 <div className={styles.preview}>
-                  {eventStacks.length ? <ComposeOperationStacks stacks={eventStacks} /> : null}
+                  {eventStacks.length ? (
+                    <ComposeOperationStacks
+                      stacks={eventStacks}
+                      onSelectField={selectField}
+                      selectedField={selectedField}
+                    />
+                  ) : null}
                   {eventStacks.length ? (
                     <details className={draftStyles.resultDisclosure}>
                       <summary>Object changes &amp; Details · {eventCards.length} paths</summary>
