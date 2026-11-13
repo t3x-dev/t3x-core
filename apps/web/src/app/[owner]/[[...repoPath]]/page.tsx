@@ -9,9 +9,9 @@ import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
 import { ProjectShell } from '@/components/project/ProjectShell';
-import { Button } from '@/components/ui/button';
 import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/projectTabModel';
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
+import { Button } from '@/components/ui/button';
 import { numberedRepositoryObject, repositoryObjectHref } from '@/domain/project/objectLocation';
 import { getProjectIdRepoPath, workspaceBranchFromSuffix } from '@/domain/project/repoPath';
 import {

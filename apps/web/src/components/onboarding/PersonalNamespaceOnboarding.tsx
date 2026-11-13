@@ -66,7 +66,9 @@ function getValidationMessage(namespace: string, validation: NamespaceValidation
 }
 
 function namespaceSuggestion(value: string): string {
-  const slug = normalizeNamespace(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slug = normalizeNamespace(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
   return validateNamespace(slug).valid ? slug : '';
 }
 
