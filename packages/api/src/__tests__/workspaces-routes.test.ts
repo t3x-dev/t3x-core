@@ -675,6 +675,38 @@ describe('Workspace routes', () => {
     expect(fetched.status).toBe(404);
   });
 
+  it('projects current override authority without rewriting the fixed review', async () => {
+    const stored = mockStoredReviewSnapshot('reviewing');
+    storageMock.getTransitionReviewSnapshot.mockResolvedValue(stored);
+    const path = `/v1/projects/proj_sources/workspaces/workspace_prd_handoff/transition/review-snapshots/${stored.snapshotId}`;
+    const key: ApiKey = {
+      id: 'scoped-reviewer',
+      name: 'Reviewer',
+      key_prefix: 'test',
+      user_id: 'user_reviewer',
+      project_id: null,
+      principal_kind: 'human',
+      transition_scopes: [
+        'transition:propose',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ],
+    };
+    for (const canOverride of [false, true]) {
+      const response = await appWithApiKey({
+        ...key,
+        transition_scopes: canOverride
+          ? [...key.transition_scopes!, 'transition:decide:override']
+          : key.transition_scopes,
+      }).request(path);
+      expect(response.status).toBe(200);
+      const { data } = await response.json();
+      expect(data.can_request_override).toBe(canOverride);
+      expect(data.snapshot_digest).toBe(stored.snapshotDigest);
+      expect(data.snapshot).toEqual(stored.snapshot);
+    }
+  });
+
   it('lists and reads persisted workspace state', async () => {
     await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',

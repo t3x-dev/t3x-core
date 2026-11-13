@@ -65,6 +65,25 @@ export function WorkspaceSnapshotReview({
     useWorkspaceReviewSnapshot(projectId, workspaceId, snapshotId);
   const snapshot = state.data?.snapshot ?? null;
   const view = snapshot?.transition?.mode === 'transition' ? snapshot.transition : null;
+  const decisionView =
+    state.data?.can_request_override === false &&
+    view?.capabilities.override.disposition === 'allowed'
+      ? {
+          ...view,
+          capabilities: {
+            ...view.capabilities,
+            override: {
+              disposition: 'denied' as const,
+              reasons: [
+                {
+                  code: 'REPOSITORY_AUTHORIZATION_REQUIRED' as const,
+                  message: 'Your current session does not allow committing with an override.',
+                },
+              ],
+            },
+          },
+        }
+      : view;
   const schemaReview = state.data?.schema_review;
   const subjectChanges = workspaceReviewSubjectChanges(schemaReview);
   if (!schemaReview) {
@@ -187,7 +206,7 @@ export function WorkspaceSnapshotReview({
       )}
     </section>
   ) : null;
-  const decisionPanel = view ? (
+  const decisionPanel = decisionView ? (
     <ChangeDecisionPanel
       embedded
       contentValidation={schemaReview?.contentValidation}
@@ -203,8 +222,8 @@ export function WorkspaceSnapshotReview({
       onEdit={() => router.push(composeHref)}
       onOverrideReasonChange={setOverrideReason}
       overrideReason={overrideReason}
-      view={view}
-      commitBlocker={workspaceCommitBlocker(schemaReview, view)}
+      view={decisionView}
+      commitBlocker={workspaceCommitBlocker(schemaReview, decisionView)}
       checksHref={checksHref(projectId, {
         repositoryPath,
         recordId: snapshotNumber ? `review-${snapshotNumber}` : `review:${snapshotId}`,
