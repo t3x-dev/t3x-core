@@ -88,9 +88,9 @@ describe('private no-AI PRD starter', () => {
     const graph = await getVerifiedTransitionCommitGraph(mockDB, data.project_id, head.head!);
     expect(graph).not.toBeNull();
     expect(graph!.proposal.actor).toEqual({ kind: 'human', id: `user:${owner}` });
-    expect(decodeRepositorySemanticContentState(graph!.state)).toEqual(
-      createPrdStarterContent('My-PRD')
-    );
+    const content = decodeRepositorySemanticContentState(graph!.state);
+    expect(content).toEqual(createPrdStarterContent('My-PRD'));
+    expect(content?.trees[0]?.children?.[0]?.slots?.audience).toBe('');
     expect(graph!.commit.parents).toEqual([]);
   });
 
