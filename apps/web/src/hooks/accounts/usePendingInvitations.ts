@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 
-export function usePendingInvitations(): boolean {
+export function usePendingInvitations(enabled: boolean): boolean {
   const [hasPending, setHasPending] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     let request = 0;
     const refresh = () => {
@@ -30,7 +31,7 @@ export function usePendingInvitations(): boolean {
       window.removeEventListener('focus', refresh);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [enabled]);
 
-  return hasPending;
+  return enabled && hasPending;
 }

@@ -3,6 +3,7 @@
 import type { ReceivedCollaborationInvitation } from '@t3x-dev/api-client';
 import { CheckCircle2, Inbox, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -181,5 +182,6 @@ export function InvitationsPageContent() {
 }
 
 export default function InvitationsPage() {
+  if (process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true') redirect('/repositories');
   return <InvitationsPageContent />;
 }
