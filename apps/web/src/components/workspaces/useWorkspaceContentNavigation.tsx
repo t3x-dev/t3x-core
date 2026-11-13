@@ -137,7 +137,7 @@ export function useWorkspaceContentNavigation({
                 : null}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="sm:flex-wrap">
             <Button
               variant="outline"
               disabled={busy}
