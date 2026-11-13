@@ -21,7 +21,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
-      has_changesets: ${{ steps.detect.outputs.has_changesets }}
       has_publish_packages: ${{ steps.publish.outputs.has_publish_packages }}
       is_version_packages: ${{ steps.detect.outputs.is_version_packages }}
       publish_packages: ${{ steps.publish.outputs.package_names }}
@@ -52,13 +51,6 @@ jobs:
         env:
           RELEASE_EVENT: ${{ github.event_name }}
         run: |
-          changeset_count="$(find .changeset -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')"
-          if [[ "$changeset_count" -gt 0 ]]; then
-            has_changesets=true
-          else
-            has_changesets=false
-          fi
-
           head_message="$(git log -1 --pretty=%B)"
           if grep -Fq "chore: version packages" <<<"$head_message"; then
             is_version_packages=true
@@ -70,17 +62,18 @@ jobs:
             is_version_packages=true
           fi
 
-          should_release=false
-          if [[ "$has_changesets" == "true" || "$is_version_packages" == "true" ]]; then
-            should_release=true
+          should_release=true
+          if [[ "$is_version_packages" != "true" ]]; then
+            release_plan="$(mktemp)"
+            trap 'rm -f "$release_plan"' EXIT
+            pnpm exec changeset status --output "$release_plan"
+            should_release="$(node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).releases.some(({ oldVersion, newVersion }) => oldVersion !== newVersion)' < "$release_plan")"
           fi
 
-          echo "has_changesets=$has_changesets" >> "$GITHUB_OUTPUT"
           echo "is_version_packages=$is_version_packages" >> "$GITHUB_OUTPUT"
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
           echo "should_publish=$is_version_packages" >> "$GITHUB_OUTPUT"
 
-          echo "has_changesets=$has_changesets"
           echo "is_version_packages=$is_version_packages"
           echo "should_release=$should_release"
           echo "should_publish=$is_version_packages"
