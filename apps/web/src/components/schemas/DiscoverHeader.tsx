@@ -87,7 +87,8 @@ export function DiscoverHeader({
   newProjectHref?: string;
   repositoriesNavigation?: boolean;
 }) {
-  const hasPendingInvitations = usePendingInvitations();
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const hasPendingInvitations = usePendingInvitations(!authDisabled);
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
@@ -99,7 +100,6 @@ export function DiscoverHeader({
     : owner
       ? `/${encodeURIComponent(owner)}`
       : '/';
-  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const homeHref = authDisabled ? '/t3x-dev' : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
@@ -206,18 +206,20 @@ export function DiscoverHeader({
             </Link>
           </nav>
           <div className={styles.actions}>
-            <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
-              <Link
-                href="/invitations"
-                aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
-                title="Invitations"
-              >
-                <Mail aria-hidden="true" />
-                {hasPendingInvitations && (
-                  <span className={styles.invitationDot} aria-hidden="true" />
-                )}
-              </Link>
-            </Button>
+            {!authDisabled && (
+              <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
+                <Link
+                  href="/invitations"
+                  aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
+                  title="Invitations"
+                >
+                  <Mail aria-hidden="true" />
+                  {hasPendingInvitations && (
+                    <span className={styles.invitationDot} aria-hidden="true" />
+                  )}
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
               <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
                 <CircleUserRound aria-hidden="true" />

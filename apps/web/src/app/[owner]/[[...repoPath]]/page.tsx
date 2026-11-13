@@ -11,6 +11,7 @@ import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage'
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/projectTabModel';
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
+import { Button } from '@/components/ui/button';
 import { numberedRepositoryObject, repositoryObjectHref } from '@/domain/project/objectLocation';
 import { getProjectIdRepoPath, workspaceBranchFromSuffix } from '@/domain/project/repoPath';
 import {
@@ -129,7 +130,23 @@ function OwnerRepoProjectPageContent() {
       loading
     );
   }
-  if (current.error) return <ErrorMessage error={current.error} onRetry={retry} />;
+  if (current.error) {
+    const code = 'code' in current.error ? current.error.code : undefined;
+    if (code === 'NOT_FOUND' || code === 'FORBIDDEN') {
+      return (
+        <div className="flex flex-col items-center gap-4 p-8 text-center">
+          <h1 className="font-medium">Repository unavailable</h1>
+          <p className="text-sm text-muted-foreground">
+            This repository may have moved, or you may not have access.
+          </p>
+          <Button asChild variant="outline">
+            <Link href="/repositories">Back to repositories</Link>
+          </Button>
+        </div>
+      );
+    }
+    return <ErrorMessage error={current.error} onRetry={retry} />;
+  }
   if (!address) return null;
   if (!supported)
     return (

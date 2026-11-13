@@ -10,7 +10,7 @@ export function createPrdStarterContent(title: string): SemanticContent {
         children: [
           {
             key: 'summary',
-            slots: { problem: '', audience: [], outcome: '' },
+            slots: { problem: '', audience: '', outcome: '' },
             children: [],
           },
           {

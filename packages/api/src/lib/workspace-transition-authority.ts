@@ -1,7 +1,12 @@
 import type { RequestPrincipal } from '@t3x-dev/application';
 import type { TransitionScope } from '@t3x-dev/core';
 import { type AnyDB, findWorkspaceDraft } from '@t3x-dev/storage';
-import { requireTransitionAuthority, resolveTransitionControlPlane } from './transition-authority';
+import {
+  requireTransitionAuthority,
+  resolveTransitionControlPlane,
+  TransitionProjectScopeDeniedError,
+  TransitionScopeDeniedError,
+} from './transition-authority';
 import { WorkspaceTransitionNotFoundError } from './workspace-transition';
 
 type CompatibilityOperation =
@@ -14,6 +19,38 @@ function decisionScope(
   if (outcome === 'accepted') return 'transition:decide:accept';
   if (outcome === 'overridden') return 'transition:decide:override';
   return 'transition:decide:reject';
+}
+
+function workspaceDecisionScopes(
+  outcome: Extract<CompatibilityOperation, { kind: 'decide' }>['outcome']
+): TransitionScope[] {
+  return outcome === 'rejected'
+    ? [decisionScope(outcome), 'transition:propose']
+    : [
+        decisionScope(outcome),
+        'transition:propose',
+        'transition:commit:create',
+        'transition:ref:advance',
+      ];
+}
+
+export function canRequestWorkspaceOverride(
+  apiKey: RequestPrincipal | undefined,
+  projectId: string
+) {
+  try {
+    for (const scope of workspaceDecisionScopes('overridden')) {
+      requireTransitionAuthority({ apiKey, projectId, scope });
+    }
+    return true;
+  } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    )
+      return false;
+    throw error;
+  }
 }
 
 /**
@@ -46,21 +83,11 @@ export async function resolveWorkspaceTransitionAuthority(input: {
   });
 
   if (input.operation.kind === 'decide') {
-    requireTransitionAuthority({
-      apiKey: input.apiKey,
-      projectId: input.projectId,
-      scope: 'transition:propose',
-    });
-    if (input.operation.outcome !== 'rejected') {
+    for (const scope of workspaceDecisionScopes(input.operation.outcome).slice(1)) {
       requireTransitionAuthority({
         apiKey: input.apiKey,
         projectId: input.projectId,
-        scope: 'transition:commit:create',
-      });
-      requireTransitionAuthority({
-        apiKey: input.apiKey,
-        projectId: input.projectId,
-        scope: 'transition:ref:advance',
+        scope,
       });
     }
   }

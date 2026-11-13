@@ -83,11 +83,11 @@ export async function proxyBrowserApi(request: Request, path: string[]): Promise
   const session = readCookie(request.headers.get('cookie'), SESSION_COOKIE);
   const body = ['GET', 'HEAD'].includes(request.method.toUpperCase())
     ? undefined
-    : await request.arrayBuffer();
+    : await request.blob();
   const upstream = await fetch(target, {
     method: request.method,
     headers: upstreamHeaders(request, session),
-    body: body && body.byteLength > 0 ? body : undefined,
+    body: body && body.size > 0 ? body : undefined,
     redirect: 'manual',
   });
   const route = path.join('/');

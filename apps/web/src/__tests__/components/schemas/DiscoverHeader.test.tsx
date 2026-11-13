@@ -58,6 +58,8 @@ describe('DiscoverHeader navigation', () => {
     render(<DiscoverHeader owner="t3x-dev" namespaceTab="repositories" />);
 
     expect(screen.getByRole('link', { name: 'T3X home' })).toHaveAttribute('href', '/t3x-dev');
+    expect(screen.queryByRole('link', { name: 'Invitations' })).not.toBeInTheDocument();
+    expect(listReceivedCollaborationInvitations).not.toHaveBeenCalled();
   });
   it('preserves the current branch and Workspace on canonical repository tabs', () => {
     const settingsHref = '/orbit/release/settings?returnTo=%2Forbit%2Frelease%3Ftab%3Dworkspaces';
