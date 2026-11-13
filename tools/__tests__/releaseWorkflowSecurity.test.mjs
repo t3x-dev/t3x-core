@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { selectRetryPackages } from '../detect-publish-packages.mjs';
 import { validateReleasePr } from '../lib/releasePr.mjs';
@@ -82,6 +86,85 @@ test('publishing bypasses Changesets PR selection when ignored changesets remain
   assert.equal(auth.env.NPM_CONFIG_USERCONFIG, publish.env.NPM_CONFIG_USERCONFIG);
   assert.match(auth.run, /\$\{NPM_TOKEN\}/);
   assert.match(publish.env.NPM_TOKEN, /secrets\.NPM_TOKEN/);
+});
+
+test('release workflow creates version PRs only for a Changesets plan with version bumps', (t) => {
+  const workflow = readWorkflow('.github/workflows/release.yml');
+  const detect = workflow.jobs['changeset-state'].steps.find((step) => step.id === 'detect');
+  const cwd = mkdtempSync(join(tmpdir(), 't3x-release-state-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+
+  mkdirSync(join(cwd, '.changeset'));
+  writeFileSync(join(cwd, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+  writeFileSync(join(cwd, 'package.json'), '{"name":"release-fixture","private":true}');
+  writeFileSync(
+    join(cwd, '.changeset/config.json'),
+    '{"baseBranch":"main","ignore":["t3x-webui"]}'
+  );
+  for (const [dir, name] of [
+    ['web', 't3x-webui'],
+    ['yops', '@t3x-dev/yops'],
+  ]) {
+    const packageDir = join(cwd, 'packages', dir);
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ name, version: '1.0.0' }));
+  }
+
+  const git = (...args) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Release Test', '-c', 'user.email=release@example.com', ...args],
+      {
+        cwd,
+        stdio: 'pipe',
+      }
+    );
+  git('init', '-b', 'main');
+  git('add', '.');
+  git('commit', '-m', 'base');
+
+  const output = join(cwd, 'release-state');
+  function detectState(event = 'push') {
+    writeFileSync(output, '');
+    execFileSync('bash', ['-e', '-o', 'pipefail', '-c', detect.run], {
+      cwd,
+      env: {
+        ...process.env,
+        PATH: [fileURLToPath(new URL('node_modules/.bin', root)), process.env.PATH].join(delimiter),
+        GITHUB_OUTPUT: output,
+        RELEASE_EVENT: event,
+        TMPDIR: cwd,
+      },
+    });
+    return Object.fromEntries(
+      readFileSync(output, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => line.split('='))
+    );
+  }
+
+  assert.equal(detectState().should_release, 'false');
+  writeFileSync(join(cwd, '.changeset/web-only.md'), '---\nt3x-webui: patch\n---\n\nWeb only.\n');
+  git('add', '.changeset');
+  git('commit', '-m', 'Keep ignored WebUI changeset');
+  assert.equal(detectState().should_release, 'false');
+  writeFileSync(join(cwd, '.changeset/yops.md'), '---\n"@t3x-dev/yops": patch\n---\n\nYOps fix.\n');
+  git('add', '.changeset');
+  git('commit', '-m', 'Queue YOps patch');
+  assert.deepEqual(detectState(), {
+    is_version_packages: 'false',
+    should_release: 'true',
+    should_publish: 'false',
+  });
+  const publishState = {
+    is_version_packages: 'true',
+    should_release: 'true',
+    should_publish: 'true',
+  };
+  assert.deepEqual(detectState('workflow_dispatch'), publishState);
+  git('commit', '--allow-empty', '-m', 'chore: version packages');
+  assert.deepEqual(detectState(), publishState);
 });
 
 test('manual recovery only runs on main and passes package input as quoted data', () => {
