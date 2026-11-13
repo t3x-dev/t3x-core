@@ -65,13 +65,18 @@ function getValidationMessage(namespace: string, validation: NamespaceValidation
   return 'This namespace format is valid.';
 }
 
+function namespaceSuggestion(value: string): string {
+  const slug = normalizeNamespace(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return validateNamespace(slug).valid ? slug : '';
+}
+
 export function PersonalNamespaceOnboarding({
   suggestedNamespace,
 }: {
   suggestedNamespace?: string;
 }) {
   const normalizedSuggestion = useMemo(
-    () => normalizeNamespace(suggestedNamespace ?? ''),
+    () => namespaceSuggestion(suggestedNamespace ?? ''),
     [suggestedNamespace]
   );
   const [suggestion, setSuggestion] = useState(normalizedSuggestion);
@@ -87,7 +92,7 @@ export function PersonalNamespaceOnboarding({
 
   useEffect(() => {
     if (normalizedSuggestion) return;
-    const username = normalizeNamespace(getUser()?.username ?? '');
+    const username = namespaceSuggestion(getUser()?.username ?? '');
     if (!username) return;
     setSuggestion(username);
     setNamespace(username);
