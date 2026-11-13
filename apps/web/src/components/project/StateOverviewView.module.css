@@ -148,7 +148,7 @@
 }
 .descriptionRow {
   position: relative;
-  padding-right: 26px;
+  padding-right: 36px;
 }
 .description {
   font-size: 15px;
@@ -159,7 +159,7 @@
 .descriptionEdit {
   position: absolute;
   top: -3px;
-  right: -5px;
+  right: 5px;
   padding: 5px;
   width: 28px;
   height: 28px;
