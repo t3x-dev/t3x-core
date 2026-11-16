@@ -762,6 +762,7 @@ export function ProjectStateTab({
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 workspaceHref={workspaceHref}
+                canProposeChanges={canEditRepository}
               />
               {focusedCommitHash ? (
                 <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">

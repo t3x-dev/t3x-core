@@ -552,6 +552,7 @@ function renderStateTab(
   const element = () => (
     <ProjectStateTab
       initialView="structure"
+      canEditRepository
       projectId="proj_test"
       projectName="Test Project"
       projectDescription={projectDescription}
@@ -1009,7 +1010,7 @@ describe('ProjectStateTab', () => {
     hookMocks.loadCommit.mockImplementation(async (hash) =>
       hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
     );
-    render(<ProjectStateTab projectId="proj_test" projectName="Fresh" />);
+    render(<ProjectStateTab projectId="proj_test" projectName="Fresh" canEditRepository />);
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
@@ -1041,6 +1042,15 @@ describe('ProjectStateTab', () => {
       expect.stringContaining('view=code'),
       { scroll: false }
     );
+  });
+
+  it('keeps State readable without advertising changes to a read-only viewer', async () => {
+    render(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" canEditRepository={false} />
+    );
+    expect(await screen.findByText('Read-only access')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Propose change' })).toBeNull();
   });
 
   it('honors an explicit historical commit instead of the registered branch HEAD', async () => {
@@ -2208,6 +2218,7 @@ describe('ProjectStateTab', () => {
         projectName="Test Project"
         repositoryPath="/t3x-dev/test-project"
         commitAddress={{ id: committed.hash, number: '42' }}
+        canEditRepository
         initialView="structure"
       />
     );

@@ -25,6 +25,7 @@ export function StatePageToolbar({
   onCreateBranch,
   workspaceHref,
   historical,
+  canProposeChanges,
 }: {
   historical: boolean;
   activeView: ProjectSnapshotView;
@@ -37,6 +38,7 @@ export function StatePageToolbar({
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   workspaceHref: string;
+  canProposeChanges: boolean;
 }) {
   const commitHref = headCommit ? historyCommitHref(historyHref, headCommit) : historyHref;
   return (
@@ -72,10 +74,14 @@ export function StatePageToolbar({
             <Link href={historical ? commitHref : historyHref}>
               <History aria-hidden="true" /> History
             </Link>
-            <Link href={workspaceHref} className={overviewStyles.primary}>
-              <Pencil />
-              Propose change
-            </Link>
+            {canProposeChanges ? (
+              <Link href={workspaceHref} className={overviewStyles.primary}>
+                <Pencil aria-hidden="true" />
+                Propose change
+              </Link>
+            ) : (
+              <span className={overviewStyles.sidebarHint}>Read-only access</span>
+            )}
           </div>
         </div>
         <div className={inspectionStyles.viewNavigation}>

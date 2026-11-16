@@ -705,9 +705,105 @@ a.commitMessage:hover {
   font-weight: 500;
 }
 .emptyContent p {
-  margin: 8px 0 12px;
+  margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.7;
+  color: var(--text-secondary);
+}
+.sidebar:has(.emptyState) {
+  contain: none;
+  overflow: visible;
+}
+.emptyState {
+  display: grid;
+  gap: 16px;
+}
+.yamlIllustration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  padding: 12px 16px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--accent-commit);
+}
+.yamlIllustration > svg {
+  width: 40px;
+  height: 48px;
+  stroke-width: 1.25;
+}
+.yamlIllustration > div {
+  display: grid;
+  gap: 5px;
+  width: 48px;
+}
+.yamlIllustration span {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.yamlIllustration i {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--stroke-default);
+}
+.yamlIllustration i:nth-child(2) {
+  width: 65%;
+  background: var(--accent-commit);
+}
+.yamlIllustration i:nth-child(3) {
+  margin-left: 8px;
+}
+.startActions {
+  display: grid;
+  gap: 10px;
+}
+.startCard {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: start;
+  gap: 10px;
+  padding: 14px 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+a.startCard:first-child {
+  background: var(--accent-commit-soft);
+}
+a.startCard:hover {
+  border-color: var(--accent-commit);
+}
+a.startCard:hover h4 {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.startCard h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.startCard p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.startIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-commit);
+}
+.startArrow {
+  width: 14px;
+  height: 20px;
+  color: var(--text-secondary);
+}
+.startCard[aria-disabled="true"] .startIcon {
   color: var(--text-secondary);
 }
 .root :is(button, a, textarea):focus-visible,
@@ -735,11 +831,20 @@ a.commitMessage:hover {
   .about {
     grid-column: 1 / -1;
   }
+  .sidebar:has(.emptyState) .stateContent {
+    grid-column: 1 / -1;
+  }
+  .startActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .markdown h1 {
     font-size: 28px;
   }
 }
 @media (max-width: 480px) {
+  .startActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .sidebar {
     grid-template-columns: minmax(0, 1fr);
   }
