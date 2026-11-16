@@ -24,9 +24,13 @@ it.each([
     const query = new URLSearchParams({ branch, view: 'structure', workspace: 'exact' });
     const href = repositoryLocation('/team/Repo', section, query.toString(), '#field');
     const url = new URL(href, 'http://local');
-    expect(url.pathname).toBe(`/team/Repo/branches/${encodeURIComponent(branch)}${section}`);
+    expect(url.pathname).toBe(
+      branch === 'main' && !section
+        ? '/team/Repo'
+        : `/team/Repo/branches/${encodeURIComponent(branch)}${section}`
+    );
     expect(url.searchParams.has('branch')).toBe(false);
-    expect(repositoryBranch(url.pathname, url.searchParams)).toBe(branch);
+    expect(repositoryBranch(url.pathname, url.searchParams) ?? 'main').toBe(branch);
     expect(
       repositoryLocation(
         '/team/Repo',
@@ -39,7 +43,7 @@ it.each([
 });
 
 it('uses main for a short entry without overriding an explicitly addressed Workspace', () => {
-  expect(repositoryLocation('/team/Repo', '', '')).toBe('/team/Repo/branches/main');
+  expect(repositoryLocation('/team/Repo', '', '')).toBe('/team/Repo');
   expect(repositoryLocation('/team/Repo', '/schemas', '')).toBe('/team/Repo/branches/main/schemas');
   expect(repositoryLocation('/team/Repo', '/workspaces', '')).toBe(
     '/team/Repo/branches/main/workspaces'
@@ -109,9 +113,11 @@ it.each(PROJECT_TABS)('accepts the public route generated for $label', ({ id }) 
   expect(isSupportedRepositorySuffix(`/${segment}`)).toBe(true);
   expect(isSupportedRepositorySuffix(`/${segment}/`)).toBe(true);
   expect(repositoryLocation('/team/Repo', '', `tab=${segment}&branch=main&pr=42`, '#details')).toBe(
-    ['state', 'schemas', 'workspaces'].includes(id)
-      ? `/team/Repo/branches/main${id === 'state' ? '' : `/${segment}`}?pr=42#details`
-      : `/team/Repo/${segment}?pr=42#details`
+    id === 'state'
+      ? '/team/Repo?pr=42#details'
+      : ['schemas', 'workspaces'].includes(id)
+        ? `/team/Repo/branches/main/${segment}?pr=42#details`
+        : `/team/Repo/${segment}?pr=42#details`
   );
 });
 
@@ -231,4 +237,24 @@ it.each([
 ])('keeps the active route %s available', (suffix) => {
   expect(isRetiredRepositoryLocation(suffix, new URLSearchParams())).toBe(false);
   expect(isSupportedRepositorySuffix(suffix)).toBe(true);
+});
+
+it.each([
+  '',
+  '/state',
+  '/branches/main',
+  '/branches/main/',
+  '/branches/main/state',
+])('keeps the default State at the repository root for %s', (suffix) => {
+  const href = repositoryLocation('/team/Repo', suffix, 'branch=main&view=structure', '#field');
+  expect(href).toBe('/team/Repo?view=structure#field');
+  expect(repositoryLocation('/team/Repo', '', 'view=structure', '#field')).toBe(href);
+});
+it('lets an explicit main path win over a conflicting branch query before shortening', () => {
+  expect(repositoryLocation('/team/Repo', '/branches/main', 'branch=dev&view=code')).toBe(
+    '/team/Repo?view=code'
+  );
+  expect(repositoryLocation('/team/Repo', '', 'branch=dev&view=code')).toBe(
+    '/team/Repo/branches/dev?view=code'
+  );
 });

@@ -68,7 +68,8 @@ export function repositoryBranchHref(
   let path = `${base}${suffix}`;
   if (branch && branch !== '.' && branch !== '..') {
     if (base.startsWith('/project/')) params.set('branch', branch);
-    else path = `${base}/branches/${encodeURIComponent(branch)}${suffix}`;
+    else if (branch !== 'main' || suffix)
+      path = `${base}/branches/${encodeURIComponent(branch)}${suffix}`;
   } else if (branch) params.set('branch', branch);
   else params.delete('branch');
   return `${path}${params.size ? `?${params}` : ''}`;

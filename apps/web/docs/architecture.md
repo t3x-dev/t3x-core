@@ -112,6 +112,9 @@ new and changed WebUI links. This section records the current entry points.
   section such as `/schemas` takes precedence over a conflicting `tab` query.
   State, Schema, Workspace, branch-filtered History, and branch-context Diff
   or source links use `/branches/{branch}` after the repository address.
+  Default-branch State is the exception: a terminal `/branches/main`
+  normalizes to the repository root, retaining view queries and fragments.
+  Non-default State and all branch subpages retain their branch segment.
   Encode the whole branch name as one segment, including embedded slashes.
   The path wins over a conflicting legacy `branch` query. The repository
   short address selects `main`, the current creation default; there is no
@@ -156,7 +159,7 @@ new and changed WebUI links. This section records the current entry points.
 | Destination | Current address example |
 | --- | --- |
 | Browse Schema results | `/explore/browse?type=schemas` |
-| State on the default branch | `/team/repo/branches/main` |
+| State on the default branch | `/team/repo` |
 | Schema on a named branch | `/team/repo/branches/feature%2Frelease/schemas` |
 | History for one branch | `/team/repo/branches/main/history?q=fix` |
 | History across branches | `/team/repo/history` |
@@ -413,7 +416,9 @@ Apply these rules to new and changed WebUI links and controls.
 
 - Put the destination and the selected object's identity in the path. Use the
   resolved repository address. An explicitly selected branch belongs in the
-  path, including the default branch and a single-branch History filter.
+  path, including a single-branch History filter. Default-branch State uses
+  the repository root; omit only the terminal `/branches/main`, keeping
+  explicit branch paths for subpages such as `/branches/main/schemas`.
   All-branch lists use the repository path, without a synthetic `all` branch.
   Repository-wide Run, Pull request, Community and Settings pages do not
   select a branch. Exact Commit and Review numbers remain repository-scoped;

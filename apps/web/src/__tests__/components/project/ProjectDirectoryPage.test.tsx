@@ -173,11 +173,11 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/t3x-dev/prd-workflow/branches/main'
+      '/t3x-dev/prd-workflow'
     );
     expect(screen.getByTitle('/t3x-dev/prd-workflow')).toHaveAttribute(
       'href',
-      '/t3x-dev/prd-workflow/branches/main'
+      '/t3x-dev/prd-workflow'
     );
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Canvas' })).not.toBeInTheDocument();
@@ -219,11 +219,11 @@ describe('ProjectDirectoryPage', () => {
     );
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/lqw905/prd-workflow/branches/main'
+      '/lqw905/prd-workflow'
     );
     expect(screen.getByTitle('/lqw905/prd-workflow')).toHaveAttribute(
       'href',
-      '/lqw905/prd-workflow/branches/main'
+      '/lqw905/prd-workflow'
     );
     for (const link of screen.getAllByRole('link', { name: /new repository/i })) {
       expect(link).toHaveAttribute('href', '/lqw905/new');
@@ -255,7 +255,7 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByText('Editor access')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 't3x-core' })).toHaveAttribute(
       'href',
-      '/test-a3/t3x-core/branches/main'
+      '/test-a3/t3x-core'
     );
     expect(screen.getByRole('link', { name: 'New repository' })).toHaveAttribute(
       'href',
@@ -287,8 +287,8 @@ describe('ProjectDirectoryPage', () => {
     expect(recentSection).not.toBeNull();
 
     const recentLinks = within(recentSection as HTMLElement).getAllByRole('link');
-    expect(recentLinks[0]).toHaveAttribute('href', '/t3x-dev/t3x-core/branches/main');
-    expect(recentLinks[1]).toHaveAttribute('href', '/t3x-dev/prd-workflow/branches/main');
+    expect(recentLinks[0]).toHaveAttribute('href', '/t3x-dev/t3x-core');
+    expect(recentLinks[1]).toHaveAttribute('href', '/t3x-dev/prd-workflow');
   });
 
   it('filters project rows without leaving the directory', () => {
@@ -400,7 +400,7 @@ describe('ProjectDirectoryPage', () => {
     openActions();
     expect(screen.getByRole('menuitem', { name: 'Open repository' })).toHaveAttribute(
       'href',
-      '/t3x-dev/prd-workflow/branches/main'
+      '/t3x-dev/prd-workflow'
     );
     expect(screen.queryByRole('menuitem', { name: /Rename/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /Delete repository/ })).not.toBeInTheDocument();

@@ -26,7 +26,7 @@ describe('ProjectTabs', () => {
         tab.id === 'settings'
           ? '/settings'
           : tab.id === 'state'
-            ? '/t3x-dev/test-project/branches/main'
+            ? '/t3x-dev/test-project'
             : `/t3x-dev/test-project/${['schemas', 'workspaces'].includes(tab.id) ? 'branches/main/' : ''}${getProjectTabSegment(tab.id)}`;
       expect(screen.getByRole('link', { name: tab.label })).toHaveAttribute('href', href);
     }

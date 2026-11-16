@@ -63,12 +63,17 @@ function OwnerRepoProjectPageContent() {
   const invalidBranch =
     !branchRoute && ['.', '..'].includes(new URLSearchParams(query).get('branch')?.trim() ?? '');
   const supported = isSupportedRepositorySuffix(suffix) && !invalidBranch;
-  const branches = useBranches(
-    address?.project_id ?? null,
-    Boolean(supported && branchRoute && address)
-  );
   const search = new URLSearchParams(query);
   const legacyView = branchRoute || pageSegments.length ? view : (search.get('tab') ?? view);
+  const branchForPage =
+    routeBranch ??
+    (!numbered && legacyView === 'state' && !search.get('commit')
+      ? search.get('branch')?.trim() || 'main'
+      : null);
+  const branches = useBranches(
+    address?.project_id ?? null,
+    Boolean(supported && branchForPage && address)
+  );
   const legacySnapshot =
     legacyView === 'workspaces' && search.get('reviewPane') !== 'checks'
       ? search.get('reviewSnapshot')
@@ -170,14 +175,14 @@ function OwnerRepoProjectPageContent() {
     );
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
-  if (branchRoute) {
+  if (branchForPage) {
     if (branches.loading) return <LoadingSpinner message="Loading branch…" />;
     if (branches.error)
       return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
-    if (!branches.branches.includes(branchRoute.branch))
+    if (!branches.branches.includes(branchForPage))
       return (
         <p role="alert" className="p-6">
-          Branch {branchRoute.branch} was not found in this repository.
+          Branch {branchForPage} was not found in this repository.
         </p>
       );
   }

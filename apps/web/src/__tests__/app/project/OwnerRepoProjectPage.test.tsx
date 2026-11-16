@@ -99,7 +99,7 @@ beforeEach(() => {
   });
 });
 it('resolves directly, without any list cache or pagination', async () => {
-  mocks.params.repoPath = ['Repo', 'branches', 'main'];
+  mocks.params.repoPath = ['Repo'];
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
   expect(mocks.resolve).toHaveBeenCalledWith('alice', 'Repo');
@@ -246,10 +246,9 @@ it('uses the namespace returned by the backend after a transfer', async () => {
   });
   render(<OwnerRepoProjectPage />);
   await waitFor(() =>
-    expect(mocks.replace).toHaveBeenCalledWith(
-      '/bob/Repo/branches/main?workspace=w&conversation=c&pr=9',
-      { scroll: false }
-    )
+    expect(mocks.replace).toHaveBeenCalledWith('/bob/Repo?workspace=w&conversation=c&pr=9', {
+      scroll: false,
+    })
   );
 });
 it('forwards a legacy Settings return source and fragment to the resolved Settings page', async () => {
@@ -479,7 +478,7 @@ it('rejects an unknown branch without rendering State or falling back to main', 
   expect(mocks.replace).not.toHaveBeenCalled();
 });
 it('waits for the branch inventory before mounting a branch page', async () => {
-  mocks.params.repoPath = ['Repo', 'branches', 'main'];
+  mocks.params.repoPath = ['Repo'];
   mocks.query = '';
   mocks.branchesLoading = true;
   const view = render(<OwnerRepoProjectPage />);
@@ -501,4 +500,25 @@ it('uses the path branch and retains the view and fragment when a query disagree
       { scroll: false }
     )
   );
+});
+
+it('shortens an explicit main State path while retaining view and fragment', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'main'];
+  mocks.query = 'branch=feature%2Frelease&view=structure';
+  window.location.hash = '#field';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith('/alice/Repo?view=structure#field', {
+      scroll: false,
+    })
+  );
+});
+it('does not treat a missing main branch as empty State on the short address', async () => {
+  mocks.params.repoPath = ['Repo'];
+  mocks.branches = ['feature/release'];
+  mocks.query = '';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Branch main was not found');
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });
