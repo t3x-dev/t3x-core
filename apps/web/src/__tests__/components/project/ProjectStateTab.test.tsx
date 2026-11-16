@@ -60,16 +60,21 @@ vi.mock('@/components/project/StateOverviewView', () => ({
     reader,
     schemaHref,
     historyHref,
+    workspaceHref,
     commit,
   }: {
     commitDigest: string | null;
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
     historyHref?: string;
+    workspaceHref?: string;
     commit?: ApiCommit | null;
   }) =>
     commitDigest === null ? (
-      <section aria-label="Overview">No commits yet</section>
+      <section aria-label="Overview">
+        No commits yet
+        {workspaceHref ? <a href={workspaceHref}>Open Workspace</a> : null}
+      </section>
     ) : (
       <section aria-label="Overview">
         {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
@@ -1217,7 +1222,7 @@ describe('ProjectStateTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/project/proj_test?branch=main&tab=workspaces'
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
     );
     const tree = screen.getByRole('region', { name: 'State structure' });
     expect(within(tree).getByRole('region', { name: 'State structure rows' })).toHaveAttribute(
@@ -1864,11 +1869,15 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/project/proj_test?branch=main&tab=workspaces'
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(await screen.findByText('No commits yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
+    );
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {
@@ -2227,7 +2236,7 @@ describe('ProjectStateTab', () => {
     ).toBeVisible();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/t3x-dev/test-project/branches/feature%2Fprd-audience/workspaces'
+      '/t3x-dev/test-project/branches/feature%2Fprd-audience/workspaces?workspaceMode=compose'
     );
     view.unmount();
     navigationMocks.pathname = '/t3x-dev/test-project/branches/feature%2Fprd-audience';

@@ -53,6 +53,7 @@ import {
   getProjectIdWorkspacePath,
   repositoryBranch,
   repositoryBranchHref,
+  workspaceLocation,
 } from '@/domain/project/repoPath';
 import {
   filterCollapsedStateRows,
@@ -606,10 +607,11 @@ export function ProjectStateTab({
     inspectedBranch,
     new URLSearchParams(repositoryPath ? '' : 'tab=schemas')
   );
-  const workspaceHref = getProjectIdWorkspacePath(projectId, {
-    branch: inspectedBranch,
-    repositoryPath,
-  });
+  const workspaceHref = workspaceLocation(
+    repositoryPath ?? getProjectIdRepoPath(projectId),
+    inspectedBranch,
+    new URLSearchParams({ workspaceMode: 'compose' })
+  );
   const latestBranchHeadHash = branchHeads[inspectedBranch] ?? null;
   const availableHeadHash =
     latestBranchHeadHash &&
