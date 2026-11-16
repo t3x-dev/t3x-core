@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import {
   type SchemaBindingActionKind,
@@ -9,6 +9,7 @@ import {
 } from '@/components/schemas';
 import { SchemaCatalogExperience } from '@/components/schemas/SchemaCatalogExperience';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { repositoryBranch } from '@/domain/project/repoPath';
 import { mergePublishedSchemaVersions } from '@/domain/schemas/publishedSchemaVersions';
 import {
   rebindWorkspaceCandidate,
@@ -39,6 +40,7 @@ export function ProjectSchemasTab(props: ProjectSchemasTabProps) {
   );
 }
 function ProjectSchemaStudio({ projectId }: ProjectSchemasTabProps) {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const publishedVersions = useProjectYSchemaVersions(projectId);
   const identityManagement = useYSchemaIdentityManagement(projectId, publishedVersions.refresh);
@@ -56,7 +58,7 @@ function ProjectSchemaStudio({ projectId }: ProjectSchemasTabProps) {
   const [pending, setPending] = useState<SchemaBindingActionKind | null>(null);
   const [feedback, setFeedback] = useState<BindingFeedback>();
   const requestedWorkspaceId = searchParams?.get('workspace') ?? null;
-  const requestedBranch = searchParams?.get('branch') ?? null;
+  const requestedBranch = repositoryBranch(pathname, searchParams);
   const workspaceTarget = useMemo(
     () =>
       resolveWorkspaceTarget(projectWorkspaces.workspaces, requestedWorkspaceId, requestedBranch),

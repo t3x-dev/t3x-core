@@ -18,7 +18,11 @@ import {
 } from '@/components/ui/dialog';
 import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStageNavigation';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdWorkspacePath,
+  repositoryBranch,
+} from '@/domain/project/repoPath';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
   schemaReviewHref,
@@ -189,6 +193,7 @@ export function SchemaStudioExperience({
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const repositoryPath = getCanonicalRepositoryPath(pathname);
   const candidates = useStudioCandidates(projectId);
   const workspaces = useProjectWorkspaces(projectId);
   const projectBranches = useBranches(projectId, true);
@@ -197,12 +202,15 @@ export function SchemaStudioExperience({
     scope: object;
     errors: Record<string, string>;
   }>();
-  const [workspaceSetupRetry, setWorkspaceSetupRetry] = useState(0);
+  const [workspaceSetupPending, setWorkspaceSetupPending] = useState<{
+    scope: object;
+    key: string;
+  }>();
   const [selection, setSelection] = useState<string[]>([]);
   const navigationRef = useRef<SchemaEditorNavigation | null>(null);
   const reviewFlow = useSchemaReviewFlow(projectId);
   const requestedWorkspaceId = params?.get('workspace') ?? '';
-  const requestedBranch = params?.get('branch');
+  const requestedBranch = repositoryBranch(pathname, params);
   const query = params?.toString() ?? '';
   const [implicitTarget, setImplicitTarget] = useState<{
     scope: string;
@@ -330,6 +338,22 @@ export function SchemaStudioExperience({
     selectedTarget && requestedBranch && selectedTarget.targetBranch !== requestedBranch
   );
   const target = targetMismatch ? undefined : selectedTarget;
+  useEffect(() => {
+    if (repositoryPath && requestedWorkspaceId && !requestedBranch && target && targetsReady) {
+      router.replace(`${schemaWorkspaceHref(pathname, query, target)}${window.location.hash}`, {
+        scroll: false,
+      });
+    }
+  }, [
+    repositoryPath,
+    requestedWorkspaceId,
+    requestedBranch,
+    target,
+    targetsReady,
+    pathname,
+    query,
+    router,
+  ]);
   const invalidTarget = Boolean(targetMismatch || (workspaceId && !selectedTarget));
   const targetCommitted = target?.status === 'committed';
   useEffect(() => {
@@ -348,73 +372,44 @@ export function SchemaStudioExperience({
       : undefined
     : undefined;
   const editorUnavailable = Boolean(invalidTarget || targetCommitted || workspaceSetupError);
-  useEffect(() => {
-    if (
-      !projectId ||
-      projectBranches.loading ||
-      projectBranches.error ||
-      workspaces.loading ||
-      workspaces.error ||
-      invalidTarget
-    )
-      return;
-    const persistedBranches = new Set(
-      workspaces.workspaces.map((workspace) => workspace.targetBranch)
-    );
-    const missing = projectBranches.branches.filter((branch) => {
-      const key = JSON.stringify([projectId, branch]);
-      return !persistedBranches.has(branch) && !projectScope.attempts.has(key);
-    });
-    if (missing.length === 0) return;
+  async function setupWorkspace(retry = false) {
+    if (!targetsReady || !target || invalidTarget || targetCommitted) return;
+    if (workspaces.workspaces.some((item) => item.id === target.id)) return;
+    if (retry) projectScope.attempts.delete(setupKey);
+    if (projectScope.attempts.has(setupKey)) return;
     const scope = projectScope;
     const isCurrent = () => scope.active && activeProjectScope.current === scope;
-    void (async () => {
-      await Promise.all(
-        missing.map(async (branch) => {
-          const key = JSON.stringify([projectId, branch]);
-          projectScope.attempts.add(key);
-          try {
-            const starter = getProjectWorkspaceStarterCandidate(
-              projectId,
-              [],
-              branch,
-              projectBranches.branchHeads[branch] ?? null
-            );
-            await saveDraft(starter);
-          } catch (error) {
-            if (isCurrent())
-              setWorkspaceSetupFailures((previous) => ({
-                scope,
-                errors: {
-                  ...(previous?.scope === scope ? previous.errors : {}),
-                  [key]:
-                    (error as { code?: unknown } | null)?.code === 'CONFLICT'
-                      ? `Workspace creation for ${branch} conflicted. Refresh or retry before editing.`
-                      : error instanceof Error
-                        ? error.message
-                        : `Could not create a Workspace for ${branch}.`,
-                },
-              }));
-          }
-        })
-      );
+    scope.attempts.add(setupKey);
+    setWorkspaceSetupPending({ scope, key: setupKey });
+    setWorkspaceSetupFailures((previous) => ({
+      scope,
+      errors: { ...(previous?.scope === scope ? previous.errors : {}), [setupKey]: '' },
+    }));
+    try {
+      await saveDraft(target);
       if (isCurrent()) await workspaces.refresh();
-    })();
-  }, [
-    projectBranches.branchHeads,
-    projectBranches.branches,
-    projectBranches.loading,
-    projectBranches.error,
-    projectId,
-    saveDraft,
-    workspaces.refresh,
-    workspaces.workspaces,
-    workspaces.loading,
-    workspaces.error,
-    invalidTarget,
-    workspaceSetupRetry,
-    projectScope,
-  ]);
+    } catch (error) {
+      if (isCurrent()) {
+        setWorkspaceSetupFailures((previous) => ({
+          scope,
+          errors: {
+            ...(previous?.scope === scope ? previous.errors : {}),
+            [setupKey]:
+              (error as { code?: unknown } | null)?.code === 'CONFLICT'
+                ? `Workspace creation for ${target.targetBranch} conflicted. Refresh or retry before editing.`
+                : error instanceof Error
+                  ? error.message
+                  : 'Could not create a Workspace.',
+          },
+        }));
+      }
+    } finally {
+      if (isCurrent())
+        setWorkspaceSetupPending((pending) =>
+          pending?.scope === scope && pending.key === setupKey ? undefined : pending
+        );
+    }
+  }
   const replaceRoute = router.replace;
   useEffect(() => {
     const next = new URLSearchParams(query);
@@ -808,7 +803,7 @@ export function SchemaStudioExperience({
     for (const id of selection) diagnosticsParams.append('schemaSource', id);
     const navigate = () =>
       router.push(
-        `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch)}&${diagnosticsParams}`
+        `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch, repositoryPath)}&${diagnosticsParams}`
       );
     if (!saved && navigationRef.current) navigationRef.current.requestNavigation(navigate);
     else navigate();
@@ -834,7 +829,15 @@ export function SchemaStudioExperience({
         if (!(await navigationRef.current?.save?.())) return;
         await workspaces.refresh();
         if (!isCurrent()) return;
-        router.push(schemaReviewHref(projectId, targetId, undefined, persistedTarget.targetBranch));
+        router.push(
+          schemaReviewHref(
+            projectId,
+            targetId,
+            undefined,
+            persistedTarget.targetBranch,
+            repositoryPath
+          )
+        );
         return;
       }
       if (!isCurrent()) return;
@@ -1066,7 +1069,8 @@ export function SchemaStudioExperience({
           projectId,
           persistedTarget.id,
           !dataDirty && workflow.matchesReview ? reviewStatus.latest?.snapshot_id : undefined,
-          target?.targetBranch
+          target?.targetBranch,
+          repositoryPath
         )
       );
     if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
@@ -1259,15 +1263,26 @@ export function SchemaStudioExperience({
       {workspaceSetupError ? (
         <div className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
           {workspaceSetupError}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              projectScope.attempts.delete(setupKey);
-              setWorkspaceSetupRetry((value) => value + 1);
-            }}
-          >
+          <Button variant="ghost" size="sm" onClick={() => void setupWorkspace(true)}>
             Retry workspace setup
+          </Button>
+        </div>
+      ) : null}
+      {targetsReady && target && !targetCommitted && !persistedTarget && !workspaceSetupError ? (
+        <div className="flex items-center gap-3 px-6 py-2 text-sm text-muted-foreground">
+          <span>Create a Draft for {target.targetBranch} to edit its Schema.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void setupWorkspace()}
+            disabled={
+              workspaceSetupPending?.scope === projectScope &&
+              workspaceSetupPending.key === setupKey
+            }
+          >
+            {workspaceSetupPending?.scope === projectScope && workspaceSetupPending.key === setupKey
+              ? 'Creating Draft…'
+              : 'Start editing schema'}
           </Button>
         </div>
       ) : null}
@@ -1276,7 +1291,10 @@ export function SchemaStudioExperience({
           This Workspace is committed. Continue in Workspace to start the next iteration.{' '}
           <Link
             className="underline"
-            href={getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}
+            href={getProjectIdWorkspacePath(projectId, {
+              branch: target.targetBranch,
+              repositoryPath,
+            })}
           >
             Open Workspace
           </Link>
@@ -1680,7 +1698,8 @@ export function SchemaStudioExperience({
                   projectId,
                   preparation.workspaceId,
                   undefined,
-                  target?.targetBranch
+                  target?.targetBranch,
+                  repositoryPath
                 )
               );
             }

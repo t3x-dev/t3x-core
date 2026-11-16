@@ -26,8 +26,8 @@ describe('ProjectTabs', () => {
         tab.id === 'settings'
           ? '/settings'
           : tab.id === 'state'
-            ? '/t3x-dev/test-project'
-            : `/t3x-dev/test-project/${getProjectTabSegment(tab.id)}`;
+            ? '/t3x-dev/test-project/branches/main'
+            : `/t3x-dev/test-project/${['schemas', 'workspaces'].includes(tab.id) ? 'branches/main/' : ''}${getProjectTabSegment(tab.id)}`;
       expect(screen.getByRole('link', { name: tab.label })).toHaveAttribute('href', href);
     }
 
@@ -90,11 +90,11 @@ describe('ProjectTabs', () => {
     );
     expect(screen.getByRole('link', { name: 'Pull requests' })).toHaveAttribute(
       'href',
-      '/project/proj_123?tab=pull-requests&branch=feature%2Frelease'
+      '/project/proj_123?tab=pull-requests'
     );
     expect(screen.getByRole('link', { name: 'Community' })).toHaveAttribute(
       'href',
-      '/project/proj_123?tab=community&branch=feature%2Frelease'
+      '/project/proj_123?tab=community'
     );
   });
 

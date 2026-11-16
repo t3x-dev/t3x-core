@@ -1,4 +1,5 @@
 import { exploreListHref, safeExploreReturn } from '@/domain/project/exploreLocation';
+import { getCanonicalRepositoryPath, repositoryBranchHref } from '@/domain/project/repoPath';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 
 export function schemaBrowseHref(projectId: string, workspace?: string, branch?: string) {
@@ -44,7 +45,10 @@ export function schemaWorkspaceHref(
     params.delete('candidate');
     params.delete('mode');
   }
-  return `${pathname}?${params}`;
+  const base = getCanonicalRepositoryPath(pathname);
+  return base
+    ? repositoryBranchHref(base, '/schemas', workspace.targetBranch, params)
+    : `${pathname}?${params}`;
 }
 
 /** All Schema review entry points use the shared Workspace workbench. */
@@ -52,7 +56,8 @@ export function schemaReviewHref(
   projectId: string,
   workspaceId: string,
   snapshotId?: string,
-  branch?: string
+  branch?: string,
+  repositoryPath?: string
 ) {
-  return workspaceReviewHref(projectId, workspaceId, { snapshotId, branch });
+  return workspaceReviewHref(projectId, workspaceId, { snapshotId, branch, repositoryPath });
 }

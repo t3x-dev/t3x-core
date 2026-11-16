@@ -1168,7 +1168,7 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+      '/project/proj_test/history?returnTo=%2Ft3x-dev%2Ftest-project&branch=main'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
@@ -2163,6 +2163,49 @@ describe('ProjectStateTab', () => {
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
 
+  it('reads a canonical branch path and keeps fixed commit actions on the stored branch', async () => {
+    navigationMocks.pathname = '/t3x-dev/test-project/commits/42';
+    const committed = { ...PRD_COMMIT, branch: 'feature/prd-audience' };
+    hookMocks.loadCommit.mockResolvedValue(committed);
+    const view = render(
+      <ProjectStateTab
+        projectId="proj_test"
+        projectName="Test Project"
+        repositoryPath="/t3x-dev/test-project"
+        commitAddress={{ id: committed.hash, number: '42' }}
+        initialView="structure"
+      />
+    );
+    expect(
+      await screen.findByRole('button', { name: /current branch feature\/prd-audience/ })
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/branches/feature%2Fprd-audience/workspaces'
+    );
+    view.unmount();
+    navigationMocks.pathname = '/t3x-dev/test-project/branches/feature%2Fprd-audience';
+    navigationMocks.search = 'view=structure';
+    hookMocks.loadCommits.mockResolvedValue([committed]);
+    render(
+      <ProjectStateTab
+        projectId="proj_test"
+        projectName="Test Project"
+        repositoryPath="/t3x-dev/test-project"
+      />
+    );
+    await waitFor(() =>
+      expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
+        'proj_test',
+        'feature/prd-audience',
+        100
+      )
+    );
+    expect(screen.getByRole('link', { name: 'History' }).getAttribute('href')).toContain(
+      '/branches/feature%2Fprd-audience/history?'
+    );
+  });
+
   it('switches its local read-only branch focus', async () => {
     const view = renderStateTab();
 
@@ -2177,7 +2220,7 @@ describe('ProjectStateTab', () => {
     );
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      '/project/proj_test?branch=feature%2Fprd-audience',
       { scroll: false }
     );
     view.rerender(
@@ -2198,7 +2241,7 @@ describe('ProjectStateTab', () => {
     });
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/project/proj_test/history?returnTo=%2Fproject%2Fproj_test%3Fbranch%3Dfeature%252Fprd-audience&branch=feature%2Fprd-audience'
     );
   });
 
@@ -2235,7 +2278,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/project/proj_test/history?returnTo=%2Fproject%2Fproj_test%3Fbranch%3Dfeature%252Fprd-audience&branch=feature%2Fprd-audience'
     );
   });
 

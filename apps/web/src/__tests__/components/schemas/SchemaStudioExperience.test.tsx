@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
   previewResult: undefined as ((input: unknown) => unknown) | undefined,
   pendingSchema: { status: 'none', pending: null } as unknown,
+  pathname: '/team/project/schemas',
   query: 'candidate=provider',
   candidatesLoading: false,
   restoredSources: [] as StudioCandidate[],
@@ -108,7 +109,7 @@ vi.mock('@/components/workspaces/WorkspaceYOpsEditor', () => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
-  usePathname: () => '/team/project/schemas',
+  usePathname: () => mocks.pathname,
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 vi.mock('@/hooks/schemas/useSchemaSourceIdentities', () => ({
@@ -199,6 +200,7 @@ beforeEach(() => {
   mocks.draftRefresh.mockReset();
   mocks.schemaEditLoading = false;
   mocks.schemaEditError = undefined;
+  mocks.pathname = '/team/project/schemas';
   mocks.query = 'candidate=provider';
   mocks.draftView = {
     workspaceRevision: 2,
@@ -944,7 +946,7 @@ it.each([
   await waitFor(() =>
     expect(mocks.push).toHaveBeenCalledWith(
       expect.stringContaining(
-        'workspaceMode=review&branch=main&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
+        'workspaceMode=review&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
       )
     )
   );
@@ -967,7 +969,7 @@ it('opens detailed checks in Workspace Review without applying the Schema', () =
   render(<SchemaStudioExperience projectId="p" />);
   openChecks();
   expect(mocks.push).toHaveBeenCalledWith(
-    '/project/p?tab=workspaces&workspace=workspace_branch%3Amain&workspaceMode=review&branch=main&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
+    '/team/project/branches/main/workspaces?workspace=workspace_branch%3Amain&workspaceMode=review&schemaDiagnostics=1&schemaSelection=1&schemaSource=provider'
   );
   expect(screen.queryByRole('dialog', { name: 'Schema checks' })).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
@@ -1086,11 +1088,13 @@ it('opens public publication from the checked saved candidate without applying o
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
-it('saves a main branch workspace when none is persisted', async () => {
+it('creates only the selected Draft after an explicit start action', async () => {
   mocks.branches = ['main'];
   mocks.refresh.mockResolvedValue(undefined);
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: /current branch main/ })).toBeInTheDocument();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
   await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalled());
   expect(mocks.saveDraft).toHaveBeenCalledWith(
     'p',
@@ -1351,7 +1355,7 @@ it('keeps the short Studio entry and local edits when a refresh makes another Wo
   fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
   await waitFor(() =>
     expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?workspace=feature-draft&branch=feature',
+      '/team/project/branches/feature/schemas?workspace=feature-draft',
       {
         scroll: false,
       }
@@ -1392,7 +1396,7 @@ it('protects unsaved edits before switching branches', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Discard & continue' }));
   await waitFor(() =>
     expect(mocks.push).toHaveBeenCalledWith(
-      '/team/project/schemas?workspace=feature-draft&branch=feature',
+      '/team/project/branches/feature/schemas?workspace=feature-draft',
       { scroll: false }
     )
   );
@@ -2276,7 +2280,8 @@ it('creates a branch from Schema and opens its workspace with stale editor selec
   expect(mocks.createBranch).toHaveBeenCalledWith('feature/new', 'main');
   const url = new URL(mocks.push.mock.calls.at(-1)![0], 'http://local');
   expect(url.pathname).toContain('schema');
-  expect(url.searchParams.get('branch')).toBe('feature/new');
+  expect(url.pathname).toBe('/team/project/branches/feature%2Fnew/schemas');
+  expect(url.searchParams.has('branch')).toBe(false);
   expect(url.searchParams.get('workspace')).toBe('workspace_branch:feature%2Fnew');
   expect(url.searchParams.has('candidate')).toBe(false);
   expect(url.searchParams.has('mode')).toBe(false);
@@ -2316,7 +2321,7 @@ it('blocks a mismatched branch and Workspace without correcting the URL or editi
   fireEvent.click(screen.getByRole('button', { name: /Switch branches/ }));
   fireEvent.click(screen.getByRole('menuitemradio', { name: /^main$/ }));
   expect(mocks.push).toHaveBeenCalledWith(
-    '/team/project/schemas?branch=main&workspace=workspace_branch%3Amain',
+    '/team/project/branches/main/schemas?workspace=workspace_branch%3Amain',
     { scroll: false }
   );
 });
@@ -2366,7 +2371,7 @@ it('retains a legacy committed Workspace and offers continuation without recreat
   expect(screen.getByText(/This Workspace is committed/)).toBeVisible();
   expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
     'href',
-    '/project/p?branch=main&tab=workspaces'
+    '/team/project/branches/main/workspaces'
   );
   expect(screen.queryByRole('textbox', { name: 'Name checklist' })).not.toBeInTheDocument();
   mocks.workspaces = [...mocks.workspaces];
@@ -2397,7 +2402,9 @@ it.each([
   mocks.branches = ['main'];
   mocks.saveDraft.mockRejectedValue(failure);
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
-  await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
+  await screen.findByRole('button', { name: 'Retry workspace setup' });
   expect(screen.getByRole('alert')).toHaveTextContent(
     failure instanceof Error ? failure.message : 'Workspace creation for main conflicted'
   );
@@ -2449,11 +2456,14 @@ it('owns workspace setup attempts by project lifetime when returning while an ol
       })
   );
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
   expect(mocks.saveDraft).toHaveBeenCalledTimes(1);
   mocks.workspaces = [boundWorkspace()];
   rerender(<SchemaStudioExperience projectId="other" />);
   mocks.workspaces = [];
   rerender(<SchemaStudioExperience projectId="p" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
   await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
   const refreshCount = mocks.refresh.mock.calls.length;
   await act(async () => completeOld());
@@ -2471,4 +2481,28 @@ it('keeps failed branch reads distinct from missing Workspaces and does not auto
   expect(mocks.replace).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
   expect(mocks.refreshBranches).toHaveBeenCalled();
+});
+
+it.each([
+  'legacy',
+  'canonical',
+])('does not write on a %s Schema link, refresh or branch change until editing starts', async (kind) => {
+  mocks.branches = ['main', 'feature/release'];
+  mocks.query = kind === 'legacy' ? 'branch=feature%2Frelease' : '';
+  mocks.pathname =
+    kind === 'legacy'
+      ? '/team/project/schemas'
+      : '/team/project/branches/feature%2Frelease/schemas';
+  const view = render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  mocks.query = kind === 'legacy' ? 'branch=main' : '';
+  mocks.pathname =
+    kind === 'legacy' ? '/team/project/schemas' : '/team/project/branches/main/schemas';
+  view.rerender(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
+  await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(1));
+  expect(mocks.saveDraft.mock.calls[0][2]).toMatchObject({ targetBranch: 'main' });
+  expect(mocks.apply).not.toHaveBeenCalled();
+  expect(mocks.fullReview).not.toHaveBeenCalled();
 });

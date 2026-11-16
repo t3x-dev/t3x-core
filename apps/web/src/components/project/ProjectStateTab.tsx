@@ -51,6 +51,8 @@ import {
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
+  repositoryBranch,
+  repositoryBranchHref,
 } from '@/domain/project/repoPath';
 import {
   filterCollapsedStateRows,
@@ -228,7 +230,7 @@ export function ProjectStateTab({
         : (initialView ?? preferredView)
       : routeView
   );
-  const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
+  const branchFocus: BranchFocus = repositoryBranch(pathname, searchParams) ?? 'main';
   const branchScope = JSON.stringify([projectId, branchFocus]);
   const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
   const addressedCommit = commitAddress?.id ?? (searchParams.get('commit')?.trim() || undefined);
@@ -302,15 +304,12 @@ export function ProjectStateTab({
       ++branchCreationScope.request;
       const params = new URLSearchParams(routeQueryRef.current);
       params.delete('commit');
-      if (focus === 'main') params.delete('branch');
-      else params.set('branch', focus);
-      const query = params.toString();
       replaceRoute(
-        `${commitAddress && repositoryPath ? repositoryPath : pathname}${query ? `?${query}` : ''}`,
+        repositoryBranchHref(repositoryPath ?? getProjectIdRepoPath(projectId), '', focus, params),
         { scroll: false }
       );
     },
-    [branchCreationScope, commitAddress, pathname, replaceRoute, repositoryPath]
+    [branchCreationScope, projectId, replaceRoute, repositoryPath]
   );
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
@@ -412,6 +411,7 @@ export function ProjectStateTab({
   ]);
 
   const headCommit = snapshot.headCommit;
+  const inspectedBranch = focusedCommitHash && headCommit ? headCommit.branch : branchFocus;
   function changeArtifactVisibility(open: boolean) {
     if (!headCommit) return;
     const params = new URLSearchParams(routeQueryRef.current);
@@ -562,7 +562,7 @@ export function ProjectStateTab({
   );
   const nativeReview = useCommitTransitionView(
     projectId,
-    branchFocus,
+    inspectedBranch,
     isNativeCommit ? (headCommit?.hash ?? null) : null
   );
   const nativeChecks =
@@ -593,21 +593,24 @@ export function ProjectStateTab({
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = getProjectIdHistoryPath(projectId, {
     repositoryPath,
-    branch: branchFocus,
+    branch: inspectedBranch,
     returnTo: currentStateReturnTo,
   });
   const snapshotQuery = new URLSearchParams(routeQuery);
   snapshotQuery.set('view', lastSnapshotView);
   const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
-  const schemaHref = repositoryPath
-    ? `${repositoryPath}/schemas?${new URLSearchParams({ branch: branchFocus })}`
-    : `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus })}`;
+  const schemaHref = repositoryBranchHref(
+    repositoryPath ?? getProjectIdRepoPath(projectId),
+    repositoryPath ? '/schemas' : '',
+    inspectedBranch,
+    new URLSearchParams(repositoryPath ? '' : 'tab=schemas')
+  );
   const workspaceHref = getProjectIdWorkspacePath(projectId, {
-    branch: branchFocus,
+    branch: inspectedBranch,
     repositoryPath,
   });
-  const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
+  const latestBranchHeadHash = branchHeads[inspectedBranch] ?? null;
   const availableHeadHash =
     latestBranchHeadHash &&
     headCommit &&
@@ -616,7 +619,7 @@ export function ProjectStateTab({
       ? latestBranchHeadHash
       : null;
   const handleCreateBranch = useCallback(
-    async (name: string, fromBranch = branchFocus) => {
+    async (name: string, fromBranch = inspectedBranch) => {
       const request = ++branchCreationScope.request;
       const isCurrent = () =>
         branchCreationScope.active &&
@@ -630,7 +633,7 @@ export function ProjectStateTab({
     },
     [
       branchCreationScope,
-      branchFocus,
+      inspectedBranch,
       createBranch,
       focusedCommitHash,
       projectId,
@@ -667,7 +670,7 @@ export function ProjectStateTab({
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [branchFocus, checkCurrentBranchForUpdates]);
+  }, [inspectedBranch, checkCurrentBranchForUpdates]);
 
   const handleViewLatest = useCallback(() => {
     const latestHash = availableHeadHash ?? latestBranchHeadHash;
@@ -678,8 +681,15 @@ export function ProjectStateTab({
     if (focusedCommitHash) {
       const params = new URLSearchParams(routeQueryRef.current);
       params.delete('commit');
-      const query = params.toString();
-      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+      replaceRoute(
+        repositoryBranchHref(
+          repositoryPath ?? getProjectIdRepoPath(projectId),
+          '',
+          inspectedBranch,
+          params
+        ),
+        { scroll: false }
+      );
     }
     setSnapshotRefreshVersion((version) => version + 1);
   }, [
@@ -687,7 +697,9 @@ export function ProjectStateTab({
     latestBranchHeadHash,
     branchScope,
     focusedCommitHash,
-    pathname,
+    repositoryPath,
+    projectId,
+    inspectedBranch,
     replaceRoute,
   ]);
 
@@ -738,12 +750,12 @@ export function ProjectStateTab({
           {activeView !== 'canvas' ? (
             <>
               <StatePageToolbar
-                key={`${projectId}:${branchFocus}`}
+                key={`${projectId}:${inspectedBranch}`}
                 activeView={activeView}
-                branch={branchFocus || 'main'}
+                branch={inspectedBranch || 'main'}
                 branchOptions={branchOptions}
                 headCommit={headCommit}
-                headCommitHash={branchHeads[branchFocus] ?? null}
+                headCommitHash={branchHeads[inspectedBranch] ?? null}
                 sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
                 historical={Boolean(focusedCommitHash)}
@@ -772,7 +784,7 @@ export function ProjectStateTab({
                 <div className="sr-only">
                   <span>{readinessLabel}</span>
                   <span>
-                    {branchFocus} · pinned {headCommit ? shortHash(headCommit.hash) : 'empty'}
+                    {inspectedBranch} · pinned {headCommit ? shortHash(headCommit.hash) : 'empty'}
                   </span>
                   <span>{lastCheckedLabel}</span>
                   <span>{schemaName}</span>
@@ -795,7 +807,7 @@ export function ProjectStateTab({
               ) : null}
               {availableHeadHash && !focusedCommitHash ? (
                 <StateUpdateBanner
-                  branch={branchFocus}
+                  branch={inspectedBranch}
                   hash={availableHeadHash}
                   onDismiss={() => setDismissedHeadHash(availableHeadHash)}
                   onViewLatest={handleViewLatest}
@@ -803,7 +815,7 @@ export function ProjectStateTab({
               ) : null}
               <StatePageFrame
                 projectName={projectName}
-                branch={branchFocus || 'main'}
+                branch={inspectedBranch || 'main'}
                 view={statePanel}
               >
                 {activeView !== 'overview' &&
@@ -864,13 +876,21 @@ export function ProjectStateTab({
                       updateActiveView('structure');
                     }}
                     validationLabel={readinessLabel}
-                    refName={branchFocus}
+                    refName={inspectedBranch}
                     onAuthorRevision={(digest) => {
                       void refresh();
                       const params = new URLSearchParams(routeQueryRef.current);
                       params.set('commit', digest);
                       params.set('view', 'overview');
-                      replaceRoute(`${repositoryPath ?? pathname}?${params}`, { scroll: false });
+                      replaceRoute(
+                        repositoryBranchHref(
+                          repositoryPath ?? getProjectIdRepoPath(projectId),
+                          '',
+                          inspectedBranch,
+                          params
+                        ),
+                        { scroll: false }
+                      );
                     }}
                     reader={
                       skillRenderModel || prdRenderModel || promptRenderModel
@@ -947,7 +967,7 @@ export function ProjectStateTab({
                     dataMode={activeView}
                     onDataModeChange={updateActiveView}
                     yamlText={yamlText}
-                    branch={branchFocus || 'main'}
+                    branch={inspectedBranch || 'main'}
                     changeReason={headCommit.message?.trim() ?? ''}
                     diffChanges={committedDiffChanges}
                     contextLoading={contextLoading}
@@ -969,8 +989,8 @@ export function ProjectStateTab({
             </>
           ) : (
             <StateCanvasView
-              branch={branchFocus || 'main'}
-              branchHeadHash={branchHeads[branchFocus] ?? null}
+              branch={inspectedBranch || 'main'}
+              branchHeadHash={branchHeads[inspectedBranch] ?? null}
               focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}

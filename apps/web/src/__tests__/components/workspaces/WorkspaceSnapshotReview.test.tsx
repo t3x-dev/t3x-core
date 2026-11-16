@@ -271,7 +271,7 @@ it('keeps the original snapshot and Run while linking the exact later result and
   expect(run.searchParams.get('returnTo')).toContain('reviewSnapshot=rvs_old');
   expect(screen.getByRole('link', { name: 'View result snapshot' })).toHaveAttribute(
     'href',
-    '/owner/repo/workspaces?workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Frelease&reviewSnapshot=rvs_committed&reviewPane=yaml'
+    '/owner/repo/branches/feature%2Frelease/workspaces?workspace=workspace_prd_handoff&workspaceMode=review&reviewSnapshot=rvs_committed&reviewPane=yaml'
   );
   expect(replace).not.toHaveBeenCalled();
 });

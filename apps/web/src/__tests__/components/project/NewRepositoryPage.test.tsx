@@ -99,7 +99,7 @@ it('creates without AI and retains the canonical D01-005 destination', async () 
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('readme');
   expect(mocks.create.mock.calls[0][0]).toMatchObject({ initializeReadme: false, tags: [] });
   expect(mocks.push).toHaveBeenCalledWith(
-    '/another-team/Catalog/workspaces?workspace=workspace_branch%3Amain&conversation=c'
+    '/another-team/Catalog/branches/main/workspaces?workspace=workspace_branch%3Amain&conversation=c'
   );
 });
 it('keeps a partially created repository locked and allows setup retry', async () => {

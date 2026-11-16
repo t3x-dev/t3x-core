@@ -10,7 +10,13 @@ import {
   repairLeakedWorkspacePreviewCandidate,
 } from '@/data/workspaceCandidates';
 import { repositoryObjectHref } from '@/domain/project/objectLocation';
-import { getCanonicalRepositoryPath, workspaceLocation } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  repositoryBranch,
+  repositoryBranchHref,
+  workspaceLocation,
+} from '@/domain/project/repoPath';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
@@ -87,7 +93,7 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
   const projectWorkspaces = useProjectWorkspaces(projectId);
   const { getUser } = useSession();
   const sessionUserId = getUser()?.id ?? null;
-  const branch = workspaceBranch ?? (searchParams.get('branch')?.trim() || null);
+  const branch = workspaceBranch ?? repositoryBranch(pathname, searchParams);
   const {
     branchHeads,
     branches,
@@ -115,6 +121,17 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
   const requestedWorkspaceId = searchParams.get('workspace')?.trim() || null;
   const branchWorkspace = branch ? selectWorkspaceForBranch(candidates, branch, branchHead) : null;
   const requestedCandidate = candidates.find((candidate) => candidate.id === requestedWorkspaceId);
+  useEffect(() => {
+    if (!repositoryPath || branch || !requestedCandidate || projectWorkspaces.loading) return;
+    router.replace(
+      `${workspaceLocation(
+        repositoryPath,
+        requestedCandidate.targetBranch,
+        new URLSearchParams(routeQuery)
+      )}${window.location.hash}`,
+      { scroll: false }
+    );
+  }, [branch, repositoryPath, requestedCandidate, projectWorkspaces.loading, routeQuery, router]);
   const selectedCandidate = requestedWorkspaceId
     ? requestedCandidate && (!branch || requestedCandidate.targetBranch === branch)
       ? requestedCandidate
@@ -202,7 +219,12 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
       router.push(
         repositoryPath && address
           ? repositoryObjectHref(repositoryPath, 'commits', address.number, params)
-          : `${repositoryPath ?? pathname}?${params}`
+          : repositoryBranchHref(
+              repositoryPath ?? getProjectIdRepoPath(projectId),
+              '',
+              branch,
+              params
+            )
       );
     },
     [captureNavigation, pathname, projectId, repositoryPath, resolveObjectAddress, router]

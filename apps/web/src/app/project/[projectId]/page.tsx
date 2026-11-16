@@ -21,8 +21,9 @@ import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { repositoryObjectHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
-  getProjectIdRepoPath,
   getProjectRepoPath,
+  repositoryBranch,
+  repositoryBranchHref,
 } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
@@ -403,7 +404,12 @@ export function ProjectDetailPageContent({
                   commitAddress.number,
                   new URLSearchParams({ view: 'overview' })
                 )
-              : `${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`
+              : repositoryBranchHref(
+                  getProjectRepoPath(project),
+                  '',
+                  repositoryBranch(pathname, searchParams) ?? 'main',
+                  new URLSearchParams({ view: 'overview' })
+                )
           }
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
@@ -493,7 +499,7 @@ export function ProjectDetailPageContent({
     <>
       <ProjectShell
         activeTab={activeTab}
-        branch={workspaceBranch ?? searchParams.get('branch')}
+        branch={workspaceBranch ?? repositoryBranch(pathname, searchParams)}
         immersive={isSchemaStudio || isSchemaRelease}
         ownerSlug={project.namespace ?? ownerSlugOverride}
         pageTitle={

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   loadDiff: vi.fn(),
   routerReplace: vi.fn(),
   routerPush: vi.fn(),
+  pathname: '/project/proj_test/history',
   search: 'branch=main&view=list',
   listeners: new Set<() => void>(),
 }));
@@ -19,7 +20,7 @@ vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
   return {
     useRouter: () => ({ replace: mocks.routerReplace, push: mocks.routerPush }),
-    usePathname: () => '/project/proj_test/history',
+    usePathname: () => mocks.pathname,
     useSearchParams: () => {
       const search = useSyncExternalStore(
         (listener) => {
@@ -34,7 +35,9 @@ vi.mock('next/navigation', async () => {
 });
 
 function navigate(href: string) {
-  mocks.search = new URL(href, 'http://localhost').search.slice(1);
+  const url = new URL(href, 'http://localhost');
+  mocks.pathname = url.pathname;
+  mocks.search = url.search.slice(1);
   for (const listener of mocks.listeners) listener();
 }
 vi.mock('@/hooks/commits/useCommitByHash', () => ({
@@ -83,6 +86,7 @@ describe('History node navigation', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
+    mocks.pathname = '/project/proj_test/history';
     mocks.search = 'branch=main&view=list';
     mocks.routerReplace.mockImplementation(navigate);
     mocks.routerPush.mockImplementation(navigate);
@@ -107,7 +111,7 @@ describe('History node navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Update title' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Structure' })).toHaveAttribute(
       'href',
-      '/project/proj_test?view=structure&commit=sha256%3Asecond'
+      '/project/proj_test?view=structure&commit=sha256%3Asecond&branch=main'
     );
     expect(screen.getByText('"Original"', { exact: true })).toBeInTheDocument();
     expect(screen.getByText('"Revised"', { exact: true })).toBeInTheDocument();
@@ -296,7 +300,9 @@ describe('History node navigation', () => {
     await screen.findByRole('button', { name: /Update title/ });
     expect(mocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
     fireEvent.click(screen.getByRole('button', { name: 'Back to State' }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_test?view=overview');
+    expect(mocks.routerPush).toHaveBeenLastCalledWith(
+      '/project/proj_test?view=overview&branch=main'
+    );
     fireEvent.change(screen.getByRole('combobox', { name: 'History branch filter' }), {
       target: { value: 'main' },
     });
@@ -320,5 +326,40 @@ describe('History node navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry branches' }));
     expect(await screen.findByRole('option', { name: 'feature' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+it('preserves a branch History source across numbered detail and back, and returns All to the repository list', async () => {
+  mocks.pathname = '/team/repo/branches/feature%2Frelease/history';
+  mocks.search = 'view=list&q=Update';
+  mocks.loadCommits.mockResolvedValue([
+    { ...selected, address_number: '42', branch: 'feature/release' },
+  ]);
+  mocks.loadBranches.mockResolvedValue({
+    branches: [{ name: 'feature/release' }, { name: 'main' }],
+  });
+  const view = render(<CommitHistoryPage projectId="proj_test" />);
+  fireEvent.click(await screen.findByRole('button', { name: /Update title/ }));
+  const url = new URL(mocks.routerPush.mock.lastCall![0], 'http://local');
+  expect(url.pathname).toBe('/team/repo/history/42');
+  expect(url.searchParams.has('branch')).toBe(false);
+  expect(url.searchParams.get('returnTo')).toBe(
+    '/team/repo/branches/feature%2Frelease/history?view=list&q=Update'
+  );
+  view.rerender(<CommitHistoryPage projectId="proj_test" commitHash={selected.hash} />);
+  expect(await screen.findByRole('combobox', { name: 'History branch filter' })).toHaveValue(
+    'feature/release'
+  );
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(mocks.routerReplace).toHaveBeenLastCalledWith(
+    '/team/repo/branches/feature%2Frelease/history?view=list&q=Update',
+    { scroll: false }
+  );
+  view.rerender(<CommitHistoryPage projectId="proj_test" />);
+  fireEvent.change(screen.getByRole('combobox', { name: 'History branch filter' }), {
+    target: { value: 'all' },
+  });
+  expect(mocks.routerReplace).toHaveBeenLastCalledWith('/team/repo/history?view=list&q=Update', {
+    scroll: false,
   });
 });

@@ -32,7 +32,12 @@ import {
 import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { commitStructureHref } from '@/domain/project/objectLocation';
-import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  repositoryBranch,
+  repositoryBranchHref,
+} from '@/domain/project/repoPath';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -113,13 +118,35 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
 export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPageProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const listPath = commitHash ? pathname.replace(/\/[0-9]+\/?$/, '') : pathname;
+  const basePath = getCanonicalRepositoryPath(pathname) ?? getProjectIdRepoPath(projectId);
   const searchParams = useSearchParams();
   const query = searchParams.toString();
   const queryRef = useRef(query);
   queryRef.current = query;
-  const branchFromUrl = searchParams.get('branch')?.trim() || 'all';
-  const stateHref = `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ view: 'overview', ...(branchFromUrl !== 'all' ? { branch: branchFromUrl } : {}) }).toString()}`;
+  const source = new URL(
+    safeInternalReturnTo(searchParams.get('returnTo'), basePath),
+    'https://t3x.local'
+  );
+  const sourceIsHistory =
+    source.pathname.startsWith(`${basePath}/branches/`) &&
+    /^\/branches\/[^/]+\/history$/.test(source.pathname.slice(basePath.length));
+  const listPath = commitHash
+    ? sourceIsHistory
+      ? source.pathname
+      : `${basePath}/history`
+    : pathname;
+  const branchFromUrl =
+    repositoryBranch(pathname, searchParams) ??
+    (commitHash && sourceIsHistory
+      ? repositoryBranch(source.pathname, source.searchParams)
+      : null) ??
+    'all';
+  const stateHref = repositoryBranchHref(
+    basePath,
+    '',
+    branchFromUrl === 'all' ? 'main' : branchFromUrl,
+    new URLSearchParams({ view: 'overview' })
+  );
   const returnHref = safeInternalReturnTo(searchParams.get('returnTo'), stateHref);
   const stateLocation = returnHref.split('?')[0];
   const returnsToState =
@@ -227,23 +254,35 @@ export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPagePr
         else params.set(key, value);
       }
       const changingCommit = Object.hasOwn(changes, 'commit');
-      if (addressNumber) params.delete('commit');
+      if (addressNumber) {
+        params.delete('commit');
+        params.delete('branch');
+        if (!commitHash && /\/branches\/[^/]+\/history$/.test(pathname))
+          params.set('returnTo', buildReturnTo(pathname, queryRef.current));
+      }
       queryRef.current = params.toString();
       const target = addressNumber
-        ? `${listPath}/${addressNumber}`
+        ? `${basePath}/history/${addressNumber}`
         : changingCommit
           ? listPath
           : pathname;
-      const href = buildReturnTo(target, params);
+      const href = Object.hasOwn(changes, 'branch')
+        ? repositoryBranchHref(basePath, '/history', changes.branch, params)
+        : buildReturnTo(target, params);
       if (push) router.push(href, { scroll: false });
-      else if (target !== pathname) router.replace(href, { scroll: false });
+      else if (target !== pathname || Object.hasOwn(changes, 'branch'))
+        router.replace(href, { scroll: false });
       // These controls only change this client view. Native history updates keep
       // Next's search params in sync without a server navigation on every key.
       else window.history.replaceState(null, '', href);
     },
-    [listPath, pathname, router]
+    [basePath, commitHash, listPath, pathname, router]
   );
-  const closeCommit = useCallback(() => updateQuery({ commit: null }), [updateQuery]);
+  const closeCommit = () => {
+    if (commitHash && sourceIsHistory)
+      router.replace(`${source.pathname}${source.search}${source.hash}`, { scroll: false });
+    else updateQuery({ commit: null });
+  };
 
   const handleBranchChange = useCallback(
     (branch: string) => {

@@ -13,7 +13,7 @@ import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { safeExploreReturn } from '@/domain/project/exploreLocation';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { getProjectRepoPath, workspaceLocation } from '@/domain/project/repoPath';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
@@ -77,7 +77,14 @@ export function NewRepositoryPage() {
       router.push(`${target.pathname}?${target.searchParams}`);
     } else if (result)
       router.push(
-        `${getProjectRepoPath(result.project, owner)}/workspaces?workspace=${encodeURIComponent(result.workspaceId)}&conversation=${encodeURIComponent(result.conversationId)}`
+        workspaceLocation(
+          getProjectRepoPath(result.project, owner),
+          'main',
+          new URLSearchParams({
+            workspace: result.workspaceId,
+            conversation: result.conversationId,
+          })
+        )
       );
   }
 
