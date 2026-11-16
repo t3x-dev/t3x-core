@@ -49,7 +49,7 @@ describe('WorkspaceComposeChat', () => {
     }
   });
 
-  it('opens the published action belonging to the chosen reply while keeping ordinary replies in Chat', () => {
+  it('opens Draft changes from a published reply while keeping ordinary replies in Chat', () => {
     const onOpenTurn = vi.fn();
     const records = Object.fromEntries(
       ['first', 'second'].map((id, index) => [
@@ -93,10 +93,7 @@ describe('WorkspaceComposeChat', () => {
     const receipts = screen.getAllByRole('button', { name: /This reply/ });
     expect(receipts).toHaveLength(2);
     fireEvent.click(receipts[0]!);
-    expect(onOpenTurn).toHaveBeenCalledWith({
-      action: records.first!.publication.action,
-      cards: records.first!.publication.cards,
-    });
+    expect(onOpenTurn).toHaveBeenCalledExactlyOnceWith();
     expect(screen.queryByText('YOps in this Action')).not.toBeInTheDocument();
   });
 

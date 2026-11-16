@@ -33,8 +33,7 @@
 .processToggle:hover {
   color: var(--text-primary);
 }
-.processToggle::-webkit-details-marker,
-.change summary::-webkit-details-marker {
+.processToggle::-webkit-details-marker {
   display: none;
 }
 .processToggle strong {
@@ -49,14 +48,12 @@
   height: 14px;
   place-items: center;
 }
-.chevron svg,
-.changeIcon svg {
+.chevron svg {
   width: 13px;
   height: 13px;
   transition: transform 150ms ease;
 }
-.process:not([open]) .chevron svg,
-.change:not([open]) .changeIcon svg {
+.process:not([open]) .chevron svg {
   transform: rotate(-90deg);
 }
 .spinner {
@@ -103,115 +100,7 @@
   color: var(--text-tertiary);
   white-space: nowrap;
 }
-.changes {
-  display: grid;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--stroke-default);
-  border-radius: 14px;
-  background: var(--surface-card);
-}
-.changesTitle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.changesTitle svg {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--stroke-default);
-  border-radius: 8px;
-  padding: 6px;
-  color: var(--text-secondary);
-}
-.change {
-  min-width: 0;
-  border-top: 1px solid var(--stroke-divider);
-}
-.change summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 40px;
-  padding: 8px 14px;
-  list-style: none;
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-.change summary:hover {
-  background: var(--surface-app);
-}
-.changeIcon {
-  display: grid;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-  color: var(--text-tertiary);
-}
-.changeHeading {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.changeHeading strong {
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.changeHeading code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.changeDetail {
-  display: grid;
-  gap: 10px;
-  padding: 4px 14px 14px 38px;
-}
-.changeDetail > strong {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-}
-.values {
-  display: grid;
-  gap: 8px;
-}
-.values span {
-  display: grid;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-.values code,
-.change pre {
-  display: block;
-  max-height: 180px;
-  overflow: auto;
-  border-radius: 8px;
-  background: var(--surface-app);
-  padding: 8px 10px;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.processToggle:focus-visible,
-.change summary:focus-visible {
+.processToggle:focus-visible {
   outline: 2px solid var(--accent-commit);
   outline-offset: 2px;
 }
@@ -262,35 +151,4 @@
 }
 .receipt svg:first-child {
   color: var(--accent-commit);
-}
-
-.delta {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-  font: 12px / 1.5 var(--font-mono);
-}
-.delta ins,
-.delta del {
-  overflow: hidden;
-  max-width: 100%;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  border-radius: var(--radius-sm);
-  padding-inline: 4px;
-}
-.delta ins {
-  color: var(--diff-added-text);
-  background: var(--diff-added-bg);
-  text-decoration: none;
-}
-.delta del {
-  color: var(--diff-removed-text);
-  background: var(--diff-removed-bg);
-}
-.delta > span,
-.delta small {
-  color: var(--text-secondary);
 }

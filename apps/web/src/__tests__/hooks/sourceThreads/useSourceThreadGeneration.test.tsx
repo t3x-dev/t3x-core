@@ -185,7 +185,8 @@ describe('Workspace assistant route lifetime', () => {
     expect(restored.result.current.isStreaming).toBe(false);
     expect(restored.result.current.messages).toHaveLength(2);
     expect(restored.result.current.messages[1]?.id).toBe('assistant-turn');
-    expect(onCandidate).toHaveBeenCalledTimes(1);
+    expect(restored.result.current.workspaceActivity?.turnId).toBe('assistant-turn');
+    expect(onCandidate).toHaveBeenCalledExactlyOnceWith('candidate', 'assistant-turn');
     expect(initial.workspaceAssistant.onCandidate).not.toHaveBeenCalled();
     expect(mocks.stream).toHaveBeenCalledTimes(1);
   });

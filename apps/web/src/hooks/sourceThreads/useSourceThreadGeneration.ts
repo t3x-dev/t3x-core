@@ -700,6 +700,7 @@ export function useSourceThreadGeneration({
             warnings.setWarning(
               'Assistant stream ended before completion. Saved business results were checked.'
             );
+          const assistantTurnId = completedTurnHash ?? `reply-${savedUserTurnHash}`;
           if (completed && fullResponse.trim()) {
             // Keep the streaming surface mounted just long enough for the last
             // provider delta to finish its visual reveal. This does not delay or
@@ -709,7 +710,7 @@ export function useSourceThreadGeneration({
             history.setMessages((prev) => [
               ...prev,
               {
-                id: completedTurnHash ?? `reply-${savedUserTurnHash}`,
+                id: assistantTurnId,
                 role: 'assistant',
                 content: fullResponse,
               },
@@ -722,10 +723,12 @@ export function useSourceThreadGeneration({
           // gap where only the user turn exists and hide the completed reply until a
           // manual page reload.
           for (const transitionId of completedCandidates) {
-            assistantRef.current?.onCandidate?.(transitionId, newUserMessage.id);
+            assistantRef.current?.onCandidate?.(transitionId, assistantTurnId);
           }
           setWorkspaceActivity((current) =>
-            current ? { ...current, phase: completed ? 'complete' : 'error' } : current
+            current
+              ? { ...current, turnId: assistantTurnId, phase: completed ? 'complete' : 'error' }
+              : current
           );
           return;
         }
