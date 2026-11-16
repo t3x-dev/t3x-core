@@ -1209,7 +1209,7 @@ it('does not replace an unsaved Data edit when another candidate revision arrive
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
   expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
@@ -1840,7 +1840,7 @@ it.each([
   await waitFor(() =>
     expect(screen.getByLabelText('Type task/title')).toHaveValue(dirty ? 'number' : 'boolean')
   );
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: dirty ? 'Retry save' : 'Save draft' })).toBeDisabled();
   expect(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   ).toBeDisabled();
@@ -2178,7 +2178,7 @@ it('carries unsaved fields into YAML, saves in place, and returns to the saved f
   await waitFor(() =>
     expect(
       within(screen.getByRole('dialog', { name: 'Schema YAML editor' })).getByText(
-        'Draft saved · not committed'
+        'Candidate saved · not adopted'
       )
     ).toBeVisible()
   );
@@ -2203,7 +2203,7 @@ it('carries unsaved fields into YAML, saves in place, and returns to the saved f
   await waitFor(() =>
     expect(
       within(screen.getByRole('dialog', { name: 'Schema YAML editor' })).getByText(
-        'Draft saved · not committed'
+        'Candidate saved · not adopted'
       )
     ).toBeVisible()
   );

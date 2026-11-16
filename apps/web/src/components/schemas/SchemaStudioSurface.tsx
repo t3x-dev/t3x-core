@@ -35,6 +35,7 @@ export function SchemaStudioSurface({
   onReview,
   onSave,
   canSave = false,
+  saveFailed = false,
   onInspect,
   canReview = false,
   hasUnsavedChanges = false,
@@ -67,6 +68,7 @@ export function SchemaStudioSurface({
   onReview?: () => void;
   onSave?: () => void;
   canSave?: boolean;
+  saveFailed?: boolean;
   onInspect?: () => void;
   canReview?: boolean;
   hasUnsavedChanges?: boolean;
@@ -160,7 +162,7 @@ export function SchemaStudioSurface({
                   </DropdownMenu>
                 ) : null}
                 <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
-                  Save draft
+                  {saveFailed ? 'Retry save' : 'Save draft'}
                 </Button>
                 <Button
                   variant="commit"

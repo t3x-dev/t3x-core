@@ -10,6 +10,7 @@ import {
   readStudioSchemaEditCandidate,
   saveStudioSchemaEditCandidate,
 } from '@/infrastructure/schemaStudio';
+import { getSessionUser } from '@/infrastructure/session';
 import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
 
 export function useStudioSchemaEditCandidate(
@@ -17,6 +18,8 @@ export function useStudioSchemaEditCandidate(
   workspaceId: string,
   workspaceRevision?: number
 ) {
+  const sessionId = useRef(getSessionUser()?.id ?? null);
+  const sameSession = () => (getSessionUser()?.id ?? null) === sessionId.current;
   const key = `${projectId}:${workspaceId}:${workspaceRevision ?? 'unknown'}`;
   const epoch = useRef(0);
   const activeKey = useRef(key);
@@ -44,6 +47,12 @@ export function useStudioSchemaEditCandidate(
   const [pendingKey, setPendingKey] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!sameSession()) {
+      ++epoch.current;
+      setPendingKey(null);
+      setResult({ key, candidate: null, error: 'Account changed. Reload Schema before editing.' });
+      return;
+    }
     if (
       !projectId ||
       !workspaceId ||
@@ -58,6 +67,7 @@ export function useStudioSchemaEditCandidate(
       mounted.current &&
       activeKey.current === key &&
       current === epoch.current &&
+      sameSession() &&
       token === readRequest.current;
     try {
       const candidate = await readStudioSchemaEditCandidate(projectId, workspaceId);
@@ -91,6 +101,10 @@ export function useStudioSchemaEditCandidate(
       if (detail?.projectId === projectId && detail.workspaceId === workspaceId) void refresh();
     };
     const storage = (event: StorageEvent) => {
+      if (event.key === 't3x-user' || event.key === null) {
+        void refresh();
+        return;
+      }
       if (event.key !== 't3x-schema-candidate-updated' || !event.newValue) return;
       try {
         updated(
@@ -104,10 +118,12 @@ export function useStudioSchemaEditCandidate(
     window.addEventListener('focus', focus);
     window.addEventListener('t3x-schema-candidate-updated', updated);
     window.addEventListener('storage', storage);
+    window.addEventListener('t3x:session-changed', focus);
     return () => {
       window.removeEventListener('focus', focus);
       window.removeEventListener('t3x-schema-candidate-updated', updated);
       window.removeEventListener('storage', storage);
+      window.removeEventListener('t3x:session-changed', focus);
     };
   }, [projectId, workspaceId, refresh]);
 
@@ -119,11 +135,20 @@ export function useStudioSchemaEditCandidate(
     pending: pendingKey === key,
     refresh,
     save: (input: SaveStudioSchemaEditCandidateInput) => {
-      if (!mounted.current || activeKey.current !== key || !projectId || !workspaceId)
+      if (
+        !sameSession() ||
+        !mounted.current ||
+        activeKey.current !== key ||
+        !projectId ||
+        !workspaceId
+      )
         return Promise.reject(new Error('The Schema editing context changed. Reopen the Draft.'));
       const currentEpoch = epoch.current;
       const isCurrent = () =>
-        mounted.current && activeKey.current === key && currentEpoch === epoch.current;
+        mounted.current &&
+        sameSession() &&
+        activeKey.current === key &&
+        currentEpoch === epoch.current;
       const scope = `${projectId}:${workspaceId}`;
       const { retryKey: _retryKey, ...facts } = input;
       const fingerprint = canonicalJson(JSON.parse(JSON.stringify(facts)));

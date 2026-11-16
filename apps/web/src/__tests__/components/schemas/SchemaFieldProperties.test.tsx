@@ -57,7 +57,7 @@ it('shows configured false, zero and null values and preserves untouched attribu
   expect(screen.getByLabelText('Default value for slot task/title')).not.toBeVisible();
   fireEvent.click(screen.getByText('Advanced settings · 1'));
   expect(screen.getByLabelText('Default value for slot task/title')).toHaveValue('null');
-  expect(screen.getByLabelText('Minimum value for slot task/title')).toHaveValue('0');
+  expect(screen.getByLabelText('Number ≥ for slot task/title')).toHaveValue('0');
   expect(screen.getByLabelText('Require supporting evidence for slot task/title')).toHaveValue(
     'false'
   );

@@ -585,6 +585,9 @@ importers:
       '@t3x-dev/yops':
         specifier: workspace:*
         version: link:../../packages/yops
+      '@t3x-dev/yschema':
+        specifier: workspace:*
+        version: link:../../packages/yschema
       '@xyflow/react':
         specifier: ^12.10.0
         version: 12.10.0(@types/react@19.2.7)(immer@11.1.3)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { fieldConstraintLabels } from '@/domain/schemas/fieldValidation';
 
 type Definition = Record<string, unknown>;
 type Field = {
@@ -1185,7 +1186,10 @@ export function SchemaFieldProperties({
       : [...descriptions, contentKind, { key: 'repeated', kind: 'boolean' } as Field]
   ).map((field) => ({
     ...field,
-    label: propertyLabels[field.key],
+    label:
+      value.type === 'array' && ['minLength', 'maxLength'].includes(field.key)
+        ? `Items ${field.key === 'minLength' ? '≥' : '≤'}`
+        : (fieldConstraintLabels[field.key] ?? propertyLabels[field.key]),
     hint: propertyHints[field.key],
   }));
   const configured = fields.filter(

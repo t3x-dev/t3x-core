@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { fieldConstraintCount } from '@/domain/schemas/fieldValidation';
 import {
   addSchemaField,
   changeSchemaField,
@@ -55,6 +56,7 @@ import {
 } from '@/domain/schemas/schemaSourceMappings';
 import { schemaSourceRelations } from '@/domain/schemas/schemaSourceRelations';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
+import type { SchemaSaveState } from '@/types/schemas';
 import styles from './SchemaDataEditor.module.css';
 import {
   SchemaDefinitionStructure,
@@ -67,6 +69,7 @@ import { SchemaDetailsPanel } from './SchemaDetailsPanel';
 import overlay from './SchemaEditorOverlay.module.css';
 import { SchemaEditorSelect } from './SchemaEditorSelect';
 import { SchemaFieldTree } from './SchemaFieldTree';
+import { SchemaFieldValueTest } from './SchemaFieldValueTest';
 import { SchemaSourceBadge } from './SchemaSourceBadge';
 import { type ParentLineMode, SchemaVisualEditor } from './SchemaVisualEditor';
 import type { SchemaSourceItem } from './SchemaVisualSources';
@@ -114,6 +117,9 @@ export function SchemaDataEditor({
   workbenchFooter = false,
   onActionsAvailabilityChange,
   onSaveAvailabilityChange,
+  autoSave = false,
+  autoSavePaused = false,
+  onSaveStateChange,
   view = 'data',
   layoutKey = 'schema',
   sources,
@@ -153,6 +159,9 @@ export function SchemaDataEditor({
     discard: boolean;
   }) => void;
   onSaveAvailabilityChange?: (available: boolean) => void;
+  autoSave?: boolean;
+  autoSavePaused?: boolean;
+  onSaveStateChange?: (state: SchemaSaveState) => void;
   onValidationChange?: (invalid: boolean) => void;
   view?: 'data' | 'visual';
   layoutKey?: string;
@@ -181,7 +190,7 @@ export function SchemaDataEditor({
     definition: SchemaDefinition,
     intent: string,
     mappings?: SchemaSourceMappings
-  ) => Promise<void>;
+  ) => Promise<void | { revisionKey: string }>;
   onDirtyChange: (dirty: boolean) => void;
   onDiscard: () => void;
 }) {
@@ -206,6 +215,9 @@ export function SchemaDataEditor({
   const addButton = useRef<HTMLButtonElement>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveFailure, setSaveFailure] = useState<SchemaSaveState>();
+  const [savedOnce, setSavedOnce] = useState(false);
   const [sourceMappings, setSourceMappings] = useState<SchemaSourceMappings>([]);
   const [history, setHistory] = useState<
     Array<{ definition: SchemaDefinition; mappings: SchemaSourceMappings; selected?: string }>
@@ -218,12 +230,23 @@ export function SchemaDataEditor({
   const [conflictName, setConflictName] = useState('');
   const [conflictError, setConflictError] = useState('');
   const loaded = useRef<string | undefined>(undefined);
+  const acknowledgedFrom = useRef<string | undefined>(undefined);
   const savedValue = useRef<{ key: string; needsInitialSave: boolean } | undefined>(undefined);
   const validationError = fieldError || rulesError;
-  const busy = pending || saving || !definition;
-  const stale = dirty && loaded.current !== revisionKey;
+  const busy = pending || (!autoSave && saving) || !definition;
+  const stale = dirty && !(autoSave && loading) && loaded.current !== revisionKey;
+  const latestEdit = useRef({ definition, sourceMappings, intent });
+  latestEdit.current = { definition, sourceMappings, intent };
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   useEffect(() => {
+    if (autoSave && (saving || loading || revisionKey === acknowledgedFrom.current)) return;
     if (!initialDefinition || dirty || loaded.current === revisionKey) return;
     loaded.current = revisionKey;
     savedValue.current = {
@@ -234,22 +257,31 @@ export function SchemaDataEditor({
     setDirty(initiallyDirty);
     setSourceMappings(structuredClone(initialSourceMappings));
     setHistory([]);
-  }, [initialDefinition, revisionKey, dirty, initialSourceMappings, initiallyDirty]);
+  }, [
+    initialDefinition,
+    revisionKey,
+    dirty,
+    initialSourceMappings,
+    initiallyDirty,
+    loading,
+    autoSave,
+    saving,
+  ]);
   useEffect(() => {
     onValidationChange?.(!!validationError);
   }, [validationError, onValidationChange]);
   useEffect(() => {
-    onDirtyChange(dirty || Boolean(validationError));
-  }, [dirty, validationError, onDirtyChange]);
+    onDirtyChange(dirty || Boolean(validationError) || saving);
+  }, [dirty, validationError, saving, onDirtyChange]);
   useEffect(() => {
-    if (!dirty && !validationError) return;
+    if (!dirty && !validationError && !saving) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, validationError]);
+  }, [dirty, validationError, saving]);
 
   const rows = useMemo(() => (definition ? schemaFieldRows(definition) : []), [definition]);
   const nodeCount = rows.filter((row) => row.kind === 'node').length;
@@ -437,33 +469,70 @@ export function SchemaDataEditor({
     }
   }
   async function save() {
-    if (!definition || busy || validationError || stale || disabledReason) return false;
+    if (
+      !definition ||
+      busy ||
+      savingRef.current ||
+      validationError ||
+      stale ||
+      disabledReason ||
+      (autoSave && (loading || previewError))
+    )
+      return false;
+    savingRef.current = true;
     setSaving(true);
+    setSaveFailure(undefined);
     setError(undefined);
     try {
-      await onSave(definition, intent.trim() || 'Edit Schema fields.', sourceMappings);
+      const saved = await onSave(
+        definition,
+        intent.trim() || 'Edit Schema fields.',
+        sourceMappings
+      );
+      if (!alive.current) return false;
       savedValue.current = {
         key: schemaEditorValueKey(definition, sourceMappings),
         needsInitialSave: false,
       };
-      setDirty(false);
-      setHistory([]);
+      if (saved) {
+        acknowledgedFrom.current = revisionKey;
+        loaded.current = saved.revisionKey;
+      }
+      const latest = latestEdit.current;
+      const caughtUp =
+        !!latest.definition &&
+        schemaEditorValueKey(latest.definition, latest.sourceMappings) === savedValue.current.key;
+      setDirty(!caughtUp);
+      setSavedOnce(true);
+      if (caughtUp) setHistory([]);
       setNotice('Schema changes saved. Not committed.');
-      return true;
+      return caughtUp;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save the Schema candidate.');
+      if (!alive.current) return false;
+      const message =
+        cause instanceof Error ? cause.message : 'Could not save the Schema candidate.';
+      setError(message);
+      setSaveFailure({
+        status:
+          cause && typeof cause === 'object' && 'code' in cause && cause.code === 'CONFLICT'
+            ? 'conflict'
+            : 'failed',
+        message,
+      });
       return false;
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (alive.current) setSaving(false);
     }
   }
 
   function discard() {
-    if (!initialDefinition) return;
+    if (!initialDefinition || savingRef.current) return;
     setDirty(false);
     setFieldError(undefined);
     setRulesError(undefined);
     setError(undefined);
+    setSaveFailure(undefined);
     setNotice('');
     setHistory([]);
     setConflict(undefined);
@@ -473,21 +542,52 @@ export function SchemaDataEditor({
     setResetKey((value) => value + 1);
     onDiscard();
   }
-  const canSave = !!definition && !busy && dirty && !validationError && !stale && !disabledReason;
+  const canSave =
+    !!definition &&
+    !busy &&
+    !saving &&
+    dirty &&
+    !validationError &&
+    !stale &&
+    !disabledReason &&
+    (!autoSave || (!loading && !previewError));
+  const saveCurrent = useRef(save);
+  saveCurrent.current = save;
+  useEffect(() => {
+    if (!autoSave || autoSavePaused || !canSave || saveFailure) return;
+    const timer = window.setTimeout(() => void saveCurrent.current(), 800);
+    return () => window.clearTimeout(timer);
+  }, [autoSave, autoSavePaused, canSave, saveFailure, definition, sourceMappings, intent]);
+  useEffect(() => {
+    onSaveStateChange?.(
+      saving
+        ? { status: 'saving' }
+        : stale
+          ? {
+              status: 'conflict',
+              message: 'The saved candidate changed. Keep your input and reload before saving.',
+            }
+          : (saveFailure ??
+            (dirty || validationError
+              ? { status: 'unsaved', message: validationError }
+              : { status: savedOnce ? 'saved' : 'idle' }))
+    );
+  }, [saving, stale, saveFailure, dirty, validationError, savedOnce, onSaveStateChange]);
   useEffect(() => {
     onSaveAvailabilityChange?.(canSave);
   }, [canSave, onSaveAvailabilityChange]);
   const canUndo = !busy && !!history.length && !validationError && !stale;
   const canOpenRules = !busy && !validationError;
-  const canDiscard = !busy && (dirty || !!validationError);
+  const canDiscard = !busy && !saving && (dirty || !!validationError);
   useEffect(() => {
     onActionsAvailabilityChange?.({ undo: canUndo, rules: canOpenRules, discard: canDiscard });
   }, [canUndo, canOpenRules, canDiscard, onActionsAvailabilityChange]);
   const navigation = useSchemaNavigationGuard({
-    dirty: dirty || Boolean(validationError),
+    dirty: dirty || Boolean(validationError) || saving,
     canSave,
     save,
     discard,
+    pending: saving,
   });
   useEffect(() => {
     if (!navigationRef) return;
@@ -827,7 +927,7 @@ export function SchemaDataEditor({
         </p>
       ) : null}
       {definition && previewError ? previewErrorAction : null}
-      <fieldset className={styles.content} disabled={pending || saving}>
+      <fieldset className={styles.content} disabled={pending || (!autoSave && saving)}>
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>
             <SchemaFieldTree
@@ -930,6 +1030,12 @@ export function SchemaDataEditor({
                       {workbenchFooter && (row.kind === 'node' || row.definition.type === 'object')
                         ? renderSource(row)
                         : null}
+                      {row.kind === 'slot' && fieldConstraintCount(row.definition) > 0 ? (
+                        <span className={styles.ruleCount}>
+                          {fieldConstraintCount(row.definition)}{' '}
+                          {fieldConstraintCount(row.definition) === 1 ? 'rule' : 'rules'}
+                        </span>
+                      ) : null}
                     </span>
                   }
                   preview={
@@ -1274,6 +1380,16 @@ export function SchemaDataEditor({
                       </div>
                     ) : null}
                   </SchemaFieldProperties>
+                  {active.kind === 'slot' ? (
+                    <div className="mt-3">
+                      <SchemaFieldValueTest
+                        key={active.path}
+                        definition={active.definition}
+                        required={active.required}
+                        path={active.semanticPath}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="text-xs text-[var(--text-secondary)]">

@@ -55,6 +55,7 @@ import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPen
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import type { SchemaSaveState } from '@/types/schemas';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaSourceComposition } from './SchemaSourceComposition';
@@ -257,6 +258,8 @@ export function SchemaStudioExperience({
   const [editorInvalid, setEditorInvalid] = useState(false);
   const [dataDirty, setDataDirty] = useState(false);
   const [dataCanSave, setDataCanSave] = useState(false);
+  const [saveState, setSaveState] = useState<SchemaSaveState>({ status: 'idle' });
+  const localEditVersion = useRef(0);
   const dataDirtyRef = useRef(false);
   const updateDataDirty = useCallback((dirty: boolean) => {
     dataDirtyRef.current = dirty;
@@ -907,6 +910,8 @@ export function SchemaStudioExperience({
       throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
     if (!selection.length && !currentBinding && !creatingBlank && !activeCandidate)
       throw new Error('Create a blank Schema or choose a source first.');
+    const scope = reviewScope;
+    const version = localEditVersion.current;
     const saved = await schemaEdit.save({
       workspaceId: persistedTarget.id,
       candidateIds: [...selection],
@@ -924,14 +929,20 @@ export function SchemaStudioExperience({
           }
         : {}),
     });
+    if (!mounted.current || activeReviewScope.current !== scope)
+      throw new Error('The Schema editing context changed. Reopen the Draft.');
     setUsingSavedCandidate(true);
     setLocalContribution(structuredClone(saved.candidate.localContribution));
-    setSchemaDefinition(undefined);
-    setSavedCandidateRef({
-      candidateId: saved.candidate.candidateId,
-      revision: saved.candidate.revision,
-    });
+    if (localEditVersion.current === version) {
+      setSchemaDefinition(undefined);
+      setSavedCandidateRef({
+        candidateId: saved.candidate.candidateId,
+        revision: saved.candidate.revision,
+      });
+    }
     await workspaces.refresh();
+    if (!mounted.current || activeReviewScope.current !== scope)
+      throw new Error('The Schema editing context changed. Reopen the Draft.');
     return {
       candidateId: saved.candidate.candidateId,
       revision: saved.candidate.revision,
@@ -1335,6 +1346,9 @@ export function SchemaStudioExperience({
               showSaveAction={false}
               externalActions
               workbenchFooter
+              autoSave={!definitionOpen && !compositionRequest}
+              autoSavePaused={!data?.report.valid}
+              onSaveStateChange={setSaveState}
               onActionsAvailabilityChange={setEditorActions}
               onSaveAvailabilityChange={setDataCanSave}
               onValidationChange={setEditorInvalid}
@@ -1408,7 +1422,7 @@ export function SchemaStudioExperience({
                 recoveryError ??
                 (!persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined)
               }
-              pending={schemaEdit.pending || applying}
+              pending={applying}
               loading={
                 workspaces.loading ||
                 projectBranches.loading ||
@@ -1446,6 +1460,7 @@ export function SchemaStudioExperience({
               }}
               onDirtyChange={updateDataDirty}
               onPreview={(definition, mappings) => {
+                ++localEditVersion.current;
                 setSourceMappings(mappings ?? []);
                 if (!editorBase && basePreview.data && data) {
                   setEditorBase({
@@ -1477,9 +1492,10 @@ export function SchemaStudioExperience({
                 changeDefinitionOpen(false);
               }}
               onSave={async (definition, intent, mappings) => {
-                await saveDefinition(definition, intent, mappings);
-                setEditorBase(undefined);
-                updateDataDirty(false);
+                const saved = await saveDefinition(definition, intent, mappings);
+                return {
+                  revisionKey: `${workspaceId}:${saved.candidateId}:${saved.revision}:${candidateSelectionKey}:${boundRevision}`,
+                };
               }}
             />
           )
@@ -1527,21 +1543,33 @@ export function SchemaStudioExperience({
           />
         }
         draftStatus={
-          dataDirty
-            ? 'Unsaved changes'
-            : workflow.rejected
-              ? 'Changes rejected · draft kept'
-              : workflow.matchesReview && workflow.hasChanges
-                ? 'Ready for review'
-                : (savedCandidateRef || activeCandidate) && workflow.hasChanges
-                  ? 'Draft saved · not committed'
-                  : draftView?.hasChanges === false && draftView.basis.refHead
-                    ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
-                    : draftView?.hasChanges === true
-                      ? 'Draft saved · not committed'
-                      : draftView?.hasChanges === false
-                        ? 'No changes to review'
-                        : undefined
+          saveState.status === 'saving'
+            ? 'Saving candidate…'
+            : saveState.status === 'conflict'
+              ? 'Conflict · edits kept'
+              : saveState.status === 'failed'
+                ? 'Save failed · edits kept'
+                : editorInvalid
+                  ? 'Unsaved · fix field errors'
+                  : dataDirty
+                    ? !preview.loading && data && !data.report.valid
+                      ? 'Unsaved · resolve Schema checks'
+                      : 'Unsaved changes'
+                    : saveState.status === 'saved' && workflow.candidateChanged
+                      ? 'Candidate saved · not adopted'
+                      : workflow.rejected
+                        ? 'Changes rejected · draft kept'
+                        : workflow.matchesReview && workflow.hasChanges
+                          ? 'Ready for review'
+                          : (savedCandidateRef || activeCandidate) && workflow.hasChanges
+                            ? 'Draft saved · not committed'
+                            : draftView?.hasChanges === false && draftView.basis.refHead
+                              ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
+                              : draftView?.hasChanges === true
+                                ? 'Draft saved · not committed'
+                                : draftView?.hasChanges === false
+                                  ? 'No changes to review'
+                                  : undefined
         }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
@@ -1586,6 +1614,7 @@ export function SchemaStudioExperience({
         }}
         onReview={() => void openReview()}
         onSave={() => void navigationRef.current?.save?.()}
+        saveFailed={saveState.status === 'failed' || saveState.status === 'conflict'}
         canSave={
           !editorUnavailable &&
           !recoveryError &&
@@ -1690,6 +1719,8 @@ export function SchemaStudioExperience({
         </DialogContent>
       </Dialog>
       <SchemaYamlEditor
+        autoSave
+        autoSavePaused={!data?.report.valid}
         open={definitionOpen}
         onOpenChange={setDefinitionOpen}
         workspaceTitle={selectedWorkspaceTitle}

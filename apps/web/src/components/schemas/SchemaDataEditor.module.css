@@ -237,6 +237,15 @@
   height: 16px;
   accent-color: var(--accent-commit);
 }
+.ruleCount {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-commit-soft);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .importSources p {
   color: var(--text-secondary);
   font-size: 12px;

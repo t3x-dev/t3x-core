@@ -152,6 +152,15 @@ promise prevention of a forced close or browser-managed recovery. Do not
 persist private working copies to browser storage by default; offline recovery
 is a separately scoped capability. Saved Draft recovery uses the server.
 
+Schema Studio may save valid definition edits automatically after input pauses,
+as a Schema edit candidate only (B-04). Serialize saves within the current
+account, project and Workspace, using the candidate revision and guarded retry
+identity. Acknowledgement applies only to the submitted snapshot; newer input
+remains unsaved. Invalid input or unresolved source checks pause automatic
+saving. Failed or conflicting saves retain input, show the actual outcome and
+require explicit retry or conflict resolution. Leave protection still applies
+to unsaved edits and in-flight saves; reload restores only acknowledged data.
+
 If a local operation cannot be applied, retain the input/changes and show the
 failure. Do not silently fall back to displaying the saved baseline while
 implying the local preview succeeded.
@@ -241,6 +250,8 @@ Label their outcomes separately; completing one does not imply the others.
    Dedicated and inline editors use the same Workspace/candidate identity and
    local-edit protections. Preserve local Content edits when switching editors;
    resolve them under B-01 before an adoption that changes their baseline.
+   Automatic candidate saving in Schema Studio does not confirm adoption,
+   Content adaptations, Review preparation, a Decision or publication.
 3. Adoption uses the authoritative preparation preview and its exact revision,
    Schema and preview identity. Show Content adaptations and destructive impact;
    an explicit adoption confirms that preview only. Changed inputs invalidate
@@ -257,6 +268,18 @@ Label their outcomes separately; completing one does not imply the others.
    disabled action using the actual missing condition. Validate fields against
    the owning [publication schema](../../../packages/api-client/src/schema-studio.ts),
    show field-level feedback, and do not invent stricter identifier/version rules.
+
+Field-local value tests use the public YSchema validator and its actual type,
+required and value constraints. Distinguish a missing value, empty text, null
+and explicitly typed values; report the tested field and failures. Tests must
+not write Schema or Workspace data, apply fixes/defaults, or establish Review
+readiness. Changing the field or its rules invalidates or recomputes the result.
+Relationships and supporting evidence still require full Workspace context.
+
+**Verification:** Candidate autosave covers overlapping edits, delayed/failed
+responses, explicit retry, identity/version changes, leave protection and saved
+recovery. Field tests cover native boundaries and counting semantics, multiple
+failures, missing/null/type distinctions and absence of persistence side effects.
 
 If the supported service cannot supply an exact target or preparation, mark the
 operation unavailable and report the capability gap. Do not synthesize approval
