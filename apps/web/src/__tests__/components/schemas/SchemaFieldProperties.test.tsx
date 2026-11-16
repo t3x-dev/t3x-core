@@ -54,6 +54,8 @@ it('shows configured false, zero and null values and preserves untouched attribu
     extension: { keep: true },
   };
   const save = setup(initial);
+  expect(screen.getByLabelText('Default value for slot task/title')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Advanced settings · 1'));
   expect(screen.getByLabelText('Default value for slot task/title')).toHaveValue('null');
   expect(screen.getByLabelText('Minimum value for slot task/title')).toHaveValue('0');
   expect(screen.getByLabelText('Require supporting evidence for slot task/title')).toHaveValue(
@@ -75,7 +77,7 @@ it('retains configured operation hints inside the advanced disclosure', () => {
   const initial = { type: 'string', yopsHint: { preferredOp: 'set', path: 'task', slot: 'title' } };
   const save = setup(initial);
   expect(screen.getByLabelText('Target path for YOps hint task/title')).not.toBeVisible();
-  fireEvent.click(screen.getByText('YOps hints (advanced) · configured'));
+  fireEvent.click(screen.getByText('Advanced settings · 1'));
   expect(screen.getByLabelText('Target path for YOps hint task/title')).toHaveValue('task');
   fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
   expect(save).toHaveBeenLastCalledWith(initial);

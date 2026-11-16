@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
 import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
@@ -628,7 +628,7 @@ describe('Schema editor lifecycle states', () => {
       />
     );
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add', exact: true })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Add root node', exact: true })).toBeEnabled()
     );
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Schema change intent' })).toBeVisible();
@@ -742,4 +742,53 @@ it('keeps the parent picker focused after the Add menu closes and cancels withou
   await waitFor(() => expect(add).toHaveFocus());
   expect(screen.queryByLabelText('Parent node')).not.toBeInTheDocument();
   expect(handlers.onPreview).not.toHaveBeenCalled();
+});
+
+it('edits the selected field through property cards without saving or losing sibling settings', () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      workbenchFooter
+      initialDefinition={definition}
+      revisionKey="cards"
+      loading={false}
+      {...handlers}
+    />
+  );
+  fireEvent.focus(screen.getByLabelText('Name checklist/title'));
+  const basics = screen.getByRole('region', { name: 'Basic properties' });
+  fireEvent.change(within(basics).getByLabelText('Field type checklist/title'), {
+    target: { value: 'number' },
+  });
+  fireEvent.click(within(basics).getByLabelText('Field required checklist/title'));
+  const next = handlers.onPreview.mock.lastCall?.[0];
+  expect(next.nodes.checklist.slots.title).toEqual({ type: 'number', maxLength: 100 });
+  expect(next.nodes.checklist.requiredSlots ?? []).not.toContain('title');
+  expect(next.nodes.checklist.children).toEqual(definition.nodes.checklist.children);
+  expect(handlers.onSave).not.toHaveBeenCalled();
+});
+
+it('adds root nodes and contextual children, and keeps invalid input from being lost on add', () => {
+  const handlers = callbacks();
+  render(
+    <SchemaDataEditor
+      workbenchFooter
+      initialDefinition={definition}
+      revisionKey="add-cards"
+      loading={false}
+      {...handlers}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Add root node' }));
+  expect(screen.getByLabelText('Name new_node')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Add child node', exact: true }));
+  expect(screen.getByLabelText('Name new_node/new_node')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Add field', exact: true }));
+  expect(screen.getByLabelText('Name new_node/new_node/new_field')).toBeVisible();
+  fireEvent.focus(screen.getByLabelText('Name new_node'));
+  fireEvent.change(screen.getByLabelText('Name new_node'), { target: { value: 'Bad Name' } });
+  expect(screen.getByRole('button', { name: 'Add root node' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Add field', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Add child node', exact: true })).toBeDisabled();
+  expect(handlers.onSave).not.toHaveBeenCalled();
 });

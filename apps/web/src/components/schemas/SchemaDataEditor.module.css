@@ -197,6 +197,46 @@
   justify-content: space-between;
   gap: 8px;
 }
+.sourceActions {
+  display: grid;
+  gap: 8px;
+}
+.sourceActions > :is(a, button) {
+  justify-content: flex-start;
+  white-space: normal;
+  height: auto;
+  min-height: 32px;
+}
+.propertyBasics {
+  display: grid;
+  gap: 12px;
+  font-size: 12px;
+}
+.propertyBasics label:not(.propertyRequired) {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.propertyBasics select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding-inline: 8px;
+  border: 1px solid var(--stroke-divider);
+  color: var(--text-primary);
+}
+.propertyRequired,
+.nodeActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.propertyRequired input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-commit);
+}
 .importSources p {
   color: var(--text-secondary);
   font-size: 12px;
@@ -461,6 +501,8 @@
   justify-content: flex-end;
   flex: none;
   padding: 12px 16px 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .emptyToolbar button {
   color: var(--text-secondary);
@@ -603,18 +645,6 @@
   min-height: 30px;
   font-size: 12px;
   font-weight: 500;
-}
-.editor[data-workbench-footer] .sourceHeading button {
-  width: 28px;
-  min-height: 28px;
-  padding: 6px;
-  border-color: transparent;
-  background: transparent;
-  font-size: 0;
-  gap: 0;
-}
-.editor[data-workbench-footer] .sourceHeading button:hover {
-  background: var(--hover-bg);
 }
 .editor[data-workbench-footer] .sourceHelp {
   order: 1;

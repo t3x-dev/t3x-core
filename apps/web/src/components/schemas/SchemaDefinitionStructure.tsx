@@ -1,7 +1,15 @@
 'use client';
 
 import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useId, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -1161,13 +1169,16 @@ export function SchemaFieldProperties({
   path,
   value,
   onChange,
+  children,
 }: {
   kind: 'node' | 'slot';
   path: string;
   value: Definition;
   onChange: (next: Definition) => void;
+  children?: ReactNode;
 }) {
   const [added, setAdded] = useState<string[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const fields: Field[] = (
     kind === 'slot'
       ? slotFields
@@ -1185,27 +1196,41 @@ export function SchemaFieldProperties({
     (field) => field.key !== 'description' && !configured.includes(field)
   );
   const context = `${kind} ${path}`;
+  const ruleKeys = [
+    'enum',
+    'const',
+    'minimum',
+    'maximum',
+    'minLength',
+    'maxLength',
+    'maxWords',
+    'pattern',
+    'repeated',
+    'provenanceRequired',
+  ];
+  const rules = configured.filter((field) => ruleKeys.includes(field.key));
+  const advanced = configured.filter((field) => !ruleKeys.includes(field.key));
+  const advancedCount = advanced.length + (value.yopsHint ? 1 : 0);
   return (
-    <div className="space-y-4">
-      <Fields
-        context={context}
-        value={value}
-        fields={fields.filter((field) => field.key === 'description')}
-        onChange={onChange}
-      />
-      {configured.length ? (
-        <section
-          aria-label="Current field settings"
-          className="space-y-3 border-t border-[var(--stroke-divider)] pt-3"
-        >
-          <h4 className="text-xs font-medium">Current settings</h4>
-          <Fields context={context} value={value} fields={configured} onChange={onChange} />
-        </section>
-      ) : (
-        <p className="text-xs text-[var(--text-secondary)]">
-          No additional settings. Add one when you need it.
-        </p>
-      )}
+    <div className="space-y-3">
+      <section aria-label="Basic properties" className={panelClass}>
+        <h3 className="text-xs font-medium">Basic properties</h3>
+        {children}
+        <Fields
+          context={context}
+          value={value}
+          fields={fields.filter((field) => field.key === 'description')}
+          onChange={onChange}
+        />
+      </section>
+      <section aria-label="Validation rules" className={panelClass}>
+        <h3 className="text-xs font-medium">Validation rules</h3>
+        {rules.length ? (
+          <Fields context={context} value={value} fields={rules} onChange={onChange} />
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">No additional rules.</p>
+        )}
+      </section>
       {available.length ? (
         <label className="block space-y-1 text-xs">
           <span>Add a setting</span>
@@ -1214,7 +1239,10 @@ export function SchemaFieldProperties({
             value=""
             onChange={(event) => {
               const key = event.target.value;
-              if (key) setAdded((current) => [...current, key]);
+              if (key) {
+                setAdded((current) => [...current, key]);
+                if (!ruleKeys.includes(key)) setAdvancedOpen(true);
+              }
             }}
           >
             <option value="">Choose a setting…</option>
@@ -1233,33 +1261,40 @@ export function SchemaFieldProperties({
           </select>
         </label>
       ) : null}
-      {kind === 'slot' ? (
-        <details className="space-y-3 border-t border-[var(--stroke-divider)] pt-3">
-          <summary className="cursor-pointer text-xs text-[var(--text-secondary)]">
-            YOps hints (advanced)
-            {Object.keys(record(value.yopsHint)).length ? ' · configured' : ''}
-          </summary>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Optional hints for generating write operations. These do not change validation.
-          </p>
-          <Fields
-            context={`YOps hint ${path}`}
-            value={record(value.yopsHint)}
-            fields={[
-              {
-                key: 'preferredOp',
-                label: 'Preferred YOps operation',
-                options: ['define', 'set', 'populate', 'append'],
-              },
-              { key: 'path', label: 'Target path' },
-              { key: 'slot', label: 'Target field' },
-            ]}
-            onChange={(hint) =>
-              onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
-            }
-          />
-        </details>
-      ) : null}
+      <details
+        className={panelClass}
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+      >
+        <summary className={disclosureClass}>
+          Advanced settings{advancedCount ? ` · ${advancedCount}` : ''}
+        </summary>
+        <Fields context={context} value={value} fields={advanced} onChange={onChange} />
+        {kind === 'slot' ? (
+          <section aria-label="YOps hints" className="space-y-3">
+            <h4 className="text-xs font-medium">YOps hints</h4>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Optional hints for generating write operations. These do not change validation.
+            </p>
+            <Fields
+              context={`YOps hint ${path}`}
+              value={record(value.yopsHint)}
+              fields={[
+                {
+                  key: 'preferredOp',
+                  label: 'Preferred YOps operation',
+                  options: ['define', 'set', 'populate', 'append'],
+                },
+                { key: 'path', label: 'Target path' },
+                { key: 'slot', label: 'Target field' },
+              ]}
+              onChange={(hint) =>
+                onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
+              }
+            />
+          </section>
+        ) : null}
+      </details>
     </div>
   );
 }

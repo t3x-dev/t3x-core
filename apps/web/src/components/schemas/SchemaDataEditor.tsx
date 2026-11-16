@@ -14,7 +14,6 @@ import {
   MoreHorizontal,
   Plus,
   Search,
-  Shapes,
   ToggleRight,
   Trash2,
   Type,
@@ -521,7 +520,7 @@ export function SchemaDataEditor({
     <div className={styles.emptyState}>
       {workbenchFooter ? (
         <span className={styles.emptyIcon}>
-          <Shapes size={22} aria-hidden="true" />
+          <Braces size={22} aria-hidden="true" />
         </span>
       ) : null}
       {previewError ? (
@@ -568,7 +567,7 @@ export function SchemaDataEditor({
   ) : schemaEmpty ? (
     <div className={styles.emptyState}>
       <span className={styles.emptyIcon}>
-        <Shapes size={22} aria-hidden="true" />
+        <Braces size={22} aria-hidden="true" />
       </span>
       <strong>No nodes yet</strong>
       <p>Add a node, or reuse one from Schema sources.</p>
@@ -642,6 +641,16 @@ export function SchemaDataEditor({
             Undo
           </Button>
         ) : null}
+        {workbenchFooter ? (
+          <Button
+            variant="canvas-outline"
+            size="sm"
+            disabled={busy || !!disabledReason || !!validationError || stale}
+            onClick={() => add(null, 'node')}
+          >
+            <Plus size={14} aria-hidden="true" /> Add root node
+          </Button>
+        ) : null}
         <Popover
           open={addOpen}
           onOpenChange={(open) => {
@@ -656,7 +665,8 @@ export function SchemaDataEditor({
               size="sm"
               disabled={busy || !!disabledReason || !!validationError || stale}
             >
-              <Plus size={14} aria-hidden="true" /> Add <ChevronDown size={14} aria-hidden="true" />
+              <Plus size={14} aria-hidden="true" /> {workbenchFooter ? 'Add child' : 'Add'}{' '}
+              <ChevronDown size={14} aria-hidden="true" />
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -674,17 +684,19 @@ export function SchemaDataEditor({
           >
             {!addKind ? (
               <div className="grid gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start"
-                  onClick={() => {
-                    add(null, 'node');
-                    setAddOpen(false);
-                  }}
-                >
-                  Top-level node
-                </Button>
+                {!workbenchFooter ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => {
+                      add(null, 'node');
+                      setAddOpen(false);
+                    }}
+                  >
+                    Top-level node
+                  </Button>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1192,7 +1204,76 @@ export function SchemaDataEditor({
                     path={active.semanticPath}
                     value={active.definition}
                     onChange={(value) => update(active, active.name, value)}
-                  />
+                  >
+                    {workbenchFooter && view === 'data' ? (
+                      <div className={styles.propertyBasics}>
+                        {active.kind === 'slot' ? (
+                          <label>
+                            Type
+                            <select
+                              aria-label={`Field type ${active.semanticPath}`}
+                              value={String(active.definition.type ?? '')}
+                              onChange={(event) => {
+                                const next = { ...active.definition };
+                                if (event.target.value) next.type = event.target.value;
+                                else delete next.type;
+                                update(active, active.name, next);
+                              }}
+                            >
+                              <option value="">Any type</option>
+                              {Object.entries(schemaFieldTypeLabels).map(([type, label]) => (
+                                <option key={type} value={type}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : (
+                          <div>
+                            Type · {active.definition.repeated ? 'Repeatable node' : 'Node'}
+                          </div>
+                        )}
+                        <label className={styles.propertyRequired}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Field required ${active.semanticPath}`}
+                            checked={active.required}
+                            onChange={(event) =>
+                              update(active, active.name, active.definition, event.target.checked)
+                            }
+                          />{' '}
+                          Required
+                        </label>
+                        {active.kind === 'node' ? (
+                          <div className={styles.nodeActions}>
+                            <Button
+                              size="sm"
+                              variant="canvas-outline"
+                              disabled={busy || !!disabledReason || !!validationError || stale}
+                              onClick={() => add(active, 'slot')}
+                            >
+                              <Plus size={14} aria-hidden="true" /> Add field
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="canvas-outline"
+                              disabled={
+                                busy ||
+                                !!disabledReason ||
+                                !!validationError ||
+                                stale ||
+                                active.definition.repeated === true ||
+                                active.definition.children === 'any'
+                              }
+                              onClick={() => add(active, 'node')}
+                            >
+                              Add child node
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </SchemaFieldProperties>
                 </div>
               ) : (
                 <p className="text-xs text-[var(--text-secondary)]">

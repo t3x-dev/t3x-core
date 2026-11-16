@@ -1,6 +1,6 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, ChevronDown, Shapes } from 'lucide-react';
+import { ArrowUpRight, Braces, ChevronDown, FileCode2 } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export function SchemaStudioSurface({
   error,
   data,
   onEditDefinition,
+  onCompose,
   onPublish,
   publishBlocker,
   onReview,
@@ -60,6 +61,7 @@ export function SchemaStudioSurface({
   error?: string;
   data?: StudioPreview;
   onEditDefinition?: () => void;
+  onCompose?: () => void;
   onPublish?: () => void;
   publishBlocker?: string;
   onReview?: () => void;
@@ -94,7 +96,7 @@ export function SchemaStudioSurface({
             {navigation}
             <div className={s.heading}>
               <span className={s.schemaIcon}>
-                <Shapes size={18} aria-hidden="true" />
+                <Braces size={18} aria-hidden="true" />
               </span>
               <div className={s.headingContent}>
                 <h1>Schema</h1>
@@ -105,6 +107,22 @@ export function SchemaStudioSurface({
               </div>
             </div>
             <div className={s.toolbarActions}>
+              <Button
+                variant="canvas-outline"
+                size="sm"
+                disabled={!canEditDefinition}
+                onClick={onEditDefinition}
+              >
+                <FileCode2 size={14} aria-hidden="true" /> View draft YAML
+              </Button>
+              <Button
+                variant="canvas-outline"
+                size="sm"
+                disabled={!onCompose || pending}
+                onClick={onCompose}
+              >
+                Continue in Compose <ArrowUpRight size={14} aria-hidden="true" />
+              </Button>
               <fieldset aria-label="Schema save and review" className={s.saveGroup}>
                 {onUndo || onDiscard || onDiscardSaved ? (
                   <DropdownMenu>
@@ -148,11 +166,13 @@ export function SchemaStudioSurface({
                   variant="commit"
                   className={s.reviewButton}
                   size="sm"
-                  aria-label={hasUnsavedChanges ? 'Save and review' : 'Review changes'}
+                  aria-label={
+                    hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'
+                  }
                   disabled={!canReview}
                   onClick={onReview}
                 >
-                  {hasUnsavedChanges ? 'Save and review' : 'Review changes'}
+                  {hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'}
                   <ArrowUpRight size={14} aria-hidden="true" />
                 </Button>
               </fieldset>

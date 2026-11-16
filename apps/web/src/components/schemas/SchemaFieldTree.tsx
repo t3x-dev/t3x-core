@@ -181,16 +181,15 @@ export function SchemaFieldTree({
           <aside className={styles.importSources} aria-label="Available Schema sources">
             <div className={styles.sourceHeading}>
               <strong>Schema sources</strong>
-              {studio ? sourceManagement : null}
             </div>
-            {!studio ? sourceManagement : null}
+            <div className={styles.sourceActions}>{sourceManagement}</div>
             <p className={styles.sourceHelp} hidden={!availableSources.length}>
               Drag a node or object field into your schema, or select one to choose where to add it.
             </p>
             {!availableSources.length ? (
               <p>
                 {sourceManagement
-                  ? 'No sources added. Use Manage to browse reusable definitions.'
+                  ? 'No sources yet. Browse templates or manage imported schemas.'
                   : 'No sources added.'}
               </p>
             ) : null}

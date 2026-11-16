@@ -1,7 +1,7 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { Settings2 } from 'lucide-react';
+import { BookOpen, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,11 +20,14 @@ import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStage
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
 import {
   getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
   getProjectIdWorkspacePath,
   repositoryBranch,
+  workspaceLocation,
 } from '@/domain/project/repoPath';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
+  schemaBrowseHref,
   schemaReviewHref,
   schemaSourceHref,
   schemaWorkspaceHref,
@@ -1341,18 +1344,31 @@ export function SchemaStudioExperience({
               projectId={projectId}
               sources={candidates.items}
               sourceManagement={
-                <Button
-                  ref={sourceManagerTrigger}
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Manage sources"
-                  title="Manage sources"
-                  aria-haspopup="dialog"
-                  aria-expanded={sourceManagerOpen}
-                  onClick={() => setSourceManagerOpen(true)}
-                >
-                  <Settings2 size={14} aria-hidden="true" /> Manage sources…
-                </Button>
+                <>
+                  <Button variant="canvas-outline" size="sm" asChild>
+                    <Link
+                      href={schemaBrowseHref(
+                        projectId,
+                        workspaceId,
+                        target?.targetBranch ?? requestedBranch ?? undefined
+                      )}
+                    >
+                      <BookOpen size={14} aria-hidden="true" /> Browse schemas
+                    </Link>
+                  </Button>
+                  <Button
+                    ref={sourceManagerTrigger}
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Manage sources"
+                    title="Manage sources"
+                    aria-haspopup="dialog"
+                    aria-expanded={sourceManagerOpen}
+                    onClick={() => setSourceManagerOpen(true)}
+                  >
+                    <Settings2 size={14} aria-hidden="true" /> Manage sources…
+                  </Button>
+                </>
               }
               baseDefinition={
                 editorBase?.schema ??
@@ -1469,6 +1485,25 @@ export function SchemaStudioExperience({
           )
         }
         sourceHref={sourceHref}
+        onCompose={
+          persistedTarget && !editorUnavailable && !applying
+            ? () => {
+                const navigate = () =>
+                  router.push(
+                    workspaceLocation(
+                      repositoryPath ?? getProjectIdRepoPath(projectId),
+                      persistedTarget.targetBranch,
+                      new URLSearchParams({
+                        workspace: persistedTarget.id,
+                        workspaceMode: 'compose',
+                      })
+                    )
+                  );
+                if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+                else navigate();
+              }
+            : undefined
+        }
         branchControl={
           <StateBranchControls
             key={JSON.stringify([projectId, workspaceId, target?.targetBranch])}
