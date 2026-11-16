@@ -13,7 +13,7 @@ import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { safeExploreReturn } from '@/domain/project/exploreLocation';
-import { getProjectRepoPath, workspaceLocation } from '@/domain/project/repoPath';
+import { getProjectRepoPath, repositoryBranchHref } from '@/domain/project/repoPath';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
@@ -48,8 +48,9 @@ export function NewRepositoryPage() {
   );
   const [visibility, setVisibility] = useState<'private' | 'unlisted' | 'public'>('private');
   const locked = setup.pending || setup.started;
-  const ready =
-    setup.started || (nameCheck.canSubmit && parsedTags.success && parsedReadme.success);
+  const ready = setup.started
+    ? Boolean(setup.error)
+    : nameCheck.canSubmit && parsedTags.success && parsedReadme.success;
   const owners = Array.from(new Set([routeOwner, ...accounts.map((item) => item.namespace.slug)]));
   const visibilityDescription = {
     private: 'Only people with permission can access this repository.',
@@ -77,13 +78,11 @@ export function NewRepositoryPage() {
       router.push(`${target.pathname}?${target.searchParams}`);
     } else if (result)
       router.push(
-        workspaceLocation(
+        repositoryBranchHref(
           getProjectRepoPath(result.project, owner),
+          '',
           'main',
-          new URLSearchParams({
-            workspace: result.workspaceId,
-            conversation: result.conversationId,
-          })
+          new URLSearchParams({ view: 'overview' })
         )
       );
   }
@@ -289,8 +288,14 @@ export function NewRepositoryPage() {
                     ? 'Repository created. Finishing setup…'
                     : 'Creating your repository…'
                   : setup.started
-                    ? 'Your repository is created. Retry to finish setup and open its Workspace.'
-                    : 'Your new repository opens in Workspace.'}
+                    ? setup.error
+                      ? `Repository created. Retry setup to ${returnTo ? 'return to your Schema source' : 'open State Overview'}.`
+                      : returnTo
+                        ? 'Repository created. Returning to your Schema source…'
+                        : 'Repository created. Opening State Overview…'
+                    : returnTo
+                      ? 'After creation, return to your Schema source.'
+                      : 'Your new repository opens in State Overview.'}
               </output>
               <Button
                 type="submit"
@@ -303,7 +308,13 @@ export function NewRepositoryPage() {
                     className="size-4 animate-spin motion-reduce:animate-none"
                   />
                 )}
-                {setup.pending ? 'Creating…' : setup.started ? 'Retry setup' : 'Create repository'}
+                {setup.pending
+                  ? 'Creating…'
+                  : setup.started
+                    ? setup.error
+                      ? 'Retry setup'
+                      : 'Opening…'
+                    : 'Create repository'}
                 {!setup.pending && <ArrowRight aria-hidden="true" className="size-4" />}
               </Button>
             </footer>

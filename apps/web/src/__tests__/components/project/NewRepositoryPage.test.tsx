@@ -49,6 +49,7 @@ vi.mock('@/hooks/projects/useRepositorySetup', () => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.create.mockReset();
   mocks.query = '';
   mocks.setup = { pending: false, started: false, error: null };
 });
@@ -65,8 +66,11 @@ it('shows General and Configuration with optional README and tags inputs but no 
   expect(container.querySelector('input[type="file"]')).toBeNull();
   expect(screen.queryByText(/\.gitignore|Add license/i)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create repository' })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Your new repository opens in State Overview.'
+  );
 });
-it('creates without AI and retains the canonical D01-005 destination', async () => {
+it('creates without AI and opens the canonical default branch State Overview', async () => {
   mocks.create.mockResolvedValue({
     project: { project_id: 'p', name: 'Catalog', canonical_path: '/another-team/Catalog' },
     workspaceId: 'workspace_branch:main',
@@ -98,23 +102,48 @@ it('creates without AI and retains the canonical D01-005 destination', async () 
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('schema');
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('readme');
   expect(mocks.create.mock.calls[0][0]).toMatchObject({ initializeReadme: false, tags: [] });
-  expect(mocks.push).toHaveBeenCalledWith(
-    '/another-team/Catalog/branches/main/workspaces?workspace=workspace_branch%3Amain&conversation=c'
-  );
+  expect(mocks.push).toHaveBeenCalledWith('/another-team/Catalog?view=overview');
 });
 it('keeps a partially created repository locked and allows setup retry', async () => {
   mocks.setup.started = true;
   mocks.setup.error = 'Repository created; retry to finish setup. Permission denied';
+  mocks.create.mockResolvedValue({
+    project: { project_id: 'p', name: 'Catalog', canonical_path: '/t3x-dev/Catalog' },
+    workspaceId: 'workspace_branch:main',
+    conversationId: 'c',
+  });
   render(<NewRepositoryPage />);
   expect(screen.getByRole('alert')).toHaveTextContent('Permission denied');
   expect(screen.getByLabelText('Repository name')).toBeDisabled();
   expect(screen.getByLabelText('Owner')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Retry setup' })).toBeEnabled();
+  expect(screen.getByRole('status')).toHaveTextContent('Retry setup to open State Overview.');
   fireEvent.click(screen.getByRole('button', { name: 'Retry setup' }));
   await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+  expect(mocks.push).toHaveBeenCalledWith('/t3x-dev/Catalog?view=overview');
+});
+
+it.each([
+  ['', 'Opening State Overview'],
+  [
+    new URLSearchParams({ returnTo: '/explore?type=schemas' }).toString(),
+    'Returning to your Schema source',
+  ],
+])('announces successful setup without offering another retry (%s)', (query, destination) => {
+  mocks.query = query;
+  mocks.setup.started = true;
+  render(<NewRepositoryPage />);
+  expect(screen.getByRole('status')).toHaveTextContent(`Repository created. ${destination}…`);
+  expect(screen.getByRole('button', { name: 'Opening…' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Retry setup' })).not.toBeInTheDocument();
 });
 
 it('adds and removes hashtag chips and submits unfinished input with README initialization', async () => {
+  mocks.create.mockResolvedValue({
+    project: { project_id: 'p', name: 'Final-Name', canonical_path: '/t3x-dev/Final-Name' },
+    workspaceId: 'workspace_branch:main',
+    conversationId: 'c',
+  });
   render(<NewRepositoryPage />);
   fireEvent.change(screen.getByLabelText('Repository name'), { target: { value: 'Final-Name' } });
   fireEvent.click(screen.getByRole('switch', { name: 'Initialize README' }));
@@ -142,6 +171,7 @@ it('adds and removes hashtag chips and submits unfinished input with README init
       })
     )
   );
+  expect(mocks.push).toHaveBeenCalledWith('/t3x-dev/Final-Name?view=overview');
 });
 
 it('keeps IME confirmation separate from adding tags and validates the pending tag', async () => {
@@ -178,6 +208,9 @@ it('returns a newly created project to the exact Explore release without applyin
     conversationId: 'chat',
   });
   render(<NewRepositoryPage />);
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'After creation, return to your Schema source.'
+  );
   fireEvent.change(screen.getByLabelText(/Repository name/), { target: { value: 'new-project' } });
   await waitFor(() =>
     expect(screen.getByRole('button', { name: /Create repository/ })).toBeEnabled()
@@ -187,9 +220,12 @@ it('returns a newly created project to the exact Explore release without applyin
   const destination = new URL(mocks.push.mock.calls[0][0], 'http://local');
   expect(destination.pathname).toBe('/explore');
   expect(destination.searchParams.get('catalogName')).toBe('team/schema');
+  expect(destination.searchParams.get('catalogVersion')).toBe('1.0.0');
   expect(destination.searchParams.get('catalogHash')).toBe('sha256:abc');
   expect(destination.searchParams.get('studioTarget')).toBe('new-project');
   expect(destination.searchParams.get('workspace')).toBe('workspace:main');
+  expect(destination.searchParams.get('branch')).toBe('main');
+  expect(destination.searchParams.has('view')).toBe(false);
 });
 
 it('loads existing tags for the chosen owner only when requested and retains unfinished input', async () => {

@@ -431,6 +431,11 @@ Apply these rules to new and changed WebUI links and controls.
   request or the current tab's history. An explicit view must take precedence
   over a personal preference. Omit a default only when the address still
   restores the intended result. Use a fragment to address a section on the page.
+- After ordinary repository creation and setup succeed, open the default-branch
+  State with `view=overview`. Keep the supported Schema `returnTo` flow when
+  supplied. This changes the landing page, not initial Workspace or conversation
+  creation. Ordinary repository entry preserves its saved reading preference;
+  opening an explicit view does not overwrite that preference.
 - Use readable names, versions or stable project-scoped numbers in regular
   user-facing addresses. Check project access before resolving a historical
   number, then apply the existing checks to the exact object. Keep full

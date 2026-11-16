@@ -969,6 +969,41 @@ describe('ProjectStateTab', () => {
     expect(navigationMocks.router.push).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'structure',
+    'code',
+  ])('preserves the saved %s view when an explicit Overview link is opened', async (savedView) => {
+    const key = 't3x.state-view:proj_test';
+    localStorage.setItem(key, savedView);
+    const element = <ProjectStateTab projectId="proj_test" projectName="Test Project" />;
+    const view = render(element);
+    await waitFor(() =>
+      expect(view.container.querySelector('[data-state-view]')).toHaveAttribute(
+        'data-state-view',
+        savedView
+      )
+    );
+    navigationMocks.search = 'view=overview';
+    view.rerender(<ProjectStateTab projectId="proj_test" projectName="Test Project" />);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+    expect(localStorage.getItem(key)).toBe(savedView);
+    view.unmount();
+    navigationMocks.search = '';
+    const reopened = render(element);
+    await waitFor(() =>
+      expect(reopened.container.querySelector('[data-state-view]')).toHaveAttribute(
+        'data-state-view',
+        savedView
+      )
+    );
+    localStorage.removeItem(key);
+  });
+
   it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
     navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
     hookMocks.loadCommit.mockImplementation(async (hash) =>
