@@ -811,7 +811,13 @@ it('guides a first selection and keeps testing and change notes behind their own
   );
   expect(screen.getByText('Choose a field to edit')).toBeVisible();
   expect(screen.getByLabelText('Schema change intent')).not.toBeVisible();
+  const fields = within(screen.getByRole('region', { name: 'Fields', exact: true }));
+  expect(fields.getByRole('textbox', { name: 'Find a node or field' })).toBeVisible();
+  expect(fields.getByRole('button', { name: 'Add root node' })).toBeVisible();
+  expect(fields.getByRole('button', { name: 'Add child', exact: true })).toBeVisible();
+  expect(fields.getByRole('button', { name: 'Move to…' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Select first field' }));
+  expect(fields.getByRole('button', { name: 'Move to…' })).toBeEnabled();
   expect(screen.getByRole('region', { name: 'Basic properties' })).toBeVisible();
   expect(screen.getByLabelText('Sample value')).not.toBeVisible();
   fireEvent.click(screen.getByText('Test a value', { exact: true }));

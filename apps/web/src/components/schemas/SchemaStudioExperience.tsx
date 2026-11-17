@@ -1359,7 +1359,7 @@ export function SchemaStudioExperience({
               sources={candidates.items}
               sourceManagement={
                 <>
-                  <Button variant="canvas-outline" size="sm" asChild>
+                  <Button variant="canvas-ghost" size="sm" asChild>
                     <Link
                       href={schemaBrowseHref(
                         projectId,
@@ -1372,7 +1372,7 @@ export function SchemaStudioExperience({
                   </Button>
                   <Button
                     ref={sourceManagerTrigger}
-                    variant="ghost"
+                    variant="canvas-ghost"
                     size="sm"
                     aria-label="Manage sources"
                     title="Manage sources"

@@ -608,7 +608,8 @@
   container-type: inline-size;
 }
 .editor[data-workbench-footer] .toolbar {
-  padding: 14px 18px;
+  flex: none;
+  padding: 8px 16px 12px;
   background: var(--surface-card);
 }
 .editor[data-workbench-footer] .search {
@@ -655,6 +656,22 @@
   font-size: 12px;
   font-weight: 500;
 }
+.editor[data-workbench-footer] .sourceActions > :is(a, button) {
+  justify-content: flex-start;
+  padding: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+.editor[data-workbench-footer] .sourceActions > :is(a, button):hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.editor[data-workbench-footer] .sourceActions > :is(a, button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .editor[data-workbench-footer] .sourceHelp {
   margin: 0 0 4px;
   font-size: 12px;
@@ -667,16 +684,11 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 4px 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--stroke-divider);
+  padding: 12px 16px 4px;
 }
 .fieldHeading h2 {
   font-size: 13px;
   font-weight: 600;
-}
-.fieldHeading span {
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 .selectionGuide {
   display: grid;
@@ -751,6 +763,12 @@
   font-size: 11px;
   color: var(--text-tertiary);
 }
+.editor[data-workbench-footer] .moveToolbar > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .editor[data-workbench-footer] .moveToolbar button {
   min-height: 28px;
   height: 28px;
@@ -790,10 +808,12 @@
 }
 .relationSummary {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 4px;
   margin-left: auto;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 .editor[data-workbench-footer] .dragRow [role="treeitem"] :has(> .fieldTypeIcon) {
   width: 22px;

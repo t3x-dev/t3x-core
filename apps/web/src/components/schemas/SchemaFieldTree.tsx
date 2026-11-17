@@ -54,6 +54,7 @@ export function SchemaFieldTree({
   projectId,
   sources = [],
   sourceManagement,
+  toolbar,
   footer,
   emptyContent,
   studio = false,
@@ -73,6 +74,7 @@ export function SchemaFieldTree({
   projectId?: string;
   sources?: StudioCandidate[];
   sourceManagement?: ReactNode;
+  toolbar?: ReactNode;
   footer?: ReactNode;
   emptyContent?: ReactNode;
   studio?: boolean;
@@ -221,13 +223,16 @@ export function SchemaFieldTree({
             ))}
           </aside>
         ) : null}
-        <div className={studio ? `${styles.fieldMain} ${workbench.primary}` : styles.fieldMain}>
-          {studio && !unavailable && rows.length ? (
+        <section
+          className={studio ? `${styles.fieldMain} ${workbench.primary}` : styles.fieldMain}
+          aria-label={studio ? 'Fields' : undefined}
+        >
+          {studio && !unavailable ? (
             <div className={styles.fieldHeading}>
               <h2>Fields</h2>
-              <span>Select a name to edit</span>
             </div>
           ) : null}
+          {toolbar}
           <div ref={fieldScroll} className={styles.fieldScroll}>
             <div className={styles.columns} hidden={unavailable || !rows.length}>
               <span>Name</span>
@@ -237,7 +242,7 @@ export function SchemaFieldTree({
             </div>
             {active ? (
               <div className={styles.moveToolbar}>
-                <span>{active.row.semanticPath}</span>
+                <span title={active.row.semanticPath}>{active.row.semanticPath}</span>
                 <Popover open={moveOpen} onOpenChange={setMoveOpen}>
                   {source && sourcePosition.current ? (
                     <PopoverAnchor virtualRef={{ current: sourcePosition.current }} />
@@ -340,10 +345,15 @@ export function SchemaFieldTree({
                 ) : null}
               </div>
             ) : (
-              <div className={styles.moveToolbar} hidden={studio || unavailable || !rows.length}>
+              <div className={styles.moveToolbar} hidden={unavailable || !rows.length}>
                 <span className={styles.selectionHint}>
                   {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
                 </span>
+                {studio ? (
+                  <Button variant="canvas-outline" size="sm" disabled>
+                    Move to…
+                  </Button>
+                ) : null}
               </div>
             )}
             <div
@@ -389,7 +399,7 @@ export function SchemaFieldTree({
             ) : null}
           </div>
           {footer}
-        </div>
+        </section>
       </div>
       <DragOverlay>
         {dragging ? <div className={styles.dragPreview}>{dragging.row.semanticPath}</div> : null}
