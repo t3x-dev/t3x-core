@@ -59,6 +59,7 @@ import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayou
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaContentPreparationDialog';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -83,7 +84,6 @@ import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChang
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
-import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
 import { WorkspaceReconciliationResolver } from '@/components/workspaces/WorkspaceReconciliationResolver';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -590,8 +590,10 @@ export function WorkspaceComposeReviewSurface({
             }
           />
           {syncRequired ? (
-            <WorkspaceNotice
+            <Alert
               label="Workspace synchronization"
+              layout="banner"
+              tone="warning"
               title={
                 activity.reconciliationPreview?.conflicts.length
                   ? 'Branch changes overlap with your Draft'
@@ -617,7 +619,7 @@ export function WorkspaceComposeReviewSurface({
               {activity.reconciliationError ? (
                 <p role="alert">{activity.reconciliationError}</p>
               ) : null}
-            </WorkspaceNotice>
+            </Alert>
           ) : null}
           {workspaceTool ? (
             <>

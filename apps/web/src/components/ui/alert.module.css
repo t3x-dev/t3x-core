@@ -3,12 +3,28 @@
   flex: none;
   align-items: flex-start;
   gap: 10px;
-  border-bottom: 1px solid var(--stroke-divider);
   background: var(--surface-panel);
   padding: 10px 16px;
   color: var(--text-primary);
   font-size: 13px;
   line-height: 20px;
+}
+
+.notice[data-layout="banner"] {
+  border-bottom: 1px solid var(--stroke-divider);
+}
+
+.notice[data-layout="inset"] {
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+}
+
+.notice[data-layout="inset"] .icon {
+  margin-top: 2px;
+}
+
+.notice[data-tone="success"] .icon {
+  color: var(--status-success);
 }
 
 .icon {
