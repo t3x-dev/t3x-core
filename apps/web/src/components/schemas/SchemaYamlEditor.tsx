@@ -328,7 +328,7 @@ export function SchemaYamlEditor({
                 disabled={!!busy || !parsed.definition || !dirty}
                 onClick={() => void save()}
               >
-                {saveFailure ? 'Retry save' : 'Save draft'}
+                {saveFailure ? 'Retry save' : autoSave ? 'Save now' : 'Save draft'}
               </Button>
               <Button
                 size="sm"

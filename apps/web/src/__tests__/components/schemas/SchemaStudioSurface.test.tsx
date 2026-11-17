@@ -33,7 +33,9 @@ it('keeps Undo direct and separates editing tools from the next workflow actions
   fireEvent.click(within(tools).getByRole('button', { name: 'Undo last change' }));
   expect(undo).toHaveBeenCalledOnce();
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-  fireEvent.click(within(tools).getByRole('button', { name: 'Save draft' }));
+  expect(within(tools).queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+  openMore();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Save now' }));
   expect(save).toHaveBeenCalledOnce();
   const next = screen.getByRole('group', { name: 'Schema next steps' });
   fireEvent.click(within(next).getByRole('button', { name: 'Continue in Compose' }));

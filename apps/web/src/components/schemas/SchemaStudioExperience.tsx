@@ -1542,34 +1542,43 @@ export function SchemaStudioExperience({
             }
           />
         }
+        saveStatus={
+          editorUnavailable
+            ? undefined
+            : saveState.status === 'saving'
+              ? 'Saving…'
+              : saveState.status === 'conflict'
+                ? 'Save conflict · edits kept'
+                : saveState.status === 'failed'
+                  ? 'Save failed · edits kept'
+                  : editorInvalid
+                    ? 'Not saved · fix field errors'
+                    : dataDirty && preview.error
+                      ? 'Autosave paused · preview unavailable'
+                      : dataDirty
+                        ? !preview.loading && data && !data.report.valid
+                          ? 'Autosave paused · resolve Schema checks'
+                          : 'Waiting to save…'
+                        : saveState.status === 'saved'
+                          ? 'All changes saved'
+                          : 'Autosave on'
+        }
         draftStatus={
-          saveState.status === 'saving'
-            ? 'Saving candidate…'
-            : saveState.status === 'conflict'
-              ? 'Conflict · edits kept'
-              : saveState.status === 'failed'
-                ? 'Save failed · edits kept'
-                : editorInvalid
-                  ? 'Unsaved · fix field errors'
-                  : dataDirty
-                    ? !preview.loading && data && !data.report.valid
-                      ? 'Unsaved · resolve Schema checks'
-                      : 'Unsaved changes'
-                    : saveState.status === 'saved' && workflow.candidateChanged
-                      ? 'Candidate saved · not adopted'
-                      : workflow.rejected
-                        ? 'Changes rejected · draft kept'
-                        : workflow.matchesReview && workflow.hasChanges
-                          ? 'Ready for review'
-                          : (savedCandidateRef || activeCandidate) && workflow.hasChanges
-                            ? 'Draft saved · not committed'
-                            : draftView?.hasChanges === false && draftView.basis.refHead
-                              ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
-                              : draftView?.hasChanges === true
-                                ? 'Draft saved · not committed'
-                                : draftView?.hasChanges === false
-                                  ? 'No changes to review'
-                                  : undefined
+          saveState.status === 'saved' && workflow.candidateChanged
+            ? 'Candidate · not adopted'
+            : workflow.rejected
+              ? 'Changes rejected · draft kept'
+              : workflow.matchesReview && workflow.hasChanges
+                ? 'Ready for review'
+                : (savedCandidateRef || activeCandidate) && workflow.hasChanges
+                  ? 'Draft · not committed'
+                  : draftView?.hasChanges === false && draftView.basis.refHead
+                    ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
+                    : draftView?.hasChanges === true
+                      ? 'Draft · not committed'
+                      : draftView?.hasChanges === false
+                        ? 'No changes to review'
+                        : undefined
         }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}

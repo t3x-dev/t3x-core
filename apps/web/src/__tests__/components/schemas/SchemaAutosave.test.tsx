@@ -270,3 +270,46 @@ it('keeps valid YAML local until source checks allow automatic saving', async ()
   await tick();
   expect(save).toHaveBeenCalledTimes(1);
 });
+
+it('keeps Undo after acknowledged autosaves and saves the reverted snapshot', async () => {
+  const save = vi
+    .fn()
+    .mockResolvedValueOnce('r2')
+    .mockResolvedValueOnce('r3')
+    .mockResolvedValue('r4');
+  const { change } = setup(save);
+  change('first');
+  await tick();
+  change('second');
+  await tick();
+  expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo', exact: true }));
+  expect(screen.getByLabelText('Description for slot item/title')).toHaveValue('first');
+  await tick();
+  expect(save.mock.calls[2][0].nodes.item.slots.title.description).toBe('first');
+  expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo', exact: true }));
+  expect(screen.getByLabelText('Description for slot item/title')).toHaveValue('');
+  await tick();
+  expect(save.mock.calls[3][0].nodes.item.slots.title.description).toBeUndefined();
+});
+it('clears autosave undo history when a clean editor loads a different revision', async () => {
+  const props = {
+    autoSave: true,
+    loading: false,
+    initialDefinition: initial,
+    onSave: vi.fn().mockResolvedValue({ revisionKey: 'r2' }),
+    onPreview: vi.fn(),
+    onDirtyChange: vi.fn(),
+    onDiscard: vi.fn(),
+  };
+  const view = render(<SchemaDataEditor {...props} revisionKey="r1" />);
+  fireEvent.focus(screen.getByLabelText('Name item/title'));
+  fireEvent.change(screen.getByLabelText('Description for slot item/title'), {
+    target: { value: 'one' },
+  });
+  await tick();
+  expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+  view.rerender(<SchemaDataEditor {...props} revisionKey="other" />);
+  expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
+});

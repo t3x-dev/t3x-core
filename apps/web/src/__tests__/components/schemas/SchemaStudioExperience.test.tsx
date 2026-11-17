@@ -7,6 +7,21 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { SchemaStudioExperience } from '@/components/schemas/SchemaStudioExperience';
 import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 
+function saveNow() {
+  const yamlSave = screen.queryByRole('button', { name: 'Save now', exact: true });
+  if (yamlSave) return yamlSave;
+  if (!screen.queryByRole('menuitem', { name: 'Save now', exact: true })) {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  }
+  return screen.getByRole('menuitem', { name: 'Save now', exact: true });
+}
+function expectSaveEnabled(enabled: boolean) {
+  const action = saveNow();
+  if (enabled) expect(action).not.toHaveAttribute('aria-disabled', 'true');
+  else expect(action).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.keyDown(action, { key: 'Escape' });
+}
+
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
   ensureAuthoring: vi.fn(),
@@ -716,7 +731,7 @@ it('opens the embedded definition workbench and saves the YAML candidate', async
       value: dump({ ...(load(yaml.value) as object), nodes: { new_node: { slots: {} } } }),
     },
   });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save now', exact: true }));
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -783,7 +798,7 @@ it('starts a new branch editor from its inherited bound definition, not the orig
   const yaml = screen.getByLabelText('Schema definition YAML editor') as HTMLTextAreaElement;
   expect(load(yaml.value)).toEqual(inherited);
   fireEvent.change(yaml, { target: { value: yaml.value.replace('type: string', 'type: number') } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(saveNow());
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -833,7 +848,7 @@ it('edits existing fields against a frozen Base and retains unsaved input while 
   mocks.data = undefined;
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByLabelText('Schema definition YAML editor')).toHaveValue(editedYaml);
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(saveNow());
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1153,7 +1168,7 @@ it('edits Schema fields in the default Data view and saves through the existing 
   );
   expect(screen.getByRole('tree', { name: 'Schema fields' })).toBeVisible();
   expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  fireEvent.click(saveNow());
   await waitFor(() =>
     expect(mocks.saveSchemaEdit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1560,12 +1575,12 @@ it.each([
   await expectBoundSnapshot();
   expect(screen.getByLabelText('Type item/title')).toHaveValue('number');
   expect(
-    screen.getByText(committed ? 'Committed · committed-he' : 'Draft saved · not committed', {
+    screen.getByText(committed ? 'Committed · committed-he' : 'Draft · not committed', {
       exact: true,
     })
   ).toBeVisible();
   expect(screen.queryByText(/needs missing sources/)).not.toBeInTheDocument();
-  if (committed) expect(screen.queryByText('Draft saved · not committed')).not.toBeInTheDocument();
+  if (committed) expect(screen.queryByText('Draft · not committed')).not.toBeInTheDocument();
 });
 
 it('keeps a failed Review on the editor without navigating to Workspace', async () => {
@@ -1614,7 +1629,7 @@ it('refreshes the clean Draft after a no-change Review response and disables ano
     expect(screen.getByRole('button', { name: 'Review in Workspace', exact: true })).toBeDisabled()
   );
   expect(await screen.findByText('Committed · committed', { exact: true })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expectSaveEnabled(false);
   expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Review in Workspace', exact: true }));
   expect(mocks.fullReview).toHaveBeenCalledTimes(1);
@@ -1694,7 +1709,7 @@ it('starts blank explicitly and saves the empty definition before Schema Review'
   render(<SchemaStudioExperience projectId="p" />);
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   fireEvent.click(await screen.findByRole('button', { name: 'Create schema' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
+  await waitFor(() => expectSaveEnabled(true));
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
@@ -1837,7 +1852,8 @@ it.each([
   await waitFor(() =>
     expect(screen.getByLabelText('Type task/title')).toHaveValue(dirty ? 'number' : 'boolean')
   );
-  expect(screen.getByRole('button', { name: dirty ? 'Retry save' : 'Save draft' })).toBeDisabled();
+  if (dirty) expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
+  else expectSaveEnabled(false);
   expect(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   ).toBeDisabled();
@@ -1890,7 +1906,8 @@ it('groups editing tools separately from next steps and opens global rules from 
   const group = screen.getByRole('group', { name: 'Schema editing tools' });
   const undo = within(group).getByRole('button', { name: 'Undo last change' });
   expect(undo).toBeDisabled();
-  expect(within(group).getByRole('button', { name: 'Save draft' })).toBeVisible();
+  expect(within(group).queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+  expect(screen.getByText('Autosave on')).toBeVisible();
   expect(
     within(screen.getByRole('group', { name: 'Schema next steps' })).getByRole('button', {
       name: /^(Review in Workspace|Save and review in Workspace)$/,
@@ -2036,7 +2053,7 @@ function openSavedDraftDiscard() {
 
 it('allows abandoning a saved source combination even without local undo history', () => {
   setupSavedDraftDiscard();
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expectSaveEnabled(false);
   expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   expect(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' })).toHaveAttribute(
@@ -2076,7 +2093,7 @@ it.each([
     })
   );
   expect(screen.getByLabelText('Type task/title')).toHaveValue('boolean');
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expectSaveEnabled(false);
   expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   const review = screen.getByRole('button', { name: 'Review in Workspace' });
   if (contentChanged) expect(review).toBeEnabled();
@@ -2099,7 +2116,7 @@ it('preserves saved and unsaved edits if discarding fails', async () => {
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Keep draft' }));
   expect(screen.getByLabelText('Type task/title')).toHaveValue('number');
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  expectSaveEnabled(true);
   expect(mocks.schemaEditCandidate?.revision).toBe(13);
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
@@ -2146,7 +2163,7 @@ it('retains unsaved YAML and rejects saving after its Workspace is committed els
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(editor).toBeVisible();
   expect(editor).toHaveValue(edited);
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(saveNow());
   const dialog = screen.getByRole('dialog', { name: 'Schema YAML editor' });
   expect(await within(dialog).findByText(/persisted Workspace before saving/)).toBeVisible();
   expect(editor).toHaveValue(edited);
@@ -2162,7 +2179,7 @@ it('carries unsaved fields into YAML, saves in place, and returns to the saved f
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   const edited = editor.value.replace('type: string', 'type: number');
   fireEvent.change(editor, { target: { value: edited } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(saveNow());
   await waitFor(() =>
     expect(
       within(screen.getByRole('dialog', { name: 'Schema YAML editor' })).getByText(
@@ -2184,7 +2201,7 @@ it('carries unsaved fields into YAML, saves in place, and returns to the saved f
   expect(screen.getByRole('dialog', { name: 'Schema YAML editor' })).toBeVisible();
   expect(editor).toHaveValue(edited);
   fireEvent.change(editor, { target: { value: edited.replace('type: number', 'type: boolean') } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
+  fireEvent.click(saveNow());
   await waitFor(() => expect(mocks.saveSchemaEdit).toHaveBeenCalledTimes(2));
   expect(mocks.saveSchemaEdit.mock.lastCall?.[0]).toMatchObject({ ifRevision: 1 });
   expect(mocks.saveSchemaEdit.mock.lastCall?.[0].rebase).toBeUndefined();
@@ -2210,7 +2227,7 @@ it('discards only YAML changes when returning to an unsaved field draft', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Close', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Discard YAML edits' }));
   expect(screen.getByLabelText('Required checklist/title')).toBeChecked();
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  expectSaveEnabled(true);
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 

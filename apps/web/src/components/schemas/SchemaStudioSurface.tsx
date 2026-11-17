@@ -26,6 +26,7 @@ export function SchemaStudioSurface({
   sourceHref,
   branchControl,
   draftStatus,
+  saveStatus,
   pending = false,
   loading = false,
   error,
@@ -59,6 +60,7 @@ export function SchemaStudioSurface({
   sourceHref?: string;
   branchControl?: ReactNode;
   draftStatus?: string;
+  saveStatus?: string;
   pending?: boolean;
   loading?: boolean;
   error?: string;
@@ -134,14 +136,12 @@ export function SchemaStudioSurface({
                     <Undo2 size={14} aria-hidden="true" /> Undo
                   </Button>
                 ) : null}
-                <Button
-                  variant={saveFailed ? 'canvas-outline' : 'ghost'}
-                  size="sm"
-                  disabled={!canSave}
-                  onClick={onSave}
-                >
-                  {saveFailed ? 'Retry save' : 'Save draft'}
-                </Button>
+                {saveStatus ? <output className={s.draftStatus}>{saveStatus}</output> : null}
+                {saveFailed ? (
+                  <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
+                    Retry save
+                  </Button>
+                ) : null}
                 {editorInvalid ? (
                   <span id={yamlHint} className={s.editingHint}>
                     Fix field errors before opening YAML.
@@ -183,6 +183,10 @@ export function SchemaStudioSurface({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className={s.moreMenu}>
+                  <DropdownMenuItem disabled={!canSave} onSelect={onSave}>
+                    Save now
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {onRules ? (
                     <DropdownMenuGroup aria-label="Schema settings">
                       <DropdownMenuLabel className={s.menuLabel}>Schema settings</DropdownMenuLabel>

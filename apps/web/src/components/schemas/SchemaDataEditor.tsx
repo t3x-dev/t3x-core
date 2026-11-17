@@ -505,7 +505,7 @@ export function SchemaDataEditor({
         schemaEditorValueKey(latest.definition, latest.sourceMappings) === savedValue.current.key;
       setDirty(!caughtUp);
       setSavedOnce(true);
-      if (caughtUp) setHistory([]);
+      if (caughtUp && !autoSave) setHistory([]);
       setNotice('Schema changes saved. Not committed.');
       return caughtUp;
     } catch (cause) {

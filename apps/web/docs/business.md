@@ -160,6 +160,12 @@ remains unsaved. Invalid input or unresolved source checks pause automatic
 saving. Failed or conflicting saves retain input, show the actual outcome and
 require explicit retry or conflict resolution. Leave protection still applies
 to unsaved edits and in-flight saves; reload restores only acknowledged data.
+An automatic acknowledgement does not clear the current field-editing session's
+Undo history. Undo restores a local snapshot and autosaves it under the same
+candidate guards; it does not reverse a Commit. Loading a different baseline,
+discarding or leaving the editing session resets this history. Show automatic
+save progress and failures directly; an optional Save now action is secondary
+to editing, while a failed save exposes an explicit retry.
 
 If a local operation cannot be applied, retain the input/changes and show the
 failure. Do not silently fall back to displaying the saved baseline while
