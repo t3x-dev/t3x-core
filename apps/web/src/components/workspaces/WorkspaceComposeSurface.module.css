@@ -1139,16 +1139,6 @@
   cursor: not-allowed;
   opacity: 0.6;
 }
-.composerSubmit > button:first-child {
-  width: auto;
-  height: 28px;
-  border-radius: 8px;
-  background: transparent;
-  padding: 0 20px 0 4px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-}
 .discussionComposer .send {
   width: 30px;
   height: 30px;
@@ -2942,16 +2932,6 @@ button.currentDraftRow:hover {
   min-height: 30px;
   font-size: 12px;
 }
-.currentDraftBinding {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.currentDraftBinding > span {
-  margin-left: 4px;
-  color: var(--status-success);
-  font-size: 10px;
-}
 .currentDraft .currentDraftNotice {
   border-left: 2px solid var(--accent-pending);
   padding-left: 8px;
@@ -3210,4 +3190,163 @@ button.currentDraftRow:hover {
   .chatPanel .discussionHeader > svg {
     display: none;
   }
+}
+
+/* Compose entry controls share one row; supporting details open on demand. */
+.discussionComposer > textarea {
+  min-height: 78px;
+  height: auto;
+  max-height: 240px;
+  resize: vertical;
+}
+.discussionComposerFooter {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.composerSubmit {
+  flex: 1 1 280px;
+  width: auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.composerControl {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.composerControl > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.composerControl > button {
+  max-width: 220px;
+  font-size: 12px;
+}
+.composerControl .postureSelect {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.composerModeHelp {
+  position: relative;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.composerModeHelp summary {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  list-style: none;
+}
+.composerModeHelp summary::-webkit-details-marker {
+  display: none;
+}
+.composerModeHelp p {
+  position: absolute;
+  bottom: 36px;
+  right: 0;
+  z-index: 20;
+  width: min(300px, 65vw);
+  padding: 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+  line-height: 1.6;
+}
+.composerSendStatus {
+  display: block;
+  padding: 0 18px 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.composerAvailability {
+  margin: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.composerAvailability button,
+.composerAvailability a,
+.savedSchemaNotice button {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.composerAvailability button,
+.savedSchemaNotice button {
+  min-height: 28px;
+}
+.composerModeHelp summary:focus-visible,
+.composerControl select:focus-visible,
+.composerAvailability button:focus-visible,
+.savedSchemaNotice button:focus-visible,
+.currentSchemaBinding summary:focus-visible {
+  outline: 2px solid var(--accent-commit);
+  outline-offset: 2px;
+}
+.savedSchemaNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.savedSchemaNotice > div {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+.savedSchemaNotice span {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.savedSchemaNotice strong {
+  font-weight: 600;
+}
+.currentSchemaBinding {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  font-size: 12px;
+}
+.currentSchemaBinding strong,
+.currentSchemaBinding code,
+.currentSchemaBinding p {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.currentSchemaBinding > span,
+.currentSchemaBinding details {
+  color: var(--text-secondary);
+}
+.currentSchemaBinding summary {
+  cursor: pointer;
+}
+.currentSchemaBinding details[open] > :not(summary) {
+  display: block;
+  margin-top: 6px;
+}
+.currentSchemaBinding .schemaBindingControl {
+  margin: 4px 0 0;
+}
+
+.currentDraftSection > .savedSchemaNotice {
+  margin-bottom: 12px;
 }

@@ -905,11 +905,7 @@ function ComposeSurface({
   const [resizing, setResizing] = useState(false);
   const balancedDraftWidth = balancedRailWidth('navigation', boardWidth);
   const balancedDiscussionWidth = balancedRailWidth('inspector', boardWidth);
-  const compact =
-    inspectorOpen &&
-    boardWidth > 840 &&
-    boardWidth - balancedDraftWidth - balancedDiscussionWidth < 480;
-  const draftCollapsed = collapsedPreference ?? compact;
+  const draftCollapsed = collapsedPreference ?? inspectorOpen;
   const draftWidth = Math.max(
     180,
     Math.min(customDraftWidth ?? balancedDraftWidth, boardWidth - (inspectorOpen ? 640 : 320))
@@ -945,7 +941,7 @@ function ComposeSurface({
     }
   }, []);
   const toggleDraft = (collapsed: boolean) => {
-    setCollapsedPreference(compact || collapsed ? collapsed : null);
+    setCollapsedPreference(inspectorOpen || collapsed ? collapsed : null);
     try {
       localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
     } catch {
@@ -1242,6 +1238,47 @@ function ComposeSurface({
     schemaConversationId ?? activeConversationId,
     String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
   );
+  const savedSchema = useStudioSchemaEditCandidate(
+    candidate.projectId,
+    candidate.id,
+    candidate.revision
+  );
+  const hasSavedSchema = hasUnappliedSchemaEdit(
+    savedSchema.candidate,
+    candidate,
+    activity.view?.currentSchema?.schemaHash
+  );
+  const schemaCandidateNotice = savedSchema.loading ? (
+    <output className={composeStyles.savedSchemaNotice}>Checking saved Schema…</output>
+  ) : savedSchema.error ? (
+    <div className={composeStyles.savedSchemaNotice} role="alert">
+      <strong>Saved Schema status unavailable</strong>
+      <span>{savedSchema.error}</span>
+      <button type="button" onClick={() => void savedSchema.refresh()}>
+        Retry Schema status
+      </button>
+    </div>
+  ) : hasSavedSchema ? (
+    <section className={composeStyles.savedSchemaNotice} aria-label="Saved Schema candidate">
+      <div>
+        <strong>Schema candidate r{savedSchema.candidate!.revision}</strong>
+        <span>Saved · not applied</span>
+      </div>
+      {rightView !== 'structure' || draftSubject !== 'schema' ? (
+        <button
+          type="button"
+          onClick={() => {
+            setTurn(null);
+            setRightView('structure');
+            setSidePanel('chat');
+            setDraftSubject('schema');
+          }}
+        >
+          View Schema status
+        </button>
+      ) : null}
+    </section>
+  ) : null;
   const selectedSchema =
     schemaSelection?.workspaceId === candidate.id
       ? (
@@ -1510,10 +1547,13 @@ function ComposeSurface({
             >
               <PanelRightOpen aria-hidden="true" /> Draft
               <span id={draftCountId}>
-                {contentChangeCount} {activity.view ? 'Content changes' : 'Draft operations'}
+                {contentChangeCount} {activity.view ? 'Content change' : 'Draft operation'}
+                {contentChangeCount === 1 ? '' : 's'}
               </span>
-              {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
-                <small>Schema</small>
+              {hasSavedSchema ? (
+                <small>Schema candidate r{savedSchema.candidate!.revision}</small>
+              ) : schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
+                <small>Schema proposal</small>
               ) : null}
               {staged.length ? <small>{staged.length} unsaved</small> : null}
             </button>
@@ -1646,6 +1686,7 @@ function ComposeSurface({
               stagedCount={staged.length}
               authoring={activity.view}
               subject={draftSubject}
+              schemaCandidateNotice={schemaCandidateNotice}
               onSubjectChange={setDraftSubject}
               schemaControl={
                 <WorkspaceSchemaSelect
@@ -1787,6 +1828,7 @@ function ComposeSurface({
           ) : rightView === 'changes' ? (
             <div className={composeStyles.changesBody} hidden={showingDetails}>
               <ChangesToolbar
+                countUnit={activity.view ? 'Content change' : 'Draft operation'}
                 proposedChangeCount={
                   activity.view
                     ? (changeScope === 'all'
@@ -1801,6 +1843,7 @@ function ComposeSurface({
                 changeScope={changeScope}
                 onChangeScope={setChangeScope}
               />
+              {schemaCandidateNotice}
               {schemaSettings.error && !schemaSettings.record ? (
                 <p role="alert">{schemaSettings.error}</p>
               ) : null}
@@ -2558,10 +2601,11 @@ function WorkspaceSourcesMenu({
                 <Plus aria-hidden="true" />
                 {controller.sourceBusy ? (
                   <span>Updating sources…</span>
-                ) : included.length > 0 ? (
-                  <small>{included.length}</small>
                 ) : (
-                  <span>Add source</span>
+                  <>
+                    <span>Add source</span>
+                    {included.length > 0 ? <small>{included.length}</small> : null}
+                  </>
                 )}
               </button>
             </DropdownMenuTrigger>
@@ -2605,10 +2649,12 @@ function WorkspaceSourcesMenu({
 }
 
 function ChangesToolbar({
+  countUnit,
   proposedChangeCount,
   changeScope,
   onChangeScope,
 }: {
+  countUnit: 'Content change' | 'Draft operation';
   proposedChangeCount: number;
   changeScope: 'latest' | 'all';
   onChangeScope: (scope: 'latest' | 'all') => void;
@@ -2629,7 +2675,8 @@ function ChangesToolbar({
         ))}
       </div>
       <span className={composeStyles.changeCount} title="Proposed changes">
-        {proposedChangeCount} {proposedChangeCount === 1 ? 'change' : 'changes'}
+        {proposedChangeCount} {countUnit}
+        {proposedChangeCount === 1 ? '' : 's'}
       </span>
     </div>
   );

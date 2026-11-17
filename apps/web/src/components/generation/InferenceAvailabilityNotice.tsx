@@ -21,7 +21,7 @@ export function InferenceAvailabilityNotice({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (ready) return null;
-  if (loading || status === 'loading') return <output>Checking AI availability…</output>;
+  if (loading || status === 'loading') return <output>Checking AI…</output>;
   if (
     error ||
     status === 'error' ||
@@ -30,7 +30,7 @@ export function InferenceAvailabilityNotice({
   ) {
     return (
       <p role="alert">
-        AI availability could not be checked.{' '}
+        AI status unavailable.{' '}
         <button
           type="button"
           onClick={() => {
@@ -47,7 +47,7 @@ export function InferenceAvailabilityNotice({
   if (capabilities.inference.mode === 'managed') {
     return (
       <output>
-        Managed AI is currently unavailable. Retry or contact your administrator.{' '}
+        Managed AI unavailable. Contact your administrator or retry.{' '}
         <button type="button" onClick={onRetry}>
           Retry
         </button>
@@ -56,7 +56,7 @@ export function InferenceAvailabilityNotice({
   }
   return (
     <output>
-      AI service is unavailable.{' '}
+      AI unavailable.{' '}
       {canAdministerProviderCredentials ? (
         <Link
           href={withReturnTo(
@@ -64,12 +64,12 @@ export function InferenceAvailabilityNotice({
             buildReturnTo(pathname ?? '/', searchParams?.toString())
           )}
         >
-          Configure AI in global Settings
+          Configure AI
         </Link>
       ) : (
         'Contact your deployment administrator.'
       )}{' '}
-      Sources can still be added and used.{' '}
+      Sources remain available.{' '}
       <button type="button" onClick={onRetry}>
         Retry
       </button>

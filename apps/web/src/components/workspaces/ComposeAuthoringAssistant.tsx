@@ -5,13 +5,23 @@ import type {
   WorkspaceAuthoringCard,
   WorkspaceAuthoringOutcome,
 } from '@t3x-dev/api-client';
-import { AlertTriangle, ArrowUp, FileText, Layers, Square, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUp,
+  FileText,
+  HelpCircle,
+  Layers,
+  Loader2,
+  Square,
+  X,
+} from 'lucide-react';
 import NextImage from 'next/image';
 import {
   type ClipboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -307,6 +317,20 @@ export function ComposeAuthoringAssistant({
     images: AttachedImage[];
     files: File[];
   } | null>(null);
+  const modeHelpId = useId();
+  const sendStatus = chat.isStreaming
+    ? 'Generating…'
+    : chat.isLoading
+      ? 'Sending…'
+      : firstMessage || draftPreparation?.busy
+        ? 'Preparing Draft…'
+        : draftPreparation?.importing
+          ? 'Confirm the Draft import to continue.'
+          : model.loading
+            ? 'Checking models…'
+            : !model.isSelectionReady
+              ? 'You can keep writing or add sources.'
+              : 'Enter to send · Shift+Enter for a new line';
   const sendDisabled =
     Boolean(firstMessage || draftPreparation?.busy || draftPreparation?.importing) ||
     chat.isLoading ||
@@ -419,12 +443,14 @@ export function ComposeAuthoringAssistant({
         </p>
       ) : null}
       {!model.isSelectionReady ? (
-        <InferenceAvailabilityNotice
-          loading={model.loading}
-          ready={model.isSelectionReady}
-          error={model.availabilityError}
-          onRetry={model.refresh}
-        />
+        <div className={styles.composerAvailability}>
+          <InferenceAvailabilityNotice
+            loading={model.loading}
+            ready={model.isSelectionReady}
+            error={model.availabilityError}
+            onRetry={model.refresh}
+          />
+        </div>
       ) : null}
       {draftPreparation?.importing ? (
         <div className={styles.activityBootstrap}>
@@ -521,31 +547,49 @@ export function ComposeAuthoringAssistant({
         <div className={styles.discussionComposerFooter}>
           {sourcesControl}
           <div className={styles.composerSubmit}>
-            <GenerationModelSelector
-              onModelChange={model.handleModelChange}
-              onThinkingChange={setThinking}
-              selectedModel={model.selectedModel ?? ''}
-              selectedProvider={model.selectedProvider ?? ''}
-              supportsThinking={supportsThinking}
-              thinkingEnabled={thinkingEnabled}
-            />
-            <select
-              aria-label="Proposal mode"
-              className={styles.postureSelect}
-              disabled={chat.isLoading}
-              onChange={(event) =>
-                setPosture(event.currentTarget.value as WorkspaceProposalPosture)
-              }
-              title={proposalPostureOption(posture).title}
-              value={posture}
-            >
-              {PROPOSAL_POSTURE_OPTIONS.map((option) => (
-                <option key={option.value} title={option.description} value={option.value}>
-                  {option.shortLabel}
-                </option>
-              ))}
-            </select>
+            <div className={styles.composerControl}>
+              <span>Model</span>
+              <GenerationModelSelector
+                onModelChange={model.handleModelChange}
+                onThinkingChange={setThinking}
+                selectedModel={model.selectedModel ?? ''}
+                selectedProvider={model.selectedProvider ?? ''}
+                supportsThinking={supportsThinking}
+                thinkingEnabled={thinkingEnabled}
+              />
+            </div>
+            <label className={styles.composerControl}>
+              <span>Mode</span>
+              <select
+                aria-label="Proposal mode"
+                aria-describedby={modeHelpId}
+                className={styles.postureSelect}
+                disabled={chat.isLoading}
+                onChange={(event) =>
+                  setPosture(event.currentTarget.value as WorkspaceProposalPosture)
+                }
+                title={proposalPostureOption(posture).title}
+                value={posture}
+              >
+                {PROPOSAL_POSTURE_OPTIONS.map((option) => (
+                  <option key={option.value} title={option.description} value={option.value}>
+                    {option.shortLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <details className={styles.composerModeHelp}>
+              <summary aria-label={`About ${proposalPostureOption(posture).shortLabel} mode`}>
+                <HelpCircle size={15} aria-hidden="true" />
+              </summary>
+              <p id={modeHelpId}>
+                {proposalPostureOption(posture).title}. {proposalPostureOption(posture).description}
+              </p>
+            </details>
             <button
+              title={
+                chat.isStreaming ? 'Stop generating' : sendDisabled ? sendStatus : 'Send message'
+              }
               aria-label={chat.isStreaming ? 'Stop generating' : 'Send message'}
               className={styles.send}
               disabled={!chat.isStreaming && sendDisabled}
@@ -554,12 +598,17 @@ export function ComposeAuthoringAssistant({
             >
               {chat.isStreaming ? (
                 <Square aria-hidden="true" className="size-4 fill-current text-current" />
+              ) : chat.isLoading || firstMessage || draftPreparation?.busy ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
               ) : (
                 <ArrowUp aria-hidden="true" className="size-4" />
               )}
             </button>
           </div>
         </div>
+        <output className={styles.composerSendStatus} aria-live="polite">
+          {sendStatus}
+        </output>
       </fieldset>
     </div>
   );

@@ -176,13 +176,18 @@ const schemaEditingMocks = vi.hoisted(() => ({ hasPendingEdit: vi.fn(), read: vi
 vi.mock('@/hooks/workspaces/useWorkspaceSchemaEditingRequests', () => ({
   useWorkspaceSchemaEditingRequests: () => schemaEditingMocks,
 }));
-const savedSchemaMock = vi.hoisted(() => ({ candidate: null as StudioSchemaEditCandidate | null }));
+const savedSchemaMock = vi.hoisted(() => ({
+  candidate: null as StudioSchemaEditCandidate | null,
+  loading: false,
+  error: undefined as string | undefined,
+  refresh: vi.fn(),
+}));
 vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
   useStudioSchemaEditCandidate: () => ({
     candidate: savedSchemaMock.candidate,
-    loading: false,
-    error: undefined,
-    refresh: vi.fn(),
+    loading: savedSchemaMock.loading,
+    error: savedSchemaMock.error,
+    refresh: savedSchemaMock.refresh,
   }),
 }));
 const schemaDiscussion = vi.fn();
@@ -286,6 +291,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     useProjectStore.setState({ projects: [], details: {} });
     schemaCardMocks.record = null;
     savedSchemaMock.candidate = null;
+    savedSchemaMock.loading = false;
+    savedSchemaMock.error = undefined;
+    savedSchemaMock.refresh.mockClear();
     schemaEditingMocks.hasPendingEdit.mockReset().mockResolvedValue(false);
     schemaEditingMocks.read.mockReset().mockRejectedValue(new Error('Candidate must be loaded'));
     localStorage.removeItem('t3x-workspace-draft-width');
@@ -478,6 +486,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     renderCompose();
     expect(screen.queryByRole('navigation', { name: 'Workspace tools' })).not.toBeInTheDocument();
     openInspector();
+    expect(screen.queryByRole('region', { name: 'Workspace chat list' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
     const sidebar = screen.getByRole('complementary', { name: 'Workspace conversations' });
     expect(within(sidebar).getByRole('region', { name: 'Workspace chat list' })).toBeVisible();
     expect(
@@ -515,6 +525,62 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it.each([
+    0, 1,
+  ])('shows a saved Schema candidate separately from %i Content changes without adopting it', (count) => {
+    enableComposeActivity();
+    savedSchemaMock.candidate = {
+      candidateId: 'schema-edit',
+      revision: 4,
+    } as StudioSchemaEditCandidate;
+    activityMocks.value!.view!.base = { title: 'Before' };
+    activityMocks.value!.view!.current = { title: count ? 'After' : 'Before' };
+    activityMocks.value!.view!.netDiff = count
+      ? [{ nodeId: 'title', path: 'title', before: 'Before', after: 'After' }]
+      : [];
+    renderCompose();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent(
+      'Schema candidate r4'
+    );
+    openInspector();
+    expect(screen.getByRole('region', { name: 'Saved Schema candidate' })).toHaveTextContent(
+      'Saved · not applied'
+    );
+    expect(
+      screen.getByText(`${count} Content change${count === 1 ? '' : 's'}`, {
+        selector: 'span[title="Proposed changes"]',
+      })
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'View Schema status', exact: true }));
+    expect(screen.getByRole('button', { name: 'Schema', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'Saved Schema candidate' })).toHaveTextContent(
+      'Schema candidate r4'
+    );
+    expect(screen.queryByRole('button', { name: 'View Schema status' })).not.toBeInTheDocument();
+    expect(activityMocks.value!.publish).not.toHaveBeenCalled();
+    expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes loading and failed Schema status from having no candidate', () => {
+    savedSchemaMock.loading = true;
+    const pending = renderCompose();
+    openInspector();
+    expect(
+      screen.getByText('Checking saved Schema…', { selector: 'div:not([hidden]) > output' })
+    ).toBeInTheDocument();
+    pending.unmount();
+    savedSchemaMock.loading = false;
+    savedSchemaMock.error = 'Read unavailable';
+    renderCompose();
+    openInspector();
+    expect(screen.getByRole('alert')).toHaveTextContent('Saved Schema status unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema status' }));
+    expect(savedSchemaMock.refresh).toHaveBeenCalledOnce();
+  });
 
   it('opens a separate shared Details card for each recorded operation field', () => {
     enableComposeActivity();
@@ -1294,8 +1360,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
   it('limits conversation width so changes and Chat retain room, and ignores invalid saved preferences', () => {
     localStorage.setItem('t3x-compose-balanced-conversation-width', 'not-a-width');
-    const { splitter } = renderResizableCompose();
+    renderResizableCompose();
     openInspector();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
+    const splitter = screen.getByRole('separator', { name: 'Resize conversation panel' });
     expect(splitter).toHaveAttribute('aria-valuenow', '216');
     Object.defineProperty(splitter.parentElement, 'clientWidth', {
       value: 1000,
@@ -1429,6 +1497,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     openInspector();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
