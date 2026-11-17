@@ -55,21 +55,21 @@
 }
 .toolbar {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin: 0 24px 12px;
+  border-bottom: 1px solid var(--stroke-divider);
+  padding-bottom: 8px;
+  margin: 0 24px 16px;
 }
 .subjects {
   display: flex;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
+  gap: 16px;
 }
 .subjects button {
-  padding: 7px 12px;
-  border-radius: var(--radius-sm);
+  padding: 9px 4px;
+  border-bottom: 2px solid transparent;
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -83,11 +83,15 @@
   padding: 16px;
 }
 .subjects button[aria-pressed="true"] {
-  background: var(--accent-commit-soft);
+  border-bottom-color: var(--accent-commit);
   color: var(--accent-commit);
   font-weight: 600;
 }
 .views {
+  padding: 3px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -155,14 +159,16 @@
 }
 .selectedDetailsHeader {
   border-bottom: 1px solid var(--stroke-divider);
-  padding: 12px 20px;
+  padding: 12px 16px;
 }
 .selectedDetailsHeader h2 {
   font-size: 14px;
   font-weight: 600;
 }
 .selectedDetailsReason {
-  padding: 0 20px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  font-size: 12px;
 }
 .selectedDetailsUnavailable {
   border-top: 1px solid var(--stroke-divider);
@@ -261,11 +267,22 @@
 }
 .preview {
   min-width: 0;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+.preview > div {
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
 }
 .preview h2 {
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .notice {
   padding: 12px 24px;
@@ -274,10 +291,6 @@
   border-bottom: 1px solid var(--stroke-divider);
 }
 @media (max-width: 1000px) {
-  .toolbar,
-  .content {
-    padding-inline: 16px;
-  }
   .views button {
     padding-inline: 9px;
   }
@@ -593,4 +606,16 @@
   .toolbar {
     margin-inline: 12px;
   }
+}
+
+.fieldActions {
+  padding: 12px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.selectedDetailsReason > summary {
+  cursor: pointer;
+  font-weight: 500;
 }

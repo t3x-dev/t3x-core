@@ -3468,6 +3468,10 @@ function ReviewSurface({
               candidate={candidate}
               model={structureModel}
               row={activeStructureRow}
+              onRevise={() => {
+                controller.prefillAssistant(`Revise ${activeStructureRow.path}: `);
+                onModeChange('compose');
+              }}
             />
           ) : undefined
         }
@@ -3523,10 +3527,8 @@ function ReviewSurface({
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
             model={structureModel}
-            selectedRow={activeStructureRow}
             onSelectRow={setSelectedStructureRowId}
             controller={controller}
-            onModeChange={onModeChange}
           />
         ) : comparisonStatus ? (
           comparisonStatus
@@ -3536,10 +3538,8 @@ function ReviewSurface({
             activeRowId={activeStructureRow?.id ?? null}
             candidate={candidate}
             checks={checks}
-            controller={controller}
             modifiedLabel={formatRelativeTime(controller.candidate.updatedAt)}
             modifiedOnly={false}
-            onEditInCompose={() => onModeChange('compose')}
             onSelectRow={setSelectedStructureRowId}
             preparing={preparing}
             query=""
@@ -3848,6 +3848,7 @@ function findWorkspaceReviewRow(rows: WorkspaceReviewStructureRow[], path: strin
 }
 
 function WorkspaceReviewSelectedDetails({
+  onRevise,
   activity,
   candidate,
   model,
@@ -3857,6 +3858,7 @@ function WorkspaceReviewSelectedDetails({
   candidate: WorkspaceCandidate;
   model: WorkspaceReviewStructureModel;
   row: WorkspaceReviewStructureRow;
+  onRevise: () => void;
 }) {
   const before = readStatePointValue(model.baseline, row.path);
   const after = readStatePointValue(model.head, row.path);
@@ -3901,13 +3903,15 @@ function WorkspaceReviewSelectedDetails({
         path={row.path}
         revisionLabel={version}
         current={current}
+        showCurrentValue={matchesBase}
         unknown={false}
         comparison={{ before: previous, after: current }}
         comparisonLabel={`Whole draft · Base → ${version}`}
         matchesBase={matchesBase}
       />
       {action ? (
-        <div className={workbenchStyles.selectedDetailsReason}>
+        <details className={workbenchStyles.selectedDetailsReason}>
+          <summary>Latest action · A{action.sequence}</summary>
           <ComposeChangeReason
             reason={action.reason ?? ''}
             actor={action.actor.id}
@@ -3916,7 +3920,7 @@ function WorkspaceReviewSelectedDetails({
             action={action}
             contextLabel={`Latest saved action affecting this path · A${action.sequence}. YOps describes the whole action.`}
           />
-        </div>
+        </details>
       ) : (
         <p className={workbenchStyles.selectedDetailsUnavailable}>
           {matchesBase
@@ -3924,6 +3928,11 @@ function WorkspaceReviewSelectedDetails({
             : 'Saved action details are unavailable for this path in the loaded history.'}
         </p>
       )}
+      <div className={workbenchStyles.fieldActions}>
+        <Button size="sm" variant="canvas-outline" onClick={onRevise}>
+          <Sparkles aria-hidden="true" /> Ask AI to revise
+        </Button>
+      </div>
     </section>
   );
 }
@@ -3953,26 +3962,13 @@ type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
   model,
-  selectedRow,
   onSelectRow,
   controller,
-  onModeChange,
 }: {
   model: WorkspaceReviewStructureModel;
-  selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
   controller: WorkspaceComposeReviewController;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const selectedKind = selectedRow?.diff?.kind;
-  const copyPath = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard)
-      void navigator.clipboard.writeText(selectedRow?.path ?? '');
-  };
-  const revise = () => {
-    controller.prefillAssistant(`Revise ${selectedRow?.path ?? ''}: `);
-    onModeChange('compose');
-  };
   return (
     <section aria-label="Rendered result">
       {controller.error ? <p role="alert">{controller.error}</p> : null}
@@ -3983,30 +3979,6 @@ function WorkspaceRenderedReview({
           if (row) onSelectRow(row.id);
         }}
       />
-      <details className={workbenchStyles.selection}>
-        <summary>Selected change · actions</summary>
-        <section aria-label="Review details">
-          <section aria-label="Selected section" className={reviewStyles.panel}>
-            <header>
-              <h2>
-                <Pencil aria-hidden="true" /> Selected change
-              </h2>
-              <button onClick={copyPath} type="button">
-                <Copy aria-hidden="true" /> Copy path
-              </button>
-            </header>
-            <code className={reviewStyles.path}>
-              {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
-            </code>
-            <span className={reviewStyles.kind} data-kind={selectedKind}>
-              {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
-            </span>
-            <button className={reviewStyles.primary} onClick={revise} type="button">
-              <Sparkles aria-hidden="true" /> Ask AI to revise
-            </button>
-          </section>
-        </section>
-      </details>
     </section>
   );
 }
@@ -4015,10 +3987,8 @@ function WorkspaceReviewStructureView({
   activeRowId,
   candidate,
   checks,
-  controller,
   modifiedLabel,
   modifiedOnly,
-  onEditInCompose,
   onSelectRow,
   preparing,
   query,
@@ -4032,10 +4002,8 @@ function WorkspaceReviewStructureView({
   activeRowId: string | null;
   candidate: WorkspaceCandidate;
   checks: ReviewCheckView[];
-  controller: WorkspaceComposeReviewController;
   modifiedLabel: string;
   modifiedOnly: boolean;
-  onEditInCompose: () => void;
   onSelectRow: (rowId: string) => void;
   preparing: boolean;
   query: string;
@@ -4135,8 +4103,6 @@ function WorkspaceReviewStructureView({
           <summary>Selected change · source and actions</summary>
           <WorkspaceReviewNodeInspector
             candidate={candidate}
-            controller={controller}
-            onEditInCompose={onEditInCompose}
             selectedRow={selectedRow}
             sourceLabel={sourceLabel}
           />
@@ -4470,14 +4436,10 @@ function WorkspaceReviewDiffMarker({ kind }: { kind: StructuredDiffKind }) {
 
 function WorkspaceReviewNodeInspector({
   candidate,
-  controller,
-  onEditInCompose,
   selectedRow,
   sourceLabel,
 }: {
   candidate: WorkspaceCandidate;
-  controller: WorkspaceComposeReviewController;
-  onEditInCompose: () => void;
   selectedRow: WorkspaceReviewStructureRow | null;
   sourceLabel: string;
 }) {
@@ -4486,24 +4448,15 @@ function WorkspaceReviewNodeInspector({
     : { href: null, label: sourceLabel };
   return (
     <aside aria-label="Workspace selected change" className={diffStyles.inspector}>
-      <WorkspaceReviewChangeReviewPanel
-        controller={controller}
-        onEditInCompose={onEditInCompose}
-        row={selectedRow}
-        source={source}
-      />
+      <WorkspaceReviewChangeReviewPanel row={selectedRow} source={source} />
     </aside>
   );
 }
 
 function WorkspaceReviewChangeReviewPanel({
-  controller,
-  onEditInCompose,
   row,
   source,
 }: {
-  controller: WorkspaceComposeReviewController;
-  onEditInCompose: () => void;
   row: WorkspaceReviewStructureRow | null;
   source: { href: string | null; label: string };
 }) {
@@ -4512,10 +4465,6 @@ function WorkspaceReviewChangeReviewPanel({
   }
   const beforeValue = workspaceReviewBeforeValue(row);
   const resultValue = workspaceReviewResultValue(row);
-  const revise = () => {
-    controller.prefillAssistant(`Revise ${row.path}: `);
-    onEditInCompose();
-  };
   const copyPath = () => {
     if (navigator.clipboard) void navigator.clipboard.writeText(row.path);
   };
@@ -4564,9 +4513,6 @@ function WorkspaceReviewChangeReviewPanel({
             <span>{source.label}</span>
           </div>
         )}
-        <button className={diffStyles.revise} onClick={revise} type="button">
-          <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-        </button>
       </div>
     </section>
   );

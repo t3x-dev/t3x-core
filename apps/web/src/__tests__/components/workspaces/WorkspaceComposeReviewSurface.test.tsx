@@ -2663,7 +2663,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       netDiff: [card, otherCard],
       hasChanges: true,
     });
+    const prefillAssistant = vi.fn();
+    const onModeChange = vi.fn();
     const controller = {
+      prefillAssistant,
       candidate,
       isBusy: false,
       busyAction: null,
@@ -2675,7 +2678,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         candidate={candidate}
         controller={controller}
         mode="review"
-        onModeChange={vi.fn()}
+        onModeChange={onModeChange}
       />
     );
 
@@ -2726,6 +2729,11 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'Matches Base · no change'
     );
+    expect(screen.queryByText('Selected change · actions')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Ask AI to revise' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI to revise' }));
+    expect(prefillAssistant).toHaveBeenCalledWith('Revise prd/summary/priority: ');
+    expect(onModeChange).toHaveBeenCalledWith('compose');
     fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     fireEvent.click(within(screen.getByRole('table')).getByTitle('prd/summary').closest('tr')!);
     expect(

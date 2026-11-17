@@ -351,6 +351,7 @@ export function ComposeChangeContext({
   current,
   unknown,
   currentLabel = 'Current Draft value',
+  showCurrentValue = true,
   comparison,
   comparisonLabel,
   matchesBase = false,
@@ -362,6 +363,7 @@ export function ComposeChangeContext({
   current: TransitionProtocolValue | undefined;
   unknown: boolean;
   currentLabel?: string;
+  showCurrentValue?: boolean;
   comparison: {
     before?: TransitionProtocolValue;
     after?: TransitionProtocolValue;
@@ -398,7 +400,9 @@ export function ComposeChangeContext({
         </button>
       </div>
       {copyNotice ? <output className={styles.helper}>{copyNotice}</output> : null}
-      <ComposeDetailValue key={path} value={current} unknown={unknown} label={currentLabel} />
+      {showCurrentValue ? (
+        <ComposeDetailValue key={path} value={current} unknown={unknown} label={currentLabel} />
+      ) : null}
       <div className={styles.selectedDelta}>
         <span>{comparisonLabel}</span>
         {matchesBase ? (

@@ -20,6 +20,15 @@
   overflow: visible;
   padding: 0;
 }
+.reference .reviewBody .mainColumn {
+  overflow: hidden;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+}
+.reference .reviewBody .toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
 .reference .reviewBody .inspector {
   max-height: none;
   overflow: visible;
