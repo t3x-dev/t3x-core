@@ -65,7 +65,8 @@ it('groups More by purpose, keeps discard scopes distinct and does not duplicate
   expect(within(menu).getByRole('group', { name: 'Schema settings' })).toBeVisible();
   expect(within(menu).getByRole('group', { name: 'Check and publish' })).toBeVisible();
   const discardGroup = within(menu).getByRole('group', { name: 'Discard changes' });
-  expect(within(menu).queryByRole('menuitem', { name: /YAML/ })).not.toBeInTheDocument();
+  expect(within(menu).getAllByRole('menuitem', { name: 'View draft YAML' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'View draft YAML' })).not.toBeInTheDocument();
   fireEvent.click(
     within(discardGroup).getByRole('menuitem', { name: 'Discard all unsaved changes' })
   );
@@ -95,10 +96,11 @@ it('retains disabled reasons and guards after moving actions into groups', () =>
       onDiscardSaved={vi.fn()}
     />
   );
-  const yaml = screen.getByRole('button', { name: 'View draft YAML' });
-  expect(yaml).toBeDisabled();
-  expect(yaml).toHaveAccessibleDescription('Fix field errors before opening YAML.');
+  expect(screen.queryByRole('button', { name: 'View draft YAML' })).not.toBeInTheDocument();
   openMore();
+  const yaml = screen.getByRole('menuitem', { name: 'View draft YAML' });
+  expect(yaml).toHaveAttribute('aria-disabled', 'true');
+  expect(yaml).toHaveAccessibleDescription('Fix field errors before opening YAML.');
   for (const name of [
     'Relationships & rules…',
     'View checks and impact',

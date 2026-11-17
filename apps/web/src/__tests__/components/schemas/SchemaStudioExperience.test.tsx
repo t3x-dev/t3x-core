@@ -393,7 +393,8 @@ it('restores an exact missing source and reopens the same saved candidate', asyn
   });
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByText(/needs missing sources: t3x\/weekly-goals @ 1.0.0/)).toBeVisible();
-  expect(screen.getByRole('button', { name: 'View draft YAML' })).toBeDisabled();
+  expect(yamlAction()).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
   fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
   expect(await screen.findByText(/Source release is unavailable/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
@@ -1447,10 +1448,16 @@ function closeSources() {
   const dialog = screen.queryByRole('dialog', { name: 'Schema sources' });
   if (dialog) fireEvent.click(within(dialog).getByRole('button', { name: 'Close', exact: true }));
 }
+function yamlAction() {
+  if (!screen.queryByRole('menuitem', { name: 'View draft YAML' })) {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
+  }
+  return screen.getByRole('menuitem', { name: 'View draft YAML' });
+}
 function openYaml() {
   if (screen.queryByRole('dialog', { name: 'Schema YAML editor' })) return;
   closeSources();
-  fireEvent.click(screen.getByRole('button', { name: 'View draft YAML' }));
+  fireEvent.click(yamlAction());
 }
 
 it('keeps sources beside the fields and opens YAML directly without nested panels', () => {
@@ -1470,9 +1477,9 @@ it('keeps sources beside the fields and opens YAML directly without nested panel
     'aria-disabled',
     'true'
   );
-  expect(screen.queryByRole('menuitem', { name: /YAML/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'View draft YAML' })).toBeVisible();
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-  fireEvent.click(screen.getByRole('button', { name: 'View draft YAML' }));
+  fireEvent.click(yamlAction());
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
   expect(screen.getByLabelText('Schema definition YAML editor')).toBeVisible();
   expect(screen.queryByText('Definition details')).not.toBeInTheDocument();
@@ -1724,6 +1731,39 @@ it('starts blank explicitly and saves the empty definition before Schema Review'
   );
   expect(mocks.prepareContent).not.toHaveBeenCalled();
   expect(mocks.fullReview).not.toHaveBeenCalled();
+});
+
+it.each([
+  false,
+  true,
+])('hides Ready for review while the editor has pending changes (invalid: %s)', (invalid) => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  mocks.workspaces = [boundWorkspace()];
+  mocks.data = {
+    ...mocks.data,
+    schema: { nodes: { task: { slots: { title: { type: 'string' } } } } },
+    report: { valid: true, issues: [] },
+    workspace: { id: 'workspace_branch:main', revision: 2, changes: [] },
+  };
+  mocks.reviewStatus.latest = {
+    snapshot_id: 'current-review',
+    schema_review: { draft: { status: 'bound', schemaHash: 'definition-hash' }, draftContent: {} },
+    snapshot: {
+      review: { precondition: { workspaceRevision: 2, refName: 'main', refHead: null } },
+    },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByText('Ready for review')).toBeVisible();
+  fireEvent.focus(screen.getByLabelText('Name task/title'));
+  if (invalid) {
+    fireEvent.change(screen.getByLabelText('Name task/title'), { target: { value: 'title-' } });
+  } else {
+    fireEvent.change(screen.getByLabelText('Description for slot task/title'), {
+      target: { value: 'Unsaved description' },
+    });
+  }
+  expect(screen.queryByText('Ready for review')).not.toBeInTheDocument();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
 it('keeps rejected Review status visible while hiding Schema Review navigation', () => {
@@ -2592,7 +2632,7 @@ it.each([
 it('opens draft YAML directly without saving or adopting', () => {
   mocks.workspaces = [boundWorkspace()];
   render(<SchemaStudioExperience projectId="p" />);
-  fireEvent.click(screen.getByRole('button', { name: 'View draft YAML' }));
+  fireEvent.click(yamlAction());
   expect(screen.getByRole('dialog', { name: 'Schema YAML editor' })).toBeVisible();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   expect(mocks.apply).not.toHaveBeenCalled();

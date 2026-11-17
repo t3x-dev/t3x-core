@@ -1568,7 +1568,7 @@ export function SchemaStudioExperience({
             ? 'Candidate · not adopted'
             : workflow.rejected
               ? 'Changes rejected · draft kept'
-              : workflow.matchesReview && workflow.hasChanges
+              : workflow.matchesReview && workflow.hasChanges && !editorInvalid && !dataDirty
                 ? 'Ready for review'
                 : (savedCandidateRef || activeCandidate) && workflow.hasChanges
                   ? 'Draft · not committed'

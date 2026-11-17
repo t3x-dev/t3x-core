@@ -633,10 +633,13 @@ describe('Schema editor lifecycle states', () => {
       expect(screen.getByRole('button', { name: 'Add root node', exact: true })).toBeEnabled()
     );
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText(/Change description/, { selector: 'summary' }));
-    expect(screen.getByRole('textbox', { name: 'Schema change intent' })).toBeVisible();
+    expect(
+      screen.queryByText(/Change description/, { selector: 'summary' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Move to…' })).not.toBeInTheDocument();
     expect(screen.getByText('No nodes yet')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Add node', exact: true }));
+    expect(screen.getByText(/Change description/, { selector: 'summary' })).toBeVisible();
     expect(handlers.onPreview).toHaveBeenLastCalledWith(
       expect.objectContaining({ nodes: { new_node: expect.any(Object) } }),
       []

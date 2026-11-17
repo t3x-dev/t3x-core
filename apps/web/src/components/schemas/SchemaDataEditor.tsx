@@ -938,7 +938,7 @@ export function SchemaDataEditor({
               toolbar={workbenchFooter && view === 'data' ? toolbar : undefined}
               unavailable={schemaUnavailable}
               footer={
-                workbenchFooter && definition ? (
+                workbenchFooter && definition && rows.length > 0 ? (
                   <details className={styles.changeNote}>
                     <summary>
                       Change description <span>Optional</span>

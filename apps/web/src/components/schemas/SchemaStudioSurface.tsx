@@ -1,6 +1,6 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, Braces, ChevronDown, FileCode2, Undo2 } from 'lucide-react';
+import { ArrowUpRight, Braces, ChevronDown, Undo2 } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useId } from 'react';
 import { Button } from '@/components/ui/button';
@@ -115,16 +115,6 @@ export function SchemaStudioSurface({
             </div>
             <div className={s.toolbarActions}>
               <fieldset className={s.editingTools} aria-label="Schema editing tools">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="View draft YAML"
-                  aria-describedby={editorInvalid ? yamlHint : undefined}
-                  disabled={!canEditDefinition}
-                  onClick={onEditDefinition}
-                >
-                  <FileCode2 size={14} aria-hidden="true" /> View draft YAML
-                </Button>
                 {onUndo ? (
                   <Button
                     variant="ghost"
@@ -183,6 +173,13 @@ export function SchemaStudioSurface({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className={s.moreMenu}>
+                  <DropdownMenuItem
+                    aria-describedby={editorInvalid ? yamlHint : undefined}
+                    disabled={!canEditDefinition}
+                    onSelect={onEditDefinition}
+                  >
+                    View draft YAML
+                  </DropdownMenuItem>
                   <DropdownMenuItem disabled={!canSave} onSelect={onSave}>
                     Save now
                   </DropdownMenuItem>
