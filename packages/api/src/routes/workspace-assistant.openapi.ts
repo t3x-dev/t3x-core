@@ -326,93 +326,101 @@ workspaceAssistantRoutes.post(
     });
   }
 );
-const settingsPath =
-  '/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings';
-workspaceAssistantRoutes.get(settingsPath, async (c) => {
-  const { projectId, workspaceId } = Params.parse(c.req.param());
-  const conversationId = z.string().min(1).parse(c.req.query('conversation_id'));
-  const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId);
-  if (access instanceof Response) return access;
-  const principal = requireTransitionAuthority({
-    apiKey: transitionApiKey(c),
-    projectId,
-    scope: 'transition:inspect',
-  });
-  const record = await createAssistantSchemaSettingsService(
-    c,
-    db,
-    projectId,
-    workspaceId,
-    principal.actor,
-    conversationId
-  ).read();
-  c.header('Cache-Control', 'private, no-store');
-  return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
-});
-workspaceAssistantRoutes.post(settingsPath, async (c) => {
-  const { projectId, workspaceId } = Params.parse(c.req.param());
-  const input = z
-    .object({
-      conversationId: z.string().min(1),
-      settingsId: z.string().min(1),
-      ifRevision: z.number().int().positive(),
-      settings: AssistantSchemaSettingsInputSchema.nullable(),
-      generateSnapshot: z.boolean().default(false),
-      applyToDraft: z.boolean().default(false),
-      discardStudioCandidate: z.boolean().default(false),
-    })
-    .strict()
-    .parse(await c.req.json());
-  const db = await getDB();
-  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
-  if (access instanceof Response) return access;
-  const principal = requireTransitionAuthority({
-    apiKey: transitionApiKey(c),
-    projectId,
-    scope: 'transition:propose',
-  });
-  if (principal.actor.kind !== 'human')
-    return errorResponse(c, 'FORBIDDEN', 'Settings confirmation requires a human principal.');
-  const service = createAssistantSchemaSettingsService(
-    c,
-    db,
-    projectId,
-    workspaceId,
-    principal.actor,
-    input.conversationId
-  );
-  if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
-    return errorResponse(c, 'INVALID_REQUEST', 'Snapshot generation requires confirmed settings.');
-  await service.confirm(input.settingsId, input.ifRevision, input.settings, {
-    discardStudioCandidate: input.discardStudioCandidate,
-  });
-  let failure: unknown;
-  try {
-    if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
-    if (input.applyToDraft) await service.applyToDraft(input.settingsId);
-  } catch (error) {
-    failure = error;
-  }
-  const record = await service.read();
-  if (failure instanceof StudioError)
-    return errorResponse(c, failure.code, failure.message, failure.details);
-  if (failure instanceof TypeError || failure instanceof WorkspaceSchemaYOpsError)
-    return errorResponse(c, 'INVALID_REQUEST', failure.message);
-  if (failure instanceof ConflictError)
-    return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
-  if (failure instanceof HTTPException) return failure.getResponse();
-  if (failure)
-    return errorResponse(
+workspaceAssistantRoutes.get(
+  '/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings',
+  async (c) => {
+    const { projectId, workspaceId } = Params.parse(c.req.param());
+    const conversationId = z.string().min(1).parse(c.req.query('conversation_id'));
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId);
+    if (access instanceof Response) return access;
+    const principal = requireTransitionAuthority({
+      apiKey: transitionApiKey(c),
+      projectId,
+      scope: 'transition:inspect',
+    });
+    const record = await createAssistantSchemaSettingsService(
       c,
-      'INTERNAL_ERROR',
-      failure instanceof Error ? failure.message : 'Schema operation failed.'
+      db,
+      projectId,
+      workspaceId,
+      principal.actor,
+      conversationId
+    ).read();
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ success: true, data: record ? schemaSettingsView(record) : null });
+  }
+);
+workspaceAssistantRoutes.post(
+  '/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings',
+  async (c) => {
+    const { projectId, workspaceId } = Params.parse(c.req.param());
+    const input = z
+      .object({
+        conversationId: z.string().min(1),
+        settingsId: z.string().min(1),
+        ifRevision: z.number().int().positive(),
+        settings: AssistantSchemaSettingsInputSchema.nullable(),
+        generateSnapshot: z.boolean().default(false),
+        applyToDraft: z.boolean().default(false),
+        discardStudioCandidate: z.boolean().default(false),
+      })
+      .strict()
+      .parse(await c.req.json());
+    const db = await getDB();
+    const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+    if (access instanceof Response) return access;
+    const principal = requireTransitionAuthority({
+      apiKey: transitionApiKey(c),
+      projectId,
+      scope: 'transition:propose',
+    });
+    if (principal.actor.kind !== 'human')
+      return errorResponse(c, 'FORBIDDEN', 'Settings confirmation requires a human principal.');
+    const service = createAssistantSchemaSettingsService(
+      c,
+      db,
+      projectId,
+      workspaceId,
+      principal.actor,
+      input.conversationId
     );
-  return c.json({
-    success: true,
-    data: record ? schemaSettingsView(record) : null,
-  });
-});
+    if ((input.generateSnapshot || input.applyToDraft) && !input.settings)
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        'Snapshot generation requires confirmed settings.'
+      );
+    await service.confirm(input.settingsId, input.ifRevision, input.settings, {
+      discardStudioCandidate: input.discardStudioCandidate,
+    });
+    let failure: unknown;
+    try {
+      if (input.generateSnapshot || input.applyToDraft) await service.propose(input.settingsId);
+      if (input.applyToDraft) await service.applyToDraft(input.settingsId);
+    } catch (error) {
+      failure = error;
+    }
+    const record = await service.read();
+    if (failure instanceof StudioError)
+      return errorResponse(c, failure.code, failure.message, failure.details);
+    if (failure instanceof TypeError || failure instanceof WorkspaceSchemaYOpsError)
+      return errorResponse(c, 'INVALID_REQUEST', failure.message);
+    if (failure instanceof ConflictError)
+      return errorResponse(c, 'CONFLICT', 'Workspace changed. Refresh the settings card.');
+    if (failure instanceof HTTPException) return failure.getResponse();
+    if (failure)
+      return errorResponse(
+        c,
+        'INTERNAL_ERROR',
+        failure instanceof Error ? failure.message : 'Schema operation failed.'
+      );
+    return c.json({
+      success: true,
+      data: record ? schemaSettingsView(record) : null,
+    });
+  }
+);
 const recovery = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/source-chat/assistant/operations/{operationId}',

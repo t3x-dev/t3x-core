@@ -2566,6 +2566,22 @@
     },
     {
       "source": "workspace-assistant.openapi.ts",
+      "method": "GET",
+      "path": "/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings",
+      "policy": "project",
+      "rationale": "Read saved Schema settings under project read, private Workspace ownership and Transition inspect authority.",
+      "action": "project:read"
+    },
+    {
+      "source": "workspace-assistant.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/schema-settings",
+      "policy": "project",
+      "rationale": "Confirm Schema settings under project edit, private Workspace ownership and human Transition propose authority; preserve revision and adoption guards.",
+      "action": "project:edit"
+    },
+    {
+      "source": "workspace-assistant.openapi.ts",
       "method": "POST",
       "path": "/v1/projects/:projectId/workspaces/:workspaceId/source-chat/assistant/stream",
       "policy": "project",
