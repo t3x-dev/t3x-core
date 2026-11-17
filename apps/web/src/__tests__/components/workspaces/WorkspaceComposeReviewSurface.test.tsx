@@ -648,7 +648,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
-    expect(screen.getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Structure', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     );
@@ -2167,7 +2167,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(snapshotMocks.list).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
@@ -2191,7 +2191,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(within(selectedChange).getByText('Previous outcome')).toBeInTheDocument();
     expect(within(selectedChange).getByText('Auditable rollout outcome')).toBeInTheDocument();
-    const reviewDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const reviewDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(reviewDetails).toHaveTextContent('prd/summary/outcome');
     expect(reviewDetails).toHaveTextContent('Previous outcome');
     expect(reviewDetails).toHaveTextContent('Auditable rollout outcome');
@@ -2238,9 +2238,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
-      'prd/requirements/canary/title'
-    );
+    expect(screen.queryByRole('complementary', { name: 'Review Details' })).toBeNull();
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
@@ -2612,13 +2610,13 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
 
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'prd/summary/outcome'
     );
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/outcome').closest('tr')!
     );
-    const details = screen.getByRole('region', { name: 'Selected review Details' });
+    const details = screen.getByRole('complementary', { name: 'Review Details' });
     expect(details).toHaveTextContent('Before');
     expect(details).toHaveTextContent('After');
     const actionDetails = within(details).getByRole('region', { name: 'Action details' });
@@ -2631,7 +2629,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/title').closest('tr')!
     );
-    const otherDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const otherDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(otherDetails).toHaveTextContent('Old title');
     expect(otherDetails).toHaveTextContent('New title');
     expect(within(otherDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
@@ -2639,7 +2637,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/priority').closest('tr')!
     );
-    const unchangedDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const unchangedDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(unchangedDetails).toHaveTextContent('prd/summary/priority');
     expect(unchangedDetails).toHaveTextContent('Matches Base · no change');
     expect(unchangedDetails).toHaveTextContent(
@@ -2653,16 +2651,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         .getByTitle('content/trees/[key=prd]/children/[key=summary]/slots/priority')
         .closest('tr')!
     );
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'prd/summary/priority'
     );
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'Matches Base · no change'
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     fireEvent.click(within(screen.getByRole('table')).getByTitle('prd/summary').closest('tr')!);
     expect(
-      within(screen.getByRole('region', { name: 'Selected review Details' })).getByRole('region', {
+      within(screen.getByRole('complementary', { name: 'Review Details' })).getByRole('region', {
         name: 'Action details',
       })
     ).toHaveTextContent('Clarify the intended outcome.');
@@ -2802,13 +2800,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Structure' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     expect(screen.getByRole('region', { name: 'Review readiness' })).toBeInTheDocument();
     expect(
       within(screen.getByRole('navigation', { name: 'Review views' }))
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Changes', 'YAML', 'Preview']);
+    ).toEqual(['Structure', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
@@ -3159,7 +3160,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
     expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
     expect(
@@ -3298,7 +3299,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         .map((item) => item.textContent)
     ).toEqual(['Field', 'Before', 'After']);
     expect(within(review).getByRole('button', { name: 'YAML' })).toBeDisabled();
-    expect(within(review).getByRole('region', { name: 'Check summary' })).toBeVisible();
+    expect(within(review).getByText('Not prepared')).toBeVisible();
     expect(within(review).queryByRole('button', { name: 'Edit in Compose' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Prepare review' })).not.toBeInTheDocument();
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
@@ -3313,6 +3314,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       preview: {
         schema: { nodes: { aaa: { description: 'Saved description' } } },
         workspace: {
+          binding: null,
           changes: [{ kind: 'ADD', path: 'nodes.aaa.description', summary: 'Saved description' }],
         },
       },
@@ -3326,7 +3328,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     expect(within(review).getByRole('button', { name: 'Schema', exact: true })).toBeEnabled();
-    expect(await screen.findByText('nodes.aaa.description')).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Inspect nodes/aaa/description' })
+    ).toBeVisible();
     expect(screen.getByText(/Saved Schema candidate r2/)).toBeVisible();
     expect(controller.prepareReview).not.toHaveBeenCalled();
     expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();

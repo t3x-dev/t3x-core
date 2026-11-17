@@ -132,7 +132,7 @@ describe('WorkspaceSnapshotReview', () => {
     );
     const { rerender } = render(snapshot);
     expect(screen.getByText('Loading change review…')).toBeVisible();
-    expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Review checks and actions' })).toBeVisible();
     vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
       ...controller,
       state: { ...controller.state, loading: false, error: 'Offline', latestUnavailable: true },
@@ -318,7 +318,7 @@ it('keeps the complete frozen Schema and content visible without loading a newer
   );
   fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
   expect(screen.getByRole('region', { name: 'Reviewed Schema' })).toHaveTextContent('advantage');
-  fireEvent.click(screen.getByRole('button', { name: 'Changes', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Structure', exact: true }));
   route.query = 'reviewPane=changes';
   rendered.rerender(
     <WorkspaceSnapshotReview
@@ -327,7 +327,10 @@ it('keeps the complete frozen Schema and content visible without loading a newer
       snapshotId={data.snapshot_id}
     />
   );
-  expect(screen.getByText('ADD nodes.advantage')).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Schema field changes' })).toHaveTextContent(
+    'advantage'
+  );
+  expect(screen.getByRole('button', { name: 'Inspect nodes/advantage' })).toBeInTheDocument();
 });
 
 it('shows loading instead of a confirmed empty Review before the snapshot arrives', () => {
@@ -347,7 +350,7 @@ it('shows loading instead of a confirmed empty Review before the snapshot arrive
   );
   expect(screen.getByText('Loading change review…')).toBeVisible();
   expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
-  expect(screen.getByRole('complementary', { name: 'Review checks and actions' })).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Review checks and actions' })).toBeVisible();
 });
 
 it('keeps recovery explicit on a stale decision and disables actions during refresh', () => {
@@ -495,7 +498,7 @@ it('restores the same Workspace view preference in a snapshot and respects an ex
       snapshotId={data.snapshot_id}
     />
   );
-  expect(screen.getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+  expect(screen.getByRole('button', { name: 'Structure', exact: true })).toHaveAttribute(
     'aria-current',
     'page'
   );

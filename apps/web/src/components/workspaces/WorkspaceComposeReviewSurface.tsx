@@ -10,10 +10,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
   Box as BoxIcon,
-  Check,
   ChevronDown,
   ChevronRight,
-  CircleDot,
   Copy,
   ExternalLink,
   FileCode2,
@@ -117,7 +115,7 @@ import {
   authoringSemanticPath,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
-import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
+import { changeCheckRows, EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
@@ -190,7 +188,6 @@ import { WorkspaceCommitHistoryPanel } from './WorkspaceCommitHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import { WorkspacePendingSchemaReview } from './WorkspacePendingSchemaReview';
-import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 import {
@@ -200,6 +197,7 @@ import {
   WorkspaceReviewYaml,
 } from './WorkspaceReviewDocuments';
 import reviewStyles from './WorkspaceReviewReference.module.css';
+import { WorkspaceReviewValidation } from './WorkspaceReviewValidation';
 import {
   useWorkspaceReviewSubject,
   WorkspaceReviewWorkbench,
@@ -3204,7 +3202,7 @@ function ReviewSurface({
   );
   const sourceRefs = getProposalSourceRefs(controller.candidate);
   const sourceLabel =
-    controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'source_chat:current';
+    controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'Source not recorded';
   const materialLabel = sourceLabel.length > 36 ? `${sourceLabel.slice(0, 33)}…` : sourceLabel;
   const activeStructureRow =
     selectedStructureRow ?? changedStructureRows[0] ?? structureModel.rows[0] ?? null;
@@ -3386,52 +3384,43 @@ function ReviewSurface({
             </Button>
           )
         }
-        sidebar={
+        readiness={
           showEmptyWorkbench ? (
-            <section className={workbenchStyles.draftChecks} aria-label="Review readiness">
-              <h2>Review checks</h2>
-              <ReviewCheckList checks={checks} />
-            </section>
+            <WorkspaceReviewValidation checks={[]} />
           ) : (
-            <>
-              {subject === 'content' && activeStructureRow ? (
-                <WorkspaceReviewSelectedDetails
-                  activity={activity}
-                  candidate={candidate}
-                  model={structureModel}
-                  row={activeStructureRow}
-                />
-              ) : null}
-              <WorkspaceReviewSummary
-                candidate={candidate}
-                controller={controller}
-                snapshotStatus={snapshotStatus}
-                hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
-                preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-                schemaLoading={Boolean(
-                  savedSchema.loading ||
-                    savedSchema.error ||
-                    activity.loading ||
-                    (activity.enabled && !authoring) ||
-                    newerDraft
-                )}
-                hasSavedSchema={hasSavedSchema}
-                draftUnavailable={Boolean(draftLoading || draftUnavailable)}
-                preparationError={
-                  preparationError ?? savedSchema.error ?? controller.error ?? undefined
-                }
-                onEdit={() => onModeChange('compose')}
-                onOpenChecks={() => setPane('checks')}
-                onPrepare={() => void prepareReview()}
-              />
-              <WorkspaceSchemaDiagnostics
-                key={`${candidate.projectId}:${candidate.id}:${candidate.revision}`}
-                projectId={candidate.projectId}
-                workspaceId={candidate.id}
-                revision={candidate.revision}
-              />
-            </>
+            <WorkspaceReviewSummary
+              candidate={candidate}
+              controller={controller}
+              snapshotStatus={snapshotStatus}
+              hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
+              preparingSchema={preparingSchema || Boolean(schemaPreparation)}
+              schemaLoading={Boolean(
+                savedSchema.loading ||
+                  savedSchema.error ||
+                  activity.loading ||
+                  (activity.enabled && !authoring) ||
+                  newerDraft
+              )}
+              hasSavedSchema={hasSavedSchema}
+              draftUnavailable={Boolean(draftLoading || draftUnavailable)}
+              preparationError={
+                preparationError ?? savedSchema.error ?? controller.error ?? undefined
+              }
+              onEdit={() => onModeChange('compose')}
+              onOpenChecks={() => setPane('checks')}
+              onPrepare={() => void prepareReview()}
+            />
           )
+        }
+        sidebar={
+          !showEmptyWorkbench && subject === 'content' && activeStructureRow && pane !== 'yaml' ? (
+            <WorkspaceReviewSelectedDetails
+              activity={activity}
+              candidate={candidate}
+              model={structureModel}
+              row={activeStructureRow}
+            />
+          ) : undefined
         }
       >
         {comparisonScenario ? (
@@ -3557,32 +3546,6 @@ function ReviewSurface({
   );
 }
 
-function ReviewCheckList({
-  checks,
-  snapshotCurrent = false,
-}: {
-  checks: ReviewCheckView[];
-  snapshotCurrent?: boolean;
-}) {
-  return (
-    <section aria-label="Check summary">
-      <ul className={workbenchStyles.checkList}>
-        {checks.map((check) => (
-          <li key={check.label}>
-            <CheckStatusMark status={snapshotCurrent ? check.status : 'pending'} />
-            <span>{check.label}</span>
-            {snapshotCurrent ? (
-              <CheckStatusBadge status={check.status} />
-            ) : (
-              <span>Not reviewed</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function WorkspaceReviewSummary({
   candidate,
   controller,
@@ -3611,7 +3574,10 @@ function WorkspaceReviewSummary({
   onPrepare: () => void;
 }) {
   const snapshotCurrent = snapshotStatus === 'matching';
-  const checks = getReviewChecks(controller);
+  const checks =
+    snapshotCurrent && controller.review.view?.mode === 'transition'
+      ? changeCheckRows(controller.review.view, controller.review.schemaReview?.contentValidation)
+      : [];
   const preparing = preparingSchema || controller.busyAction === 'review.prepare';
   const status = preparing
     ? 'Preparing review…'
@@ -3648,11 +3614,22 @@ function WorkspaceReviewSummary({
           need confirmation.
         </p>
       ) : null}
-      <ReviewCheckList checks={checks} snapshotCurrent={snapshotCurrent} />
-      <p>
-        Commit to <strong>{candidate.targetBranch || 'main'}</strong> after reviewing the fixed
-        snapshot.
-      </p>
+      <WorkspaceReviewValidation
+        checks={checks}
+        running={preparing}
+        actions={
+          <Button size="sm" variant="canvas-outline" onClick={onOpenChecks}>
+            Open Run <ExternalLink aria-hidden="true" />
+          </Button>
+        }
+      >
+        <WorkspaceSchemaDiagnostics
+          key={`${candidate.projectId}:${candidate.id}:${candidate.revision}`}
+          projectId={candidate.projectId}
+          workspaceId={candidate.id}
+          revision={candidate.revision}
+        />
+      </WorkspaceReviewValidation>
       {preparationError ? (
         <div role="alert">
           <p>{preparationError}</p>
@@ -3676,9 +3653,6 @@ function WorkspaceReviewSummary({
           type="button"
         >
           {preparing ? 'Preparing…' : 'Prepare review'}
-        </Button>
-        <Button size="sm" variant="canvas-outline" onClick={onOpenChecks} type="button">
-          Open Run <ExternalLink aria-hidden="true" />
         </Button>
       </div>
     </section>
@@ -3985,54 +3959,6 @@ function WorkspaceRenderedReview({
         </section>
       </details>
     </section>
-  );
-}
-
-function CheckStatusMark({
-  status,
-  large = false,
-}: {
-  status: ReviewCheckStatus;
-  large?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        checksStyles.statusMark,
-        checksStyles[status],
-        large && checksStyles.statusMarkLarge
-      )}
-    >
-      {status === 'passed' ? (
-        <Check aria-hidden="true" />
-      ) : status === 'failed' ? (
-        <X aria-hidden="true" />
-      ) : (
-        <CircleDot aria-hidden="true" />
-      )}
-    </span>
-  );
-}
-
-function CheckStatusBadge({
-  status,
-  ready = false,
-}: {
-  status: ReviewCheckStatus;
-  ready?: boolean;
-}) {
-  return (
-    <span className={cn(checksStyles.statusBadge, checksStyles[status])}>
-      {ready
-        ? status === 'passed'
-          ? 'Ready'
-          : 'Not ready'
-        : status === 'passed'
-          ? 'Passed'
-          : status === 'failed'
-            ? 'Failed'
-            : 'Pending'}
-    </span>
   );
 }
 
@@ -4387,7 +4313,18 @@ function WorkspaceReviewStructureTableRow({
           </span>
         </span>
       </td>
-      {reference ? (
+      {reference &&
+      row.diff?.exact &&
+      (row.diff.kind === 'added' || row.diff.kind === 'removed') ? (
+        <td className={diffStyles.referenceValue} colSpan={2}>
+          <small>{row.diff.kind === 'added' ? '+ Added' : '− Removed'}</small>{' '}
+          {row.diff.kind === 'added' ? (
+            <ins>{row.diff.afterValue}</ins>
+          ) : (
+            <del>{row.diff.beforeValue}</del>
+          )}
+        </td>
+      ) : reference ? (
         <>
           <td className={diffStyles.referenceValue}>
             {row.diff?.exact && row.diff.kind === 'added' ? (

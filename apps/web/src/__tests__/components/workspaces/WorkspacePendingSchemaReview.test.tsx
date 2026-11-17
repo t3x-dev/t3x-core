@@ -28,6 +28,7 @@ const result = {
   preview: {
     schema: { nodes: { aaa: { description: 'Saved description' } } },
     workspace: {
+      binding: null,
       changes: [{ kind: 'ADD', path: 'nodes.aaa.description', summary: 'Saved description' }],
     },
   },
@@ -36,7 +37,9 @@ beforeEach(() => requests.read.mockReset().mockResolvedValue(result));
 
 it('shows the saved candidate changes, YAML and definition without preparing it', async () => {
   const { rerender } = render(<WorkspacePendingSchemaReview {...props} />);
-  expect(await screen.findByText('nodes.aaa.description')).toBeVisible();
+  expect(
+    await screen.findByRole('button', { name: 'Inspect nodes/aaa/description' })
+  ).toBeVisible();
   rerender(<WorkspacePendingSchemaReview {...props} pane="yaml" />);
   expect(screen.getByText(/description: Saved description/)).toBeVisible();
   rerender(<WorkspacePendingSchemaReview {...props} pane="rendered" />);
@@ -52,7 +55,9 @@ it.each([
   requests.read.mockResolvedValue({ ...result, ...changed });
   render(<WorkspacePendingSchemaReview {...props} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('The Draft or saved Schema changed');
-  expect(screen.queryByText('nodes.aaa.description')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Inspect nodes/aaa/description' })
+  ).not.toBeInTheDocument();
 });
 
 it('offers retry after a read failure', async () => {
@@ -60,7 +65,9 @@ it('offers retry after a read failure', async () => {
   render(<WorkspacePendingSchemaReview {...props} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('Source unavailable');
   fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
-  expect(await screen.findByText('nodes.aaa.description')).toBeVisible();
+  expect(
+    await screen.findByRole('button', { name: 'Inspect nodes/aaa/description' })
+  ).toBeVisible();
 });
 
 it('keeps the inspected definition visible when a newer candidate preview arrives', async () => {
@@ -88,12 +95,18 @@ it('hides old data and ignores an old response after the candidate changes', asy
     edit: { ...candidate, revision: 3 },
     preview: {
       ...result.preview,
-      workspace: { changes: [{ kind: 'ADD', path: 'nodes.new', summary: 'New revision' }] },
+      schema: { nodes: { new: { description: 'New revision' } } },
+      workspace: {
+        binding: null,
+        changes: [{ kind: 'ADD', path: 'nodes.new', summary: 'New revision' }],
+      },
     },
   });
   rerender(<WorkspacePendingSchemaReview {...props} candidate={{ ...candidate, revision: 3 }} />);
-  expect(await screen.findByText('nodes.new')).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Inspect nodes/new' })).toBeVisible();
   await act(async () => resolve(result));
-  expect(screen.queryByText('nodes.aaa.description')).not.toBeInTheDocument();
-  expect(screen.getByText('nodes.new')).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Inspect nodes/aaa/description' })
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Inspect nodes/new' })).toBeVisible();
 });

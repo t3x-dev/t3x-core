@@ -13,7 +13,7 @@ export type WorkspaceReviewSubject = 'content' | 'schema';
 export type WorkspaceReviewSubjectChanges = Record<WorkspaceReviewSubject, boolean>;
 const SUBJECTS = ['content', 'schema'] as const;
 const VIEWS = [
-  { id: 'changes', label: 'Changes', detail: 'Before → After', icon: GitCompareArrows },
+  { id: 'changes', label: 'Structure', detail: 'Before → After', icon: GitCompareArrows },
   { id: 'yaml', label: 'YAML', detail: 'Complete text', icon: Code2 },
   { id: 'rendered', label: 'Preview', detail: 'Result structure', icon: Eye },
 ] as const;
@@ -74,6 +74,7 @@ export function WorkspaceReviewWorkbench({
   emptyState,
   contentStatus,
   sidebar,
+  readiness,
   children,
 }: {
   title: ReactNode;
@@ -90,60 +91,64 @@ export function WorkspaceReviewWorkbench({
   subjectChanges: WorkspaceReviewSubjectChanges;
   emptyState?: ReactNode;
   contentStatus?: ReactNode;
-  sidebar: ReactNode;
+  sidebar?: ReactNode;
+  readiness: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className={styles.workbench} aria-label="Workspace Review">
-      <div className={styles.body}>
+      <header className={styles.heading}>
+        <div>
+          <h1>{title}</h1>
+          <p>{status}</p>
+        </div>
+        <div className={styles.actions}>{actions}</div>
+      </header>
+      <section className={styles.readiness} aria-label="Review checks and actions">
+        {readiness}
+      </section>
+      {notice ? <div className={styles.notice}>{notice}</div> : null}
+      <div className={styles.toolbar}>
+        <nav className={styles.subjects} aria-label="Review subject">
+          {SUBJECTS.map((item) => (
+            <button
+              type="button"
+              key={item}
+              aria-pressed={subject === item && subjectChanges[item]}
+              disabled={loading || !subjectChanges[item]}
+              title={
+                !loading && !subjectChanges[item]
+                  ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
+                  : undefined
+              }
+              onClick={() => onSubjectChange(item)}
+            >
+              {item === 'content' ? 'Content' : 'Schema'}
+            </button>
+          ))}
+        </nav>
+        <nav className={styles.views} aria-label="Review views">
+          {VIEWS.map(({ id, label, detail, icon: Icon }) => (
+            <button
+              type="button"
+              key={id}
+              disabled={viewsDisabled || loading}
+              aria-label={label}
+              aria-current={pane === id ? 'page' : undefined}
+              onClick={() => onPaneChange(id)}
+            >
+              <Icon aria-hidden="true" />
+              <span>
+                <strong>{label}</strong>
+                <small>{detail}</small>
+              </span>
+            </button>
+          ))}
+        </nav>
+      </div>
+      <div className={styles.body} data-has-inspector={Boolean(sidebar)}>
         <div className={styles.main}>
-          <div className={styles.toolbar}>
-            <nav className={styles.subjects} aria-label="Review subject">
-              {SUBJECTS.map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  aria-pressed={subject === item && subjectChanges[item]}
-                  disabled={loading || !subjectChanges[item]}
-                  title={
-                    !loading && !subjectChanges[item]
-                      ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
-                      : undefined
-                  }
-                  onClick={() => onSubjectChange(item)}
-                >
-                  {item === 'content' ? 'Content' : 'Schema'}
-                </button>
-              ))}
-            </nav>
-            <nav className={styles.views} aria-label="Review views">
-              {VIEWS.map(({ id, label, detail, icon: Icon }) => (
-                <button
-                  type="button"
-                  key={id}
-                  disabled={viewsDisabled || loading}
-                  aria-label={label}
-                  aria-current={pane === id ? 'page' : undefined}
-                  onClick={() => onPaneChange(id)}
-                >
-                  <Icon aria-hidden="true" />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{detail}</small>
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </div>
           <div className={styles.content} data-review-pane={pane} data-review-subject={subject}>
-            <header className={styles.heading}>
-              <div>
-                <h1>{title}</h1>
-                <p>{status}</p>
-              </div>
-              <div className={styles.actions}>{actions}</div>
-            </header>
-            {notice}
             {contentStatus ??
               (loading ? (
                 <output className={styles.empty}>Loading change review…</output>
@@ -162,12 +167,11 @@ export function WorkspaceReviewWorkbench({
             </details>
           ) : null}
         </div>
-        <aside className={styles.sidebar} aria-label="Review checks and actions">
-          <div className={styles.sidebarContent}>
-            <p className={styles.scope}>This review covers Content and Schema together.</p>
-            {sidebar}
-          </div>
-        </aside>
+        {sidebar ? (
+          <aside className={styles.sidebar} aria-label="Review Details">
+            <div className={styles.sidebarContent}>{sidebar}</div>
+          </aside>
+        ) : null}
       </div>
     </section>
   );

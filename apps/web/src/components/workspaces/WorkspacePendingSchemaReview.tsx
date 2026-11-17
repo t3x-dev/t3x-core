@@ -9,8 +9,8 @@ import {
   useWorkspaceSchemaEditingRequests,
   type WorkspaceSchemaEditing,
 } from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
-import { StudioChanges } from './SchemaDiagnosticsReportParts';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
+import { WorkspaceReviewComparison } from './WorkspaceReviewComparison';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';
 
 /** Read-only candidate preview; preparation still rechecks the live candidate. */
@@ -104,7 +104,14 @@ export function WorkspacePendingSchemaReview({
       ) : !preview ? (
         <output>Loading saved Schema changes…</output>
       ) : pane === 'changes' ? (
-        <StudioChanges changes={preview.workspace!.changes} />
+        <WorkspaceReviewComparison
+          before={
+            preview.workspace!.boundSchema ?? (preview.workspace!.binding === null ? {} : undefined)
+          }
+          after={preview.schema}
+          subject="Schema"
+          versionLabel={`Candidate r${candidate.revision}`}
+        />
       ) : pane === 'yaml' ? (
         <WorkspaceReviewCodeView
           branch={branch}

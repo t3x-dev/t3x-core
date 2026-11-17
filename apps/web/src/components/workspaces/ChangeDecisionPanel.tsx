@@ -25,6 +25,9 @@ import {
   isGeneratedChange,
 } from '@/domain/workspaces/changeDecision';
 
+import { WorkspaceReviewValidation } from './WorkspaceReviewValidation';
+import styles from './WorkspaceReviewWorkbench.module.css';
+
 type DecisionOutcome = 'accepted' | 'overridden' | 'rejected';
 
 export function ChangeDecisionPanel({
@@ -40,6 +43,8 @@ export function ChangeDecisionPanel({
   contentValidation,
   embedded = false,
   historical = false,
+  reviewLayout = false,
+  diagnostics,
 }: {
   branch: string | null;
   busy: boolean;
@@ -53,6 +58,8 @@ export function ChangeDecisionPanel({
   contentValidation?: 'not_applicable';
   embedded?: boolean;
   historical?: boolean;
+  reviewLayout?: boolean;
+  diagnostics?: import('react').ReactNode;
 }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reasonError, setReasonError] = useState(false);
@@ -79,9 +86,11 @@ export function ChangeDecisionPanel({
     <section
       aria-label="Decision"
       className={
-        embedded
-          ? 'overflow-hidden'
-          : 'overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]'
+        reviewLayout
+          ? styles.decision
+          : embedded
+            ? 'overflow-hidden'
+            : 'overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-[0_1px_2px_oklch(0_0_0/4%)]'
       }
     >
       <header className={`border-b px-4 py-3 ${STATUS_TONE[status.tone].header}`}>
@@ -116,24 +125,39 @@ export function ChangeDecisionPanel({
         </div>
       </dl>
 
-      <section aria-label="Checks" className="border-b border-[var(--stroke-divider)] px-4 py-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-          Checks
-        </h3>
-        <ul className="mt-2 grid gap-1">
-          {checks.map((check) => (
-            <CheckRow check={check} key={check.id} summaryOnly={Boolean(checksHref)} />
-          ))}
-        </ul>
-        {checksHref ? (
-          <Link
-            className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
-            href={checksHref}
-          >
-            {embedded ? 'View run' : 'Run details and evidence'}
-          </Link>
-        ) : null}
-      </section>
+      {reviewLayout ? (
+        <WorkspaceReviewValidation
+          checks={checks}
+          actions={
+            checksHref ? (
+              <Link className="underline" href={checksHref}>
+                Open Run
+              </Link>
+            ) : null
+          }
+        >
+          {diagnostics}
+        </WorkspaceReviewValidation>
+      ) : (
+        <section aria-label="Checks" className="border-b border-[var(--stroke-divider)] px-4 py-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+            Checks
+          </h3>
+          <ul className="mt-2 grid gap-1">
+            {checks.map((check) => (
+              <CheckRow check={check} key={check.id} summaryOnly={Boolean(checksHref)} />
+            ))}
+          </ul>
+          {checksHref ? (
+            <Link
+              className="mt-2 inline-block text-xs underline text-[var(--text-secondary)]"
+              href={checksHref}
+            >
+              {embedded ? 'View run' : 'Run details and evidence'}
+            </Link>
+          ) : null}
+        </section>
+      )}
 
       {!historical && !decided && blockers.length > 0 ? (
         <section aria-label="Why this is blocked" className="grid gap-2 px-4 pt-3">
@@ -170,7 +194,7 @@ export function ChangeDecisionPanel({
       ) : null}
 
       {!historical && !decided ? (
-        <div className="grid gap-2 px-4 py-3">
+        <div className={reviewLayout ? styles.decisionActions : 'grid gap-2 px-4 py-3'}>
           {commitBlocker ? (
             <p role="alert" className="text-xs text-[var(--status-warning)]">
               {commitBlocker}
