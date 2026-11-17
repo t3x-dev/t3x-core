@@ -322,7 +322,7 @@ export function WorkspaceSnapshotReview({
         actions={
           <>
             {stateHref ? (
-              <Button asChild size="sm">
+              <Button asChild size="sm" variant="outline">
                 <Link href={stateHref}>View State & export</Link>
               </Button>
             ) : null}
