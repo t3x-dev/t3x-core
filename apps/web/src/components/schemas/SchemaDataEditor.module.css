@@ -609,7 +609,7 @@
 }
 .editor[data-workbench-footer] .toolbar {
   flex: none;
-  padding: 8px 16px 12px;
+  padding: 12px 16px;
   background: var(--surface-card);
 }
 .editor[data-workbench-footer] .search {
@@ -659,8 +659,8 @@
 .editor[data-workbench-footer] .sourceActions > :is(a, button) {
   justify-content: flex-start;
   padding: 8px;
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid var(--stroke-divider);
+  background: var(--surface-card);
   color: var(--text-secondary);
   box-shadow: none;
 }
@@ -678,15 +678,8 @@
   line-height: 1.5;
   color: var(--text-secondary);
 }
-.fieldHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 12px 16px 4px;
-}
-.fieldHeading h2 {
+.fieldsTitle {
+  flex: none;
   font-size: 13px;
   font-weight: 600;
 }
@@ -746,7 +739,6 @@
   scrollbar-width: thin;
 }
 .editor[data-workbench-footer] .columns,
-.editor[data-workbench-footer] .moveToolbar,
 .editor[data-workbench-footer] .fieldTree {
   min-width: 440px;
 }
@@ -756,9 +748,12 @@
   font-size: 11px;
   padding: 8px;
 }
-.editor[data-workbench-footer] .moveToolbar {
+.editor[data-workbench-footer] .fieldMain > .moveToolbar {
+  flex: none;
+  min-width: 0;
   min-height: 38px;
-  padding: 4px 8px;
+  padding: 4px 16px;
+  border-top: 1px solid var(--stroke-divider);
   border-bottom: 0;
   font-size: 11px;
   color: var(--text-tertiary);

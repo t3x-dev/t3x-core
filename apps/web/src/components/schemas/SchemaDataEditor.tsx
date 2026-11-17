@@ -689,6 +689,7 @@ export function SchemaDataEditor({
   ) : undefined;
   const toolbar = (
     <header className={styles.toolbar} hidden={schemaUnavailable}>
+      {workbenchFooter && view === 'data' ? <h2 className={styles.fieldsTitle}>Fields</h2> : null}
       {view === 'data' ? (
         <label className={styles.search}>
           {workbenchFooter ? <Search size={15} aria-hidden="true" /> : null}
