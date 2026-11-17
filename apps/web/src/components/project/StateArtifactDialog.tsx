@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Download, FileText, PanelTop, Share2, X } from 'lucide-react';
+import { ChevronDown, Download, FileText, Link2, PanelTop, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -74,6 +74,8 @@ function ArtifactPreview({
   const data = result && 'data' in result ? result.data : null;
   const description = typeof projectDescription === 'string' ? projectDescription.trim() : '';
   const objectType = summary?.objectType ?? (data?.exact ? 'State' : null);
+  const schemaLabels = artifactSchemaLabels(schemaBindings);
+  const fieldCount = summary?.rows.reduce((count, row) => count + row.fields.length, 0) ?? 0;
 
   async function share() {
     const url = new URL(href, window.location.origin).href;
@@ -122,17 +124,22 @@ function ArtifactPreview({
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => void share()} disabled={!data}>
-            <Share2 aria-hidden="true" /> Share
+            <Link2 aria-hidden="true" /> Copy version link
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" disabled={!data || busy}>
-                <Download aria-hidden="true" /> Export <ChevronDown aria-hidden="true" />
+                <Download aria-hidden="true" /> {busy ? 'Exporting…' : 'Export'}
+                <ChevronDown aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="z-[60]">
-              <DropdownMenuItem onSelect={() => void download('html')}>HTML</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void download('png')}>PNG</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void download('html')}>
+                HTML · Card + {data?.exact ? 'full' : 'Structure'} data
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void download('png')}>
+                PNG · Card snapshot
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DialogClose asChild>
@@ -173,67 +180,115 @@ function ArtifactPreview({
                     {objectType ? (
                       <span className="t3x-artifact-tag-kind">{objectType}</span>
                     ) : null}
-                    {artifactSchemaLabels(schemaBindings).map((label) => (
-                      <span key={label} className="t3x-artifact-tag-schema">
-                        Schema {label}
-                      </span>
-                    ))}
                     <span>
-                      Commit <code title={commitDigest}>{shortHash(commitDigest)}</code>
+                      Committed · <code>{shortHash(commitDigest)}</code>
                     </span>
                   </p>
                   <h2>{projectName}</h2>
-                  {description ? <p className="t3x-artifact-description">{description}</p> : null}
+                  {description ? (
+                    <div className="t3x-artifact-description">
+                      <ArtifactText value={description} />
+                    </div>
+                  ) : null}
                 </div>
               </header>
               <section aria-label="Content summary">
-                <h3>Content summary</h3>
+                <div className="t3x-artifact-section-heading">
+                  <h3>{objectType === 'Content' ? 'Structure summary' : 'Content summary'}</h3>
+                  {summary ? (
+                    <span className="t3x-artifact-note">
+                      {summary.hasMore ? 'First ' : ''}
+                      {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
+                    </span>
+                  ) : null}
+                </div>
                 {!summary ? (
                   <p className="t3x-artifact-note">
                     Content summary is unavailable. You can still view the YAML below.
                   </p>
                 ) : summary.rows.length ? (
-                  <dl>
-                    {summary.rows.map(({ path, fields }) => {
-                      const single = fields.length === 1 ? fields[0] : null;
-                      const label = single ? [...path, single.name] : path;
-                      return (
-                        <div key={JSON.stringify(label)}>
-                          <dt>{label.join(' / ')}</dt>
-                          <dd>
-                            {single ? (
-                              <span className="t3x-artifact-value">{single.value}</span>
-                            ) : (
-                              fields.map(({ name, value }) => (
-                                <span className="t3x-artifact-field" key={name}>
-                                  <span>{name}</span>
-                                  <span className="t3x-artifact-value">{value}</span>
-                                </span>
-                              ))
-                            )}
-                          </dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
+                  <div className="t3x-artifact-groups">
+                    {summary.rows.map(({ path, fields }, index) => (
+                      <div className="t3x-artifact-group" key={`${index}:${JSON.stringify(path)}`}>
+                        {path.length || summary.rows.length > 1 ? (
+                          <h4>{path.length ? path.join(' / ') : 'Root fields'}</h4>
+                        ) : null}
+                        <dl>
+                          {fields.map(({ name, value }) => (
+                            <div key={name}>
+                              <dt>{name}</dt>
+                              <dd>
+                                <ArtifactText value={value} />
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="t3x-artifact-note">No fields in this version.</p>
                 )}
-                {summary?.hasMore ? (
-                  <p className="t3x-artifact-note">More fields are available in the data below.</p>
+                {summary && (summary.hasMore || objectType === 'Content') ? (
+                  <p className="t3x-artifact-scope">
+                    {objectType === 'Content'
+                      ? 'Structure preview. Full data includes all fields and relations.'
+                      : 'Summary preview. Full data includes the remaining fields.'}
+                  </p>
                 ) : null}
               </section>
-              <details>
+              <details className="t3x-artifact-disclosure">
                 <summary>{data.exact ? 'Full data (YAML)' : 'Structure data (YAML)'}</summary>
                 {/* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users need to scroll the full data. */}
                 <pre tabIndex={0}>
                   <code>{data.yaml}</code>
                 </pre>
               </details>
+              <details className="t3x-artifact-disclosure">
+                <summary>
+                  Version details
+                  {schemaLabels.length
+                    ? ` · ${schemaLabels.length} ${schemaLabels.length === 1 ? 'Schema' : 'Schemas'}`
+                    : ''}
+                </summary>
+                <dl className="t3x-artifact-metadata">
+                  <div>
+                    <dt>Commit</dt>
+                    <dd>
+                      <code>{commitDigest}</code>
+                    </dd>
+                  </div>
+                  {schemaLabels.length ? (
+                    <div>
+                      <dt>Schema</dt>
+                      <dd>
+                        {schemaLabels.map((label) => (
+                          <p key={label}>{label}</p>
+                        ))}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </details>
             </article>
           </div>
         ) : null}
       </div>
     </>
+  );
+}
+
+function ArtifactText({ value }: { value: string }) {
+  const preview = value.split('\n').slice(0, 3).join('\n').slice(0, 240);
+  if (preview === value) return <span className="t3x-artifact-value">{value}</span>;
+  return (
+    <details className="t3x-artifact-text">
+      <summary>
+        <span className="t3x-artifact-excerpt">{preview}…</span>
+        <span className="t3x-artifact-more">Show more</span>
+        <span className="t3x-artifact-less">Show less</span>
+      </summary>
+      <p className="t3x-artifact-value">{value}</p>
+    </details>
   );
 }

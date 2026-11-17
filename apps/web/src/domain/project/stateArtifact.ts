@@ -52,18 +52,19 @@ export function summarizeArtifactState(yaml: string, structureYaml: string) {
   const content: unknown = semantic ? load(structureYaml, { schema: JSON_SCHEMA }) : value;
   const roots = semantic && isRecord(content) ? Object.values(content) : [];
   const document = roots.length === 1 && isRecord(roots[0]) ? roots[0] : content;
-  const rows = new Map<string, SummaryRow>();
+  const rows: SummaryRow[] = [];
   let count = 0;
   for (const field of summarizeFields(document)) {
-    if (count++ === SUMMARY_LIMIT) return { objectType, rows: [...rows.values()], hasMore: true };
+    if (count++ === SUMMARY_LIMIT) return { objectType, rows, hasMore: true };
     const path = field.path.slice(0, -1);
-    const key = JSON.stringify(path.length ? path : field.path);
     const entry = { name: field.path[field.path.length - 1], value: field.value };
-    const row = rows.get(key);
-    if (row) row.fields.push(entry);
-    else rows.set(key, { path, fields: [entry] });
+    const previous = rows.at(-1);
+    // Group adjacent fields without moving them across nested objects or list items.
+    if (previous && JSON.stringify(previous.path) === JSON.stringify(path)) {
+      previous.fields.push(entry);
+    } else rows.push({ path, fields: [entry] });
   }
-  return { objectType, rows: [...rows.values()], hasMore: false };
+  return { objectType, rows, hasMore: false };
 }
 
 export function artifactSchemaLabels(bindings: readonly Record<string, unknown>[] = []) {

@@ -631,7 +631,11 @@ describe('ProjectStateTab', () => {
     expect(within(header).getByRole('heading', { name: 'Test Project' })).toBeVisible();
     expect(within(header).getByText('The project description.')).toBeVisible();
     expect(within(header).getByText('Content', { exact: true })).toBeVisible();
-    expect(within(header).getByText('Schema Care Checklist@1.0.0')).toBeVisible();
+    const schemaLabel = within(dialog).getByText('Care Checklist@1.0.0');
+    expect(schemaLabel).not.toBeVisible();
+    fireEvent.click(within(dialog).getByText('Version details · 1 Schema'));
+    expect(schemaLabel).toBeVisible();
+    expect(within(dialog).getByText(commit.hash)).toBeVisible();
     expect(within(summary).getByText('You: i need food and drink')).toBeVisible();
     expect(summary).not.toHaveTextContent('t3x.dev/semantic-content');
     expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
@@ -655,6 +659,34 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('expands long values and keeps the summary limit distinct from full data', async () => {
+    const commit = { ...PRD_COMMIT, hash: `sha256:${'c'.repeat(64)}`, parents: [] };
+    const longValue = 'A long reading note. '.repeat(30);
+    const yaml = JSON.stringify({
+      note: longValue,
+      tasks: Array.from({ length: 20 }, (_, index) => ({ title: `Task ${index}`, done: false })),
+    });
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    hookMocks.fetchStateExport.mockResolvedValue({ content: yaml });
+    navigationMocks.search = new URLSearchParams({
+      view: 'structure',
+      artifact: commit.hash,
+    }).toString();
+    renderStateTab();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share card' });
+    const summary = await within(dialog).findByRole('region', { name: 'Content summary' });
+    expect(within(summary).getByText('First 16 fields')).toBeVisible();
+    const fullNote = within(summary).getByText(longValue.trim());
+    expect(fullNote).not.toBeVisible();
+    fireEvent.click(within(summary).getByText('Show more'));
+    expect(fullNote).toBeVisible();
+    expect(fullNote.textContent).toBe(longValue);
+    expect(within(summary).queryByText('Task 19')).toBeNull();
+    fireEvent.click(within(dialog).getByText('Full data (YAML)'));
+    expect(dialog.querySelector('pre code')?.textContent).toBe(yaml);
   });
 
   it('keeps the full YAML and export available when the 110-level summary fails', async () => {
