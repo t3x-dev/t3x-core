@@ -1171,12 +1171,16 @@ export function SchemaFieldProperties({
   value,
   onChange,
   children,
+  studio = false,
+  ruleTest,
 }: {
   kind: 'node' | 'slot';
   path: string;
   value: Definition;
   onChange: (next: Definition) => void;
   children?: ReactNode;
+  studio?: boolean;
+  ruleTest?: ReactNode;
 }) {
   const [added, setAdded] = useState<string[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -1215,6 +1219,37 @@ export function SchemaFieldProperties({
   const rules = configured.filter((field) => ruleKeys.includes(field.key));
   const advanced = configured.filter((field) => !ruleKeys.includes(field.key));
   const advancedCount = advanced.length + (value.yopsHint ? 1 : 0);
+  const addSetting = (choices: Field[], label = 'Add a setting') =>
+    choices.length ? (
+      <label className="block space-y-1 text-xs">
+        <span>{label}</span>
+        <select
+          className={inputClass}
+          value=""
+          onChange={(event) => {
+            const key = event.target.value;
+            if (key) {
+              setAdded((current) => [...current, key]);
+              if (!ruleKeys.includes(key)) setAdvancedOpen(true);
+            }
+          }}
+        >
+          <option value="">{label === 'Add rule' ? 'Choose a rule…' : 'Choose a setting…'}</option>
+          {propertyGroups.map((group) => {
+            const grouped = choices.filter((field) => group.keys.includes(field.key));
+            return grouped.length ? (
+              <optgroup key={group.label} label={group.label}>
+                {grouped.map((field) => (
+                  <option key={field.key} value={field.key}>
+                    {field.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null;
+          })}
+        </select>
+      </label>
+    ) : null;
   return (
     <div className="space-y-3">
       <section aria-label="Basic properties" className={panelClass}>
@@ -1234,37 +1269,15 @@ export function SchemaFieldProperties({
         ) : (
           <p className="text-xs text-[var(--text-secondary)]">No additional rules.</p>
         )}
+        {studio
+          ? addSetting(
+              available.filter((field) => ruleKeys.includes(field.key)),
+              'Add rule'
+            )
+          : null}
       </section>
-      {available.length ? (
-        <label className="block space-y-1 text-xs">
-          <span>Add a setting</span>
-          <select
-            className={inputClass}
-            value=""
-            onChange={(event) => {
-              const key = event.target.value;
-              if (key) {
-                setAdded((current) => [...current, key]);
-                if (!ruleKeys.includes(key)) setAdvancedOpen(true);
-              }
-            }}
-          >
-            <option value="">Choose a setting…</option>
-            {propertyGroups.map((group) => {
-              const choices = available.filter((field) => group.keys.includes(field.key));
-              return choices.length ? (
-                <optgroup key={group.label} label={group.label}>
-                  {choices.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null;
-            })}
-          </select>
-        </label>
-      ) : null}
+      {ruleTest}
+      {!studio ? addSetting(available) : null}
       <details
         className={panelClass}
         open={advancedOpen}
@@ -1274,6 +1287,7 @@ export function SchemaFieldProperties({
           Advanced settings{advancedCount ? ` · ${advancedCount}` : ''}
         </summary>
         <Fields context={context} value={value} fields={advanced} onChange={onChange} />
+        {studio ? addSetting(available.filter((field) => !ruleKeys.includes(field.key))) : null}
         {kind === 'slot' ? (
           <section aria-label="YOps hints" className="space-y-3">
             <h4 className="text-xs font-medium">YOps hints</h4>

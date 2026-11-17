@@ -43,3 +43,38 @@ it('keeps missing and null explicit and does not imply complete-context validati
   expect(screen.getByText('Field rules failed')).toBeVisible();
   expect(screen.getByText(/whole-object checks run in Workspace/)).toBeVisible();
 });
+
+it('reveals Studio trials on demand, retains a closed sample and resets on field selection', () => {
+  const view = render(
+    <SchemaFieldValueTest
+      key="notes"
+      disclosure
+      definition={{ type: 'string', minLength: 5 }}
+      required
+      path="event/notes"
+    />
+  );
+  expect(screen.getByLabelText('Sample value')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Test a value'));
+  expect(screen.getByLabelText('Sample value')).toBeVisible();
+  fireEvent.change(screen.getByLabelText('Sample value'), { target: { value: 'hello' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Test value' }));
+  expect(screen.getByText('Field rules passed')).toBeVisible();
+  fireEvent.click(screen.getByText('Test a value'));
+  expect(screen.getByLabelText('Sample value')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Test a value'));
+  expect(screen.getByLabelText('Sample value')).toHaveValue('hello');
+  expect(screen.getByText('Field rules passed')).toBeVisible();
+  view.rerender(
+    <SchemaFieldValueTest
+      key="title"
+      disclosure
+      definition={{ type: 'string' }}
+      required
+      path="event/title"
+    />
+  );
+  expect(screen.getByLabelText('Sample value')).not.toBeVisible();
+  expect(screen.getByLabelText('Sample value')).toHaveValue('');
+  expect(screen.queryByText('Field rules passed')).not.toBeInTheDocument();
+});

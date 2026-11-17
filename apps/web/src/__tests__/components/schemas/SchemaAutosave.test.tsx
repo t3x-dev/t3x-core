@@ -239,6 +239,7 @@ it('autosaves YAML snapshots without acknowledging newer text or opening Review'
 it('does not dirty or save a Schema when trying a local sample value', async () => {
   const save = vi.fn();
   setup(save);
+  fireEvent.click(screen.getByText('Test a value', { exact: true }));
   fireEvent.change(screen.getByLabelText('Sample value'), { target: { value: 'sample' } });
   fireEvent.click(screen.getByRole('button', { name: 'Test value' }));
   expect(screen.getByText('Field rules passed')).toBeVisible();

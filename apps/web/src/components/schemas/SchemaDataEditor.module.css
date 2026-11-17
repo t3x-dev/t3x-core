@@ -636,7 +636,7 @@
   border-color: var(--ring);
 }
 .editor[data-workbench-footer] .content {
-  grid-template-columns: var(--repo-main-with-inspector);
+  grid-template-columns: minmax(0, 1fr) clamp(288px, 28%, 360px);
   overflow: hidden;
   background: var(--surface-panel);
 }
@@ -656,15 +656,70 @@
   font-weight: 500;
 }
 .editor[data-workbench-footer] .sourceHelp {
-  order: 1;
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.fieldHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
+}
+.fieldHeading h2 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.fieldHeading span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.selectionGuide {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding-block: 20px;
+  color: var(--text-secondary);
+}
+.selectionGuide h3 {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.selectionGuide p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.changeNote {
+  flex: none;
+  padding: 12px 16px;
+  border-top: 1px solid var(--stroke-divider);
+  font-size: 12px;
+}
+.changeNote summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.changeNote summary span {
+  margin-left: 8px;
   font-size: 11px;
-  line-height: 1.75;
-  color: var(--text-tertiary);
+}
+.changeNote summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.editor[data-workbench-footer] .changeNote .changeDescription {
+  padding: 12px 0 0;
+  border: 0;
 }
 .editor[data-workbench-footer] .fieldMain {
-  --field-type-width: 120px;
+  --field-type-width: 112px;
   --field-required-width: 64px;
-  --field-actions-width: 76px;
+  --field-actions-width: 60px;
   margin: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap);
 }
 .editor[data-workbench-footer] .fieldWorkarea[data-sources] .fieldMain {
@@ -681,7 +736,7 @@
 .editor[data-workbench-footer] .columns,
 .editor[data-workbench-footer] .moveToolbar,
 .editor[data-workbench-footer] .fieldTree {
-  min-width: 480px;
+  min-width: 440px;
 }
 .editor[data-workbench-footer] .columns {
   background: var(--surface-card);

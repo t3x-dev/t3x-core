@@ -1,13 +1,15 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, Braces, ChevronDown, FileCode2 } from 'lucide-react';
+import { ArrowUpRight, Braces, ChevronDown, FileCode2, Undo2 } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -81,6 +83,7 @@ export function SchemaStudioSurface({
   onDiscardSaved?: () => void;
   canDiscardSaved?: boolean;
 }) {
+  const yamlHint = useId();
   return (
     <main
       aria-label="Schema editor"
@@ -109,60 +112,50 @@ export function SchemaStudioSurface({
               </div>
             </div>
             <div className={s.toolbarActions}>
-              <Button
-                variant="canvas-outline"
-                size="sm"
-                disabled={!canEditDefinition}
-                onClick={onEditDefinition}
-              >
-                <FileCode2 size={14} aria-hidden="true" /> View draft YAML
-              </Button>
-              <Button
-                variant="canvas-outline"
-                size="sm"
-                disabled={!onCompose || pending}
-                onClick={onCompose}
-              >
-                Continue in Compose <ArrowUpRight size={14} aria-hidden="true" />
-              </Button>
-              <fieldset aria-label="Schema save and review" className={s.saveGroup}>
-                {onUndo || onDiscard || onDiscardSaved ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="canvas-outline"
-                        size="sm"
-                        aria-label="Undo and discard"
-                        disabled={!canUndo && !canDiscard && !canDiscardSaved}
-                      >
-                        Undo <ChevronDown size={14} aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {onUndo ? (
-                        <DropdownMenuItem disabled={!canUndo} onSelect={onUndo}>
-                          Undo last change
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onUndo && onDiscard ? <DropdownMenuSeparator /> : null}
-                      {onDiscard ? (
-                        <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
-                          Discard all unsaved changes
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onDiscardSaved ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem disabled={!canDiscardSaved} onSelect={onDiscardSaved}>
-                            Discard saved Schema draft…
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              <fieldset className={s.editingTools} aria-label="Schema editing tools">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="View draft YAML"
+                  aria-describedby={editorInvalid ? yamlHint : undefined}
+                  disabled={!canEditDefinition}
+                  onClick={onEditDefinition}
+                >
+                  <FileCode2 size={14} aria-hidden="true" /> View draft YAML
+                </Button>
+                {onUndo ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Undo last change"
+                    disabled={!canUndo}
+                    onClick={onUndo}
+                  >
+                    <Undo2 size={14} aria-hidden="true" /> Undo
+                  </Button>
                 ) : null}
-                <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
+                <Button
+                  variant={saveFailed ? 'canvas-outline' : 'ghost'}
+                  size="sm"
+                  disabled={!canSave}
+                  onClick={onSave}
+                >
                   {saveFailed ? 'Retry save' : 'Save draft'}
+                </Button>
+                {editorInvalid ? (
+                  <span id={yamlHint} className={s.editingHint}>
+                    Fix field errors before opening YAML.
+                  </span>
+                ) : null}
+              </fieldset>
+              <fieldset aria-label="Schema next steps" className={s.saveGroup}>
+                <Button
+                  variant="canvas-outline"
+                  size="sm"
+                  disabled={!onCompose || pending}
+                  onClick={onCompose}
+                >
+                  Continue in Compose <ArrowUpRight size={14} aria-hidden="true" />
                 </Button>
                 <Button
                   variant="commit"
@@ -189,35 +182,69 @@ export function SchemaStudioSurface({
                     More <ChevronDown size={14} aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className={s.moreMenu}>
                   {onRules ? (
-                    <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
-                      Relationships & rules…
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem disabled={!canEditDefinition} onSelect={onEditDefinition}>
-                    Edit YAML…{editorInvalid ? ' (fix field errors first)' : ''}
-                  </DropdownMenuItem>
-                  {onPublish ? (
-                    <>
-                      <DropdownMenuItem onSelect={onPublish} disabled={!!publishBlocker}>
-                        Publish to public catalog…
+                    <DropdownMenuGroup aria-label="Schema settings">
+                      <DropdownMenuLabel className={s.menuLabel}>Schema settings</DropdownMenuLabel>
+                      <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
+                        Relationships & rules…
                       </DropdownMenuItem>
-                      {publishBlocker ? (
-                        <p className="px-2 py-1 text-xs text-[var(--text-secondary)]">
-                          {publishBlocker}
-                        </p>
-                      ) : null}
+                    </DropdownMenuGroup>
+                  ) : null}
+                  {onInspect || onPublish ? (
+                    <>
+                      {onRules ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuGroup aria-label="Check and publish">
+                        <DropdownMenuLabel className={s.menuLabel}>
+                          Check & publish
+                        </DropdownMenuLabel>
+                        {onInspect ? (
+                          <DropdownMenuItem
+                            onSelect={onInspect}
+                            title="Open schema checks and affected content in Workspace Review."
+                            disabled={!data || contextLocked || pending}
+                          >
+                            View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
+                          </DropdownMenuItem>
+                        ) : null}
+                        {onPublish ? (
+                          <>
+                            <DropdownMenuItem onSelect={onPublish} disabled={!!publishBlocker}>
+                              Publish to public catalog…
+                            </DropdownMenuItem>
+                            {publishBlocker ? <p className={s.menuHint}>{publishBlocker}</p> : null}
+                          </>
+                        ) : null}
+                      </DropdownMenuGroup>
                     </>
                   ) : null}
-                  {onInspect ? (
-                    <DropdownMenuItem
-                      onSelect={onInspect}
-                      title="Open schema checks and affected content in Workspace Review."
-                      disabled={!data || contextLocked || pending}
-                    >
-                      View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
-                    </DropdownMenuItem>
+                  {onDiscard || onDiscardSaved ? (
+                    <>
+                      {onRules || onInspect || onPublish ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuGroup aria-label="Discard changes">
+                        <DropdownMenuLabel className={s.menuLabel}>
+                          Discard changes
+                        </DropdownMenuLabel>
+                        {onDiscard ? (
+                          <DropdownMenuItem
+                            className={s.destructiveAction}
+                            disabled={!canDiscard}
+                            onSelect={onDiscard}
+                          >
+                            Discard all unsaved changes
+                          </DropdownMenuItem>
+                        ) : null}
+                        {onDiscardSaved ? (
+                          <DropdownMenuItem
+                            className={s.destructiveAction}
+                            disabled={!canDiscardSaved}
+                            onSelect={onDiscardSaved}
+                          >
+                            Discard saved Schema draft…
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuGroup>
+                    </>
                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>

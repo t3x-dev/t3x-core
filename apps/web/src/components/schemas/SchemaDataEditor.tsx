@@ -340,6 +340,7 @@ export function SchemaDataEditor({
     setCollapsed({});
   }, [focusSemanticPath, rows]);
   const active = rows.find((row) => row.path === selected);
+  const firstEditableField = visible.find((row) => row.kind === 'slot') ?? visible[0];
 
   function transfer(
     row: SchemaFieldRow,
@@ -601,8 +602,11 @@ export function SchemaDataEditor({
         if (canOpenRules) setPanel('rules');
       },
       describeChanges: () => {
-        if (workbenchFooter) intentInput.current?.focus();
-        else setIntentOpen(true);
+        if (workbenchFooter) {
+          const disclosure = intentInput.current?.closest('details');
+          if (disclosure) disclosure.open = true;
+          intentInput.current?.focus();
+        } else setIntentOpen(true);
       },
       discard: () => {
         if (canDiscard) discard();
@@ -935,17 +939,22 @@ export function SchemaDataEditor({
               unavailable={schemaUnavailable}
               footer={
                 workbenchFooter && definition ? (
-                  <label className={styles.changeDescription}>
-                    <span>Change description</span>
-                    <textarea
-                      ref={intentInput}
-                      aria-label="Schema change intent"
-                      rows={1}
-                      value={intent}
-                      disabled={busy || !!disabledReason}
-                      onChange={(event) => setIntent(event.target.value)}
-                    />
-                  </label>
+                  <details className={styles.changeNote}>
+                    <summary>
+                      Change description <span>Optional</span>
+                    </summary>
+                    <label className={styles.changeDescription}>
+                      <span>Change description</span>
+                      <textarea
+                        ref={intentInput}
+                        aria-label="Schema change intent"
+                        rows={1}
+                        value={intent}
+                        disabled={busy || !!disabledReason}
+                        onChange={(event) => setIntent(event.target.value)}
+                      />
+                    </label>
+                  </details>
                 ) : undefined
               }
               emptyContent={emptyContent}
@@ -1232,7 +1241,7 @@ export function SchemaDataEditor({
             context={
               panel === 'rules'
                 ? 'These settings apply to the entire schema.'
-                : (active?.semanticPath ?? 'No selection')
+                : (active?.semanticPath ?? (workbenchFooter ? '' : 'No selection'))
             }
             contentKey={panel === 'rules' ? 'rules' : (active?.path ?? 'empty')}
             clearDisabled={busy || !!validationError}
@@ -1306,6 +1315,18 @@ export function SchemaDataEditor({
                     </div>
                   ) : null}
                   <SchemaFieldProperties
+                    studio={workbenchFooter}
+                    ruleTest={
+                      workbenchFooter && active.kind === 'slot' ? (
+                        <SchemaFieldValueTest
+                          key={active.path}
+                          disclosure
+                          definition={active.definition}
+                          required={active.required}
+                          path={active.semanticPath}
+                        />
+                      ) : undefined
+                    }
                     kind={active.kind}
                     path={active.semanticPath}
                     value={active.definition}
@@ -1380,7 +1401,7 @@ export function SchemaDataEditor({
                       </div>
                     ) : null}
                   </SchemaFieldProperties>
-                  {active.kind === 'slot' ? (
+                  {!workbenchFooter && active.kind === 'slot' ? (
                     <div className="mt-3">
                       <SchemaFieldValueTest
                         key={active.path}
@@ -1389,6 +1410,22 @@ export function SchemaDataEditor({
                         path={active.semanticPath}
                       />
                     </div>
+                  ) : null}
+                </div>
+              ) : workbenchFooter ? (
+                <div className={styles.selectionGuide}>
+                  <Type size={20} aria-hidden="true" />
+                  <h3>Choose a field to edit</h3>
+                  <p>Click a name in Fields to change its type, description or rules.</p>
+                  {firstEditableField ? (
+                    <Button
+                      size="sm"
+                      variant="canvas-outline"
+                      disabled={busy || !!validationError}
+                      onClick={() => select(firstEditableField)}
+                    >
+                      Select first field
+                    </Button>
                   ) : null}
                 </div>
               ) : (

@@ -378,12 +378,7 @@ it('restores an exact missing source and reopens the same saved candidate', asyn
   });
   render(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByText(/needs missing sources: t3x\/weekly-goals @ 1.0.0/)).toBeVisible();
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
-  expect(screen.getByRole('menuitem', { name: 'Edit YAML…' })).toHaveAttribute(
-    'aria-disabled',
-    'true'
-  );
-  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  expect(screen.getByRole('button', { name: 'View draft YAML' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
   expect(await screen.findByText(/Source release is unavailable/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Restore pinned sources' }));
@@ -1440,7 +1435,7 @@ function closeSources() {
 function openYaml() {
   if (screen.queryByRole('dialog', { name: 'Schema YAML editor' })) return;
   closeSources();
-  selectSchemaAction('Edit YAML…');
+  fireEvent.click(screen.getByRole('button', { name: 'View draft YAML' }));
 }
 
 it('keeps sources beside the fields and opens YAML directly without nested panels', () => {
@@ -1456,11 +1451,13 @@ it('keeps sources beside the fields and opens YAML directly without nested panel
   expect(
     screen.queryByRole('menuitemcheckbox', { name: 'Schema sources' })
   ).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole('menuitem', { name: 'Discard all unsaved changes' })
-  ).not.toBeInTheDocument();
-  expect(screen.queryByRole('menuitem', { name: 'View YAML' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Edit YAML…' }));
+  expect(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  expect(screen.queryByRole('menuitem', { name: /YAML/ })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: 'View draft YAML' }));
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
   expect(screen.getByLabelText('Schema definition YAML editor')).toBeVisible();
   expect(screen.queryByText('Definition details')).not.toBeInTheDocument();
@@ -1618,7 +1615,7 @@ it('refreshes the clean Draft after a no-change Review response and disables ano
   );
   expect(await screen.findByText('Committed · committed', { exact: true })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Review in Workspace', exact: true }));
   expect(mocks.fullReview).toHaveBeenCalledTimes(1);
 });
@@ -1805,7 +1802,7 @@ it.each([
   fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'number' } });
   if (!dirty)
     fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'string' } });
-  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Undo last change' })).toBeEnabled();
   const nextSchema = { nodes: { task: { slots: { title: { type: 'boolean' } } } } };
   mocks.workspaces = [
     {
@@ -1845,7 +1842,7 @@ it.each([
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   ).toBeDisabled();
   if (dirty) expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-  else expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  else expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
@@ -1880,7 +1877,7 @@ it('shows a retry for unknown Draft changes instead of reporting a clean Draft',
   expect(screen.queryByText('No changes to review')).not.toBeInTheDocument();
 });
 
-it('groups Undo with Save and Review and opens global rules from More without field tabs', async () => {
+it('groups editing tools separately from next steps and opens global rules from More', async () => {
   mocks.query = 'workspace=workspace_branch%3Amain';
   mocks.workspaces = [boundWorkspace()];
   mocks.data = {
@@ -1890,16 +1887,16 @@ it('groups Undo with Save and Review and opens global rules from More without fi
     workspace: { id: 'workspace_branch:main', revision: 2, changes: [] },
   };
   render(<SchemaStudioExperience projectId="p" />);
-  const group = screen.getByRole('group', { name: 'Schema save and review' });
-  const undo = within(group).getByRole('button', { name: 'Undo and discard' });
+  const group = screen.getByRole('group', { name: 'Schema editing tools' });
+  const undo = within(group).getByRole('button', { name: 'Undo last change' });
   expect(undo).toBeDisabled();
   expect(within(group).getByRole('button', { name: 'Save draft' })).toBeVisible();
   expect(
-    within(group).getByRole('button', {
+    within(screen.getByRole('group', { name: 'Schema next steps' })).getByRole('button', {
       name: /^(Review in Workspace|Save and review in Workspace)$/,
     })
   ).toBeVisible();
-  expect(screen.getAllByRole('button', { name: 'Undo and discard' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Undo last change' })).toHaveLength(1);
   expect(screen.queryByRole('button', { name: 'Relationships & rules…' })).not.toBeInTheDocument();
   fireEvent.focus(screen.getByLabelText('Name task/title'));
   fireEvent.change(screen.getByLabelText('Description for slot task/title'), {
@@ -1910,8 +1907,7 @@ it('groups Undo with Save and Review and opens global rules from More without fi
   expect(screen.getByRole('complementary', { name: 'Schema relations and rules' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Properties', exact: true })).not.toBeInTheDocument();
   expect(screen.getByText('These settings apply to the entire schema.')).toBeVisible();
-  fireEvent.keyDown(undo, { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Undo last change' }));
+  fireEvent.click(undo);
   fireEvent.focus(screen.getByLabelText('Name task/title'));
   expect(screen.getByLabelText('Description for slot task/title')).toHaveValue('');
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
@@ -1921,7 +1917,7 @@ it('groups Undo with Save and Review and opens global rules from More without fi
 it.each([
   false,
   true,
-])('keeps discard available in the Undo menu and restores saved content (invalid input: %s)', async (invalid) => {
+])('keeps discard available in More and restores saved content (invalid input: %s)', async (invalid) => {
   mocks.query = 'workspace=workspace_branch%3Amain';
   mocks.workspaces = [boundWorkspace()];
   mocks.data = {
@@ -1936,31 +1932,27 @@ it.each([
     target: { value: 'Unsaved description' },
   });
   fireEvent.change(screen.getByLabelText('Type task/title'), { target: { value: 'number' } });
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Undo last change' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Undo last change' }));
   expect(screen.getByLabelText('Type task/title')).toHaveValue('string');
   expect(screen.getByLabelText('Description for slot task/title')).toHaveValue(
     'Unsaved description'
   );
   if (invalid) {
+    fireEvent.click(screen.getByText('Advanced settings', { exact: true }));
     fireEvent.change(screen.getByLabelText('Add a setting'), { target: { value: 'default' } });
     fireEvent.change(screen.getByLabelText('Default value for slot task/title'), {
       target: { value: '{' },
     });
   }
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
-  if (invalid)
-    expect(screen.getByRole('menuitem', { name: 'Undo last change' })).toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
+  if (invalid) expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   expect(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' })).not.toHaveAttribute(
     'aria-disabled',
     'true'
   );
   fireEvent.click(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled()
   );
   fireEvent.focus(screen.getByLabelText('Name task/title'));
   expect(screen.getByLabelText('Description for slot task/title')).toHaveValue('');
@@ -2037,7 +2029,7 @@ function setupSavedDraftDiscard(contentChanged = false) {
 }
 
 function openSavedDraftDiscard() {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   fireEvent.click(screen.getByRole('menuitem', { name: 'Discard saved Schema draft…' }));
   return screen.getByRole('dialog', { name: 'Discard saved Schema draft?' });
 }
@@ -2045,12 +2037,8 @@ function openSavedDraftDiscard() {
 it('allows abandoning a saved source combination even without local undo history', () => {
   setupSavedDraftDiscard();
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeEnabled();
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Undo and discard' }), { key: 'Enter' });
-  expect(screen.getByRole('menuitem', { name: 'Undo last change' })).toHaveAttribute(
-    'aria-disabled',
-    'true'
-  );
+  expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Schema actions' }), { key: 'Enter' });
   expect(screen.getByRole('menuitem', { name: 'Discard all unsaved changes' })).toHaveAttribute(
     'aria-disabled',
     'true'
@@ -2089,7 +2077,7 @@ it.each([
   );
   expect(screen.getByLabelText('Type task/title')).toHaveValue('boolean');
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Undo and discard' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   const review = screen.getByRole('button', { name: 'Review in Workspace' });
   if (contentChanged) expect(review).toBeEnabled();
   else expect(review).toBeDisabled();

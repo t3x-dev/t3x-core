@@ -43,7 +43,7 @@ export function SchemaDetailsPanel({
     >
       <header className={styles.header}>
         {icon}
-        <h2>{title}</h2>
+        <h2>{identity ?? title}</h2>
         <div className={styles.action}>
           {onClear ? (
             <button
@@ -58,10 +58,11 @@ export function SchemaDetailsPanel({
           ) : null}
         </div>
       </header>
-      <div className={styles.context} title={context}>
-        {identity ? <strong className={styles.identity}>{identity}</strong> : null}
-        <p>{context}</p>
-      </div>
+      {context ? (
+        <div className={styles.context} title={context}>
+          <p>{context}</p>
+        </div>
+      ) : null}
       <div ref={body} className={styles.body}>
         {children}
       </div>

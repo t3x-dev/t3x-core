@@ -184,7 +184,9 @@ export function SchemaFieldTree({
             </div>
             <div className={styles.sourceActions}>{sourceManagement}</div>
             <p className={styles.sourceHelp} hidden={!availableSources.length}>
-              Drag a node or object field into your schema, or select one to choose where to add it.
+              {studio
+                ? 'Choose a node below to add it.'
+                : 'Drag a node or object field into your schema, or select one to choose where to add it.'}
             </p>
             {!availableSources.length ? (
               <p>
@@ -220,6 +222,12 @@ export function SchemaFieldTree({
           </aside>
         ) : null}
         <div className={studio ? `${styles.fieldMain} ${workbench.primary}` : styles.fieldMain}>
+          {studio && !unavailable && rows.length ? (
+            <div className={styles.fieldHeading}>
+              <h2>Fields</h2>
+              <span>Select a name to edit</span>
+            </div>
+          ) : null}
           <div ref={fieldScroll} className={styles.fieldScroll}>
             <div className={styles.columns} hidden={unavailable || !rows.length}>
               <span>Name</span>
@@ -332,7 +340,7 @@ export function SchemaFieldTree({
                 ) : null}
               </div>
             ) : (
-              <div className={styles.moveToolbar} hidden={unavailable || !rows.length}>
+              <div className={styles.moveToolbar} hidden={studio || unavailable || !rows.length}>
                 <span className={styles.selectionHint}>
                   {rows.length ? 'Select a node or field to edit' : 'Schema structure'}
                 </span>

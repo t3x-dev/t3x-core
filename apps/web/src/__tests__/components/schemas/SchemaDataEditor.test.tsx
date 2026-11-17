@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { SchemaDataEditor } from '@/components/schemas/SchemaDataEditor';
+import type { SchemaEditorNavigation } from '@/components/schemas/useSchemaNavigationGuard';
 import { schemaSourceKey } from '@/domain/schemas/schemaProvenance';
 
 vi.mock('@/hooks/schemas/useStudioPreview', () => ({
@@ -631,6 +633,7 @@ describe('Schema editor lifecycle states', () => {
       expect(screen.getByRole('button', { name: 'Add root node', exact: true })).toBeEnabled()
     );
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Change description/, { selector: 'summary' }));
     expect(screen.getByRole('textbox', { name: 'Schema change intent' })).toBeVisible();
     expect(screen.getByText('No nodes yet')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Add node', exact: true }));
@@ -790,5 +793,32 @@ it('adds root nodes and contextual children, and keeps invalid input from being 
   expect(screen.getByRole('button', { name: 'Add root node' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Add field', exact: true })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Add child node', exact: true })).toBeDisabled();
+  expect(handlers.onSave).not.toHaveBeenCalled();
+});
+
+it('guides a first selection and keeps testing and change notes behind their own disclosures', () => {
+  const handlers = callbacks();
+  const navigationRef = createRef<SchemaEditorNavigation>();
+  render(
+    <SchemaDataEditor
+      workbenchFooter
+      initialDefinition={definition}
+      revisionKey="guided-selection"
+      loading={false}
+      navigationRef={navigationRef}
+      {...handlers}
+    />
+  );
+  expect(screen.getByText('Choose a field to edit')).toBeVisible();
+  expect(screen.getByLabelText('Schema change intent')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Select first field' }));
+  expect(screen.getByRole('region', { name: 'Basic properties' })).toBeVisible();
+  expect(screen.getByLabelText('Sample value')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Test a value', { exact: true }));
+  expect(screen.getByLabelText('Sample value')).toBeVisible();
+  act(() => navigationRef.current?.describeChanges());
+  expect(screen.getByLabelText('Schema change intent')).toBeVisible();
+  expect(screen.getByLabelText('Schema change intent')).toHaveFocus();
+  expect(handlers.onPreview).not.toHaveBeenCalled();
   expect(handlers.onSave).not.toHaveBeenCalled();
 });

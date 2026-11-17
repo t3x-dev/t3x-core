@@ -15,10 +15,12 @@ export function SchemaFieldValueTest({
   definition,
   required,
   path,
+  disclosure = false,
 }: {
   definition: SchemaDefinition;
   required: boolean;
   path: string;
+  disclosure?: boolean;
 }) {
   const id = useId();
   const [kind, setKind] = useState<FieldTestInputKind>('text');
@@ -32,12 +34,19 @@ export function SchemaFieldValueTest({
       return { error: error instanceof Error ? error.message : 'Could not test this value.' };
     }
   }, [tested, definition, required, path, kind, text]);
+  const Container = disclosure ? 'details' : 'section';
   return (
-    <section
+    <Container
       aria-label="Test a value"
       className="space-y-3 rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
     >
-      <h3 className="text-xs font-medium">Test a value</h3>
+      {disclosure ? (
+        <summary className="cursor-pointer rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]">
+          Test a value
+        </summary>
+      ) : (
+        <h3 className="text-xs font-medium">Test a value</h3>
+      )}
       <label className="block space-y-1 text-xs" htmlFor={`${id}-type`}>
         <span>Input type</span>
         <select
@@ -129,6 +138,6 @@ export function SchemaFieldValueTest({
       <p className="text-xs text-[var(--text-secondary)]">
         Local test only. Relationships and whole-object checks run in Workspace.
       </p>
-    </section>
+    </Container>
   );
 }
