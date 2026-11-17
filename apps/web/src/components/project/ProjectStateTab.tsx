@@ -102,6 +102,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
 import { BranchLoadError } from './BranchLoadError';
+import { CommittedPublication } from './CommittedPublication';
 import { StateArtifactDialog } from './StateArtifactDialog';
 import { StateEmptyContent } from './StateEmptyContent';
 import {
@@ -113,7 +114,7 @@ import inspectionStyles from './StateInspection.module.css';
 import { StatePageFrame } from './StatePageFrame';
 import { StatePageToolbar } from './StatePageToolbar';
 
-export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
+export type ProjectSnapshotView = 'overview' | 'structure' | 'code' | 'publication';
 export type ProjectStateView = ProjectSnapshotView | 'canvas';
 type ProjectStateMode = 'snapshot' | 'canvas';
 type BranchFocus = string;
@@ -170,6 +171,7 @@ const SNAPSHOT_VIEWS: Array<{
   { id: 'overview', label: 'Overview', subtitle: 'introduction and state', icon: FileText },
   { id: 'structure', label: 'Structure', subtitle: 'state tree', icon: TableProperties },
   { id: 'code', label: 'Code', subtitle: 'canonical YAML', icon: Code2 },
+  { id: 'publication', label: 'Publication', subtitle: 'reading layouts', icon: FileText },
 ];
 
 const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
@@ -725,7 +727,8 @@ export function ProjectStateTab({
     : lastCheckedAt
       ? 'Just now'
       : 'Not checked';
-  const statePanel = activeView === 'overview' ? 'overview' : 'structure';
+  const statePanel =
+    activeView === 'overview' || activeView === 'publication' ? activeView : 'structure';
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
@@ -746,7 +749,7 @@ export function ProjectStateTab({
           role="main"
           value={statePanel}
           onValueChange={(value) =>
-            updateActiveView(value === 'overview' ? 'overview' : 'structure')
+            updateActiveView(value === 'overview' || value === 'publication' ? value : 'structure')
           }
         >
           {activeView !== 'canvas' ? (
@@ -827,10 +830,12 @@ export function ProjectStateTab({
                     aria-label="State version status"
                     className={`${inspectionStyles.surface} ${inspectionStyles.page}`}
                   >
-                    <StateStructureHeader
-                      dataMode={activeView}
-                      onDataModeChange={updateActiveView}
-                    />
+                    {activeView !== 'publication' ? (
+                      <StateStructureHeader
+                        dataMode={activeView}
+                        onDataModeChange={updateActiveView}
+                      />
+                    ) : null}
                     {snapshot.primaryError ? (
                       <StateEmpty
                         message={snapshot.primaryError}
@@ -845,6 +850,16 @@ export function ProjectStateTab({
                       />
                     )}
                   </section>
+                ) : null}
+                {activeView === 'publication' &&
+                !snapshot.loading &&
+                !snapshot.primaryError &&
+                headCommit ? (
+                  <CommittedPublication
+                    commit={headCommit}
+                    projectName={projectName}
+                    repositoryPath={repositoryPath}
+                  />
                 ) : null}
                 {activeView === 'overview' ? (
                   <StateOverviewView

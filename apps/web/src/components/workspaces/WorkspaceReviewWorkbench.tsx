@@ -1,13 +1,13 @@
 'use client';
 
 import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
-import { Code2, Eye, GitCompareArrows } from 'lucide-react';
+import { BookOpen, Code2, Eye, GitCompareArrows } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import styles from './WorkspaceReviewWorkbench.module.css';
 
-export const WORKSPACE_REVIEW_VIEWS = ['changes', 'yaml', 'rendered'] as const;
+export const WORKSPACE_REVIEW_VIEWS = ['changes', 'yaml', 'rendered', 'publication'] as const;
 export type WorkspaceReviewPane = (typeof WORKSPACE_REVIEW_VIEWS)[number];
 export type WorkspaceReviewSubject = 'content' | 'schema';
 export type WorkspaceReviewSubjectChanges = Record<WorkspaceReviewSubject, boolean>;
@@ -16,6 +16,7 @@ const VIEWS = [
   { id: 'changes', label: 'Structure', detail: 'Before → After', icon: GitCompareArrows },
   { id: 'yaml', label: 'YAML', detail: 'Complete text', icon: Code2 },
   { id: 'rendered', label: 'Preview', detail: 'Result structure', icon: Eye },
+  { id: 'publication', label: 'Publication', detail: 'Reading layouts', icon: BookOpen },
 ] as const;
 
 export function workspaceReviewPreferenceKey(projectId: string, workspaceId: string) {
