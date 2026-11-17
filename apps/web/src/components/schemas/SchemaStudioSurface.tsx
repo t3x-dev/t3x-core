@@ -133,14 +133,20 @@ export function SchemaStudioSurface({
                 ) : null}
               </fieldset>
               <fieldset aria-label="Schema next steps" className={s.saveGroup}>
-                <Button
-                  variant="canvas-outline"
-                  size="sm"
-                  disabled={!onCompose || pending}
-                  onClick={onCompose}
-                >
-                  Continue in Compose <ArrowUpRight size={14} aria-hidden="true" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="canvas-outline"
+                      size="sm"
+                      aria-label="Continue in Compose"
+                      disabled={!onCompose || pending}
+                      onClick={onCompose}
+                    >
+                      Compose <ArrowUpRight size={14} aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Continue editing content in Compose.</TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex" tabIndex={editorInvalid ? 0 : undefined}>
@@ -154,14 +160,18 @@ export function SchemaStudioSurface({
                         disabled={!canReview}
                         onClick={onReview}
                       >
-                        {hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'}
+                        Review
                         <ArrowUpRight size={14} aria-hidden="true" />
                       </Button>
                     </span>
                   </TooltipTrigger>
-                  {editorInvalid ? (
-                    <TooltipContent>Fix the highlighted fields before review.</TooltipContent>
-                  ) : null}
+                  <TooltipContent>
+                    {editorInvalid
+                      ? 'Fix the highlighted fields before review.'
+                      : hasUnsavedChanges
+                        ? 'Save Schema changes, then open Review in Workspace.'
+                        : 'Open Review in Workspace.'}
+                  </TooltipContent>
                 </Tooltip>
               </fieldset>
               {sourceHref ? (

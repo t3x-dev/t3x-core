@@ -1055,12 +1055,12 @@ function NameField({
           ? 'This name is already in use.'
           : undefined;
   return (
-    <div className={styles.nameField} data-invalid={!!error || undefined}>
+    <div className={styles.nameField}>
       <Input
         aria-label={label}
         disabled={readOnly}
         aria-invalid={Boolean(error)}
-        aria-describedby={`${id}-error`}
+        aria-describedby={error ? `${id}-error` : undefined}
         className="font-mono text-xs"
         value={draft}
         onChange={(event) => {
@@ -1076,9 +1076,11 @@ function NameField({
           if (!message && draft !== name && onChange(draft) === false) setDraft(name);
         }}
       />
-      <p id={`${id}-error`} className={styles.nameFeedback} role={error ? 'alert' : undefined}>
-        {error ?? (keyPattern ? 'Start with a–z; use a–z, 0–9 or _.' : 'Use a unique name.')}
-      </p>
+      {error ? (
+        <p id={`${id}-error`} className={styles.nameFeedback} role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
