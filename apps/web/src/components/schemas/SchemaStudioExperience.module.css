@@ -145,6 +145,8 @@
   display: flex;
   min-height: 0;
   min-width: 0;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--repo-frame-radius, 12px);
   overflow: hidden;
   background: var(--surface-card);
 }
