@@ -3369,15 +3369,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(review).getByRole('status')).toHaveTextContent(
       'This draft has no Content or Schema changes to review.'
     );
-    const changes = within(review).getByRole('table', { name: 'Draft changes' });
-    expect(
-      within(changes)
-        .getAllByRole('columnheader')
-        .map((item) => item.textContent)
-    ).toEqual(['Field', 'Before', 'After']);
-    expect(within(review).getByRole('button', { name: 'YAML' })).toBeDisabled();
-    expect(within(review).getByText('Not prepared')).toBeVisible();
-    expect(within(review).queryByRole('button', { name: 'Edit in Compose' })).toBeNull();
+    expect(within(review).getByRole('heading', { name: 'Nothing to review' })).toBeVisible();
+    expect(within(review).queryByRole('table')).toBeNull();
+    expect(within(review).queryByRole('navigation', { name: 'Review views' })).toBeNull();
+    expect(within(review).queryByText('Not prepared')).toBeNull();
+    fireEvent.click(within(review).getByRole('button', { name: 'Edit in Compose' }));
+    expect(onModeChange).toHaveBeenCalledWith('compose');
     expect(screen.queryByRole('button', { name: 'Prepare review' })).not.toBeInTheDocument();
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));

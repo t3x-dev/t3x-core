@@ -66,7 +66,7 @@ export function WorkspaceReviewWorkbench({
   notice,
   pane,
   onPaneChange,
-  viewsDisabled = false,
+  hideNavigation = false,
   loading = false,
   subject,
   onSubjectChange,
@@ -83,7 +83,7 @@ export function WorkspaceReviewWorkbench({
   details?: ReactNode;
   notice?: ReactNode;
   pane: WorkspaceReviewPane;
-  viewsDisabled?: boolean;
+  hideNavigation?: boolean;
   loading?: boolean;
   onPaneChange: (pane: WorkspaceReviewPane) => void;
   subject: WorkspaceReviewSubject;
@@ -104,48 +104,52 @@ export function WorkspaceReviewWorkbench({
         </div>
         <div className={styles.actions}>{actions}</div>
       </header>
-      <section className={styles.readiness} aria-label="Review checks and actions">
-        {readiness}
-      </section>
+      {readiness ? (
+        <section className={styles.readiness} aria-label="Review checks and actions">
+          {readiness}
+        </section>
+      ) : null}
       {notice ? <div className={styles.notice}>{notice}</div> : null}
-      <div className={styles.toolbar}>
-        <nav className={styles.subjects} aria-label="Review subject">
-          {SUBJECTS.map((item) => (
-            <button
-              type="button"
-              key={item}
-              aria-pressed={subject === item && subjectChanges[item]}
-              disabled={loading || !subjectChanges[item]}
-              title={
-                !loading && !subjectChanges[item]
-                  ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
-                  : undefined
-              }
-              onClick={() => onSubjectChange(item)}
-            >
-              {item === 'content' ? 'Content' : 'Schema'}
-            </button>
-          ))}
-        </nav>
-        <nav className={styles.views} aria-label="Review views">
-          {VIEWS.map(({ id, label, detail, icon: Icon }) => (
-            <button
-              type="button"
-              key={id}
-              disabled={viewsDisabled || loading}
-              aria-label={label}
-              aria-current={pane === id ? 'page' : undefined}
-              onClick={() => onPaneChange(id)}
-            >
-              <Icon aria-hidden="true" />
-              <span>
-                <strong>{label}</strong>
-                <small>{detail}</small>
-              </span>
-            </button>
-          ))}
-        </nav>
-      </div>
+      {!hideNavigation ? (
+        <div className={styles.toolbar}>
+          <nav className={styles.subjects} aria-label="Review subject">
+            {SUBJECTS.map((item) => (
+              <button
+                type="button"
+                key={item}
+                aria-pressed={subject === item && subjectChanges[item]}
+                disabled={loading || !subjectChanges[item]}
+                title={
+                  !loading && !subjectChanges[item]
+                    ? `No ${item === 'content' ? 'Content' : 'Schema'} changes available to review`
+                    : undefined
+                }
+                onClick={() => onSubjectChange(item)}
+              >
+                {item === 'content' ? 'Content' : 'Schema'}
+              </button>
+            ))}
+          </nav>
+          <nav className={styles.views} aria-label="Review views">
+            {VIEWS.map(({ id, label, detail, icon: Icon }) => (
+              <button
+                type="button"
+                key={id}
+                disabled={loading}
+                aria-label={label}
+                aria-current={pane === id ? 'page' : undefined}
+                onClick={() => onPaneChange(id)}
+              >
+                <Icon aria-hidden="true" />
+                <span>
+                  <strong>{label}</strong>
+                  <small>{detail}</small>
+                </span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      ) : null}
       <div className={styles.body} data-has-inspector={Boolean(sidebar)}>
         <div className={styles.main}>
           <div className={styles.content} data-review-pane={pane} data-review-subject={subject}>

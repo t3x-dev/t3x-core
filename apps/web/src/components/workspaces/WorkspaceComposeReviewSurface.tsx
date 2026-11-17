@@ -3373,7 +3373,7 @@ function ReviewSurface({
           ) : null
         }
         pane={showEmptyWorkbench ? 'changes' : pane}
-        viewsDisabled={showEmptyWorkbench}
+        hideNavigation={showEmptyWorkbench}
         onPaneChange={setPane}
         subject={subject}
         subjectChanges={subjectChanges}
@@ -3393,23 +3393,19 @@ function ReviewSurface({
         }
         emptyState={
           showEmptyWorkbench ? (
-            <table
-              className={cn(diffStyles.tree, diffStyles.referenceTree)}
-              aria-label="Draft changes"
-            >
-              <ReviewDiffColumns />
-              <tbody>
-                <tr>
-                  <td colSpan={3}>
-                    <output className={workbenchStyles.empty}>
-                      {savedSchema.loading
-                        ? 'Checking for saved changes…'
-                        : 'This draft has no Content or Schema changes to review.'}
-                    </output>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <section className={workbenchStyles.emptyReview} aria-label="Draft changes">
+              <h2>{savedSchema.loading ? 'Checking for changes…' : 'Nothing to review'}</h2>
+              <output>
+                {savedSchema.loading
+                  ? 'Checking for saved changes…'
+                  : 'This draft has no Content or Schema changes to review.'}
+              </output>
+              {!savedSchema.loading ? (
+                <Button size="sm" variant="outline" onClick={() => onModeChange('compose')}>
+                  <Pencil aria-hidden="true" /> Edit in Compose
+                </Button>
+              ) : null}
+            </section>
           ) : hasSavedSchema ? (
             <p className="text-sm text-[var(--text-secondary)]">
               Saved Schema changes are awaiting preparation. Prepare review to inspect the complete
@@ -3434,9 +3430,7 @@ function ReviewSurface({
           )
         }
         readiness={
-          showEmptyWorkbench ? (
-            <WorkspaceReviewValidation checks={[]} />
-          ) : (
+          showEmptyWorkbench ? null : (
             <WorkspaceReviewSummary
               candidate={candidate}
               controller={controller}
@@ -4098,15 +4092,15 @@ function WorkspaceReviewStructureView({
               rows={rows}
             />
           )}
+          <details className={workbenchStyles.selection}>
+            <summary>Selected change · source and actions</summary>
+            <WorkspaceReviewNodeInspector
+              candidate={candidate}
+              selectedRow={selectedRow}
+              sourceLabel={sourceLabel}
+            />
+          </details>
         </div>
-        <details className={workbenchStyles.selection}>
-          <summary>Selected change · source and actions</summary>
-          <WorkspaceReviewNodeInspector
-            candidate={candidate}
-            selectedRow={selectedRow}
-            sourceLabel={sourceLabel}
-          />
-        </details>
       </div>
     </section>
   );

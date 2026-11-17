@@ -150,7 +150,7 @@
 .selectedDetails {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
 }
@@ -200,7 +200,7 @@
   align-items: start;
   gap: 10px 20px;
   padding: 16px;
-  border: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   font-size: 12px;
@@ -231,9 +231,8 @@
   gap: 8px;
 }
 .selection {
-  margin-top: 16px;
   border-top: 1px solid var(--stroke-divider);
-  padding-top: 12px;
+  padding: 12px 16px;
 }
 .selection > summary {
   cursor: pointer;
@@ -267,7 +266,7 @@
 }
 .preview {
   min-width: 0;
-  border: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   overflow: hidden;
@@ -387,7 +386,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
 }
@@ -434,7 +433,7 @@
 .comparisonTree,
 .comparisonDetails {
   min-width: 0;
-  border: 1px solid var(--stroke-divider);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   overflow: hidden;
@@ -620,4 +619,22 @@
 .selectedDetailsReason > summary {
   cursor: pointer;
   font-weight: 500;
+}
+
+.emptyReview {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  font-size: 13px;
+}
+.emptyReview h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.emptyReview output {
+  color: var(--text-secondary);
 }
