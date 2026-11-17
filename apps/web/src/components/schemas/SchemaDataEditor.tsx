@@ -21,6 +21,7 @@ import {
 import { type ReactNode, type RefObject, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { StructureTreeRow, visibleTreeRows } from '@/components/structure/StructureTree';
 import tree from '@/components/structure/StructureTree.module.css';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -204,6 +205,7 @@ export function SchemaDataEditor({
   const [panel, setPanel] = useState<'properties' | 'rules'>('properties');
   const [fieldError, setFieldError] = useState<string>();
   const [rulesError, setRulesError] = useState<string>();
+  const editorRoot = useRef<HTMLElement>(null);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState('');
   const [resetKey, setResetKey] = useState(0);
@@ -512,7 +514,6 @@ export function SchemaDataEditor({
       if (!alive.current) return false;
       const message =
         cause instanceof Error ? cause.message : 'Could not save the Schema candidate.';
-      setError(message);
       setSaveFailure({
         status:
           cause && typeof cause === 'object' && 'code' in cause && cause.code === 'CONFLICT'
@@ -595,6 +596,15 @@ export function SchemaDataEditor({
     navigationRef.current = {
       requestNavigation: navigation.requestNavigation,
       save,
+      focusError: () => {
+        const input = editorRoot.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+        if (!input) return;
+        for (let parent = input.parentElement; parent; parent = parent.parentElement) {
+          if (parent instanceof HTMLDetailsElement) parent.open = true;
+        }
+        input.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        input.focus({ preventScroll: true });
+      },
       undo: () => {
         if (canUndo) undo();
       },
@@ -628,16 +638,20 @@ export function SchemaDataEditor({
         </span>
       ) : null}
       {previewError ? (
-        <>
-          <strong>Could not load Schema</strong>
-          <p role="alert">{previewError}</p>
-          {previewErrorAction ??
+        <Alert
+          title="Could not load Schema"
+          tone="error"
+          actions={
+            previewErrorAction ??
             (onRetry ? (
-              <Button size="sm" variant="canvas-outline" onClick={onRetry}>
+              <Button size="sm" variant="outline" onClick={onRetry}>
                 Retry
               </Button>
-            ) : null)}
-        </>
+            ) : undefined)
+          }
+        >
+          <p>{previewError}</p>
+        </Alert>
       ) : loading ? (
         <output>Loading Schema definition…</output>
       ) : disabledReason ? (
@@ -910,6 +924,7 @@ export function SchemaDataEditor({
   );
   return (
     <section
+      ref={editorRoot}
       aria-label="Schema data editor"
       className={styles.editor}
       data-schema-editor
@@ -922,14 +937,62 @@ export function SchemaDataEditor({
         <div className={styles.emptyToolbar}>{sourceManagement}</div>
       ) : null}
       {workbenchFooter && view === 'data' ? null : toolbar}
-      {error || (definition && previewError) || stale ? (
-        <p role="alert" className={styles.error}>
-          {stale
-            ? 'The saved candidate changed elsewhere. Your edits are preserved. Discard them to reload the current candidate before saving.'
-            : error || previewError}
-        </p>
+      {stale || saveFailure ? (
+        <Alert
+          title={
+            stale || saveFailure?.status === 'conflict'
+              ? 'Schema changed elsewhere'
+              : 'Could not save Schema'
+          }
+          tone="error"
+          layout="banner"
+          actions={
+            !stale && saveFailure?.status !== 'conflict' ? (
+              <Button size="sm" variant="outline" disabled={!canSave} onClick={() => void save()}>
+                Retry save
+              </Button>
+            ) : undefined
+          }
+        >
+          <p>
+            {stale || saveFailure?.status === 'conflict'
+              ? 'Your edits are kept. Review the newer version before saving. To reload it, discard your local edits from More.'
+              : 'Your edits are kept in this editor.'}
+          </p>
+          {saveFailure?.message ? (
+            <details>
+              <summary>Details</summary>
+              <p>{saveFailure.message}</p>
+            </details>
+          ) : null}
+        </Alert>
       ) : null}
-      {definition && previewError ? previewErrorAction : null}
+      {error ? (
+        <Alert title="Could not complete Schema edit" tone="error" layout="banner">
+          <p>{error}</p>
+        </Alert>
+      ) : null}
+      {definition && previewError ? (
+        <Alert
+          title="Could not refresh Schema"
+          tone="error"
+          layout="banner"
+          actions={
+            previewErrorAction ??
+            (onRetry ? (
+              <Button size="sm" variant="outline" onClick={onRetry}>
+                Retry loading Schema
+              </Button>
+            ) : undefined)
+          }
+        >
+          <p>The previous definition is still shown. Current edits are kept.</p>
+          <details>
+            <summary>Details</summary>
+            <p>{previewError}</p>
+          </details>
+        </Alert>
+      ) : null}
       <fieldset className={styles.content} disabled={pending || (!autoSave && saving)}>
         <SchemaFieldValidation key={resetKey} onValidationChange={setFieldError}>
           <div className={styles.list} hidden={view !== 'data'}>

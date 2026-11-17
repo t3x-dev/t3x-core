@@ -4,6 +4,8 @@ import { useDraggable } from '@dnd-kit/core';
 import type { StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
 import { Box, Braces, ClipboardList, Layers2, Link2, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
   type SchemaDefinition,
   type SchemaFieldRow,
@@ -149,12 +151,25 @@ export function SchemaVisualSource({
       </summary>
       {open ? (
         preview.error ? (
-          <div role="alert">
-            {preview.error}
-            <button type="button" onClick={preview.refresh}>
-              Retry source
-            </button>
-          </div>
+          <Alert
+            title="Source unavailable"
+            tone="error"
+            actions={
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Retry source"
+                onClick={preview.refresh}
+              >
+                Retry
+              </Button>
+            }
+          >
+            <details>
+              <summary>Details</summary>
+              <p>{preview.error}</p>
+            </details>
+          </Alert>
         ) : !preview.data ? (
           <output>Loading source…</output>
         ) : !preview.data.adoption.allowed ? (

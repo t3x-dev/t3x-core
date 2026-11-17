@@ -117,13 +117,20 @@ it('retains disabled reasons and guards after moving actions into groups', () =>
   expect(discard).not.toHaveBeenCalled();
 });
 
-it('keeps failed-save retry visible without opening More or claiming adoption', () => {
-  const retry = vi.fn();
+it('keeps field recovery compact and leaves error explanations out of the toolbar', () => {
+  const locate = vi.fn();
   render(
-    <SchemaStudioSurface saveFailed canSave draftStatus="Save failed · edits kept" onSave={retry} />
+    <SchemaStudioSurface
+      editorInvalid
+      saveStatus="Not saved · fix field errors"
+      onLocateError={locate}
+    />
   );
-  expect(screen.getByText('Save failed · edits kept')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry save' }));
-  expect(retry).toHaveBeenCalledOnce();
-  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  const tools = screen.getByRole('group', { name: 'Schema editing tools' });
+  fireEvent.click(within(tools).getByRole('button', { name: 'Find field error' }));
+  expect(locate).toHaveBeenCalledOnce();
+  expect(
+    within(tools).queryByText('Fix field errors before opening YAML.')
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Retry save' })).not.toBeInTheDocument();
 });

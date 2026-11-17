@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { fieldConstraintLabels } from '@/domain/schemas/fieldValidation';
+import styles from './SchemaDefinitionStructure.module.css';
 
 type Definition = Record<string, unknown>;
 type Field = {
@@ -1045,17 +1046,21 @@ function NameField({
     !text.trim()
       ? 'Name is required.'
       : keyPattern && !/^[a-z][a-z0-9_]*$/.test(text)
-        ? 'Use a lowercase letter followed by lowercase letters, numbers or underscores.'
+        ? !/^[a-z]/.test(text)
+          ? 'Start with a lowercase letter.'
+          : text.includes('-')
+            ? 'Use _ instead of -.'
+            : 'Use lowercase letters, numbers or _.'
         : text !== name && names.includes(text)
           ? 'This name is already in use.'
           : undefined;
   return (
-    <div className="min-w-0 flex-1">
+    <div className={styles.nameField} data-invalid={!!error || undefined}>
       <Input
         aria-label={label}
         disabled={readOnly}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${id}-error` : undefined}
+        aria-describedby={`${id}-error`}
         className="font-mono text-xs"
         value={draft}
         onChange={(event) => {
@@ -1071,11 +1076,9 @@ function NameField({
           if (!message && draft !== name && onChange(draft) === false) setDraft(name);
         }}
       />
-      {error ? (
-        <p id={`${id}-error`} className="mt-1 text-[11px] text-[var(--destructive)]" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <p id={`${id}-error`} className={styles.nameFeedback} role={error ? 'alert' : undefined}>
+        {error ?? (keyPattern ? 'Start with a–z; use a–z, 0–9 or _.' : 'Use a unique name.')}
+      </p>
     </div>
   );
 }

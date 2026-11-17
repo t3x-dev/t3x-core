@@ -1,0 +1,19 @@
+.nameField {
+  min-width: 0;
+  flex: 1;
+}
+.nameFeedback {
+  display: none;
+  margin: 4px 0 0;
+  min-height: 32px;
+  font: 11px / 16px var(--font-sans);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.nameField:focus-within .nameFeedback,
+.nameField[data-invalid] .nameFeedback {
+  display: block;
+}
+.nameField[data-invalid] .nameFeedback {
+  color: var(--status-error);
+}

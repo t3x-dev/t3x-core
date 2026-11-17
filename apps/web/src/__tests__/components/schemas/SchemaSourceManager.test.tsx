@@ -102,7 +102,9 @@ it('blocks referenced sources from removal and exposes removal in row actions', 
 });
 it('keeps operation failures visible', () => {
   render(<SchemaSourceManager {...managerProps()} modules={[]} error="Could not remove source." />);
-  expect(screen.getByRole('alert')).toHaveTextContent('Could not remove source.');
+  expect(screen.getByRole('complementary', { name: 'Could not update sources' })).toHaveTextContent(
+    'Could not remove source.'
+  );
   expect(screen.queryByText(/No sources yet/)).not.toBeInTheDocument();
 });
 it('explains why combining is unavailable while preserving source management', () => {

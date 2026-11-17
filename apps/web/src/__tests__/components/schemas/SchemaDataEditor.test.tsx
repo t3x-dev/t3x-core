@@ -316,7 +316,9 @@ describe('Schema data editor', () => {
       target: { value: 'number' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Save failed');
+    expect(
+      await screen.findByRole('complementary', { name: 'Could not save Schema' })
+    ).toHaveTextContent('Save failed');
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
     expect(handlers.onDirtyChange).toHaveBeenLastCalledWith(true);
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
@@ -371,7 +373,9 @@ describe('Schema data editor', () => {
         {...callbacks()}
       />
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('Source unavailable');
+    expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+      'Source unavailable'
+    );
     expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledOnce();
@@ -391,7 +395,9 @@ describe('Schema data editor', () => {
     fireEvent.change(screen.getByLabelText('Name checklist'), { target: { value: 'tasks' } });
     fireEvent.blur(screen.getByLabelText('Name checklist'));
     expect(screen.getByLabelText('Name checklist')).toHaveValue('checklist');
-    expect(screen.getByRole('alert')).toHaveTextContent('referenced');
+    expect(
+      screen.getByRole('complementary', { name: 'Could not complete Schema edit' })
+    ).toHaveTextContent('referenced');
     expect(handlers.onPreview).not.toHaveBeenCalled();
   });
   it('edits nested fields and required status, renames, saves and restores the saved definition', async () => {
@@ -436,7 +442,9 @@ describe('Schema data editor', () => {
       <SchemaDataEditor initialDefinition={definition} revisionKey="2" {...handlers} />
     );
     expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
-    expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
+    expect(
+      screen.getByRole('complementary', { name: 'Schema changed elsewhere' })
+    ).toHaveTextContent('changed elsewhere');
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(handlers.onSave).not.toHaveBeenCalled();
   });
@@ -608,7 +616,9 @@ describe('Schema editor lifecycle states', () => {
     expect(screen.getByText('Loading Schema definition…')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     rerender(<SchemaDataEditor {...props} previewError="Snapshot unavailable" />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot unavailable');
+    expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+      'Snapshot unavailable'
+    );
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     rerender(<SchemaDataEditor {...props} />);
     expect(screen.queryByRole('textbox', { name: 'Find a node or field' })).not.toBeInTheDocument();
@@ -664,7 +674,9 @@ describe('Schema editor lifecycle states', () => {
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
     rerender(<SchemaDataEditor {...props} loading={false} previewError="Snapshot missing" />);
     expect(screen.getByRole('region', { name: 'Schema data editor' })).toBe(shell);
-    expect(screen.getByRole('alert')).toHaveTextContent('Snapshot missing');
+    expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+      'Snapshot missing'
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Create schema' })).not.toBeInTheDocument();
@@ -830,4 +842,28 @@ it('guides a first selection and keeps testing and change notes behind their own
   expect(screen.getByLabelText('Schema change intent')).toHaveFocus();
   expect(handlers.onPreview).not.toHaveBeenCalled();
   expect(handlers.onSave).not.toHaveBeenCalled();
+});
+
+it('locates an invalid field without discarding its input', () => {
+  const navigationRef = { current: null } as import('react').RefObject<
+    import('@/components/schemas/useSchemaNavigationGuard').SchemaEditorNavigation | null
+  >;
+  render(
+    <SchemaDataEditor
+      initialDefinition={{ nodes: { item: { slots: { title: { type: 'string' } } } } }}
+      revisionKey="locate"
+      navigationRef={navigationRef}
+      onSave={async () => undefined}
+      onDirtyChange={() => {}}
+      onDiscard={() => {}}
+    />
+  );
+  const input = screen.getByLabelText('Name item/title');
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: 'title-' } });
+  navigationRef.current?.focusError?.();
+  expect(input).toHaveFocus();
+  expect(input).toHaveValue('title-');
+  expect(input).toHaveAttribute('aria-invalid', 'true');
+  expect(input).toHaveAccessibleDescription('Use _ instead of -.');
 });

@@ -91,11 +91,6 @@
 .editingTools button {
   color: var(--text-secondary);
 }
-.editingHint {
-  flex-basis: 100%;
-  color: var(--status-error);
-  font-size: 12px;
-}
 .moreMenu {
   width: 288px;
   max-width: calc(100vw - 24px);

@@ -14,6 +14,7 @@ import {
 export type SchemaEditorNavigation = {
   requestNavigation: (navigate: () => void) => void;
   save?: () => Promise<boolean>;
+  focusError?: () => void;
   undo?: () => void;
   openRules?: () => void;
   describeChanges?: () => void;

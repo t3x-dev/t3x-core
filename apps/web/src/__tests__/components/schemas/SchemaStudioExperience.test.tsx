@@ -150,6 +150,7 @@ vi.mock('@/hooks/schemas/useStudioCandidates', () => ({
     ],
     loading: mocks.candidatesLoading,
     add: mocks.restoreSource,
+    refresh: vi.fn(),
   }),
 }));
 vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
@@ -200,6 +201,7 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
     error: mocks.schemaEditError,
     pending: false,
     save: mocks.saveSchemaEdit,
+    refresh: vi.fn(),
   }),
 }));
 vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
@@ -419,9 +421,9 @@ it('restores an exact missing source and reopens the same saved candidate', asyn
 it('does not review another Workspace when the deep-linked target is missing', () => {
   mocks.query = 'candidate=provider&workspace=missing';
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'Workspace missing was not found in this project'
-  );
+  expect(
+    screen.getByRole('complementary', { name: 'Schema editing unavailable' })
+  ).toHaveTextContent('Workspace missing was not found in this project');
   expect(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   ).toBeDisabled();
@@ -456,7 +458,9 @@ it('protects an in-use source without treating checkbox selection as an applied 
   fireEvent.click(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   );
-  expect(screen.getByRole('alert')).toHaveTextContent('Select a valid Workspace');
+  expect(
+    screen.getByRole('complementary', { name: 'Could not complete Schema action' })
+  ).toHaveTextContent('Select a valid Workspace');
   expect(mocks.apply).not.toHaveBeenCalled();
 });
 
@@ -1219,8 +1223,10 @@ it('does not replace an unsaved Data edit when another candidate revision arrive
   };
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByLabelText('Type checklist/title')).toHaveValue('number');
-  expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
-  expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
+  expect(screen.getByRole('complementary', { name: 'Schema changed elsewhere' })).toHaveTextContent(
+    'changed elsewhere'
+  );
+  expect(screen.queryByRole('button', { name: 'Retry save' })).not.toBeInTheDocument();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
 
@@ -1290,7 +1296,9 @@ it.each([
   };
   render(<SchemaStudioExperience projectId="p" />);
   if (missing) {
-    expect(screen.getByRole('alert')).toHaveTextContent('team/missing @ 1.0');
+    expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+      'team/missing @ 1.0'
+    );
     expect(screen.getByRole('button', { name: 'Restore pinned sources' })).toBeVisible();
     expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
   } else {
@@ -1310,7 +1318,10 @@ it.each([
     })
   );
   closeSources();
-  if (missing) expect(screen.getByRole('alert')).toHaveTextContent('team/missing @ 1.0');
+  if (missing)
+    expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+      'team/missing @ 1.0'
+    );
   else expect(screen.getByLabelText('Type chosen/title')).toBeVisible();
 });
 
@@ -1319,7 +1330,9 @@ it('requires a valid Workspace for diagnostics and never opens a retired check d
   fireEvent.click(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   );
-  expect(screen.getByRole('alert')).toHaveTextContent('Select a valid Workspace');
+  expect(
+    screen.getByRole('complementary', { name: 'Could not complete Schema action' })
+  ).toHaveTextContent('Select a valid Workspace');
   expect(screen.queryByRole('dialog', { name: 'Schema checks' })).not.toBeInTheDocument();
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();
@@ -1603,7 +1616,9 @@ it('keeps a failed Review on the editor without navigating to Workspace', async 
   fireEvent.click(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   );
-  expect(await screen.findByRole('alert')).toHaveTextContent('The branch moved. Review again.');
+  expect(
+    await screen.findByRole('complementary', { name: 'Could not complete Schema action' })
+  ).toHaveTextContent('The branch moved. Review again.');
   expect(mocks.push).not.toHaveBeenCalled();
 });
 
@@ -1892,12 +1907,15 @@ it.each([
   await waitFor(() =>
     expect(screen.getByLabelText('Type task/title')).toHaveValue(dirty ? 'number' : 'boolean')
   );
-  if (dirty) expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
+  if (dirty) expect(screen.queryByRole('button', { name: 'Retry save' })).not.toBeInTheDocument();
   else expectSaveEnabled(false);
   expect(
     screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
   ).toBeDisabled();
-  if (dirty) expect(screen.getByRole('alert')).toHaveTextContent('changed elsewhere');
+  if (dirty)
+    expect(
+      screen.getByRole('complementary', { name: 'Schema changed elsewhere' })
+    ).toHaveTextContent('changed elsewhere');
   else expect(screen.getByRole('button', { name: 'Undo last change' })).toBeDisabled();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
 });
@@ -2396,7 +2414,9 @@ it('blocks a mismatched branch and Workspace without correcting the URL or editi
   mocks.branches = ['main', 'feature'];
   mocks.workspaces = [boundWorkspace()];
   render(<SchemaStudioExperience projectId="p" />);
-  expect(screen.getByRole('alert')).toHaveTextContent('belongs to main, not feature');
+  expect(
+    screen.getByRole('complementary', { name: 'Schema editing unavailable' })
+  ).toHaveTextContent('belongs to main, not feature');
   expect(mocks.replace).not.toHaveBeenCalled();
   expect(mocks.saveDraft).not.toHaveBeenCalled();
   expect(screen.queryByRole('textbox', { name: 'Name checklist' })).not.toBeInTheDocument();
@@ -2490,7 +2510,7 @@ it.each([
   expect(mocks.saveDraft).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Start editing schema' }));
   await screen.findByRole('button', { name: 'Retry workspace setup' });
-  expect(screen.getByRole('alert')).toHaveTextContent(
+  expect(screen.getByRole('complementary', { name: 'Could not create Draft' })).toHaveTextContent(
     failure instanceof Error ? failure.message : 'Workspace creation for main conflicted'
   );
   mocks.workspaces = [...mocks.workspaces];
@@ -2636,4 +2656,16 @@ it('opens draft YAML directly without saving or adopting', () => {
   expect(screen.getByRole('dialog', { name: 'Schema YAML editor' })).toBeVisible();
   expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
   expect(mocks.apply).not.toHaveBeenCalled();
+});
+
+it('keeps load recovery visible when an unresolved target hides the editor', () => {
+  mocks.query = 'workspace=missing';
+  mocks.workspacesError = 'Workspace list unavailable';
+  render(<SchemaStudioExperience projectId="p" />);
+  expect(screen.queryByRole('region', { name: 'Schema data editor' })).not.toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: 'Could not load Schema' })).toHaveTextContent(
+    'Workspace list unavailable'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading Schema' }));
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });

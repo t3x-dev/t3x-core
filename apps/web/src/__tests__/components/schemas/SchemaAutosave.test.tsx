@@ -313,3 +313,21 @@ it('clears autosave undo history when a clean editor loads a different revision'
   view.rerender(<SchemaDataEditor {...props} revisionKey="other" />);
   expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
 });
+
+it('keeps save recovery beside its Alert and removes it only after successful retry', async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValue('r2');
+  const { change } = setup(save);
+  change('Keep this edit');
+  await tick();
+  expect(screen.getByRole('complementary', { name: 'Could not save Schema' })).toHaveTextContent(
+    'Offline'
+  );
+  expect(screen.getByLabelText('Description for slot item/title')).toHaveValue('Keep this edit');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry save' }));
+  await tick(0);
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(
+    screen.queryByRole('complementary', { name: 'Could not save Schema' })
+  ).not.toBeInTheDocument();
+  expect(screen.getByTestId('status')).toHaveTextContent('saved');
+});

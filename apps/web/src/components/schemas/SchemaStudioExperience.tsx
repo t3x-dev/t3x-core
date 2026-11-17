@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -1240,6 +1241,19 @@ export function SchemaStudioExperience({
     />
   );
 
+  const retrySchema = () => {
+    void workspaces.refresh();
+    void candidates.refresh();
+    void schemaEdit.refresh();
+    void reviewStatus.refresh();
+    void draftState.refresh();
+    preview.refresh();
+  };
+  const hiddenEditorError =
+    editorUnavailable && !dataDirty
+      ? workspaces.error || schemaEdit.error || candidates.error || preview.error
+      : undefined;
+
   return (
     <section
       aria-label="Schema Studio"
@@ -1251,16 +1265,16 @@ export function SchemaStudioExperience({
         onRetry={projectBranches.refresh}
       />
       {!workspaces.loading && !workspaces.error && targetMismatch ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           Workspace {workspaceId} belongs to {selectedTarget?.targetBranch}, not {requestedBranch}.
           Select the matching branch before editing.
-        </p>
+        </Alert>
       ) : null}
       {!workspaces.loading && !workspaces.error && workspaceId && !selectedTarget ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           Workspace {workspaceId} was not found in this project. Select a valid Workspace before
           applying.
-        </p>
+        </Alert>
       ) : null}
       {!projectBranches.error &&
       !projectBranches.loading &&
@@ -1269,18 +1283,24 @@ export function SchemaStudioExperience({
       !workspaceId &&
       requestedBranch &&
       !target ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           No Workspace is available for branch {requestedBranch}. Select a valid Workspace before
           editing.
-        </p>
+        </Alert>
       ) : null}
       {workspaceSetupError ? (
-        <div className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
-          {workspaceSetupError}
-          <Button variant="ghost" size="sm" onClick={() => void setupWorkspace(true)}>
-            Retry workspace setup
-          </Button>
-        </div>
+        <Alert
+          title="Could not create Draft"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => void setupWorkspace(true)}>
+              Retry workspace setup
+            </Button>
+          }
+        >
+          <p>{workspaceSetupError}</p>
+        </Alert>
       ) : null}
       {targetsReady && target && !targetCommitted && !persistedTarget && !workspaceSetupError ? (
         <div className="flex items-center gap-3 px-6 py-2 text-sm text-muted-foreground">
@@ -1315,9 +1335,58 @@ export function SchemaStudioExperience({
         </output>
       ) : null}
       {error ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Could not complete Schema action" tone="error" layout="banner">
           {error}
-        </p>
+        </Alert>
+      ) : null}
+      {draftState.error ? (
+        <Alert
+          title="Could not determine Draft changes"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void workspaces.refresh();
+                void draftState.refresh();
+              }}
+            >
+              Retry Draft status
+            </Button>
+          }
+        >
+          <p>{draftState.error}</p>
+        </Alert>
+      ) : null}
+      {reviewStatus.error ? (
+        <Alert
+          title="Could not determine Review status"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => void reviewStatus.refresh()}>
+              Retry Review status
+            </Button>
+          }
+        >
+          <p>{reviewStatus.error}</p>
+        </Alert>
+      ) : null}
+      {hiddenEditorError ? (
+        <Alert
+          title="Could not load Schema"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button size="sm" variant="outline" onClick={retrySchema}>
+              Retry loading Schema
+            </Button>
+          }
+        >
+          <p>{hiddenEditorError}</p>
+        </Alert>
       ) : null}
       <SchemaStudioSurface
         hidden={!!preparation}
@@ -1339,6 +1408,7 @@ export function SchemaStudioExperience({
         }
         contextLocked={dataDirty || definitionOpen || applying}
         editorInvalid={editorInvalid}
+        onLocateError={() => navigationRef.current?.focusError?.()}
         dataEditor={() =>
           editorUnavailable && !dataDirty ? null : (
             <SchemaDataEditor
@@ -1450,14 +1520,7 @@ export function SchemaStudioExperience({
                   </Button>
                 ) : undefined
               }
-              onRetry={() => {
-                void workspaces.refresh();
-                void candidates.refresh();
-                void schemaEdit.refresh();
-                void reviewStatus.refresh();
-                void draftState.refresh();
-                preview.refresh();
-              }}
+              onRetry={retrySchema}
               onDirtyChange={updateDataDirty}
               onPreview={(definition, mappings) => {
                 ++localEditVersion.current;
@@ -1582,9 +1645,6 @@ export function SchemaStudioExperience({
         }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
-        error={
-          candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
-        }
         data={data}
         canEditDefinition={Boolean(
           persistedTarget &&
@@ -1623,7 +1683,6 @@ export function SchemaStudioExperience({
         }}
         onReview={() => void openReview()}
         onSave={() => void navigationRef.current?.save?.()}
-        saveFailed={saveState.status === 'failed' || saveState.status === 'conflict'}
         canSave={
           !editorUnavailable &&
           !recoveryError &&
@@ -1664,29 +1723,6 @@ export function SchemaStudioExperience({
         canReview={canReview}
         hasUnsavedChanges={dataDirty}
       />
-      {draftState.error ? (
-        <p role="alert" className="px-4 py-2 text-sm">
-          Could not determine Draft changes: {draftState.error}{' '}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void workspaces.refresh();
-              void draftState.refresh();
-            }}
-          >
-            Retry Draft status
-          </Button>
-        </p>
-      ) : null}
-      {reviewStatus.error ? (
-        <p role="alert" className="px-4 py-2 text-sm">
-          Could not determine Review status: {reviewStatus.error}{' '}
-          <Button variant="ghost" size="sm" onClick={() => void reviewStatus.refresh()}>
-            Retry Review status
-          </Button>
-        </p>
-      ) : null}
       {sourceManager}
       <Dialog
         open={!!discardRequest && !editorUnavailable}

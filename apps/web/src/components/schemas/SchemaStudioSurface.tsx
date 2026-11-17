@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import s from './SchemaStudioExperience.module.css';
 import { SchemaToolbarSlot } from './SchemaToolbarSlot';
 
@@ -21,6 +22,7 @@ export function SchemaStudioSurface({
   hidden = false,
   dataEditor,
   editorInvalid = false,
+  onLocateError,
   canEditDefinition = false,
   contextLocked = false,
   sourceHref,
@@ -29,7 +31,6 @@ export function SchemaStudioSurface({
   saveStatus,
   pending = false,
   loading = false,
-  error,
   data,
   onEditDefinition,
   onCompose,
@@ -38,7 +39,6 @@ export function SchemaStudioSurface({
   onReview,
   onSave,
   canSave = false,
-  saveFailed = false,
   onInspect,
   canReview = false,
   hasUnsavedChanges = false,
@@ -54,6 +54,7 @@ export function SchemaStudioSurface({
   navigation?: ReactNode;
   hidden?: boolean;
   editorInvalid?: boolean;
+  onLocateError?: () => void;
   canEditDefinition?: boolean;
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
@@ -63,7 +64,6 @@ export function SchemaStudioSurface({
   saveStatus?: string;
   pending?: boolean;
   loading?: boolean;
-  error?: string;
   data?: StudioPreview;
   onEditDefinition?: () => void;
   onCompose?: () => void;
@@ -72,7 +72,6 @@ export function SchemaStudioSurface({
   onReview?: () => void;
   onSave?: () => void;
   canSave?: boolean;
-  saveFailed?: boolean;
   onInspect?: () => void;
   canReview?: boolean;
   hasUnsavedChanges?: boolean;
@@ -85,7 +84,7 @@ export function SchemaStudioSurface({
   onDiscardSaved?: () => void;
   canDiscardSaved?: boolean;
 }) {
-  const yamlHint = useId();
+  const fieldHint = useId();
   return (
     <main
       aria-label="Schema editor"
@@ -127,15 +126,10 @@ export function SchemaStudioSurface({
                   </Button>
                 ) : null}
                 {saveStatus ? <output className={s.draftStatus}>{saveStatus}</output> : null}
-                {saveFailed ? (
-                  <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
-                    Retry save
+                {editorInvalid && onLocateError ? (
+                  <Button variant="ghost" size="sm" onClick={onLocateError}>
+                    Find field error
                   </Button>
-                ) : null}
-                {editorInvalid ? (
-                  <span id={yamlHint} className={s.editingHint}>
-                    Fix field errors before opening YAML.
-                  </span>
                 ) : null}
               </fieldset>
               <fieldset aria-label="Schema next steps" className={s.saveGroup}>
@@ -147,19 +141,28 @@ export function SchemaStudioSurface({
                 >
                   Continue in Compose <ArrowUpRight size={14} aria-hidden="true" />
                 </Button>
-                <Button
-                  variant="commit"
-                  className={s.reviewButton}
-                  size="sm"
-                  aria-label={
-                    hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'
-                  }
-                  disabled={!canReview}
-                  onClick={onReview}
-                >
-                  {hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'}
-                  <ArrowUpRight size={14} aria-hidden="true" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex" tabIndex={editorInvalid ? 0 : undefined}>
+                      <Button
+                        variant="commit"
+                        className={s.reviewButton}
+                        size="sm"
+                        aria-label={
+                          hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'
+                        }
+                        disabled={!canReview}
+                        onClick={onReview}
+                      >
+                        {hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'}
+                        <ArrowUpRight size={14} aria-hidden="true" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {editorInvalid ? (
+                    <TooltipContent>Fix the highlighted fields before review.</TooltipContent>
+                  ) : null}
+                </Tooltip>
               </fieldset>
               {sourceHref ? (
                 <Link href={sourceHref} className={s.navLink}>
@@ -174,12 +177,17 @@ export function SchemaStudioSurface({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className={s.moreMenu}>
                   <DropdownMenuItem
-                    aria-describedby={editorInvalid ? yamlHint : undefined}
+                    aria-describedby={editorInvalid ? fieldHint : undefined}
                     disabled={!canEditDefinition}
                     onSelect={onEditDefinition}
                   >
                     View draft YAML
                   </DropdownMenuItem>
+                  {editorInvalid ? (
+                    <p id={fieldHint} className={s.menuHint}>
+                      Fix field errors before opening YAML.
+                    </p>
+                  ) : null}
                   <DropdownMenuItem disabled={!canSave} onSelect={onSave}>
                     Save now
                   </DropdownMenuItem>
@@ -254,11 +262,6 @@ export function SchemaStudioSurface({
         </SchemaToolbarSlot>
       ) : null}
       {loading ? <output className={s.feedback}>Loading candidates…</output> : null}
-      {error ? (
-        <p role="alert" className={s.feedback}>
-          {error}
-        </p>
-      ) : null}
       <div className={s.body}>
         <section aria-label="Schema definition" className={s.canvas}>
           <div className={s.dataEditor}>{dataEditor?.()}</div>
