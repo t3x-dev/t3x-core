@@ -4,7 +4,6 @@ import type { TransitionViewV1 } from '@t3x-dev/core';
 import { Box, GitBranch, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { PublicationView } from '@/components/project/PublicationView';
 import { Button } from '@/components/ui/button';
 import { checksHref } from '@/domain/project/checks';
 import { repositoryObjectHref } from '@/domain/project/objectLocation';
@@ -432,25 +431,7 @@ export function WorkspaceSnapshotReview({
           </p>
         ) : null}
         {view ? (
-          pane === 'publication' ? (
-            <PublicationView
-              key={`${snapshotId}:${subject}`}
-              source={{
-                project: repositoryPath?.split('/').at(-1) ?? projectId,
-                projectId,
-                stage: 'Fixed Review',
-                subject: subject === 'schema' ? 'Schema' : 'Content',
-                branch: branch ?? 'Unknown branch',
-                version: `${snapshotId} · Workspace r${snapshot?.review.precondition.workspaceRevision ?? 'unknown'}`,
-                value:
-                  subject === 'schema'
-                    ? schemaReview?.draft.status === 'unknown'
-                      ? undefined
-                      : schemaReview?.draft
-                    : schemaReview?.draftContent,
-              }}
-            />
-          ) : subject === 'schema' ? (
+          subject === 'schema' ? (
             <WorkspaceReviewSchemaView
               pane={pane}
               review={schemaReview}

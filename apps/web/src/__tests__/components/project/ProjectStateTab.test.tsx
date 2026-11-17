@@ -585,34 +585,6 @@ function deferred<T>() {
 }
 
 describe('ProjectStateTab', () => {
-  it('opens Publication for the explicitly addressed Commit and leaves Structure reachable', async () => {
-    const commit = { ...PRD_COMMIT, hash: `sha256:${'c'.repeat(64)}`, parents: [] };
-    navigationMocks.search = `view=publication&commit=${encodeURIComponent(commit.hash)}`;
-    hookMocks.branchHeads = { main: PRD_COMMIT.hash };
-    hookMocks.loadCommit.mockResolvedValue(commit);
-    hookMocks.fetchStateExport.mockResolvedValue({
-      content: JSON.stringify({ exact: 'Pinned publication' }),
-    });
-    renderStateTab();
-    expect(await screen.findByText('Pinned publication')).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Publication' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
-      commit.project_id,
-      commit.hash,
-      'json',
-      expect.any(AbortSignal)
-    );
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Structure' }), { button: 0 });
-    expect(navigationMocks.router.replace).toHaveBeenLastCalledWith(
-      expect.stringContaining('view=structure'),
-      { scroll: false }
-    );
-    expect(navigationMocks.search).toContain(encodeURIComponent(commit.hash));
-  });
-
   it('navigates to the share card of the inspected revision and restores the Structure selection', async () => {
     const commit = { ...PRD_COMMIT, hash: `sha256:${'a'.repeat(64)}`, parents: [] };
     hookMocks.branchHeads = { main: commit.hash };
@@ -1377,7 +1349,6 @@ describe('ProjectStateTab', () => {
       'Canvas',
       'Overview',
       'Structure',
-      'Publication',
     ]);
     const row = within(within(data).getByRole('table')).getByText('problem').closest('tr')!;
     fireEvent.click(row);

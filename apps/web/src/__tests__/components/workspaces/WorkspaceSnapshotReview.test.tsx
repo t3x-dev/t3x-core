@@ -144,35 +144,6 @@ describe('WorkspaceSnapshotReview', () => {
     expect(screen.queryByText('No Content or Schema changes available to review.')).toBeNull();
   });
 
-  it('opens fixed Publication without substituting missing historical content', () => {
-    route.query = 'reviewPane=publication';
-    const decide = vi.fn();
-    vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
-      decide,
-      load: vi.fn(),
-      overrideReason: '',
-      setOverrideReason: vi.fn(),
-      state: { data: snapshotResponse() as never, deciding: false, error: null, loading: false },
-    });
-    render(
-      <WorkspaceSnapshotReview
-        projectId="proj_1"
-        snapshotId="rvs_88888888888888888888888888888888"
-        workspaceId="workspace_prd_handoff"
-      />
-    );
-    expect(screen.getByRole('button', { name: 'Publication', exact: true })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
-    expect(screen.getByText('Fixed Review content is unavailable for this version.')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Current draft' }).getAttribute('href')).toContain(
-      'reviewPane=publication'
-    );
-    expect(screen.queryByRole('button', { name: 'Copy version link' })).toBeNull();
-    expect(decide).not.toHaveBeenCalled();
-  });
-
   it('loads a stored ReviewSnapshot into the Changes decision view', async () => {
     const decide = vi.fn();
     const load = vi.fn();

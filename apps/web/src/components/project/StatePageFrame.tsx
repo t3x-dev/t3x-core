@@ -46,14 +46,14 @@ export function StatePageFrame({
   children: ReactNode;
   projectName: string;
   branch: string;
-  view: 'overview' | 'structure' | 'publication';
+  view: 'overview' | 'structure';
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   return (
     <div className={styles.scroll} ref={scrollRef} data-testid="state-page-scroll">
       <div className={`${styles.bounds} ${styles.page}`}>
-        {(['overview', 'structure', 'publication'] as const).map((panel) => (
+        {(['overview', 'structure'] as const).map((panel) => (
           <TabsContent
             key={panel}
             value={panel}

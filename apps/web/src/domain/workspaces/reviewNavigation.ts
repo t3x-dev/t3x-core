@@ -22,12 +22,7 @@ export function workspaceReviewHref(
   params.set('workspaceMode', options.mode ?? 'review');
   if (options.branch) params.set('branch', options.branch);
   if (options.snapshotId) params.set('reviewSnapshot', options.snapshotId);
-  if (
-    options.pane === 'changes' ||
-    options.pane === 'rendered' ||
-    options.pane === 'yaml' ||
-    options.pane === 'publication'
-  )
+  if (options.pane === 'changes' || options.pane === 'rendered' || options.pane === 'yaml')
     params.set('reviewPane', options.pane);
   if (options.tool) params.set('workspaceTool', options.tool);
   if (options.returnTo) params.set('returnTo', options.returnTo);

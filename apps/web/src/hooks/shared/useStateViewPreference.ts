@@ -1,9 +1,9 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 
-type View = 'overview' | 'structure' | 'code' | 'publication';
+type View = 'overview' | 'structure' | 'code';
 const valid = (value: unknown): value is View =>
-  value === 'overview' || value === 'structure' || value === 'code' || value === 'publication';
+  value === 'overview' || value === 'structure' || value === 'code';
 /** A local reading preference, never a source of project/ref/commit identity. */
 export function useStateViewPreference(projectId: string) {
   const [saved, setSaved] = useState<{ projectId: string; view: View } | null>(null);

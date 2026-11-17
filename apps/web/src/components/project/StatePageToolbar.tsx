@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
+import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { StateExportButton } from '@/components/shared/StateExportButton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -90,7 +90,6 @@ export function StatePageToolbar({
               [
                 { id: 'overview', label: 'Overview', icon: Eye },
                 { id: 'structure', label: 'Structure', icon: TableProperties },
-                { id: 'publication', label: 'Publication', icon: BookOpen },
               ] as const
             ).map((view) => {
               const Icon = view.icon;

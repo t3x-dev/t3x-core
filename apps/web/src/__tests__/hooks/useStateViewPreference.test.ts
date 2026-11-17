@@ -21,10 +21,6 @@ it('defaults to Overview, remembers per project and rejects invalid stored views
   expect(result.current.preferredView).toBe('overview');
   rerender({ id: 'a' });
   expect(result.current.preferredView).toBe('code');
-  act(() => result.current.remember('publication'));
-  rerender({ id: 'b' });
-  rerender({ id: 'a' });
-  expect(result.current.preferredView).toBe('publication');
 });
 it('keeps working when browser storage is unavailable', () => {
   vi.stubGlobal('localStorage', {

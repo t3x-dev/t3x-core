@@ -2817,50 +2817,6 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
   });
 
-  it('publishes a reading preview of the exact saved Draft without preparing a Review', () => {
-    enableComposeActivity();
-    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
-    const current = { title: 'Saved publication', nested: { keep: [false, null, 0] } };
-    activityMocks.value!.view!.base = { title: 'Before' };
-    activityMocks.value!.view!.current = current;
-    activityMocks.value!.view!.netDiff = [
-      { nodeId: 'title', path: 'title', before: 'Before', after: 'Saved publication' },
-    ];
-    navigationMocks.searchParams = new URLSearchParams(
-      'workspaceMode=review&reviewPane=publication'
-    );
-    const prepareReview = vi.fn();
-    const controller = {
-      candidate,
-      isBusy: false,
-      materialSources: [],
-      scenarios: { options: [] },
-      prepareReview,
-      review: { content: null, reviewSnapshot: null, view: null, deterministicValidation: null },
-    } as unknown as WorkspaceComposeReviewController;
-    const { container } = render(
-      <WorkspaceComposeReviewSurface
-        candidate={candidate}
-        controller={controller}
-        mode="review"
-        onModeChange={vi.fn()}
-      />
-    );
-    expect(screen.getByRole('button', { name: 'Publication', exact: true })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
-    expect(screen.getByText('Saved Draft')).toBeVisible();
-    expect(
-      JSON.parse(container.querySelector('article details:last-of-type code')!.textContent!)
-    ).toEqual(current);
-    expect(container.querySelector('article')).toHaveTextContent(
-      `${candidate.id} · Workspace r1 · Content r1`
-    );
-    expect(screen.queryByRole('button', { name: 'Copy version link' })).toBeNull();
-    expect(prepareReview).not.toHaveBeenCalled();
-  });
-
   it('normalizes a stale validation review pane to Changes', () => {
     enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');
@@ -2930,7 +2886,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       within(screen.getByRole('navigation', { name: 'Review views' }))
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Structure', 'YAML', 'Preview', 'Publication']);
+    ).toEqual(['Structure', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }

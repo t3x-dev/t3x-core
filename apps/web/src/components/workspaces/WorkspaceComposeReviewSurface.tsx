@@ -55,7 +55,6 @@ import {
 } from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
-import { PublicationView } from '@/components/project/PublicationView';
 import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayout';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
@@ -210,20 +209,18 @@ import stageHeaderStyles from './WorkspaceStageHeader.module.css';
 import { WorkspaceStageNavigation } from './WorkspaceStageNavigation';
 
 type WorkspaceSurfaceMode = 'compose' | 'review';
-type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks' | 'publication';
+type ReviewPane = 'rendered' | 'changes' | 'yaml' | 'checks';
 type WorkspaceTool = 'source' | 'edit' | 'delivery';
 type ReviewCheckStatus = 'failed' | 'passed' | 'pending';
 type ComposeChangeFilter = 'all' | 'modified' | 'added' | 'attention';
 const CONVERSATION_WIDTH_KEY = 't3x-compose-balanced-conversation-width';
 const DISCUSSION_WIDTH_KEY = 't3x-compose-balanced-inspector-width';
 const WORKSPACE_MODES = ['compose', 'review'] as const;
-const REVIEW_VIEWS = ['changes', 'rendered', 'yaml', 'publication'] as const;
+const REVIEW_VIEWS = ['changes', 'rendered', 'yaml'] as const;
 const CHANGE_SCOPES = ['latest', 'all'] as const;
 
 function parseReviewPane(value: string | null): ReviewPane {
-  return value === 'rendered' || value === 'yaml' || value === 'checks' || value === 'publication'
-    ? value
-    : 'changes';
+  return value === 'rendered' || value === 'yaml' || value === 'checks' ? value : 'changes';
 }
 
 function parseWorkspaceTool(value: string | null): WorkspaceTool | null {
@@ -236,7 +233,6 @@ function parseWorkspaceSurfaceMode(
 ): WorkspaceSurfaceMode | null {
   if (modeValue === 'compose' || modeValue === 'review') return modeValue;
   if (
-    paneValue === 'publication' ||
     paneValue === 'rendered' ||
     paneValue === 'changes' ||
     paneValue === 'yaml' ||
@@ -3460,11 +3456,7 @@ function ReviewSurface({
           )
         }
         sidebar={
-          !showEmptyWorkbench &&
-          subject === 'content' &&
-          activeStructureRow &&
-          pane !== 'yaml' &&
-          pane !== 'publication' ? (
+          !showEmptyWorkbench && subject === 'content' && activeStructureRow && pane !== 'yaml' ? (
             <WorkspaceReviewSelectedDetails
               activity={activity}
               candidate={candidate}
@@ -3514,25 +3506,7 @@ function ReviewSurface({
             />
           </details>
         ) : null}
-        {pane === 'publication' ? (
-          <PublicationView
-            key={`${candidate.id}:${subject}`}
-            source={{
-              project: repositoryPath?.split('/').at(-1) ?? candidate.projectId,
-              projectId: candidate.projectId,
-              stage: 'Saved Draft',
-              subject: subject === 'schema' ? 'Schema' : 'Content',
-              branch: candidate.targetBranch,
-              version: `${candidate.id} · Workspace r${authoring?.workspaceRevision ?? 'unknown'} · Content r${authoring?.compositionRevision ?? 'unknown'}`,
-              value:
-                subject === 'schema'
-                  ? authoring?.currentSchema?.status === 'unknown'
-                    ? undefined
-                    : authoring?.currentSchema
-                  : authoring?.current,
-            }}
-          />
-        ) : subject === 'schema' && hasSavedSchema && savedSchema.candidate ? (
+        {subject === 'schema' && hasSavedSchema && savedSchema.candidate ? (
           <WorkspacePendingSchemaReview
             projectId={candidate.projectId}
             workspaceId={candidate.id}
