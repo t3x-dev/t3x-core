@@ -360,7 +360,11 @@
   border-radius: var(--repo-frame-radius);
 }
 .embeddedCard .toolbar {
-  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
+  background: var(--state-panel-bg, var(--surface-panel));
+}
+.embeddedCard .formatButtonActive {
+  background: var(--state-card-bg, var(--surface-card));
+  color: var(--text-primary);
 }
 
 .embeddedCard .codeArea {
@@ -385,6 +389,8 @@
   border: 0;
   border-radius: 0;
   padding: 0 0 0 12px;
+  background: var(--state-panel-bg, var(--surface-panel));
+  border-radius: var(--repo-frame-radius);
 }
 @media (max-width: 800px) {
   .embeddedSide {

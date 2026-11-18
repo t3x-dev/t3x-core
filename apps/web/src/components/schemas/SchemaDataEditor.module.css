@@ -197,6 +197,15 @@
   justify-content: space-between;
   gap: 8px;
 }
+.sourceBody {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: inherit;
+}
+.sourceToggle {
+  display: none;
+}
 .sourceActions {
   display: grid;
   gap: 8px;
@@ -606,11 +615,12 @@
 /* Schema Studio shares editing behavior with Workspace; its presentation stays scoped here. */
 .editor[data-workbench-footer] {
   container-type: inline-size;
+  background: var(--schema-card-bg, var(--surface-card));
 }
 .editor[data-workbench-footer] .toolbar {
   flex: none;
   padding: 12px 16px;
-  background: var(--surface-card);
+  background: transparent;
 }
 .editor[data-workbench-footer] .search {
   display: flex;
@@ -639,14 +649,13 @@
 .editor[data-workbench-footer] .content {
   grid-template-columns: minmax(0, 1fr) clamp(288px, 28%, 360px);
   overflow: hidden;
-  background: var(--surface-panel);
 }
 .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
   grid-template-columns: var(--repo-nested-navigation-track) minmax(0, 1fr);
 }
 .editor[data-workbench-footer] .importSources {
-  border-right: 0;
-  background: transparent;
+  border-right: 1px solid var(--stroke-divider);
+  background: var(--schema-panel-bg, var(--surface-panel));
   padding: 12px 14px 18px;
   gap: 12px;
   scrollbar-width: thin;
@@ -725,14 +734,9 @@
   --field-type-width: 112px;
   --field-required-width: 64px;
   --field-actions-width: 60px;
-  margin: var(--repo-frame-top) var(--repo-frame-gap) var(--repo-frame-gap);
-}
-.editor[data-workbench-footer] .fieldWorkarea[data-sources] .fieldMain {
-  margin-left: 0;
 }
 .editor[data-workbench-footer] .content > aside {
-  border-left: 0;
-  background: transparent;
+  background: var(--schema-panel-bg, var(--surface-panel));
 }
 .editor[data-workbench-footer] .fieldScroll {
   padding: 0 16px 12px;
@@ -743,7 +747,7 @@
   min-width: 440px;
 }
 .editor[data-workbench-footer] .columns {
-  background: var(--surface-card);
+  background: transparent;
   color: var(--text-tertiary);
   font-size: 11px;
   padding: 8px;
@@ -874,6 +878,7 @@
 }
 .editor[data-workbench-footer] .workbenchFooter {
   min-height: 34px;
+  background: var(--schema-panel-bg, var(--surface-panel));
   color: var(--text-tertiary);
   font-size: 11px;
 }
@@ -889,13 +894,7 @@
   .editor[data-workbench-footer] .fieldScroll {
     padding-inline: 10px;
   }
-  .editor[data-workbench-footer] .sourceHeading {
-    gap: 4px;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-}
-@container (max-width: 800px) {
+
   .editor[data-workbench-footer] .content {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
@@ -913,7 +912,7 @@
     min-height: 300px;
   }
 }
-@container (max-width: 560px) {
+@container (max-width: 660px) {
   .editor[data-workbench-footer] .fieldWorkarea[data-sources] {
     display: flex;
     flex-direction: column;
@@ -921,16 +920,34 @@
   }
   .editor[data-workbench-footer] .fieldMain {
     flex: none;
-    height: clamp(320px, 55vh, 480px);
-  }
-  .editor[data-workbench-footer] .fieldWorkarea[data-sources] .fieldMain {
-    margin-inline: var(--repo-frame-gap);
+    height: clamp(280px, 48dvh, 420px);
   }
   .editor[data-workbench-footer] .importSources {
     flex: none;
     border-right: 0;
     border-bottom: 1px solid var(--stroke-divider);
+    padding: 0;
+  }
+  .editor[data-workbench-footer] .sourceHeading {
+    display: none;
+  }
+  .editor[data-workbench-footer] .sourceToggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    justify-content: space-between;
+    padding-inline: 12px;
+  }
+  .sourceToggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .sourceToggle[aria-expanded="false"] + .sourceBody {
+    display: none;
+  }
+  .editor[data-workbench-footer] .sourceBody {
     max-height: 220px;
+    overflow: auto;
+    padding: 0 12px 12px;
   }
   .editor[data-workbench-footer] .changeDescription textarea {
     min-width: 0;

@@ -49,7 +49,7 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
   return (
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section
-        className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]"
+        className={`${headerStyles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden text-[var(--text-primary)]`}
         aria-label="Schema experience"
       >
         <header className={headerStyles.header}>

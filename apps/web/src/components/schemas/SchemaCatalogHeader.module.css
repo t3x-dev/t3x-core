@@ -1,3 +1,17 @@
+.page {
+  --schema-card-bg: var(--surface-card);
+  --schema-panel-bg: var(--surface-panel);
+  background: var(--surface-app);
+}
+
+@supports (color: oklch(from black l 0 0)) {
+  .page {
+    --schema-card-bg: oklch(from var(--surface-card) l 0 0);
+    --schema-panel-bg: oklch(from var(--surface-panel) l 0 0);
+    background: oklch(from var(--surface-app) l 0 0);
+  }
+}
+
 .header {
   width: 100%;
   max-width: var(--project-page-max-width, 1264px);
@@ -16,6 +30,6 @@
 
 @media (max-width: 600px) {
   .header {
-    padding-inline: 16px;
+    padding: 12px 16px;
   }
 }

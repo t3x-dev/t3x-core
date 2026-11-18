@@ -161,7 +161,7 @@ export function StateBranchControls({
           >
             <GitBranch
               aria-hidden="true"
-              className="size-3.5 shrink-0 text-[var(--accent-branch)] opacity-90"
+              className={`${navigationStyles.branchIcon} size-3.5 shrink-0 opacity-90`}
             />
             <span className="min-w-0 flex-1 truncate text-left font-mono">
               {branch || 'Select branch'}

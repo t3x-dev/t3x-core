@@ -1257,7 +1257,7 @@ export function SchemaStudioExperience({
   return (
     <section
       aria-label="Schema Studio"
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
     >
       <BranchLoadError
         error={projectBranches.error}

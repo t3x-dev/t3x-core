@@ -72,6 +72,7 @@ export function StateOverviewView({
   onSaveDescription,
   stateLoading = false,
   stateError,
+  onRetryState,
 }: {
   introductionSource?: 'repository' | 'version';
   repositoryProfile?: RepositoryProfile;
@@ -80,6 +81,7 @@ export function StateOverviewView({
   onSaveDescription?: (description: string) => Promise<void>;
   stateLoading?: boolean;
   stateError?: string | null;
+  onRetryState?: () => void;
   navigation?: ReactNode;
   headerOnly?: boolean;
   hideHeader?: boolean;
@@ -172,6 +174,7 @@ export function StateOverviewView({
   if (headerOnly) return <div className={styles.page}>{projectHeader}</div>;
 
   const failed = stateError || (!hasCommittedContent && (error || (!empty && !loading && !data)));
+  const retryContent = stateError ? onRetryState : error ? retry : undefined;
   return (
     <div
       ref={rootRef}
@@ -371,8 +374,8 @@ export function StateOverviewView({
                 <div role="alert" className={styles.feedback}>
                   <h3>State unavailable</h3>
                   <p>{stateError || error || 'This revision could not be loaded.'}</p>
-                  {error ? (
-                    <Button size="sm" variant="outline" onClick={retry}>
+                  {retryContent ? (
+                    <Button size="sm" variant="outline" onClick={retryContent}>
                       Retry State
                     </Button>
                   ) : null}

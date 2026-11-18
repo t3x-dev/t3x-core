@@ -136,8 +136,8 @@
 .body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  flex: 1 0 420px;
-  min-height: 420px;
+  flex: 1 0 320px;
+  min-height: 0;
   position: relative;
   gap: 16px;
 }
@@ -148,7 +148,7 @@
   border: 1px solid var(--stroke-divider);
   border-radius: var(--repo-frame-radius, 12px);
   overflow: hidden;
-  background: var(--surface-card);
+  background: var(--schema-card-bg, var(--surface-card));
 }
 .body:has([data-schema-unavailable], [data-schema-empty]) {
   flex: 0 0 auto;
@@ -251,9 +251,16 @@
   .app {
     padding-inline: 16px;
   }
+  .tool,
+  .toolbarActions {
+    gap: 8px;
+  }
   .toolbarActions {
     justify-content: flex-start;
     margin-left: 0;
+  }
+  .body {
+    flex-basis: 260px;
   }
 }
 

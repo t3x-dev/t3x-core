@@ -11,9 +11,8 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { StudioCandidate } from '@t3x-dev/api-client';
-import { GripVertical } from 'lucide-react';
+import { ChevronDown, GripVertical } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import workbench from '@/components/project/RepositoryWorkbench.module.css';
 import tree from '@/components/structure/StructureTree.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -85,6 +84,8 @@ export function SchemaFieldTree({
   renderRow: (row: SchemaFieldRow, handle: ReactNode, select: () => void) => ReactNode;
 }) {
   const destinationId = useId();
+  const sourcesId = useId();
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [dragging, setDragging] = useState<TransferItem>();
   const [source, setSource] = useState<SchemaSourceItem>();
@@ -295,49 +296,61 @@ export function SchemaFieldTree({
             <div className={styles.sourceHeading}>
               <strong>Schema sources</strong>
             </div>
-            <div className={styles.sourceActions}>{sourceManagement}</div>
-            <p className={styles.sourceHelp} hidden={!availableSources.length}>
-              {studio
-                ? 'Choose a node below to add it.'
-                : 'Drag a node or object field into your schema, or select one to choose where to add it.'}
-            </p>
-            {!availableSources.length ? (
-              <p>
-                {sourceManagement
-                  ? 'No sources yet. Browse templates or manage imported schemas.'
-                  : 'No sources added.'}
-              </p>
+            {studio ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={styles.sourceToggle}
+                aria-expanded={sourcesOpen}
+                aria-controls={sourcesId}
+                onClick={() => setSourcesOpen(!sourcesOpen)}
+              >
+                Schema sources <ChevronDown size={14} aria-hidden="true" />
+              </Button>
             ) : null}
-            {availableSources.map((candidate) => (
-              <SchemaVisualSource
-                key={candidate.id}
-                projectId={projectId}
-                candidate={candidate}
-                selected={source}
-                disabled={disabled}
-                defaultOpen
-                studio={studio}
-                relations={!source && selected ? relations?.get(selected) : undefined}
-                sourceBase={sourceBase}
-                onSelect={(item, anchor) => {
-                  sourceAnchor.current = anchor;
-                  const bounds = anchor.getBoundingClientRect();
-                  sourcePosition.current = {
-                    getBoundingClientRect: () =>
-                      anchor.isConnected ? anchor.getBoundingClientRect() : bounds,
-                  };
-                  setSource(item);
-                  setDestination('');
-                  setMoveOpen(true);
-                }}
-              />
-            ))}
+            <div id={sourcesId} className={styles.sourceBody}>
+              <div className={styles.sourceActions}>{sourceManagement}</div>
+              <p className={styles.sourceHelp} hidden={!availableSources.length}>
+                {studio
+                  ? 'Choose a node below to add it.'
+                  : 'Drag a node or object field into your schema, or select one to choose where to add it.'}
+              </p>
+              {!availableSources.length ? (
+                <p>
+                  {sourceManagement
+                    ? 'No sources yet. Browse templates or manage imported schemas.'
+                    : 'No sources added.'}
+                </p>
+              ) : null}
+              {availableSources.map((candidate) => (
+                <SchemaVisualSource
+                  key={candidate.id}
+                  projectId={projectId}
+                  candidate={candidate}
+                  selected={source}
+                  disabled={disabled}
+                  defaultOpen
+                  studio={studio}
+                  relations={!source && selected ? relations?.get(selected) : undefined}
+                  sourceBase={sourceBase}
+                  onSelect={(item, anchor) => {
+                    sourceAnchor.current = anchor;
+                    const bounds = anchor.getBoundingClientRect();
+                    sourcePosition.current = {
+                      getBoundingClientRect: () =>
+                        anchor.isConnected ? anchor.getBoundingClientRect() : bounds,
+                    };
+                    setSource(item);
+                    setDestination('');
+                    setMoveOpen(true);
+                  }}
+                />
+              ))}
+            </div>
           </aside>
         ) : null}
-        <section
-          className={studio ? `${styles.fieldMain} ${workbench.primary}` : styles.fieldMain}
-          aria-label={studio ? 'Fields' : undefined}
-        >
+        <section className={styles.fieldMain} aria-label={studio ? 'Fields' : undefined}>
           {toolbar}
           <div ref={fieldScroll} className={styles.fieldScroll}>
             <div className={styles.columns} hidden={unavailable || !rows.length}>
