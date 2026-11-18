@@ -1,5 +1,6 @@
 'use client';
 
+import type { RepositoryIcon } from '@t3x-dev/api-client';
 import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { StateExportButton } from '@/components/shared/StateExportButton';
@@ -8,12 +9,16 @@ import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters
 import { historyCommitHref } from '@/domain/project/objectLocation';
 import type { ApiCommit } from '@/types/api';
 import type { ProjectSnapshotView } from './ProjectStateTab';
+import { RepositoryMark } from './RepositoryIdentity';
 import { StateBranchControls } from './StateBranchControls';
 import inspectionStyles from './StateInspection.module.css';
 import overviewStyles from './StateOverviewView.module.css';
 import frameStyles from './StatePageFrame.module.css';
 
 export function StatePageToolbar({
+  projectId,
+  projectName,
+  repositoryIcon,
   activeView,
   branch,
   branchOptions,
@@ -26,6 +31,9 @@ export function StatePageToolbar({
   workspaceHref,
   historical,
 }: {
+  projectId: string;
+  projectName: string;
+  repositoryIcon?: RepositoryIcon | null;
   historical: boolean;
   activeView: ProjectSnapshotView;
   branch: string;
@@ -40,10 +48,14 @@ export function StatePageToolbar({
 }) {
   const commitHref = headCommit ? historyCommitHref(historyHref, headCommit) : historyHref;
   return (
-    <div className={`${inspectionStyles.surface} ${frameStyles.toolbarViewport}`}>
+    <header className={`${inspectionStyles.surface} ${frameStyles.toolbarViewport}`}>
       <div className={frameStyles.bounds}>
+        <h1 className={inspectionStyles.repositoryTitle}>
+          <RepositoryMark id={projectId} icon={repositoryIcon} />
+          <span>{projectName}</span>
+        </h1>
         <div className={inspectionStyles.sub2}>
-          <div className={overviewStyles.toolbar} style={{ margin: 0, minHeight: 32 }}>
+          <div className={overviewStyles.toolbar}>
             <StateBranchControls
               branch={branch}
               branchOptions={branchOptions}
@@ -110,6 +122,6 @@ export function StatePageToolbar({
           </div>
         ) : null}
       </div>
-    </div>
+    </header>
   );
 }
