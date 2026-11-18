@@ -5,6 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "src/specData.ts"],
       "env": ["T3X_API_URL", "NEXT_PUBLIC_AUTH_DISABLED"],
+      "passThroughEnv": ["NODE_OPTIONS"],
       "cache": true
     },
     "typecheck": {
