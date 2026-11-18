@@ -206,6 +206,7 @@ const modelSelectionMocks = vi.hoisted(() => ({
 }));
 const sourceGenerationMocks = vi.hoisted(() => ({
   input: '',
+  messages: [] as Array<Record<string, unknown>>,
   send: vi.fn(),
   options: null as null | {
     conversationId?: string;
@@ -236,7 +237,7 @@ vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
   }) => {
     sourceGenerationMocks.options = options;
     return {
-      messages: [],
+      messages: sourceGenerationMocks.messages,
       streamingContent: '',
       error: null,
       warning: null,
@@ -314,6 +315,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
     sourceGenerationMocks.input = '';
+    sourceGenerationMocks.messages = [];
     sourceGenerationMocks.send.mockClear();
     conversationMocks.value.data.conversations = [];
     conversationMocks.value.loading = false;
@@ -504,6 +506,57 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(graph).toHaveTextContent('Graph for proj_1 · main');
     fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse conversation panel' }));
     expect(screen.getByRole('region', { name: 'Commit graph' })).toBeVisible();
+  });
+
+  it('opens All draft changes when a reply receipt is clicked', () => {
+    enableComposeActivity();
+    const action = {
+      actionId: 'reply-action',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: { id: 'service:t3x-proposal-generator', kind: 'service' as const },
+      publishedAt: '2026-10-29T00:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path: 'title', value: 'Learning reminder' } }],
+      reason: 'Add learning reminder',
+      generation: { transitionId: 'candidate' },
+    } as ReturnType<typeof useComposeActivity>['actions'][number];
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = {
+      [action.actionId]: [
+        { nodeId: 'title', path: 'title', before: undefined, after: 'Learning reminder' },
+      ],
+    };
+    sourceGenerationMocks.messages = [
+      {
+        id: 'assistant-turn',
+        role: 'assistant',
+        content: 'Added a learning reminder.',
+        rings: {
+          workspace_assistant: {
+            operations: [
+              {
+                type: 'operation',
+                operationId: 'proposal',
+                name: 'requestProposal',
+                result: { transitionId: 'candidate' },
+              },
+            ],
+          },
+        },
+      },
+    ];
+    renderCompose();
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
+    fireEvent.click(screen.getByRole('button', { name: /This reply/ }));
+    expect(screen.getByRole('tab', { name: 'All changes' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'All draft changes' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'This reply’s changes' })).not.toBeInTheDocument();
   });
 
   function renderCompose() {

@@ -3098,8 +3098,7 @@ button.currentDraftRow:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.discussionHeader .draftToggle,
-.turnView > button {
+.discussionHeader .draftToggle {
   display: inline-flex;
   width: auto;
   height: auto;
@@ -3124,33 +3123,11 @@ button.currentDraftRow:hover {
 .draftToggle small {
   color: var(--text-secondary);
 }
-.draftToggle:hover,
-.turnView > button:hover {
+.draftToggle:hover {
   background: var(--surface-hover);
 }
 .discussionHeader .mobileChatsButton {
   display: none;
-}
-.turnView {
-  padding: 12px 16px;
-}
-.turnView > button {
-  color: var(--text-secondary);
-  padding-inline: 0;
-}
-.turnView > button svg {
-  width: 14px;
-  height: 14px;
-}
-.turnView > h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-top: 8px;
-}
-.turnView > p {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-bottom: 14px;
 }
 @media (max-width: 840px) {
   .discussionComposer {

@@ -48,11 +48,7 @@ import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/generation';
 import type { WorkspaceProposalPosture } from '@/types/workspaces';
 import { PROPOSAL_POSTURE_OPTIONS, proposalPostureOption } from './ProposalPostureSelector';
-import type {
-  AssistantActivityRecord,
-  AssistantPublication,
-  PublishedTurnChanges,
-} from './WorkspaceAssistantActivity';
+import type { AssistantActivityRecord, AssistantPublication } from './WorkspaceAssistantActivity';
 import {
   type SchemaReceipt,
   WorkspaceComposeChat,
@@ -96,7 +92,7 @@ export function ComposeAuthoringAssistant({
   };
   beforeComposer?: ReactNode;
   schemaReceipt?: SchemaReceipt;
-  onOpenTurn?: (changes: PublishedTurnChanges) => void;
+  onOpenTurn?: () => void;
   conversationId?: string;
   title?: string;
   context: WorkspaceAssistantContext;

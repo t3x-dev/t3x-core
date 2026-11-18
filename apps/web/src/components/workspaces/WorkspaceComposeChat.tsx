@@ -31,7 +31,6 @@ import { cn } from '@/utils/cn';
 import {
   type AssistantActivityRecord,
   type AssistantPublication,
-  type PublishedTurnChanges,
   WorkspaceAssistantActivity,
   WorkspaceTurnReceipt,
 } from './WorkspaceAssistantActivity';
@@ -88,7 +87,7 @@ interface WorkspaceComposeChatProps {
   assistantPublication?: AssistantPublication | null;
   assistantPublishing?: boolean;
   schemaReceipt?: SchemaReceipt;
-  onOpenTurn?: (changes: PublishedTurnChanges) => void;
+  onOpenTurn?: () => void;
   assistantRecords?: Record<string, AssistantActivityRecord>;
 }
 

@@ -178,7 +178,6 @@ import {
   ComposeNodeHistoryPanel,
 } from './ComposeNodeHistoryPanel';
 import { useWorkspaceContentNavigation } from './useWorkspaceContentNavigation';
-import { type PublishedTurnChanges, WorkspaceTurnChanges } from './WorkspaceAssistantActivity';
 import {
   type CommitChangeInspection,
   WorkspaceCommitChangeDetails,
@@ -896,7 +895,6 @@ function ComposeSurface({
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [turn, setTurn] = useState<PublishedTurnChanges | null>(null);
   const [mobileChats, setMobileChats] = useState(false);
   const draftButton = useRef<HTMLButtonElement>(null);
   const closeDraftButton = useRef<HTMLButtonElement>(null);
@@ -1059,7 +1057,6 @@ function ComposeSurface({
         const next = stageDraftOps(workingCurrent, operations, reason);
         setStaged((current) => [...current, ...next.items]);
         setInspectorOpen(true);
-        setTurn(null);
         setRightView('changes');
         setSidePanel('chat');
         setChangeScope('latest');
@@ -1192,7 +1189,6 @@ function ComposeSurface({
     setFieldDialog(null);
     setInspectorOpen(false);
     setMobileChats(false);
-    setTurn(null);
     setDraftSubject('content');
     setFocusSchemaPath(undefined);
     setSidePanel('chat');
@@ -1307,7 +1303,6 @@ function ComposeSurface({
         .length
     : candidate.yopsDraft.operations.length;
   const openDraft = () => {
-    setTurn(null);
     setInspectorOpen(true);
     setMobileChats(false);
     setRightView('changes');
@@ -1316,14 +1311,12 @@ function ComposeSurface({
   };
   const closeInspector = () => {
     setInspectorOpen(false);
-    setTurn(null);
     requestAnimationFrame(() => draftButton.current?.focus());
   };
   useEffect(() => {
     if (inspectorOpen) closeDraftButton.current?.focus();
-  }, [inspectorOpen, turn]);
+  }, [inspectorOpen]);
   const openChat = () => {
-    setTurn(null);
     setInspectorOpen(false);
     setSidePanel('chat');
     requestAnimationFrame(() =>
@@ -1339,7 +1332,6 @@ function ComposeSurface({
     setActiveConversationTitle('Compose assistant');
     setSchemaConversationId(undefined);
     setSidePanel('chat');
-    setTurn(null);
     setMobileChats(false);
     return conversationId;
   }, [activity.createAssistantConversation]);
@@ -1513,7 +1505,6 @@ function ComposeSurface({
             onCreate={createConversation}
             onSelect={(conversationId, conversationTitle) => {
               setMobileChats(false);
-              setTurn(null);
               setActiveConversationId(conversationId);
               setActiveConversationTitle(conversationTitle);
               setSchemaConversationId(undefined);
@@ -1610,12 +1601,9 @@ function ComposeSurface({
                   }
                 : undefined
             }
-            onOpenTurn={(changes) => {
-              setTurn(changes);
-              setInspectorOpen(true);
-              setMobileChats(false);
-              setRightView('changes');
-              setSidePanel('chat');
+            onOpenTurn={() => {
+              openDraft();
+              setChangeScope('all');
             }}
             activityActions={activity.actions}
             activityCards={activity.cards}
@@ -1652,7 +1640,6 @@ function ComposeSurface({
                 type="button"
                 aria-pressed={rightView === view}
                 onClick={() => {
-                  setTurn(null);
                   setRightView(view);
                   setSidePanel('chat');
                 }}
@@ -1813,20 +1800,6 @@ function ComposeSurface({
                 }}
               />
             )
-          ) : rightView === 'changes' && turn ? (
-            <section className={composeStyles.turnView} aria-label="This reply’s changes">
-              <button type="button" onClick={openDraft}>
-                <ArrowLeft aria-hidden="true" /> All draft changes
-              </button>
-              <h3>This reply’s changes</h3>
-              <p>
-                Content r{turn.action.beforeRevision} → r{turn.action.afterRevision}
-              </p>
-              <WorkspaceTurnChanges
-                action={turn.action}
-                cards={activity.cards[turn.action.actionId] ?? turn.cards}
-              />
-            </section>
           ) : rightView === 'changes' ? (
             <div className={composeStyles.changesBody} hidden={showingDetails}>
               <ChangesToolbar
