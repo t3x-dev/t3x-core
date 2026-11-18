@@ -5,22 +5,37 @@
 }
 .page {
   min-width: 0;
-  padding-bottom: 24px;
-  flex: 1;
+  margin-block: 16px 24px;
+  padding: 0 clamp(12px, 2vw, 20px) 16px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.repositoryTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: clamp(21px, 3vw, 26px);
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .sub2 {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
   flex-wrap: wrap;
-  padding: 8px 0;
+  padding-block: 10px 6px;
 }
 .viewNavigation {
-  border-bottom: 1px solid var(--stroke-divider);
+  border-bottom: 1px solid color-mix(in srgb, var(--stroke-divider) 55%, transparent);
 }
 .viewNavigation > div {
   border-bottom: 0;
+}
+.viewNavigation button[aria-selected="true"] {
+  color: var(--accent-commit);
 }
 .revisionContext {
   display: inline-flex;
@@ -41,11 +56,11 @@
   align-items: center;
   gap: 10px;
   min-height: 36px;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 8px 12px;
   border: 1px solid var(--stroke-divider);
-  border-radius: var(--radius-md);
-  background: var(--surface-panel);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
   font-size: 12px;
   color: var(--text-secondary);
   flex-wrap: wrap;
@@ -70,7 +85,7 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 24px 0 20px;
+  padding-block: 14px;
 }
 .dataHeader h2 {
   font-size: 20px;
@@ -123,9 +138,7 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .dataTable {
-  composes: primary from "./RepositoryWorkbench.module.css";
   min-width: 0;
-  padding: var(--repo-frame-gap);
   container-type: inline-size;
 }
 .tb {
@@ -152,6 +165,7 @@
   flex: 1 1 180px;
   max-width: 360px;
   margin-right: auto;
+  background: var(--surface-card);
 }
 .find input {
   width: 100%;
@@ -432,6 +446,12 @@
   }
   .k {
     gap: 4px;
+  }
+}
+@container (max-width: 400px) {
+  .find {
+    flex-basis: 100%;
+    max-width: none;
   }
 }
 @media (pointer: coarse) {
