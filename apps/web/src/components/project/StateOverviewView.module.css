@@ -118,12 +118,13 @@
   display: grid;
   grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
-  gap: var(--repo-frame-gap);
-  padding: 24px 0 32px;
+  gap: 16px;
+  padding: 16px 0 32px;
 }
 .mainColumn {
   composes: primary from "./RepositoryWorkbench.module.css";
-  --readme-inset: clamp(12px, 2vw, 24px);
+  --repo-frame-radius: var(--radius-lg);
+  --readme-inset: clamp(16px, 2.4vw, 28px);
   padding: 0 var(--readme-inset) var(--readme-inset);
 }
 .mainColumn,
@@ -133,11 +134,13 @@
 .sidebar {
   display: grid;
   align-content: start;
-  align-self: stretch;
-  contain: size;
-  overflow: auto;
-  gap: 32px;
-  padding: 7px 0 0 12px;
+  gap: 12px;
+}
+.sidebar > :is(.about, .stateContent, .version) {
+  padding: 14px 16px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
 }
 .about {
   display: grid;
@@ -238,6 +241,7 @@
 .rootCount {
   font-size: 12px;
   color: var(--text-secondary);
+  text-align: right;
 }
 .sidebarLink {
   display: inline-flex;
@@ -406,7 +410,7 @@ a.commitMessage:hover {
   justify-content: space-between;
   gap: 8px;
   margin: 0 calc(-1 * var(--readme-inset)) 20px;
-  padding: 5px 12px;
+  padding: 5px var(--readme-inset);
   border-bottom: 1px solid var(--stroke-divider);
   border-radius: var(--repo-frame-radius) var(--repo-frame-radius) 0 0;
   background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
@@ -818,15 +822,9 @@ a.startCard:hover h4 {
   }
   .informationLayout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 40px;
-    padding-top: 20px;
   }
   .sidebar {
-    contain: none;
-    overflow: visible;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 28px;
-    padding: 0;
   }
   .about {
     grid-column: 1 / -1;
@@ -842,6 +840,10 @@ a.startCard:hover h4 {
   }
 }
 @media (max-width: 480px) {
+  .actions,
+  .readmeActions {
+    margin-left: 0;
+  }
   .startActions {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -853,6 +855,7 @@ a.startCard:hover h4 {
 .root.embedded {
   display: flex;
   overflow: visible;
+  background: transparent;
 }
 .embedded > .page {
   padding: 0;

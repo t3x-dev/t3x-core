@@ -742,7 +742,10 @@ export function ProjectStateTab({
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
         <Tabs
           activationMode="manual"
-          className="flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden bg-[var(--surface-card)]"
+          className={cn(
+            'flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden',
+            activeView === 'canvas' ? 'bg-[var(--surface-card)]' : 'bg-[var(--surface-canvas)]'
+          )}
           role="main"
           value={statePanel}
           onValueChange={(value) =>
@@ -753,6 +756,9 @@ export function ProjectStateTab({
             <>
               <StatePageToolbar
                 key={`${projectId}:${inspectedBranch}`}
+                projectId={projectId}
+                projectName={projectName}
+                repositoryIcon={repositoryProfile?.icon}
                 activeView={activeView}
                 branch={inspectedBranch || 'main'}
                 branchOptions={branchOptions}
