@@ -25,6 +25,7 @@ import { projects, yschemaArtifacts } from '../../../storage/src/schema';
 import { statePresentations } from '../../../storage/src/schema-presentations';
 import { projectGrants } from '../../../storage/src/schema-trees';
 import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
+import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { setupTestDB, testData } from './setup';
 
 let db: AnyDB;
@@ -68,6 +69,7 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
+  await ensureBuiltInYSchemaArtifacts(db);
   projectId = (
     await insertProject(db, {
       ...testData.project({ name: 'Release introduction' }),

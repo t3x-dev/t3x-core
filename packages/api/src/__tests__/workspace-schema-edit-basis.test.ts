@@ -9,6 +9,7 @@ import type { Context } from 'hono';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { compileStudioSelection } from '../lib/schema-studio-preview';
 import { resolveWorkspaceSchemaEditBasis } from '../lib/workspace-schema-edit-basis';
+import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { resolveBuiltInYSchema } from '../lib/yschema-registry';
 import { setupTestDB } from './setup';
 
@@ -17,6 +18,7 @@ let cleanup: () => Promise<void>;
 let projectId: string;
 beforeAll(async () => {
   ({ db, cleanup } = await setupTestDB());
+  await ensureBuiltInYSchemaArtifacts(db);
   projectId = (await insertProject(db, { name: 'Default Schema exact source' })).projectId;
 });
 afterAll(async () => {

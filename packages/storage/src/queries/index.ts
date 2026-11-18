@@ -714,6 +714,7 @@ export {
   type ListProjectYSchemaVersionHistoryOptions,
   type ListYSchemaArtifactsOptions,
   listProjectYSchemaVersionHistory,
+  listPublicYSchemaArtifactVersionRefs,
   listYSchemaArtifactVersions,
   type PublishYSchemaArtifactVersionInput,
   publishYSchemaArtifactVersion,

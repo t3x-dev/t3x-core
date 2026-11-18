@@ -118,7 +118,6 @@ vi.mock('../lib/yschema-artifact-registry', async () => {
   const { builtInPrdCoreArtifact, builtInPrdModules } = await import('@t3x-dev/yschema');
   return {
     artifactViewToManifest: (view: { manifest: Record<string, unknown> }) => view.manifest,
-    ensureBuiltInYSchemaArtifacts: vi.fn(() => Promise.resolve()),
     resolveCompositionArtifacts: vi.fn(() =>
       Promise.resolve({ core: builtInPrdCoreArtifact, modules: builtInPrdModules })
     ),

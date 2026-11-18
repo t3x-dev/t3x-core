@@ -9,6 +9,7 @@ import {
 } from '@t3x-dev/yschema';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { setupTestDB } from './setup';
 
 let mockDB: AnyDB;
@@ -17,6 +18,7 @@ vi.mock('../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve(mockDB)) }));
 beforeAll(async () => {
   const setup = await setupTestDB();
   mockDB = setup.db;
+  await ensureBuiltInYSchemaArtifacts(mockDB);
   cleanup = setup.cleanup;
 });
 afterAll(async () => cleanup?.());

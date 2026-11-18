@@ -1,5 +1,10 @@
 import type { AnyDB, YSchemaArtifactVersionView } from '@t3x-dev/storage';
-import { findYSchemaArtifactVersion, upsertYSchemaArtifactVersion } from '@t3x-dev/storage';
+import {
+  findYSchemaArtifactVersion,
+  listPublicYSchemaArtifactVersionRefs,
+  type UpsertYSchemaArtifactVersionInput,
+  upsertYSchemaArtifactVersion,
+} from '@t3x-dev/storage';
 import {
   builtInYSchemaCores,
   builtInYSchemaModules,
@@ -16,7 +21,8 @@ import { schemaEcosystemStarters } from './schema-ecosystem-starters';
 import { SchemaSourceUnavailableError, schemaSourceAdoptionReason } from './schema-studio';
 import { resolveBuiltInYSchema } from './yschema-registry';
 
-export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
+export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<number> {
+  const entries: Omit<UpsertYSchemaArtifactVersionInput, 'artifact_hash'>[] = [];
   // The legacy default bindings are exact versioned contracts too, not aliases
   // to the current Core or Starter. Persist their own immutable source releases.
   for (const canonicalName of ['t3x/prd', 't3x/skill', 't3x/prompt']) {
@@ -31,7 +37,7 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       license: 'Apache-2.0',
       schema,
     };
-    await seedOfficialArtifactVersion(db, {
+    entries.push({
       artifact_id: artifactId(canonicalName),
       artifact_version_id: artifactVersionId(canonicalName, version),
       canonical_name: canonicalName,
@@ -41,7 +47,6 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       version,
       status: 'active',
       manifest_json: manifest,
-      artifact_hash: await sha256CompositionValue(manifest),
       path_count: countNodePaths(schema.nodes),
       created_by: 't3x:built-in-seed',
       provides: [],
@@ -57,7 +62,7 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       artifact.apiVersion === 't3x.dev/yschema-core/v1'
         ? artifact.schema.nodes
         : (artifact.contribution.nodes ?? {});
-    await seedOfficialArtifactVersion(db, {
+    entries.push({
       artifact_id: artifactId(artifact.canonicalName),
       artifact_version_id: artifactVersionId(artifact.canonicalName, artifact.version),
       canonical_name: artifact.canonicalName,
@@ -67,7 +72,6 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       version: artifact.version,
       status: artifact.status,
       manifest_json: artifact as unknown as Record<string, unknown>,
-      artifact_hash: await sha256CompositionValue(artifact),
       path_count: countNodePaths(nodes),
       created_by: 't3x:built-in-seed',
       provides: artifact.provides,
@@ -75,7 +79,7 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
     });
   }
   for (const artifact of schemaEcosystemStarters) {
-    await seedOfficialArtifactVersion(db, {
+    entries.push({
       artifact_id: artifactId(artifact.canonicalName),
       artifact_version_id: artifactVersionId(artifact.canonicalName, artifact.version),
       canonical_name: artifact.canonicalName,
@@ -88,25 +92,31 @@ export async function ensureBuiltInYSchemaArtifacts(db: AnyDB): Promise<void> {
       version: artifact.version,
       status: artifact.status,
       manifest_json: artifact as unknown as Record<string, unknown>,
-      artifact_hash: await sha256CompositionValue(artifact),
       path_count: countNodePaths(artifact.contribution.nodes ?? {}),
       created_by: 't3x:built-in-seed',
       provides: artifact.provides.map((item) => item.capability),
       requires: [],
     });
   }
-}
-
-async function seedOfficialArtifactVersion(
-  db: AnyDB,
-  input: Parameters<typeof upsertYSchemaArtifactVersion>[1]
-): Promise<void> {
-  const existing = await findYSchemaArtifactVersion(db, {
-    canonical_name: input.canonical_name,
-    version: input.version,
-  });
-  if (existing) return;
-  await upsertYSchemaArtifactVersion(db, input);
+  const names = [...new Set(entries.map((entry) => entry.canonical_name))];
+  const existing = await listPublicYSchemaArtifactVersionRefs(db, names);
+  const existingRefs = new Set(
+    existing.map(({ canonicalName, version }) => JSON.stringify([canonicalName, version]))
+  );
+  const missing = entries.filter(
+    ({ canonical_name, version }) => !existingRefs.has(JSON.stringify([canonical_name, version]))
+  );
+  if (missing.length) {
+    await db.transaction(async (tx) => {
+      for (const entry of missing) {
+        await upsertYSchemaArtifactVersion(tx, {
+          ...entry,
+          artifact_hash: await sha256CompositionValue(entry.manifest_json),
+        });
+      }
+    });
+  }
+  return missing.length;
 }
 
 export async function resolveCompositionArtifacts(
@@ -115,7 +125,6 @@ export async function resolveCompositionArtifacts(
   projectId?: string,
   c?: Context
 ): Promise<{ core: YSchemaCoreArtifact; modules: YSchemaModuleManifest[] }> {
-  await ensureBuiltInYSchemaArtifacts(db);
   const [coreView, ...moduleViews] = await Promise.all([
     findYSchemaArtifactVersion(db, {
       canonical_name: composition.core.canonicalName,
@@ -153,7 +162,6 @@ export async function resolveCompositionArtifactsV2(
   projectId?: string,
   c?: Context
 ): Promise<YSchemaModuleArtifactV2[]> {
-  await ensureBuiltInYSchemaArtifacts(db);
   const views = await Promise.all(
     composition.modules.map((module) =>
       findYSchemaArtifactVersion(db, {
