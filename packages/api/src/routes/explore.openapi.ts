@@ -24,7 +24,6 @@ import {
 import { projectMetadataFields } from '../lib/repository-profile';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { resolveStudioSource } from '../lib/schema-studio';
-import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const exploreRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -231,7 +230,6 @@ exploreRoutes.openapi(schemaTargetsRoute, async (c) => {
 exploreRoutes.openapi(schemaReleaseRoute, async (c) => {
   const query = c.req.valid('query');
   const db = await getDB();
-  await ensureBuiltInYSchemaArtifacts(db);
   c.header('Cache-Control', 'private, no-store');
   const catalogProject = query.sourceProjectId ?? query.catalogProjectId;
   if (catalogProject) {

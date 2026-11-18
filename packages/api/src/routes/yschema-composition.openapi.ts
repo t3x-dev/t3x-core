@@ -9,6 +9,7 @@ import {
 } from '@t3x-dev/api-client';
 import { createStatePresentation } from '@t3x-dev/application';
 import {
+  type AnyDB,
   ConflictError,
   decodeCursor,
   findProjectById,
@@ -35,6 +36,7 @@ import {
   type YSchemaCompositionDraftV2,
   type YSchemaCoreArtifact,
 } from '@t3x-dev/yschema';
+import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -51,10 +53,10 @@ import { StudioError } from '../lib/schema-studio-preview';
 import { savePendingWorkspaceSchema } from '../lib/workspace-schema-pending';
 import {
   artifactViewToManifest,
-  ensureBuiltInYSchemaArtifacts,
   resolveCompositionArtifacts,
   resolveCompositionArtifactsV2,
 } from '../lib/yschema-artifact-registry';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const ArtifactReferenceSchema = z.object({
@@ -704,66 +706,75 @@ yschemaCompositionRoutes.openapi(catalogCollectionsRoute, async (c) => {
   return c.json({ success: true as const, data: { items: catalogCollections } }, 200);
 });
 yschemaCompositionRoutes.openapi(catalogRoute, async (c) => {
-  const query = c.req.valid('query');
-  const db = await getDB();
-  await ensureBuiltInYSchemaArtifacts(db);
-  if (query.selection === 'editor-picks') {
-    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
-        },
-        400
-      );
-    c.header('Cache-Control', 'private, no-store');
-    return c.json(
-      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
-      200
-    );
-  }
-  const page = await listYSchemaCatalogReleases(db, {
-    ...query,
-    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
-  });
-  c.header('Cache-Control', 'private, no-store');
-  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
+  return readSchemaCatalog(c, await getDB(), c.req.valid('query'));
 });
+
 yschemaCompositionRoutes.openapi(projectCatalogRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const query = c.req.valid('query');
   const db = await getDB();
+  const startedAt = performance.now();
   const access = await assertProjectAccess(c, db, projectId);
-  if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
-  if (query.selection === 'editor-picks') {
-    if (Object.keys(query).some((key) => !['selection', 'limit'].includes(key)))
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
-        },
-        400
-      );
-    c.header('Cache-Control', 'private, no-store');
+  const permissionMs = performance.now() - startedAt;
+  if (access instanceof Response) {
+    pinoLogger.info(
+      {
+        req_id: (c.var as { requestId?: string }).requestId,
+        permission_ms: permissionMs,
+      },
+      'YSchema catalog access denied'
+    );
+    return access;
+  }
+  return readSchemaCatalog(c, db, c.req.valid('query'), { projectId, permissionMs });
+});
+
+async function readSchemaCatalog(
+  c: Context,
+  db: AnyDB,
+  query: z.infer<typeof CatalogQuerySchema>,
+  project?: { projectId: string; permissionMs: number }
+) {
+  const editorPicks = query.selection === 'editor-picks';
+  if (editorPicks && Object.keys(query).some((key) => !['selection', 'limit'].includes(key))) {
     return c.json(
-      { success: true as const, data: await readSchemaEditorPicks(db, query.limit) },
-      200
+      {
+        success: false as const,
+        error: { code: 'INVALID_EDITORIAL_QUERY', message: 'Use Browse to filter releases.' },
+      },
+      400
     );
   }
-  const page = await listYSchemaCatalogReleases(db, {
-    ...query,
-    project_id: projectId,
-    any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
-  });
-  c.header('Cache-Control', 'private, no-store');
-  return c.json({ success: true as const, data: SchemaCatalogPageSchema.parse(page) }, 200);
-});
+
+  const startedAt = performance.now();
+  try {
+    const data = editorPicks
+      ? await readSchemaEditorPicks(db, query.limit)
+      : SchemaCatalogPageSchema.parse(
+          await listYSchemaCatalogReleases(db, {
+            ...query,
+            project_id: project?.projectId,
+            any_tags: catalogCollections.find((item) => item.id === query.collection)?.tags,
+          })
+        );
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ success: true as const, data }, 200);
+  } finally {
+    pinoLogger.info(
+      {
+        req_id: c.get('requestId'),
+        scope: project ? 'project' : 'public',
+        selection: query.selection,
+        permission_ms: project?.permissionMs,
+        query_ms: performance.now() - startedAt,
+      },
+      'YSchema catalog read'
+    );
+  }
+}
 
 yschemaCompositionRoutes.openapi(listArtifactsRoute, async (c) => {
   const query = c.req.valid('query');
   const db = await getDB();
-  await ensureBuiltInYSchemaArtifacts(db);
   const page = await listYSchemaArtifactVersions(db, {
     ...query,
     cursor: query.cursor ?? '',
@@ -787,7 +798,6 @@ yschemaCompositionRoutes.openapi(listProjectArtifactsRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
   const page = await listYSchemaArtifactVersions(db, {
     ...query,
     project_id: projectId,

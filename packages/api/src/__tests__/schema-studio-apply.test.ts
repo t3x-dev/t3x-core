@@ -17,6 +17,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { initializeWorkspaceAuthoring } from '../lib/workspace-authoring';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
+import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { setupTestDB, testData } from './setup';
 
 let db: AnyDB;
@@ -84,6 +85,7 @@ async function candidate(
 beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
+  await ensureBuiltInYSchemaArtifacts(db);
   cleanup = setup.cleanup;
   target = (await insertProject(db, testData.project({ name: 'Apply target' }))).projectId;
   source = (await insertProject(db, testData.project({ name: 'Apply source' }))).projectId;

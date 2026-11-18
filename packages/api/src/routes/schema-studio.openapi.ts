@@ -55,7 +55,6 @@ import {
   savePendingWorkspaceSchema,
 } from '../lib/workspace-schema-pending';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
-import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { schemaPreparationRoutes } from './schema-preparation.openapi';
 import { schemaPublishRoutes } from './schema-publish.openapi';
@@ -197,7 +196,6 @@ schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
   const input = c.req.valid('query');
   const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
   const view = await resolveStudioSource(c, db, {
     sourceProjectId: input.sourceProjectId ?? null,
     canonicalName: input.canonicalName,
@@ -240,7 +238,6 @@ schemaStudioRoutes.openapi(addRoute, async (c) => {
   const input = c.req.valid('json');
   const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
   if (input.sourceProjectId) {
     const sourceAccess = await assertProjectAccess(c, db, input.sourceProjectId, 'project:read');
     if (sourceAccess instanceof Response)

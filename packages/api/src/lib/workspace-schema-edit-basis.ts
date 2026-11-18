@@ -22,7 +22,6 @@ import {
 } from './schema-node-provenance';
 import { resolveStudioSource, schemaSourceAdoptionReason } from './schema-studio';
 import { StudioError } from './schema-studio-preview';
-import { ensureBuiltInYSchemaArtifacts } from './yschema-artifact-registry';
 
 export interface WorkspaceSchemaEditBasis {
   composition?: Record<string, string>;
@@ -179,7 +178,6 @@ export async function resolveWorkspaceSchemaEditBasis(
     }
   }
   if (!sources && !snapshot) {
-    await ensureBuiltInYSchemaArtifacts(db);
     const name = binding.canonicalName ?? binding.schemaName;
     const view =
       typeof name === 'string' && typeof binding.version === 'string'
