@@ -1435,6 +1435,17 @@ describe('ProjectStateTab', () => {
     ).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('does not request branches again on a mount timer', async () => {
+    vi.useFakeTimers();
+    try {
+      renderStateTab();
+      await act(async () => vi.advanceTimersByTimeAsync(1500));
+      expect(hookMocks.refreshBranches).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('checks branch freshness on focus without exposing a manual Refresh action', async () => {
     renderStateTab();
 

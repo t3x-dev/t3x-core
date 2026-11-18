@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   restoreSource: vi.fn(),
   branches: [] as string[],
   branchesError: null as string | null,
+  branchesLoading: false,
   refreshBranches: vi.fn(),
   workspacesLoading: false,
   workspacesError: null as string | null,
@@ -149,7 +150,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: {},
     branches: mocks.branches,
     error: mocks.branchesError,
-    loading: false,
+    loading: mocks.branchesLoading,
     refresh: mocks.refreshBranches,
     create: mocks.createBranch,
   }),
@@ -255,6 +256,7 @@ beforeEach(() => {
     },
   }));
   mocks.branchesError = null;
+  mocks.branchesLoading = false;
   mocks.branches = [];
   mocks.workspacesLoading = false;
   mocks.workspacesError = null;
@@ -1307,6 +1309,18 @@ it('uses the resolved branch target in outbound links without expanding the Stud
   openSources();
   expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
   closeSources();
+});
+
+it('opens an exact saved branch Workspace while branch options and unused sources are loading', async () => {
+  mocks.query = 'branch=main';
+  mocks.workspaces = [{ ...boundWorkspace(), schemaBindings: [] }];
+  mocks.branchesLoading = true;
+  mocks.candidatesLoading = true;
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(await screen.findByText('This workspace has no schema')).toBeVisible();
+  expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeDisabled();
 });
 
 it('removes the old Studio view flag without changing the explicit Workspace', () => {
