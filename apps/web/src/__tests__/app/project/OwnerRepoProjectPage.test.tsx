@@ -149,8 +149,10 @@ it('reuses the verified address and in-flight view reads when the Schema page mo
   );
   const view = render(<OwnerRepoProjectPage />);
   await screen.findByText('Loading branch…');
-  expect(mocks.listBranches).toHaveBeenCalledOnce();
-  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  await waitFor(() => {
+    expect(mocks.listBranches).toHaveBeenCalledOnce();
+    expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  });
   await act(async () => completeBranches({ branches: [{ name: 'main' }] }));
   expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
 
