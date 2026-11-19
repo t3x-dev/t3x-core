@@ -18,13 +18,12 @@ import {
   ensureMainBranch,
   findNamespaceBySlug,
   findPersonalNamespaceByOwner,
-  findProjectListCounts,
+  findProjectListDetails,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,
   getBusinessRules,
   getRepositoryAddress,
-  getRepositoryAddresses,
   insertProject,
   permanentDeleteProject,
   projects,
@@ -46,9 +45,9 @@ import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
   assertProjectCreationAccess,
+  assertProjectReadWithEditPermission,
   getProjectListAuthority,
   getUserId,
-  listAuthorizedProjectActions,
   listAuthorizedProjectActionsForPage,
 } from '../lib/project-access';
 import {
@@ -59,6 +58,7 @@ import {
 } from '../lib/project-lifecycle-policy';
 import { createPrdStarterContent } from '../lib/project-starter';
 import { projectMetadataFields } from '../lib/repository-profile';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
@@ -83,6 +83,7 @@ import {
   ProjectWithStatsSchema,
   UpdateProjectSchema,
 } from '../schemas/projects';
+import type { AppEnv } from '../types';
 
 export const projectRoutes = new OpenAPIHono();
 
@@ -184,17 +185,17 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }[]
   ) => {
     const projectIds = page.map((project) => project.projectId);
-    const [countsById, actionsById, addresses] = await Promise.all([
-      findProjectListCounts(db, projectIds),
-      listAuthorizedProjectActionsForPage(c, db, projectIds, {
-        includeDeleted: status === 'deleted',
-      }),
-      getRepositoryAddresses(db, projectIds),
+    const [detailsById, actionsById] = await Promise.all([
+      timeRepositoryRead(c, 'list_metadata', () => findProjectListDetails(db, projectIds)),
+      timeRepositoryRead(c, 'list_permissions', () =>
+        listAuthorizedProjectActionsForPage(c, db, projectIds, {
+          includeDeleted: status === 'deleted',
+        })
+      ),
     ]);
     return page.map((p) => {
       const actions = actionsById.get(p.projectId) ?? [];
-      const counts = countsById.get(p.projectId);
-      const address = addresses.get(p.projectId);
+      const { counts, address } = detailsById.get(p.projectId) ?? {};
       return {
         ...(address ?? {
           namespace: null,
@@ -230,12 +231,18 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     if (!authority && !isAuthenticationDisabled()) {
       return errorResponse(c, 'FORBIDDEN', 'Project access denied');
     }
-    const namespace = namespaceSlug ? await findNamespaceBySlug(db, namespaceSlug) : null;
+    const namespace = namespaceSlug
+      ? await timeRepositoryRead(c, 'namespace_lookup', () =>
+          findNamespaceBySlug(db, namespaceSlug)
+        )
+      : null;
     if (namespaceSlug && !namespace) {
       return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
     }
     if (namespace) {
-      const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:read');
+      const denied = await timeRepositoryRead(c, 'namespace_access', () =>
+        assertNamespaceAccess(c, db, namespace, 'namespace:read')
+      );
       if (denied) return denied;
     }
     if (status === 'active' && !namespaceSlug && !authority)
@@ -243,13 +250,15 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findProjects(db, {
-        status,
-        cursor,
-        limit,
-        authority,
-        namespace_id: namespace?.namespaceId,
-      });
+      const result = await timeRepositoryRead(c, 'list_page', () =>
+        findProjects(db, {
+          status,
+          cursor,
+          limit,
+          authority,
+          namespace_id: namespace?.namespaceId,
+        })
+      );
       const apiProjects = await enrichProjects(db, result.items);
       return c.json(
         {
@@ -266,13 +275,15 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const projects = await findProjects(db, {
-      status,
-      limit,
-      offset,
-      authority,
-      namespace_id: namespace?.namespaceId,
-    });
+    const projects = await timeRepositoryRead(c, 'list_page', () =>
+      findProjects(db, {
+        status,
+        limit,
+        offset,
+        authority,
+        namespace_id: namespace?.namespaceId,
+      })
+    );
 
     const apiProjects = await enrichProjects(db, projects);
 
@@ -816,10 +827,18 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     const db = await getDB();
 
     // Access control check
-    const accessResult = await assertProjectAccess(c, db, id);
+    const checkedAccess = (c as Context<AppEnv>).get('repositoryReadAccess');
+    const accessResult =
+      checkedAccess?.projectId === id
+        ? checkedAccess
+        : await timeRepositoryRead(c, 'project_access', () =>
+            assertProjectReadWithEditPermission(c, db, id)
+          );
     if (accessResult instanceof Response) return accessResult;
 
-    const project = await findProjectWithStats(db, id);
+    const project = await timeRepositoryRead(c, 'project_details', () =>
+      findProjectWithStats(db, id)
+    );
 
     if (!project) {
       return c.json(
@@ -831,13 +850,8 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
-    const [address, actions] = await Promise.all([
-      getRepositoryAddress(db, project),
-      listAuthorizedProjectActions(c, db, id),
-    ]);
-
     const apiProject = {
-      ...address,
+      ...project.address,
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
@@ -851,7 +865,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       drafts_count: project.stats.draftsCount,
       outputs_count: project.stats.outputsCount,
       extraction_style: project.extractionStyle ?? null,
-      can_edit: actions.includes('project:edit'),
+      can_edit: accessResult.canEdit === true,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

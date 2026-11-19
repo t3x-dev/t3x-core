@@ -57,7 +57,18 @@ export async function getRepositoryAddress(
   return repositoryAddress(project, row);
 }
 
-function repositoryAddress(
+export const repositoryAddressColumns = {
+  slug: namespaces.slug,
+  claimedBy: repositoryPaths.projectId,
+  resolvable: repositoryPaths.resolvable,
+};
+
+export const repositoryPathMatchesProject = and(
+  eq(repositoryPaths.namespaceId, namespaces.namespaceId),
+  eq(repositoryPaths.nameKey, sql`lower(${projects.name})`)
+);
+
+export function repositoryAddress(
   project: { projectId: string; name: string },
   row?: { slug: string | null; claimedBy: string | null; resolvable: boolean | null }
 ) {
@@ -75,19 +86,11 @@ export async function getRepositoryAddresses(db: AnyDB, projectIds: string[]) {
         .select({
           projectId: projects.projectId,
           name: projects.name,
-          slug: namespaces.slug,
-          claimedBy: repositoryPaths.projectId,
-          resolvable: repositoryPaths.resolvable,
+          ...repositoryAddressColumns,
         })
         .from(projects)
         .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
-        .leftJoin(
-          repositoryPaths,
-          and(
-            eq(repositoryPaths.namespaceId, namespaces.namespaceId),
-            eq(repositoryPaths.nameKey, sql`lower(${projects.name})`)
-          )
-        )
+        .leftJoin(repositoryPaths, repositoryPathMatchesProject)
         .where(inArray(projects.projectId, projectIds))
     : [];
   return new Map(rows.map((row) => [row.projectId, repositoryAddress(row, row)]));

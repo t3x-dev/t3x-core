@@ -264,5 +264,12 @@ describe('project visibility command route', () => {
         }),
       ])
     );
+    const detail = await appFor('user_visibility_guest', projectRoutes).request(
+      `/v1/projects/${publicProjectId}`
+    );
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      data: { project_id: publicProjectId, can_edit: false },
+    });
   });
 });

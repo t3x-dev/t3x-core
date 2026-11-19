@@ -8,16 +8,34 @@
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
-import { assertProjectAccess, assertProjectAccessIncludingDeleted } from '../lib/project-access';
+import {
+  assertProjectAccess,
+  assertProjectAccessIncludingDeleted,
+  assertProjectReadWithEditPermission,
+} from '../lib/project-access';
+import {
+  isPendingSchemaRead,
+  isProjectDetailRead,
+  timeRepositoryRead,
+} from '../lib/repository-read-timing';
 import { findProjectRouteAction } from '../lib/route-action-policy';
+import type { AppEnv } from '../types';
 
-export async function projectAccessMiddleware(c: Context, next: Next) {
+export async function projectAccessMiddleware(c: Context<AppEnv>, next: Next) {
   const projectId = c.req.param('projectId');
   if (!projectId) return next();
 
   const action = findProjectRouteAction(c.req.method, c.req.path);
   if (!action) return c.json(createError('NOT_FOUND', 'Route not found'), 404);
   const db = await getDB();
+  if (action === 'project:read' && isProjectDetailRead(c)) {
+    const access = await timeRepositoryRead(c, 'project_access', () =>
+      assertProjectReadWithEditPermission(c, db, projectId)
+    );
+    if (access instanceof Response) return access;
+    c.set('repositoryReadAccess', { projectId, canEdit: access.canEdit === true });
+    return next();
+  }
   // The application gate must use the same lifecycle lookup as the handlers.
   // Include deleted rows only for these exact operations, while still applying
   // canonical management authority. Query flags must not enable ordinary reads
@@ -27,8 +45,11 @@ export async function projectAccessMiddleware(c: Context, next: Next) {
     (action === 'project:delete' && c.req.query('permanent') === 'true');
   const access = includeDeleted
     ? await assertProjectAccessIncludingDeleted(c, db, projectId)
-    : await assertProjectAccess(c, db, projectId);
+    : await timeRepositoryRead(c, 'project_access', () => assertProjectAccess(c, db, projectId));
   if (access instanceof Response) return access;
 
+  if (action === 'project:read' && isPendingSchemaRead(c)) {
+    c.set('repositoryReadAccess', { projectId });
+  }
   return next();
 }
