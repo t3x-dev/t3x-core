@@ -10,6 +10,7 @@ see the repository's [stability summary](../../docs/stability.md).
 | [Agent guide](AGENTS.md) | Task scope, required reading and verification |
 | [Architecture](docs/architecture.md) | Module boundaries, state ownership, transport and frontend contracts |
 | [Business contracts](docs/business.md) | Core objects, workflow rules and frontend business contracts |
+| [Design principles](docs/design.md) | Page priorities, layout, visual semantics, accessibility and design review |
 | [Repository guide](../../AGENTS.md) | Project-wide architecture and development constraints |
 
 The architecture and business documents distinguish normative contracts from
