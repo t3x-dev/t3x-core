@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,8 +46,6 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
-import { useBranches } from '@/hooks/shared/useBranches';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
@@ -190,8 +189,7 @@ export function SchemaStudioExperience({
   const router = useRouter();
   const pathname = usePathname();
   const candidates = useStudioCandidates(projectId);
-  const workspaces = useProjectWorkspaces(projectId);
-  const projectBranches = useBranches(projectId, true);
+  const { branches: projectBranches, workspaces } = useRepositoryViewData(projectId);
   const { saveDraft } = useWorkspaceFlow();
   const [workspaceSetupFailures, setWorkspaceSetupFailures] = useState<{
     scope: object;

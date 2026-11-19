@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
-import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import RepositoryPage from '@/app/[owner]/[repository]/[[...repoPath]]/page';
+import RepositoryLayout from '@/app/[owner]/[repository]/layout';
+import OwnerPage from '@/app/[owner]/page';
 import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   resolveObject: vi.fn(),
   replace: vi.fn(),
+  listBranches: vi.fn(),
+  fetchProjectWorkspaces: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
   pathname: null as string | null,
   query: 'workspace=w&conversation=c&branch=main&pr=9',
@@ -17,7 +21,11 @@ vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
   },
-  useParams: () => mocks.params,
+  useParams: () => ({
+    owner: mocks.params.owner,
+    repository: mocks.params.repoPath[0],
+    repoPath: mocks.params.repoPath.slice(1),
+  }),
   usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
   useSearchParams: () => new URLSearchParams(mocks.query),
   useRouter: () => ({ replace: mocks.replace }),
@@ -25,33 +33,55 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/queries/projects', () => ({
   resolveRepository: (...args: unknown[]) => mocks.resolve(...args),
 }));
+vi.mock('@/infrastructure/branches', () => ({ listBranches: mocks.listBranches }));
+vi.mock('@/queries/workspaces', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/queries/workspaces')>()),
+  fetchProjectWorkspaces: mocks.fetchProjectWorkspaces,
+}));
 vi.mock('@/queries/repositoryObjectAddresses', () => ({
   getRepositoryObjectAddress: mocks.resolveObject,
 }));
-vi.mock('@/app/project/[projectId]/page', () => ({
-  ProjectDetailPageContent: ({
-    projectIdOverride,
-    ownerSlugOverride,
-    initialTabOverride,
-    commitAddress,
-    fixedReview,
-    workspaceBranch,
-  }: {
-    projectIdOverride: string;
-    ownerSlugOverride: string;
-    initialTabOverride: string;
-    commitAddress?: { id: string; number: string };
-    fixedReview?: { workspaceId: string; snapshotId: string; number: string };
-    workspaceBranch?: string;
-  }) => (
-    <div data-testid="detail">
-      {projectIdOverride} {ownerSlugOverride} {initialTabOverride}
-      {workspaceBranch && ` branch=${workspaceBranch}`}
-      {commitAddress && ` commit=${commitAddress.id}`}
-      {fixedReview && ` review=${fixedReview.snapshotId} workspace=${fixedReview.workspaceId}`}
-    </div>
-  ),
-}));
+vi.mock('@/app/project/[projectId]/page', async () => {
+  const { useRepositoryViewData } = await import('@/components/project/RepositoryRouteContext');
+
+  function ViewData({ projectId }: { projectId: string }) {
+    const { branches, workspaces } = useRepositoryViewData(projectId);
+    return (
+      <output data-testid="view-data">
+        {branches.branches.join(',')}{' '}
+        {workspaces.workspaces.map((workspace) => workspace.id).join(',')}
+      </output>
+    );
+  }
+
+  return {
+    ProjectDetailPageContent: ({
+      projectIdOverride,
+      ownerSlugOverride,
+      initialTabOverride,
+      commitAddress,
+      fixedReview,
+      workspaceBranch,
+    }: {
+      projectIdOverride: string;
+      ownerSlugOverride: string;
+      initialTabOverride: string;
+      commitAddress?: { id: string; number: string };
+      fixedReview?: { workspaceId: string; snapshotId: string; number: string };
+      workspaceBranch?: string;
+    }) => (
+      <div data-testid="detail">
+        {projectIdOverride} {ownerSlugOverride} {initialTabOverride}
+        {workspaceBranch && ` branch=${workspaceBranch}`}
+        {commitAddress && ` commit=${commitAddress.id}`}
+        {fixedReview && ` review=${fixedReview.snapshotId} workspace=${fixedReview.workspaceId}`}
+        {(initialTabOverride === 'state' || initialTabOverride === 'schemas') && (
+          <ViewData projectId={projectIdOverride} />
+        )}
+      </div>
+    ),
+  };
+});
 vi.mock('@/components/project/RepositoryNestedPage', () => ({
   RepositoryNestedPage: ({ projectId, segments }: { projectId: string; segments: string[] }) => (
     <div data-testid="nested">
@@ -68,8 +98,19 @@ vi.mock('@/components/project/NewRepositoryPage', () => ({
 vi.mock('@/components/project/OrganizationSettingsPage', () => ({
   OrganizationSettingsPage: () => <div>Organization settings</div>,
 }));
+function OwnerRepoProjectPage() {
+  return (
+    <RepositoryLayout>
+      <RepositoryPage key={mocks.params.repoPath.join('/')} />
+    </RepositoryLayout>
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal('WebSocket', undefined);
+  mocks.listBranches.mockResolvedValue({ branches: [] });
+  mocks.fetchProjectWorkspaces.mockResolvedValue([]);
   useProjectStore.setState({ projects: [], details: {} });
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
   mocks.pathname = null;
@@ -83,6 +124,51 @@ beforeEach(() => {
     path_status: 'ready',
     redirect: false,
   });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+it('reuses the verified address and in-flight view reads when the Schema page mounts', async () => {
+  mocks.query = '';
+  let completeBranches!: (value: { branches: { name: string }[] }) => void;
+  let completeWorkspaces!: (value: { id: string }[]) => void;
+  mocks.listBranches.mockReturnValue(
+    new Promise((resolve) => {
+      completeBranches = resolve;
+    })
+  );
+  mocks.fetchProjectWorkspaces.mockReturnValue(
+    new Promise((resolve) => {
+      completeWorkspaces = resolve;
+    })
+  );
+  const view = render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
+  expect(mocks.listBranches).toHaveBeenCalledOnce();
+  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+
+  mocks.params.repoPath = ['Repo', 'schemas'];
+  view.rerender(<OwnerRepoProjectPage />);
+
+  expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice schemas');
+  expect(mocks.resolve).toHaveBeenCalledOnce();
+  expect(mocks.listBranches).toHaveBeenCalledOnce();
+  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  await act(async () => {
+    completeBranches({ branches: [{ name: 'main' }] });
+    completeWorkspaces([{ id: 'main-draft' }]);
+  });
+  expect(screen.getByTestId('view-data')).toHaveTextContent('main main-draft');
+});
+
+it('checks the new repository before rendering its content', async () => {
+  const view = render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list');
+  mocks.resolve.mockRejectedValueOnce(Object.assign(new Error('No access'), { code: 'FORBIDDEN' }));
+  mocks.params.repoPath = ['Other', 'schemas'];
+  view.rerender(<OwnerRepoProjectPage />);
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  expect(await screen.findByText('Repository unavailable')).toBeInTheDocument();
+  expect(mocks.resolve).toHaveBeenLastCalledWith('alice', 'Other');
 });
 it('resolves directly, without any list cache or pagination', async () => {
   render(<OwnerRepoProjectPage />);
@@ -428,6 +514,9 @@ it('keeps the known header while checking access without exposing the review ear
   expect(screen.queryByRole('heading', { name: 'Repo', exact: true })).not.toBeInTheDocument();
 });
 it('leaves namespace directory and new-repository routes out of repository resolution', () => {
+  const directory = render(<OwnerPage />);
+  expect(screen.getByText('Directory')).toBeInTheDocument();
+  directory.unmount();
   mocks.params.repoPath = ['new'];
   render(<OwnerRepoProjectPage />);
   expect(screen.getByText('New repository')).toBeInTheDocument();
