@@ -35,11 +35,13 @@ function openActions(name = 'prd-workflow') {
 }
 const createProject = vi.fn();
 const refreshProjects = vi.fn();
+const loadMore = vi.fn();
 const removeProject = vi.fn();
 const renameProject = vi.fn();
 const useProjectsArgs = vi.fn();
 let hookError: string | null = null;
 let hookLoading = false;
+let hookHasMore = false;
 let hookProjects: Project[] = [];
 let currentPath = '/';
 let currentQuery = '';
@@ -69,6 +71,8 @@ vi.mock('@/hooks/projects/useProjects', () => ({
     return {
       create: createProject,
       error: hookError,
+      hasMore: hookHasMore,
+      loadMore,
       loading: hookLoading,
       projects: hookProjects,
       refresh: refreshProjects,
@@ -130,12 +134,14 @@ describe('ProjectDirectoryPage', () => {
     namespaceAccounts = [];
     createProject.mockReset();
     refreshProjects.mockReset();
+    loadMore.mockReset();
     removeProject.mockReset();
     renameProject.mockReset();
     useProjectsArgs.mockReset();
     window.localStorage.clear();
     hookError = null;
     hookLoading = false;
+    hookHasMore = false;
     hookProjects = projects;
     useProjectStore.setState({
       error: null,
@@ -249,7 +255,7 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage scope="accessible" />);
 
-    expect(useProjectsArgs).toHaveBeenLastCalledWith(100, undefined, true);
+    expect(useProjectsArgs).toHaveBeenLastCalledWith(20, undefined, 'on-demand');
     expect(screen.getByRole('heading', { name: /^Your repositories/ })).toBeInTheDocument();
     expect(screen.getByText('Owner: test-a3')).toBeInTheDocument();
     expect(screen.getByText('Editor access')).toBeInTheDocument();
@@ -389,6 +395,28 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByText('41–42 of 42 repositories')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  });
+
+  it('renders the first page without requesting the next and searches later pages on demand', async () => {
+    hookHasMore = true;
+    loadMore.mockImplementation(async () => {
+      hookHasMore = false;
+      hookProjects = [
+        ...projects,
+        { ...projects[0], project_id: 'older-id', name: 'older-repository' },
+      ];
+      rerender(<ProjectDirectoryPage />);
+      return true;
+    });
+    const { rerender } = render(<ProjectDirectoryPage />);
+    expect(screen.getByRole('link', { name: 'prd-workflow' })).toBeInTheDocument();
+    expect(loadMore).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a repository' }), {
+      target: { value: 'older-repository' },
+    });
+    expect(await screen.findByRole('link', { name: 'older-repository' })).toBeInTheDocument();
+    expect(loadMore).toHaveBeenCalledTimes(1);
   });
 
   it.each([

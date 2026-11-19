@@ -97,6 +97,8 @@ export function RepositoryTagPicker({
   namespace,
   disabled,
   className,
+  loading,
+  onOpenChange,
 }: {
   selected: string[];
   onChange: (tags: string[]) => void;
@@ -104,6 +106,8 @@ export function RepositoryTagPicker({
   namespace?: string;
   disabled?: boolean;
   className?: string;
+  loading?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -114,6 +118,7 @@ export function RepositoryTagPicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
+        onOpenChange?.(next);
         if (!next) setQuery('');
       }}
     >
@@ -160,6 +165,8 @@ export function RepositoryTagPicker({
               query={query}
               maxSelected={32}
             />
+          ) : loading ? (
+            <output className={styles.panelEmpty}>Loading tags…</output>
           ) : (
             <TagChoices selected={selected} onChange={onChange} query={query} options={options} />
           ))}

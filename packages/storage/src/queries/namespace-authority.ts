@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Project, projects } from '../schema';
 import {
@@ -34,7 +34,24 @@ export async function findProjectAuthorityFacts(
     includeDeleted?: boolean;
   }
 ): Promise<StoredProjectAuthorityFacts | null> {
-  const [row] = await db
+  const [row] = await findProjectsAuthorityFacts(db, {
+    principal: input.principal,
+    includeDeleted: input.includeDeleted,
+    projectIds: [input.projectId],
+  });
+  return row ?? null;
+}
+
+export async function findProjectsAuthorityFacts(
+  db: AnyDB,
+  input: {
+    projectIds: string[];
+    principal: StoredAuthorityPrincipal;
+    includeDeleted?: boolean;
+  }
+): Promise<StoredProjectAuthorityFacts[]> {
+  if (!input.projectIds.length) return [];
+  return db
     .select({
       project: projects,
       namespaceMembership: namespaceMemberships,
@@ -60,13 +77,10 @@ export async function findProjectAuthorityFacts(
     )
     .where(
       and(
-        eq(projects.projectId, input.projectId),
+        inArray(projects.projectId, input.projectIds),
         input.includeDeleted ? undefined : isNull(projects.deletedAt)
       )
-    )
-    .limit(1);
-
-  return row ?? null;
+    );
 }
 
 /** Load the exact namespace membership used for namespace-wide actions. */
