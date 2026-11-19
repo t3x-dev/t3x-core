@@ -60,16 +60,21 @@ vi.mock('@/components/project/StateOverviewView', () => ({
     reader,
     schemaHref,
     historyHref,
+    workspaceHref,
     commit,
   }: {
     commitDigest: string | null;
     reader?: (expanded: boolean, expand: () => void) => import('react').ReactNode;
     schemaHref?: string;
     historyHref?: string;
+    workspaceHref?: string;
     commit?: ApiCommit | null;
   }) =>
     commitDigest === null ? (
-      <section aria-label="Overview">No commits yet</section>
+      <section aria-label="Overview">
+        No commits yet
+        {workspaceHref ? <a href={workspaceHref}>Open Workspace</a> : null}
+      </section>
     ) : (
       <section aria-label="Overview">
         {schemaHref ? <a href={schemaHref}>View schemas</a> : null}
@@ -552,6 +557,7 @@ function renderStateTab(
   const element = () => (
     <ProjectStateTab
       initialView="structure"
+      canEditRepository
       projectId="proj_test"
       projectName="Test Project"
       projectDescription={projectDescription}
@@ -625,7 +631,11 @@ describe('ProjectStateTab', () => {
     expect(within(header).getByRole('heading', { name: 'Test Project' })).toBeVisible();
     expect(within(header).getByText('The project description.')).toBeVisible();
     expect(within(header).getByText('Content', { exact: true })).toBeVisible();
-    expect(within(header).getByText('Schema Care Checklist@1.0.0')).toBeVisible();
+    const schemaLabel = within(dialog).getByText('Care Checklist@1.0.0');
+    expect(schemaLabel).not.toBeVisible();
+    fireEvent.click(within(dialog).getByText('Version details · 1 Schema'));
+    expect(schemaLabel).toBeVisible();
+    expect(within(dialog).getByText(commit.hash)).toBeVisible();
     expect(within(summary).getByText('You: i need food and drink')).toBeVisible();
     expect(summary).not.toHaveTextContent('t3x.dev/semantic-content');
     expect(hookMocks.fetchStateExport).toHaveBeenCalledWith(
@@ -649,6 +659,34 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('dialog', { name: 'Share card' })).toBeNull();
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('expands long values and keeps the summary limit distinct from full data', async () => {
+    const commit = { ...PRD_COMMIT, hash: `sha256:${'c'.repeat(64)}`, parents: [] };
+    const longValue = 'A long reading note. '.repeat(30);
+    const yaml = JSON.stringify({
+      note: longValue,
+      tasks: Array.from({ length: 20 }, (_, index) => ({ title: `Task ${index}`, done: false })),
+    });
+    hookMocks.loadCommit.mockResolvedValue(commit);
+    hookMocks.fetchStateExport.mockResolvedValue({ content: yaml });
+    navigationMocks.search = new URLSearchParams({
+      view: 'structure',
+      artifact: commit.hash,
+    }).toString();
+    renderStateTab();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share card' });
+    const summary = await within(dialog).findByRole('region', { name: 'Content summary' });
+    expect(within(summary).getByText('First 16 fields')).toBeVisible();
+    const fullNote = within(summary).getByText(longValue.trim());
+    expect(fullNote).not.toBeVisible();
+    fireEvent.click(within(summary).getByText('Show more'));
+    expect(fullNote).toBeVisible();
+    expect(fullNote.textContent).toBe(longValue);
+    expect(within(summary).queryByText('Task 19')).toBeNull();
+    fireEvent.click(within(dialog).getByText('Full data (YAML)'));
+    expect(dialog.querySelector('pre code')?.textContent).toBe(yaml);
   });
 
   it('keeps the full YAML and export available when the 110-level summary fails', async () => {
@@ -969,12 +1007,47 @@ describe('ProjectStateTab', () => {
     expect(navigationMocks.router.push).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'structure',
+    'code',
+  ])('preserves the saved %s view when an explicit Overview link is opened', async (savedView) => {
+    const key = 't3x.state-view:proj_test';
+    localStorage.setItem(key, savedView);
+    const element = <ProjectStateTab projectId="proj_test" projectName="Test Project" />;
+    const view = render(element);
+    await waitFor(() =>
+      expect(view.container.querySelector('[data-state-view]')).toHaveAttribute(
+        'data-state-view',
+        savedView
+      )
+    );
+    navigationMocks.search = 'view=overview';
+    view.rerender(<ProjectStateTab projectId="proj_test" projectName="Test Project" />);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+    expect(localStorage.getItem(key)).toBe(savedView);
+    view.unmount();
+    navigationMocks.search = '';
+    const reopened = render(element);
+    await waitFor(() =>
+      expect(reopened.container.querySelector('[data-state-view]')).toHaveAttribute(
+        'data-state-view',
+        savedView
+      )
+    );
+    localStorage.removeItem(key);
+  });
+
   it('defaults to Overview and keeps legacy Render links on the same revision', async () => {
     navigationMocks.search = `view=render&commit=${encodeURIComponent(PRD_COMMIT.hash)}`;
     hookMocks.loadCommit.mockImplementation(async (hash) =>
       hash === PRD_COMMIT.hash ? PRD_COMMIT : PARENT_COMMIT
     );
-    render(<ProjectStateTab projectId="proj_test" projectName="Fresh" />);
+    render(<ProjectStateTab projectId="proj_test" projectName="Fresh" canEditRepository />);
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true')
     );
@@ -1006,6 +1079,15 @@ describe('ProjectStateTab', () => {
       expect.stringContaining('view=code'),
       { scroll: false }
     );
+  });
+
+  it('keeps State readable without advertising changes to a read-only viewer', async () => {
+    render(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" canEditRepository={false} />
+    );
+    expect(await screen.findByText('Read-only access')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Propose change' })).toBeNull();
   });
 
   it('honors an explicit historical commit instead of the registered branch HEAD', async () => {
@@ -1168,11 +1250,11 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+      '/project/proj_test/history?returnTo=%2Ft3x-dev%2Ftest-project&branch=main'
     );
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/project/proj_test?branch=main&tab=workspaces'
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
     );
     const tree = screen.getByRole('region', { name: 'State structure' });
     expect(within(tree).getByRole('region', { name: 'State structure rows' })).toHaveAttribute(
@@ -1830,11 +1912,15 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tablist', { name: 'State views' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
       'href',
-      '/project/proj_test?branch=main&tab=workspaces'
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
     );
     expect(screen.queryByRole('button', { name: 'New branch' })).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole('tab', { name: /Overview/ }), { button: 0 });
     expect(await screen.findByText('No commits yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+      'href',
+      '/project/proj_test?workspaceMode=compose&tab=workspaces&branch=main'
+    );
   });
 
   it('switches to canonical YAML Code without exposing internal trees', async () => {
@@ -2174,6 +2260,50 @@ describe('ProjectStateTab', () => {
     expect(navigationMocks.router.replace).not.toHaveBeenCalled();
   });
 
+  it('reads a canonical branch path and keeps fixed commit actions on the stored branch', async () => {
+    navigationMocks.pathname = '/t3x-dev/test-project/commits/42';
+    const committed = { ...PRD_COMMIT, branch: 'feature/prd-audience' };
+    hookMocks.loadCommit.mockResolvedValue(committed);
+    const view = render(
+      <ProjectStateTab
+        projectId="proj_test"
+        projectName="Test Project"
+        repositoryPath="/t3x-dev/test-project"
+        commitAddress={{ id: committed.hash, number: '42' }}
+        canEditRepository
+        initialView="structure"
+      />
+    );
+    expect(
+      await screen.findByRole('button', { name: /current branch feature\/prd-audience/ })
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Propose change' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/branches/feature%2Fprd-audience/workspaces?workspaceMode=compose'
+    );
+    view.unmount();
+    navigationMocks.pathname = '/t3x-dev/test-project/branches/feature%2Fprd-audience';
+    navigationMocks.search = 'view=structure';
+    hookMocks.loadCommits.mockResolvedValue([committed]);
+    render(
+      <ProjectStateTab
+        projectId="proj_test"
+        projectName="Test Project"
+        repositoryPath="/t3x-dev/test-project"
+      />
+    );
+    await waitFor(() =>
+      expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
+        'proj_test',
+        'feature/prd-audience',
+        100
+      )
+    );
+    expect(screen.getByRole('link', { name: 'History' }).getAttribute('href')).toContain(
+      '/branches/feature%2Fprd-audience/history?'
+    );
+  });
+
   it('switches its local read-only branch focus', async () => {
     const view = renderStateTab();
 
@@ -2188,7 +2318,7 @@ describe('ProjectStateTab', () => {
     );
 
     expect(navigationMocks.router.replace).toHaveBeenCalledWith(
-      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      '/project/proj_test?branch=feature%2Fprd-audience',
       { scroll: false }
     );
     view.rerender(
@@ -2209,7 +2339,7 @@ describe('ProjectStateTab', () => {
     });
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/project/proj_test/history?returnTo=%2Fproject%2Fproj_test%3Fbranch%3Dfeature%252Fprd-audience&branch=feature%2Fprd-audience'
     );
   });
 
@@ -2246,7 +2376,7 @@ describe('ProjectStateTab', () => {
     expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
-      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+      '/project/proj_test/history?returnTo=%2Fproject%2Fproj_test%3Fbranch%3Dfeature%252Fprd-audience&branch=feature%2Fprd-audience'
     );
   });
 

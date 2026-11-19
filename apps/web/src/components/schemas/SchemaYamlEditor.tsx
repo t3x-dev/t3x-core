@@ -14,12 +14,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { WorkspaceYOpsEditor } from '@/components/workspaces/WorkspaceYOpsEditor';
+import { schemaDefinitionError } from '@/domain/schemas/fieldValidation';
+import type { SchemaSaveState } from '@/types/schemas';
 
 export function SchemaYamlEditor({
   open,
   onOpenChange,
   initialDefinition,
   initiallyDirty = false,
+  autoSave = false,
+  autoSavePaused = false,
   workspaceTitle,
   onSave,
   onReview,
@@ -28,6 +32,8 @@ export function SchemaYamlEditor({
   onOpenChange: (open: boolean) => void;
   initialDefinition?: Record<string, unknown>;
   initiallyDirty?: boolean;
+  autoSave?: boolean;
+  autoSavePaused?: boolean;
   workspaceTitle: string;
   onSave: (definition: Record<string, unknown>, intent: string) => Promise<void>;
   onReview: () => Promise<void>;
@@ -42,14 +48,23 @@ export function SchemaYamlEditor({
   const initialized = useRef(false);
   const saving = useRef(false);
   const hasSaved = useRef(false);
+  const latestYaml = useRef(yaml);
+  latestYaml.current = yaml;
+  const editorEpoch = useRef(0);
+  const [saveFailure, setSaveFailure] = useState<SchemaSaveState>();
 
   useEffect(() => {
     if (!open) {
       initialized.current = false;
+      ++editorEpoch.current;
       return;
     }
     if (initialized.current) return;
     initialized.current = true;
+    ++editorEpoch.current;
+    saving.current = false;
+    setBusy(undefined);
+    setSaveFailure(undefined);
     const source = dump(initialDefinition ?? { nodes: {} }, { noRefs: true, lineWidth: 100 });
     setYaml(source);
     setBaseline(source);
@@ -59,6 +74,12 @@ export function SchemaYamlEditor({
     setConfirmClose(false);
     hasSaved.current = false;
   }, [open, initialDefinition, initiallyDirty]);
+  useEffect(
+    () => () => {
+      ++editorEpoch.current;
+    },
+    []
+  );
 
   const parsed = useMemo(() => {
     try {
@@ -69,6 +90,10 @@ export function SchemaYamlEditor({
       // always saves a complete definition; never silently switch write modes.
       if (definition.yschema !== '0.1')
         throw new Error("Keep yschema: '0.1' in the complete Schema definition.");
+      if (autoSave) {
+        const invalid = schemaDefinitionError(definition);
+        if (invalid) throw new Error(invalid);
+      }
       return { definition, error: undefined };
     } catch (cause) {
       return {
@@ -76,7 +101,7 @@ export function SchemaYamlEditor({
         error: cause instanceof Error ? cause.message : 'Invalid Schema YAML.',
       };
     }
-  }, [yaml]);
+  }, [yaml, autoSave]);
   const dirty = needsSave || yaml !== baseline;
   useEffect(() => {
     if (!open || !dirty) return;
@@ -98,28 +123,70 @@ export function SchemaYamlEditor({
   async function save(review = false, closeAfter = false) {
     if (saving.current || !parsed.definition) return;
     saving.current = true;
+    const epoch = editorEpoch.current;
     setBusy(review ? 'review' : 'save');
     setError(undefined);
+    setSaveFailure(undefined);
     let saved = hasSaved.current && !dirty;
     try {
       if (!saved) {
         await onSave(parsed.definition, intent.trim() || 'Edit Schema YAML.');
+        if (editorEpoch.current !== epoch) return;
         setBaseline(yaml);
         setNeedsSave(false);
         hasSaved.current = true;
         saved = true;
       }
+      if (latestYaml.current !== yaml) return;
       if (review) await onReview();
       else if (closeAfter) onOpenChange(false);
       setConfirmClose(false);
     } catch (cause) {
+      if (editorEpoch.current !== epoch) return;
       const message = cause instanceof Error ? cause.message : 'Please try again.';
       setError(saved && review ? `Saved. Could not open Review: ${message}` : message);
+      if (!saved)
+        setSaveFailure({
+          status:
+            cause && typeof cause === 'object' && 'code' in cause && cause.code === 'CONFLICT'
+              ? 'conflict'
+              : 'failed',
+          message,
+        });
     } finally {
-      saving.current = false;
-      setBusy(undefined);
+      if (editorEpoch.current === epoch) {
+        saving.current = false;
+        setBusy(undefined);
+      }
     }
   }
+  const saveCurrent = useRef(save);
+  saveCurrent.current = save;
+  useEffect(() => {
+    if (
+      !autoSave ||
+      autoSavePaused ||
+      !open ||
+      !dirty ||
+      !parsed.definition ||
+      busy ||
+      saveFailure ||
+      confirmClose
+    )
+      return;
+    const timer = window.setTimeout(() => void saveCurrent.current(), 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    autoSave,
+    autoSavePaused,
+    open,
+    dirty,
+    parsed.definition,
+    busy,
+    saveFailure,
+    confirmClose,
+    intent,
+  ]);
   function download() {
     const url = URL.createObjectURL(new Blob([yaml], { type: 'application/yaml' }));
     const anchor = document.createElement('a');
@@ -143,8 +210,9 @@ export function SchemaYamlEditor({
         <DialogHeader className="shrink-0 gap-1 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 pr-12 text-left">
           <DialogTitle className="text-sm font-medium leading-5">Schema YAML editor</DialogTitle>
           <DialogDescription className="text-xs leading-4">
-            Edit this workspace’s schema draft. Save to keep editing, or save and review your
-            changes.
+            {autoSave
+              ? 'Valid edits save as a candidate. Adoption and Review remain separate.'
+              : 'Edit this workspace’s schema draft. Save to keep editing, or save and review your changes.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-1">
@@ -163,11 +231,15 @@ export function SchemaYamlEditor({
                   ? 'Saving and preparing Review…'
                   : busy
                     ? 'Saving…'
-                    : dirty
-                      ? 'Unsaved changes'
-                      : hasSaved.current
-                        ? 'Draft saved · not committed'
-                        : 'No unsaved changes'}
+                    : saveFailure
+                      ? `${saveFailure.status === 'conflict' ? 'Conflict' : 'Save failed'} · edits kept`
+                      : dirty
+                        ? autoSavePaused
+                          ? 'Unsaved · resolve Schema checks'
+                          : 'Unsaved changes'
+                        : hasSaved.current
+                          ? 'Candidate saved · not adopted'
+                          : 'No unsaved changes'}
               </output>
             </div>
             <Button
@@ -185,10 +257,10 @@ export function SchemaYamlEditor({
               <WorkspaceYOpsEditor
                 ariaLabel="Schema definition YAML editor"
                 value={yaml}
-                readOnly={!!busy}
+                readOnly={busy === 'review' || (!!busy && !autoSave)}
                 onChange={(value) => {
                   setYaml(value);
-                  setError(undefined);
+                  if (!saveFailure) setError(undefined);
                 }}
               />
             </div>
@@ -256,7 +328,7 @@ export function SchemaYamlEditor({
                 disabled={!!busy || !parsed.definition || !dirty}
                 onClick={() => void save()}
               >
-                Save draft
+                {saveFailure ? 'Retry save' : autoSave ? 'Save now' : 'Save draft'}
               </Button>
               <Button
                 size="sm"

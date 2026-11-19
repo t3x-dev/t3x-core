@@ -1,0 +1,10 @@
+.nameField {
+  min-width: 0;
+  flex: 1;
+}
+.nameFeedback {
+  margin: 4px 0 0;
+  font: 11px / 16px var(--font-sans);
+  color: var(--status-error);
+  overflow-wrap: anywhere;
+}

@@ -33,7 +33,10 @@ describe('Workspace current Draft sidebar', () => {
     };
   });
   it('shows current content and bound definition as read-only trees without a redundant outer collapse', () => {
-    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const candidate = {
+      ...getProjectWorkspaceStarterCandidate('proj_1'),
+      schemaBindings: [{ schemaName: 'Product Schema', version: 'v2', mode: 'pinned' as const }],
+    };
     const current = {
       domain: 't3x.dev/semantic-content',
       content: {
@@ -81,10 +84,17 @@ describe('Workspace current Draft sidebar', () => {
         revision={1}
         enabled
         stagedCount={2}
+        schemaCandidateNotice={
+          <section aria-label="Saved Schema candidate">
+            Schema candidate r3 · Saved · not applied
+          </section>
+        }
       />
     );
     expect(screen.getByText(/2 ungrouped local changes/)).toBeVisible();
-    expect(screen.getByText(/Schema candidate available in Studio/)).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Saved Schema candidate' })).toHaveTextContent(
+      'r3 · Saved · not applied'
+    );
     rerender(
       <WorkspaceCurrentDraft
         candidate={candidate}
@@ -110,4 +120,46 @@ describe('Workspace current Draft sidebar', () => {
     rerender(<WorkspaceCurrentDraft candidate={candidate} current={undefined} enabled loading />);
     expect(screen.getByText('Loading current Draft…')).toBeVisible();
   });
+});
+
+it('labels the inspected Schema version separately from Content and never substitutes candidate bindings', () => {
+  const candidate = {
+    ...getProjectWorkspaceStarterCandidate('proj_1'),
+    revision: 5,
+    schemaBindings: [{ schemaName: 'Other binding', version: 'v1', mode: 'pinned' as const }],
+  };
+  const currentSchema = {
+    status: 'bound' as const,
+    schemaHash: 'sha256:inspected',
+    definition: { nodes: {} },
+    bindings: [{ schemaName: 'Inspected Schema', version: 'v3', schemaHash: 'sha256:inspected' }],
+  };
+  const props = {
+    candidate,
+    current: {},
+    revision: 2,
+    enabled: true,
+    subject: 'schema' as const,
+    onSubjectChange: vi.fn(),
+    authoring: { workspaceRevision: 5, currentSchema },
+  };
+  const rendered = render(<WorkspaceCurrentDraft {...props} />);
+  expect(screen.getByText('Workspace r5')).toBeVisible();
+  expect(screen.queryByText('Content r2')).toBeNull();
+  expect(screen.getByRole('region', { name: 'Current Schema binding' })).toHaveTextContent(
+    'Inspected SchemaVersion v3'
+  );
+  expect(screen.queryByText('Other binding')).toBeNull();
+  rendered.rerender(
+    <WorkspaceCurrentDraft
+      {...props}
+      authoring={{
+        workspaceRevision: 5,
+        currentSchema: { ...currentSchema, status: 'unknown', definition: null, bindings: [] },
+      }}
+    />
+  );
+  expect(screen.getByText('Current Schema unavailable.')).toBeVisible();
+  expect(screen.queryByText('No Schema bound.')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Node product' })).toBeNull();
 });

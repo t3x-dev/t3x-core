@@ -61,9 +61,10 @@ it.each([
     (fixed ? '&reviewSnapshot=snapshot%3Aa%2Bb' : '');
   render(<SchemaCatalogExperience projectId="p">{null}</SchemaCatalogExperience>);
   const url = new URL(mocks.replace.mock.calls[0][0], 'http://local');
-  expect(url.searchParams.get('tab')).toBe('workspaces');
+  expect(url.pathname).toBe('/team/project/branches/feature%2Fa/workspaces');
+  expect(url.searchParams.has('tab')).toBe(false);
   expect(url.searchParams.get('workspace')).toBe('draft/a');
-  expect(url.searchParams.get('branch')).toBe('feature/a');
+  expect(url.searchParams.has('branch')).toBe(false);
   expect(url.searchParams.get('reviewSnapshot')).toBe(fixed ? 'snapshot:a+b' : null);
   expect(url.searchParams.get('reviewPane')).toBe('yaml');
   expect(url.searchParams.get('schemaDiagnostics')).toBe('1');

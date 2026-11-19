@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaContentPreparationDialog';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getProjectIdRepoPath } from '@/domain/project/repoPath';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
-import { WorkspaceNotice } from './WorkspaceNotice';
 
 export function WorkspaceSchemaPendingNotice({
   projectId,
@@ -26,8 +26,9 @@ export function WorkspaceSchemaPendingNotice({
   if (pending.loading || pending.data?.status === 'none') return null;
   if (pending.error) {
     return (
-      <WorkspaceNotice
+      <Alert
         label="Schema preparation status"
+        layout="banner"
         title="Schema preparation status unavailable"
         tone="error"
         actions={
@@ -37,7 +38,7 @@ export function WorkspaceSchemaPendingNotice({
         }
       >
         <p>{pending.error}</p>
-      </WorkspaceNotice>
+      </Alert>
     );
   }
   const awaitingPreparation = pending.data?.status === 'pending_preparation';
@@ -51,8 +52,9 @@ export function WorkspaceSchemaPendingNotice({
   const href = `${getProjectIdRepoPath(projectId)}?${params}`;
   return (
     <>
-      <WorkspaceNotice
+      <Alert
         label="Pending Schema preparation"
+        layout="banner"
         title={
           awaitingPreparation
             ? 'Schema change awaiting preparation'
@@ -81,7 +83,7 @@ export function WorkspaceSchemaPendingNotice({
           {pending.data?.reason ?? 'The candidate is saved for preparation and full review.'}{' '}
           Current Schema and content are unchanged.
         </p>
-      </WorkspaceNotice>
+      </Alert>
       {preparing && pending.data?.pending && revision ? (
         <SchemaContentPreparationDialog
           projectId={projectId}

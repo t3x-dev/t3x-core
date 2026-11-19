@@ -37,10 +37,9 @@ it('switches both Workspace and branch without reusing the previous candidate', 
     true
   );
   const url = new URL(href, 'http://local');
-  expect(url.pathname).toBe('/team/repo/schemas');
+  expect(url.pathname).toBe('/team/repo/branches/feature%2Ftest/schemas');
   expect(Object.fromEntries(url.searchParams)).toEqual({
     workspace: 'feature-draft',
-    branch: 'feature/test',
     returnTo: '/explore?q=care',
   });
 });

@@ -22,6 +22,7 @@ import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { useWorkspaceReviewSnapshot } from '@/hooks/workspaces/useWorkspaceReviewSnapshot';
 import { ChangeDecisionPanel } from './ChangeDecisionPanel';
 import { ChangeReviewChanges } from './ChangeReviewChanges';
+import { WorkspaceReviewComparison } from './WorkspaceReviewComparison';
 import {
   WorkspaceReviewBaseline,
   WorkspaceReviewContentPreview,
@@ -209,6 +210,16 @@ export function WorkspaceSnapshotReview({
   const decisionPanel = decisionView ? (
     <ChangeDecisionPanel
       embedded
+      reviewLayout
+      diagnostics={
+        <WorkspaceSchemaDiagnostics
+          key={snapshotId}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          frozen
+          review={schemaReview}
+        />
+      }
       contentValidation={schemaReview?.contentValidation}
       historical={Boolean(laterSnapshot)}
       branch={branch ?? null}
@@ -311,7 +322,7 @@ export function WorkspaceSnapshotReview({
         actions={
           <>
             {stateHref ? (
-              <Button asChild size="sm">
+              <Button asChild size="sm" variant="outline">
                 <Link href={stateHref}>View State & export</Link>
               </Button>
             ) : null}
@@ -334,7 +345,7 @@ export function WorkspaceSnapshotReview({
             </Button>
           </>
         }
-        sidebar={
+        readiness={
           <>
             {decisionPanel}
             {!view && state.loading ? (
@@ -342,13 +353,6 @@ export function WorkspaceSnapshotReview({
                 Loading checks and decision status…
               </output>
             ) : null}
-            <WorkspaceSchemaDiagnostics
-              key={snapshotId}
-              projectId={projectId}
-              workspaceId={workspaceId}
-              frozen
-              review={schemaReview}
-            />
             {commit ? (
               <div className="mt-4 grid gap-2 text-xs">
                 <Link className="underline" href={historyHref}>
@@ -411,7 +415,7 @@ export function WorkspaceSnapshotReview({
           ) : null
         }
       >
-        {view && pane === 'changes' ? (
+        {view && pane === 'changes' && subject === 'content' ? (
           <p className="mb-3 text-xs text-[var(--text-secondary)]">
             Content baseline ·{' '}
             <WorkspaceReviewBaseline
@@ -433,7 +437,7 @@ export function WorkspaceSnapshotReview({
               review={schemaReview}
               branch={branch ?? 'main'}
               frozen
-              versionLabel={snapshotId}
+              versionLabel={`Fixed Review · Workspace r${snapshot?.review.precondition.workspaceRevision ?? 'unknown'}`}
             />
           ) : pane === 'rendered' ? (
             <WorkspaceReviewContentPreview value={schemaReview?.draftContent} frozen />
@@ -447,11 +451,18 @@ export function WorkspaceSnapshotReview({
               frozen
             />
           ) : (
-            <ChangeReviewChanges
-              groups={fieldGroups}
-              operations={view.change.operations}
-              operationsAsDetails
-            />
+            <>
+              <WorkspaceReviewComparison
+                before={schemaReview?.baseContent}
+                after={schemaReview?.draftContent}
+                subject="Content"
+                versionLabel={`Fixed Review · Workspace r${snapshot?.review.precondition.workspaceRevision ?? 'unknown'}`}
+              />
+              <details className="mt-4 text-xs">
+                <summary>Recorded operations · {view.change.operations.length}</summary>
+                <ChangeReviewChanges groups={null} operations={view.change.operations} />
+              </details>
+            </>
           )
         ) : null}
       </WorkspaceReviewWorkbench>

@@ -30,7 +30,7 @@ import {
 } from '@/components/project/projectTabModel';
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
-import { workspaceLocation } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { usePendingInvitations } from '@/hooks/accounts/usePendingInvitations';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
@@ -116,13 +116,15 @@ export function DiscoverHeader({
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
     if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
-    if (tab === 'workspaces' && !projectIdNavigation)
-      return workspaceLocation(repoPath, branch ?? null, params);
-    const path =
-      projectIdNavigation || tab === 'state'
-        ? repoPath
-        : `${repoPath}/${getProjectTabSegment(tab)}`;
-    return params.size ? `${path}?${params}` : path;
+    if (projectIdNavigation) {
+      if (tab === 'checks' || tab === 'reviews' || tab === 'community') params.delete('branch');
+      return `${repoPath}${params.size ? `?${params}` : ''}`;
+    }
+    return repositoryLocation(
+      repoPath,
+      tab === 'state' ? '' : `/${getProjectTabSegment(tab)}`,
+      params.toString()
+    );
   }
 
   return (
@@ -162,7 +164,10 @@ export function DiscoverHeader({
                 <span className={styles.separator} aria-hidden="true">
                   /
                 </span>
-                <Link href={repoPath || '/'} className={styles.repository}>
+                <Link
+                  href={repoPath ? repositoryLocation(repoPath, '', '') : '/'}
+                  className={styles.repository}
+                >
                   {projectIdentity && (
                     <RepositoryMark {...projectIdentity} className={styles.repositoryMark} />
                   )}

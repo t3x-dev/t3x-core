@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
@@ -117,7 +118,10 @@ function ProjectActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={cn(palette.scope, styles.menu)}>
         <DropdownMenuItem asChild>
-          <Link href={path} onClick={() => openDirectoryRepository(project)}>
+          <Link
+            href={repositoryLocation(path, '', '')}
+            onClick={() => openDirectoryRepository(project)}
+          >
             <FolderOpen aria-hidden="true" size={15} />
             Open repository
           </Link>
@@ -181,7 +185,7 @@ function ProjectRow({
       <div className={styles.rowContent}>
         <div className={styles.rowHeading}>
           <Link
-            href={getProjectRepoPath(project)}
+            href={repositoryLocation(getProjectRepoPath(project), '', '')}
             title={getProjectRepoPath(project)}
             onClick={() => openDirectoryRepository(project)}
             className={cn(styles.repositoryLink, focusRing)}
@@ -702,7 +706,7 @@ function ProjectDirectoryContent({
                     {recentProjects.slice(0, 4).map((project) => (
                       <Link
                         key={project.id}
-                        href={getProjectRepoPath(project)}
+                        href={repositoryLocation(getProjectRepoPath(project), '', '')}
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
                         onClick={() => openDirectoryRepository(project)}
                       >

@@ -15,8 +15,9 @@ const mocks = vi.hoisted(() => ({
   fetchProjectWorkspaces: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
   pathname: null as string | null,
-  query: 'workspace=w&conversation=c&branch=main&pr=9',
+  query: 'workspace=w&conversation=c&pr=9',
 }));
+const router = { replace: mocks.replace };
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_HTTP_ERROR_FALLBACK;404');
@@ -28,12 +29,15 @@ vi.mock('next/navigation', () => ({
   }),
   usePathname: () => mocks.pathname ?? `/${mocks.params.owner}/${mocks.params.repoPath.join('/')}`,
   useSearchParams: () => new URLSearchParams(mocks.query),
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => router,
 }));
 vi.mock('@/queries/projects', () => ({
   resolveRepository: (...args: unknown[]) => mocks.resolve(...args),
 }));
-vi.mock('@/infrastructure/branches', () => ({ listBranches: mocks.listBranches }));
+vi.mock('@/infrastructure/branches', () => ({
+  createBranch: vi.fn(),
+  listBranches: mocks.listBranches,
+}));
 vi.mock('@/queries/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/queries/workspaces')>()),
   fetchProjectWorkspaces: mocks.fetchProjectWorkspaces,
@@ -109,12 +113,14 @@ function OwnerRepoProjectPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('WebSocket', undefined);
-  mocks.listBranches.mockResolvedValue({ branches: [] });
+  mocks.listBranches.mockResolvedValue({
+    branches: ['main', 'feature/release', 'feature/100%'].map((name) => ({ name })),
+  });
   mocks.fetchProjectWorkspaces.mockResolvedValue([]);
   useProjectStore.setState({ projects: [], details: {} });
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
   mocks.pathname = null;
-  mocks.query = 'workspace=w&conversation=c&branch=main&pr=9';
+  mocks.query = 'workspace=w&conversation=c&pr=9';
   window.location.hash = '';
   mocks.resolve.mockResolvedValue({
     project_id: 'proj_outside_list',
@@ -142,11 +148,15 @@ it('reuses the verified address and in-flight view reads when the Schema page mo
     })
   );
   const view = render(<OwnerRepoProjectPage />);
-  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
-  expect(mocks.listBranches).toHaveBeenCalledOnce();
-  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  await screen.findByText('Loading branch…');
+  await waitFor(() => {
+    expect(mocks.listBranches).toHaveBeenCalledOnce();
+    expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  });
+  await act(async () => completeBranches({ branches: [{ name: 'main' }] }));
+  expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
 
-  mocks.params.repoPath = ['Repo', 'schemas'];
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
   view.rerender(<OwnerRepoProjectPage />);
 
   expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice schemas');
@@ -154,7 +164,6 @@ it('reuses the verified address and in-flight view reads when the Schema page mo
   expect(mocks.listBranches).toHaveBeenCalledOnce();
   expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
   await act(async () => {
-    completeBranches({ branches: [{ name: 'main' }] });
     completeWorkspaces([{ id: 'main-draft' }]);
   });
   expect(screen.getByTestId('view-data')).toHaveTextContent('main main-draft');
@@ -171,6 +180,7 @@ it('checks the new repository before rendering its content', async () => {
   expect(mocks.resolve).toHaveBeenLastCalledWith('alice', 'Other');
 });
 it('resolves directly, without any list cache or pagination', async () => {
+  mocks.params.repoPath = ['Repo'];
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
   expect(mocks.resolve).toHaveBeenCalledWith('alice', 'Repo');
@@ -220,7 +230,7 @@ it('canonicalizes historical/case addresses preserving child and query context',
   render(<OwnerRepoProjectPage />);
   await waitFor(() =>
     expect(mocks.replace).toHaveBeenCalledWith(
-      '/alice/Repo/pull-requests?workspace=w&conversation=c&branch=main&pr=9#discussion',
+      '/alice/Repo/pull-requests?workspace=w&conversation=c&pr=9#discussion',
       { scroll: false }
     )
   );
@@ -232,12 +242,14 @@ it('keeps an explicit section when a legacy tab parameter disagrees', async () =
   const { rerender } = render(<OwnerRepoProjectPage />);
   await waitFor(() =>
     expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
-      '/alice/Repo/schemas?branch=feature%2Frelease&workspace=ws%3Amain#fields',
+      '/alice/Repo/branches/feature%2Frelease/schemas?workspace=ws%3Amain#fields',
       { scroll: false }
     )
   );
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
-  mocks.query = 'branch=feature%2Frelease&workspace=ws%3Amain';
+  mocks.params.repoPath = ['Repo', 'branches', 'feature/release', 'schemas'];
+  mocks.pathname = '/alice/Repo/branches/feature%2Frelease/schemas';
+  mocks.query = 'workspace=ws%3Amain';
   rerender(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('schemas');
   expect(mocks.replace).toHaveBeenCalledTimes(1);
@@ -255,8 +267,9 @@ it.each([
   'discover',
   'browse',
 ])('opens the canonical %s route without a redirect', async (view) => {
-  mocks.params.repoPath = ['Repo', view];
-  mocks.query = 'branch=feature%2Frelease&workspace=workspace_branch%3Afeature%2Frelease';
+  mocks.params.repoPath = ['Repo', 'branches', 'feature/release', view];
+  mocks.pathname = `/alice/Repo/branches/feature%2Frelease/${view}`;
+  mocks.query = 'workspace=workspace_branch%3Afeature%2Frelease';
   render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent(`proj_outside_list alice ${view}`);
   expect(screen.queryByText('Repository view not found')).not.toBeInTheDocument();
@@ -277,16 +290,20 @@ it.each([
     'branch=feature%2Frelease&workspace=workspace_branch%3Afeature%2Frelease&q=dog+care&catalogName=team%2Fschema&catalogVersion=1.2.3&catalogHash=sha256%3Aabc';
   mocks.query = `schemaView=${schemaView}&${context}`;
   window.location.hash = '#definition';
-  const expectedQuery = `${retainedView ? `schemaView=${retainedView}&` : ''}${context}`;
+  const expectedQuery = `${retainedView ? `schemaView=${retainedView}&` : ''}${context.replace('branch=feature%2Frelease&', '')}`;
   const { rerender } = render(<OwnerRepoProjectPage />);
   await waitFor(() =>
-    expect(mocks.replace).toHaveBeenCalledWith(`/alice/Repo/${view}?${expectedQuery}#definition`, {
-      scroll: false,
-    })
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/alice/Repo/branches/feature%2Frelease/${view}?${expectedQuery}#definition`,
+      {
+        scroll: false,
+      }
+    )
   );
 
   mocks.replace.mockClear();
-  mocks.params = { owner: 'alice', repoPath: ['Repo', view] };
+  mocks.params = { owner: 'alice', repoPath: ['Repo', 'branches', 'feature/release', view] };
+  mocks.pathname = `/alice/Repo/branches/feature%2Frelease/${view}`;
   mocks.query = expectedQuery;
   rerender(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent(`proj_outside_list alice ${view}`);
@@ -296,10 +313,7 @@ it('canonicalizes pull request query links while preserving the selected PR and 
   mocks.query = 'tab=pull-requests&branch=feature%2Frelease&pr=9';
   render(<OwnerRepoProjectPage />);
   await waitFor(() =>
-    expect(mocks.replace).toHaveBeenCalledWith(
-      '/alice/Repo/pull-requests?branch=feature%2Frelease&pr=9',
-      { scroll: false }
-    )
+    expect(mocks.replace).toHaveBeenCalledWith('/alice/Repo/pull-requests?pr=9', { scroll: false })
   );
 });
 it('uses the namespace returned by the backend after a transfer', async () => {
@@ -313,10 +327,9 @@ it('uses the namespace returned by the backend after a transfer', async () => {
   });
   render(<OwnerRepoProjectPage />);
   await waitFor(() =>
-    expect(mocks.replace).toHaveBeenCalledWith(
-      '/bob/Repo?workspace=w&conversation=c&branch=main&pr=9',
-      { scroll: false }
-    )
+    expect(mocks.replace).toHaveBeenCalledWith('/bob/Repo?workspace=w&conversation=c&pr=9', {
+      scroll: false,
+    })
   );
 });
 it('forwards a legacy Settings return source and fragment to the resolved Settings page', async () => {
@@ -342,8 +355,9 @@ it.each([
   'history',
   'diff',
 ])('keeps %s under State while loading and opens its nested route', async (view) => {
-  mocks.params.repoPath = ['Repo', view];
-  mocks.query = 'branch=feature%2Frelease&commit=sha256%3Aabc&view=list';
+  mocks.params.repoPath = ['Repo', 'branches', 'feature/release', view];
+  mocks.pathname = `/alice/Repo/branches/feature%2Frelease/${view}`;
+  mocks.query = 'commit=sha256%3Aabc&view=list';
   useProjectStore.setState({
     projects: [
       {
@@ -389,9 +403,12 @@ it('canonicalizes History bookmarks without losing filters or nested return cont
   window.location.hash = '#changes';
   render(<OwnerRepoProjectPage />);
   await waitFor(() =>
-    expect(mocks.replace).toHaveBeenCalledWith(`/alice/Repo/history?${context}#changes`, {
-      scroll: false,
-    })
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/alice/Repo/branches/feature%2F100%25/history?${context.replace('branch=feature%2F100%25&', '')}#changes`,
+      {
+        scroll: false,
+      }
+    )
   );
 });
 it.each([
@@ -417,13 +434,14 @@ it('preserves encoded review identifiers across a repository rename and then sto
   const { rerender } = render(<OwnerRepoProjectPage />);
   await waitFor(() =>
     expect(mocks.replace).toHaveBeenCalledWith(
-      `/alice/Repo/changes/${workspaceId}/rvs_review?${mocks.query}#checks`,
+      `/alice/Repo/changes/${workspaceId}/rvs_review?returnTo=%2Falice%2FOld#checks`,
       { scroll: false }
     )
   );
   mocks.replace.mockClear();
   mocks.params = { owner: 'alice', repoPath: ['Repo', 'changes', workspaceId, 'rvs_review'] };
   mocks.pathname = `/alice/Repo/changes/${workspaceId}/rvs_review`;
+  mocks.query = 'returnTo=%2Falice%2FOld';
   rerender(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('nested')).toHaveTextContent(
     `changes/${workspaceId}/rvs_review`
@@ -458,7 +476,7 @@ it('redirects an encoded review URL only once when its repository address change
   const view = render(<OwnerRepoProjectPage />);
   await waitFor(() =>
     expect(mocks.replace).toHaveBeenCalledWith(
-      '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot?workspace=w&conversation=c&branch=main&pr=9#diff',
+      '/alice/Repo/changes/workspace_branch%3Afeature%252Fowner/rvs_snapshot?workspace=w&conversation=c&pr=9#diff',
       { scroll: false }
     )
   );
@@ -533,4 +551,62 @@ it.each([
   expect(() => render(<OwnerRepoProjectPage />)).toThrow('NEXT_HTTP_ERROR_FALLBACK;404');
   expect(mocks.replace).not.toHaveBeenCalled();
   expect(mocks.resolve).not.toHaveBeenCalled();
+});
+
+it('rejects an unknown branch without rendering State or falling back to main', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'missing', 'schemas'];
+  mocks.query = '';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Branch missing was not found');
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it('waits for the branch inventory before mounting a branch page', async () => {
+  mocks.params.repoPath = ['Repo'];
+  mocks.query = '';
+  let completeBranches!: (value: { branches: { name: string }[] }) => void;
+  mocks.listBranches.mockReturnValue(
+    new Promise((resolve) => {
+      completeBranches = resolve;
+    })
+  );
+  render(<OwnerRepoProjectPage />);
+  await screen.findByText('Loading branch…');
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  await act(async () => completeBranches({ branches: [{ name: 'main' }] }));
+  expect(await screen.findByTestId('detail')).toHaveTextContent('state');
+});
+it('uses the path branch and retains the view and fragment when a query disagrees', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'feature/release'];
+  mocks.pathname = '/alice/Repo/branches/feature%2Frelease';
+  mocks.query = 'branch=main&view=structure';
+  window.location.hash = '#field';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/alice/Repo/branches/feature%2Frelease?view=structure#field',
+      { scroll: false }
+    )
+  );
+});
+
+it('shortens an explicit main State path while retaining view and fragment', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'main'];
+  mocks.query = 'branch=feature%2Frelease&view=structure';
+  window.location.hash = '#field';
+  render(<OwnerRepoProjectPage />);
+  await waitFor(() =>
+    expect(mocks.replace).toHaveBeenCalledWith('/alice/Repo?view=structure#field', {
+      scroll: false,
+    })
+  );
+});
+it('does not treat a missing main branch as empty State on the short address', async () => {
+  mocks.params.repoPath = ['Repo'];
+  mocks.listBranches.mockResolvedValue({ branches: [{ name: 'feature/release' }] });
+  mocks.query = '';
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Branch main was not found');
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });

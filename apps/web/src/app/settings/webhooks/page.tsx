@@ -87,6 +87,7 @@ export default function WebhooksPage() {
   const formOpenerRef = useRef<HTMLElement | null>(null);
   const [editingWebhook, setEditingWebhook] = useState<WebhookData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WebhookData | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export default function WebhooksPage() {
   const closeForm = useCallback(() => {
     setFormOpen(false);
     setEditingWebhook(null);
+    setFormError(null);
   }, []);
 
   const openCreate = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -136,6 +138,7 @@ export default function WebhooksPage() {
   const handleFormSubmit = useCallback(
     async (data: CreateWebhookInput | UpdateWebhookInput) => {
       setFormLoading(true);
+      setFormError(null);
       try {
         if (editingWebhook) {
           const updated = await updateWebhook(
@@ -155,7 +158,7 @@ export default function WebhooksPage() {
         }
         closeForm();
       } catch (err) {
-        toast.error(formatUserFacingError(err, 'Operation failed.'));
+        setFormError(formatUserFacingError(err, 'Check the settings and try again.'));
       } finally {
         setFormLoading(false);
       }
@@ -461,7 +464,7 @@ export default function WebhooksPage() {
       <Sheet
         open={formOpen}
         onOpenChange={(open) => {
-          if (!open) closeForm();
+          if (!open && !formLoading) closeForm();
         }}
       >
         <SheetContent
@@ -486,6 +489,7 @@ export default function WebhooksPage() {
             onSubmit={handleFormSubmit}
             onCancel={closeForm}
             loading={formLoading}
+            error={formError}
             projectId={projectId}
             variant="drawer"
           />

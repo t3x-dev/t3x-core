@@ -376,13 +376,16 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     expect(within(title).getByText('Canary rollout')).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
-    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Structure' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     expect(screen.getByText('Loading the exact before and after values…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Content', exact: true })).toBeDisabled();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
 
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     const secondNode = within(screen.getByRole('table'))
@@ -477,7 +480,6 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
 
     expect(screen.queryByRole('combobox', { name: 'Compare scenario' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByTitle('prd/summary/outcome')).toBeInTheDocument();
     expect(
@@ -501,7 +503,6 @@ describe('WorkspaceWorkbench Compose/Review integration', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     fireEvent.click(screen.getByRole('button', { name: 'View in State' }));
 
     expect(mocks.onViewCommitInState).toHaveBeenCalledWith(

@@ -2,9 +2,10 @@
 
 import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Changes from '@/app/project/[projectId]/changes/[workspaceId]/[snapshotId]/page';
 import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
+import { repositoryBranch } from '@/domain/project/repoPath';
 import { RepositoryRouteContext } from '@/hooks/projects/repositoryRouteContext';
 import { ProjectRouteShell } from './ProjectRouteShell';
 
@@ -40,6 +41,7 @@ export function RepositoryNestedPage({
   segments: string[];
 }) {
   const query = useSearchParams();
+  const pathname = usePathname();
   const [view, first = '', second = ''] = segments;
   const params = {
     projectId,
@@ -75,7 +77,7 @@ export function RepositoryNestedPage({
         <Source
           projectId={projectId}
           conversationId={second}
-          branch={query.get('branch')}
+          branch={repositoryBranch(pathname, query)}
           commitId={query.get('commit')}
           turnHash={query.get('turn')}
           returnTo={query.get('returnTo')}

@@ -110,6 +110,18 @@ new and changed WebUI links. This section records the current entry points.
   available. The [repository location helper](../src/domain/project/repositoryLocation.ts)
   converts supported legacy `tab` queries at the repository root. An explicit
   section such as `/schemas` takes precedence over a conflicting `tab` query.
+  State, Schema, Workspace, branch-filtered History, and branch-context Diff
+  or source links use `/branches/{branch}` after the repository address.
+  Default-branch State is the exception: a terminal `/branches/main`
+  normalizes to the repository root, retaining view queries and fragments.
+  Non-default State and all branch subpages retain their branch segment.
+  Encode the whole branch name as one segment, including embedded slashes.
+  The path wins over a conflicting legacy `branch` query. The repository
+  short address selects `main`, the current creation default; there is no
+  configurable default-branch field. Unknown branches show an unavailable
+  result before mounting a branch page, without falling back to `main`.
+  Run and Pull request lists remain repository-wide and drop their former
+  branch navigation context; they do not provide branch filtering.
   [Repository Addresses](../../../docs/repository-addresses.md#web-compatibility)
   owns address resolution and compatibility. Fixed Review links follow
   [A-02](#a-02-read-refresh-and-invalidation) for snapshot identity.
@@ -128,9 +140,13 @@ new and changed WebUI links. This section records the current entry points.
   Legacy list links consume `cursor` after restoring that entry. A newly opened
   list starts at the newest records for its filters. A Run detail opened from an
   older page can return to that entry in the same tab.
-- The short `/schemas` entry selects a Workspace when it opens. Background
-  refreshes keep that selection for the open editor. Legacy links keep any
-  explicit branch or Workspace when dropping the redundant Studio view flag.
+- The short `/schemas` entry selects `main`. A legacy Schema or Workspace
+  link that names a Workspace without a branch first reads that Workspace
+  and uses its target branch. Background refreshes keep the selected
+  Workspace for the open editor. Opening Schema only reads data; if its
+  branch has no persisted Workspace, **Start editing schema** creates that
+  branch's Draft through the existing write flow. Failure exposes an explicit
+  retry. Other branches are not initialized by this action.
 - Explore links to an exact public Schema release by canonical name and
   version, for example `/explore/schemas/t3x/weekly-goals/1.0.0`. The server
   checks the stored content hash. Old public links with a hash are replaced
@@ -143,6 +159,10 @@ new and changed WebUI links. This section records the current entry points.
 | Destination | Current address example |
 | --- | --- |
 | Browse Schema results | `/explore/browse?type=schemas` |
+| State on the default branch | `/team/repo` |
+| Schema on a named branch | `/team/repo/branches/feature%2Frelease/schemas` |
+| History for one branch | `/team/repo/branches/main/history?q=fix` |
+| History across branches | `/team/repo/history` |
 | Workspace for an explicit branch | `/team/repo/branches/main/workspaces?workspaceMode=review&reviewPane=yaml` |
 | State at an exact Commit | `/team/repo/commits/42` |
 | History for the same Commit | `/team/repo/history/42` |
@@ -396,13 +416,26 @@ Apply these rules to new and changed WebUI links and controls.
 
 - Put the destination and the selected object's identity in the path. Use the
   resolved repository address. An explicitly selected branch belongs in the
-  path. A branch that only filters a list can be a query parameter. Keep the
-  project-ID entry for repositories awaiting a canonical address.
+  path, including a single-branch History filter. Default-branch State uses
+  the repository root; omit only the terminal `/branches/main`, keeping
+  explicit branch paths for subpages such as `/branches/main/schemas`.
+  All-branch lists use the repository path, without a synthetic `all` branch.
+  Repository-wide Run, Pull request, Community and Settings pages do not
+  select a branch. Exact Commit and Review numbers remain repository-scoped;
+  filtered History return context can use `returnTo`. Keep the project-ID
+  entry for repositories awaiting a canonical address. Old `branch` queries
+  remain compatibility inputs. Global Explore adoption-target parameters
+  describe the destination Workspace, not the branch of the catalog page.
 - Keep shareable presentation and filter values in concise query parameters.
   Numbered pagination may use `?page=2`. Keep opaque paging cursors in the
   request or the current tab's history. An explicit view must take precedence
   over a personal preference. Omit a default only when the address still
   restores the intended result. Use a fragment to address a section on the page.
+- After ordinary repository creation and setup succeed, open the default-branch
+  State with `view=overview`. Keep the supported Schema `returnTo` flow when
+  supplied. This changes the landing page, not initial Workspace or conversation
+  creation. Ordinary repository entry preserves its saved reading preference;
+  opening an explicit view does not overwrite that preference.
 - Use readable names, versions or stable project-scoped numbers in regular
   user-facing addresses. Check project access before resolving a historical
   number, then apply the existing checks to the exact object. Keep full
@@ -437,4 +470,4 @@ address leaves persisted data unchanged.
 | --- | --- |
 | A-01, A-03 | The [Decision recovery record](../src/hooks/workspaces/useWorkspaceReviewSnapshot.ts) is keyed by project, Workspace and Transition. Its key omits the authenticated session and principal, and [session cleanup](../src/infrastructure/session.ts) leaves the recovery record in browser storage. |
 | A-04 | A relative import of the same module can bypass checks that match its alias. The app allowlist also records module imports rather than operations. The project page's allowed [YSchema validation query module](../src/queries/yschemaValidation.ts) exposes both a read and a write. |
-| A-05 | State branch selection still uses a query parameter. Diff, source evidence and project-scoped Schema releases still have routes or producers that carry internal identifiers. Some compatibility link builders still emit old forms when their caller only has an internal identifier. |
+| A-05 | Diff, source evidence and project-scoped Schema releases still have routes or producers that carry internal identifiers. Some compatibility link builders still emit old forms when their caller only has an internal identifier. |

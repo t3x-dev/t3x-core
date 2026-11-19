@@ -1,5 +1,8 @@
 import { numberedRepositoryObject, repositoryObjectHref } from './objectLocation';
-import { workspaceBranchFromSuffix, workspaceLocation } from './repoPath';
+import { repositoryBranchHref, repositoryBranchRoute, workspaceLocation } from './repoPath';
+
+const BRANCH_SUFFIX =
+  /^(?:\/?|\/(?:state|workspaces|schemas|discover|browse|history|diff)\/?|\/sources\/conversations\/[^/]+\/?)$/;
 
 export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'discover' | 'browse' {
   if (schemaView === 'discover') return 'discover';
@@ -9,8 +12,9 @@ export function getSchemaProjectTab(schemaView: string | null): 'schemas' | 'dis
 
 /** Only routes with an explicit owner/name adapter may migrate from ID links. */
 export function isSupportedRepositorySuffix(suffix: string): boolean {
+  const scoped = repositoryBranchRoute(suffix);
+  if (scoped) return BRANCH_SUFFIX.test(scoped.suffix);
   return (
-    workspaceBranchFromSuffix(suffix) !== null ||
     numberedRepositoryObject(suffix) !== null ||
     /^(?:\/?|\/(?:state|workspaces|pull-requests|checks|community|schemas|discover|browse|settings|diff|history|knowledge-graph)\/?|\/checks\/[^/]+\/?|\/merge\/[^/]+\/?|\/changes\/[^/]+\/[^/]+\/?|\/sources\/conversations\/[^/]+\/?)$/.test(
       suffix
@@ -37,8 +41,10 @@ export function repositoryLocation(
   sourceBase = base
 ): string {
   const params = new URLSearchParams(query);
-  let tail = suffix === '/state' ? '' : suffix;
-  if ((!tail || tail === '/') && params.has('tab')) {
+  const scoped = repositoryBranchRoute(suffix);
+  let tail = (scoped?.suffix ?? suffix).replace(/\/$/, '');
+  if (tail === '/state') tail = '';
+  if (!scoped && !tail && params.has('tab')) {
     const tab = params.get('tab');
     if (
       tab &&
@@ -62,9 +68,9 @@ export function repositoryLocation(
   const numbered = numberedRepositoryObject(tail);
   if (numbered && !base.startsWith('/project/'))
     return `${repositoryObjectHref(base, numbered.section, numbered.number, params)}${hash}`;
-  const pathBranch = workspaceBranchFromSuffix(tail);
-  if (pathBranch || /^\/workspaces\/?$/.test(tail)) {
-    return `${workspaceLocation(base, pathBranch ?? (params.get('branch')?.trim() || null), params)}${hash}`;
+  const branch = scoped?.branch ?? (params.get('branch')?.trim() || null);
+  if (tail === '/workspaces') {
+    return `${workspaceLocation(base, branch, params)}${hash}`;
   }
   if (/^\/schemas\/?$/.test(tail)) {
     tail = '/schemas';
@@ -84,5 +90,14 @@ export function repositoryLocation(
   ) {
     params.delete('returnTo');
   }
+  if (BRANCH_SUFFIX.test(tail)) {
+    const selectedBranch =
+      tail === '/history' && branch === 'all'
+        ? null
+        : (branch ?? (!tail || (tail === '/schemas' && !params.has('workspace')) ? 'main' : null));
+    return `${repositoryBranchHref(base, tail, selectedBranch, params)}${hash}`;
+  }
+  // Repository-wide pages and exact historical records do not select a branch.
+  params.delete('branch');
   return `${base}${tail}${params.size ? `?${params}` : ''}${hash}`;
 }

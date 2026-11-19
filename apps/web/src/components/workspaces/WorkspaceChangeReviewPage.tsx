@@ -34,6 +34,7 @@ export function WorkspaceChangeReviewPage({
   ).split('?');
   const query = new URLSearchParams(params.toString());
   query.delete('tab');
+  if (repositoryPath) query.delete('branch');
   for (const [key, value] of new URLSearchParams(reviewQuery)) query.set(key, value);
   const href = `${path}?${query}`;
   useEffect(() => {

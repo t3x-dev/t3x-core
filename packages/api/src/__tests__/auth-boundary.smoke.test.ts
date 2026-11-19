@@ -4,6 +4,7 @@ import {
   createUser,
   findProjectById,
   insertProject,
+  namespaceMemberships,
   revokeApiKey,
 } from '@t3x-dev/storage';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,6 +38,7 @@ const ownerKeyValue = 't3xk_smoke_owner_0123456789abcdef';
 const otherKeyValue = 't3xk_smoke_other_0123456789abcdef';
 const agentKeyValue = 't3xk_smoke_agent_0123456789abcdef';
 const revocableKeyValue = 't3xk_smoke_revocable_0123456789ab';
+const schemaViewerKeyValue = 't3xk_smoke_schema_viewer_0123456789ab';
 
 describe('authenticated application boundary smoke', () => {
   const originalAuthDisabled = process.env.AUTH_DISABLED;
@@ -76,6 +78,26 @@ describe('authenticated application boundary smoke', () => {
       name: 'Owner smoke key',
       userId: owner.id,
       keyValue: ownerKeyValue,
+      transitionScopes: ['transition:inspect', 'transition:propose'],
+    });
+    const schemaViewer = await createUser(testDb, {
+      email: 'auth-smoke-schema-viewer@example.test',
+      name: 'Schema Viewer',
+    });
+    const ownerProject = await findProjectById(testDb, ownerProjectId);
+    await testDb.insert(namespaceMemberships).values({
+      membershipId: 'nsm_schema_smoke_viewer',
+      namespaceId: ownerProject!.namespaceId!,
+      principalKind: 'human',
+      principalId: schemaViewer.id,
+      role: 'viewer',
+      status: 'active',
+    });
+    await createApiKey(testDb, {
+      name: 'Schema viewer smoke key',
+      userId: schemaViewer.id,
+      keyValue: schemaViewerKeyValue,
+      transitionScopes: ['transition:inspect', 'transition:propose'],
     });
     await createApiKey(testDb, {
       name: 'Other smoke key',
@@ -137,6 +159,33 @@ describe('authenticated application boundary smoke', () => {
       401,
       'UNAUTHORIZED'
     );
+  });
+
+  it('routes Schema settings through authentication and distinct read/edit authority', async () => {
+    const path = `/api/v1/projects/${ownerProjectId}/workspaces/workspace_branch%3Amain/source-chat/assistant/schema-settings`;
+    const readPath = `${path}?conversation_id=conversation`;
+    const confirmation = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    };
+
+    await expectAuthError(await app.request(readPath), 401, 'UNAUTHORIZED');
+    await expectAuthError(await authorizedRequest(readPath, otherKeyValue), 403, 'FORBIDDEN');
+    for (const key of [ownerKeyValue, schemaViewerKeyValue]) {
+      const response = await authorizedRequest(readPath, key);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toEqual({ success: true, data: null });
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+    }
+    await expectAuthError(
+      await authorizedRequest(path, schemaViewerKeyValue, confirmation),
+      403,
+      'FORBIDDEN'
+    );
+    const response = await authorizedRequest(path, ownerKeyValue, confirmation);
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(((await response.json()) as ErrorBody).error.code).toBe('INVALID_REQUEST');
   });
 
   it('authenticates real keys and isolates project lists and direct reads', async () => {

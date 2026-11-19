@@ -23,7 +23,11 @@ import {
   object,
   textValue,
 } from '@/domain/project/checks';
-import { getCanonicalRepositoryPath, getProjectIdRepoPath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  workspaceLocation,
+} from '@/domain/project/repoPath';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import { useProjectChecks } from '@/hooks/projects/useProjectChecks';
 import { useRunPagination } from '@/hooks/projects/useRunPagination';
@@ -40,7 +44,7 @@ export function ProjectChecksPage({
   const pathname = usePathname();
   const repositoryPath = getCanonicalRepositoryPath(pathname);
   const base = repositoryPath ?? getProjectIdRepoPath(projectId);
-  const workspacesHref = repositoryPath ? `${repositoryPath}/workspaces` : `${base}?tab=workspaces`;
+  const workspacesHref = workspaceLocation(base, 'main');
   const query = useSearchParams().toString();
   const router = useRouter();
   const params = new URLSearchParams(query);
@@ -446,7 +450,7 @@ function CheckDetails({
             </Link>
           ) : null}
           {view.workspace ? (
-            <Link href={`${base}${repositoryPath ? '/workspaces' : ''}?${workspaceQuery}`}>
+            <Link href={workspaceLocation(base, view.branch || null, workspaceQuery)}>
               Open current Workspace <ArrowRight size={14} />
             </Link>
           ) : null}

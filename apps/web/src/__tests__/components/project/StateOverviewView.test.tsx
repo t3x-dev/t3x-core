@@ -146,6 +146,7 @@ it('shows repository identity once and retains committed values in Structure', (
       historyHref="/history"
       historyReturnTo="/team/repo?branch=release%2Fcandidate"
       workspaceHref="/workspace"
+      canEditRepository
       commits={[
         {
           hash: props.commitDigest,
@@ -178,6 +179,8 @@ it('renders an empty repository with its own metadata and no committed state', (
       projectVisibility="private"
       schemaName="t3x/state"
       workspaceHref="/project/empty?tab=workspaces"
+      schemaHref="/project/empty?tab=schemas"
+      canEditRepository
     />
   );
   expect(overview).toHaveBeenCalledWith('p', null);
@@ -191,15 +194,90 @@ it('renders an empty repository with its own metadata and no committed state', (
   expect(screen.getByText('No commits yet')).toBeVisible();
   expect(
     within(screen.getByRole('region', { name: 'Committed State' })).getByRole('link', {
-      name: 'Propose change',
+      name: 'Open Workspace',
     })
   ).toHaveAttribute('href', '/project/empty?tab=workspaces');
+  expect(screen.getByRole('link', { name: 'Set up Schema' })).toHaveAttribute(
+    'href',
+    '/project/empty?tab=schemas'
+  );
+  expect(screen.getByText(/You can skip this and start in Workspace/)).toBeVisible();
   expect(screen.queryByText('Committed')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Expand rendered State' })).toBeNull();
   expect(screen.getAllByRole('link', { name: 'Propose change' })[0]).toHaveAttribute(
     'href',
     '/project/empty?tab=workspaces'
   );
+});
+
+it('offers the same branch-scoped next steps with only a repository README', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commitDigest={null}
+      repositoryProfile={{ readme: '# Getting started', tags: [] }}
+      canEditRepository
+      schemaHref="/team/repo/branches/feature%2Fa/schemas"
+      workspaceHref="/team/repo/branches/feature%2Fa/workspaces"
+    />
+  );
+  expect(screen.getByRole('heading', { name: 'Getting started' })).toBeVisible();
+  expect(screen.getByText('No commits yet')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Set up Schema' })).toHaveAttribute(
+    'href',
+    '/team/repo/branches/feature%2Fa/schemas'
+  );
+  expect(screen.getByRole('link', { name: 'Open Workspace' })).toHaveAttribute(
+    'href',
+    '/team/repo/branches/feature%2Fa/workspaces'
+  );
+});
+
+it('explains read-only access without presenting setup or change links', () => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      commitDigest={null}
+      schemaHref="/team/repo/branches/main/schemas"
+      workspaceHref="/team/repo/branches/main/workspaces"
+    />
+  );
+  expect(screen.getByText(/Edit access is required/)).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Set up Schema' })).toBeVisible();
+  for (const name of ['Set up Schema', 'Open Workspace', 'Propose change']) {
+    expect(screen.queryByRole('link', { name })).toBeNull();
+  }
+});
+
+it.each([
+  'loading',
+  'failed',
+  'committed',
+])('does not offer first-change guidance while State is %s', (state) => {
+  overview.mockReturnValue({ data: undefined, loading: false });
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource="repository"
+      canEditRepository
+      commitDigest={state === 'committed' ? commit.hash : null}
+      commit={state === 'committed' ? commit : null}
+      stateLoading={state === 'loading'}
+      stateError={state === 'failed' ? 'Could not load State' : null}
+      schemaHref="/team/repo/branches/main/schemas"
+      workspaceHref="/team/repo/branches/main/workspaces"
+    />
+  );
+  expect(screen.queryByRole('link', { name: 'Set up Schema' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Open Workspace' })).toBeNull();
+  expect(screen.queryByText('No commits yet')).toBeNull();
+  if (state === 'failed')
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load State');
+  if (state === 'committed') expect(screen.getByText('Already loaded State')).toBeVisible();
 });
 
 it('renders the empty repository header instead of hiding it', () => {

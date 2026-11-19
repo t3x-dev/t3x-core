@@ -1,10 +1,20 @@
 'use client';
 
 import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useId, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { fieldConstraintLabels } from '@/domain/schemas/fieldValidation';
+import styles from './SchemaDefinitionStructure.module.css';
 
 type Definition = Record<string, unknown>;
 type Field = {
@@ -1036,12 +1046,16 @@ function NameField({
     !text.trim()
       ? 'Name is required.'
       : keyPattern && !/^[a-z][a-z0-9_]*$/.test(text)
-        ? 'Use a lowercase letter followed by lowercase letters, numbers or underscores.'
+        ? !/^[a-z]/.test(text)
+          ? 'Start with a lowercase letter.'
+          : text.includes('-')
+            ? 'Use _ instead of -.'
+            : 'Use lowercase letters, numbers or _.'
         : text !== name && names.includes(text)
           ? 'This name is already in use.'
           : undefined;
   return (
-    <div className="min-w-0 flex-1">
+    <div className={styles.nameField}>
       <Input
         aria-label={label}
         disabled={readOnly}
@@ -1063,7 +1077,7 @@ function NameField({
         }}
       />
       {error ? (
-        <p id={`${id}-error`} className="mt-1 text-[11px] text-[var(--destructive)]" role="alert">
+        <p id={`${id}-error`} className={styles.nameFeedback} role="alert">
           {error}
         </p>
       ) : null}
@@ -1161,20 +1175,30 @@ export function SchemaFieldProperties({
   path,
   value,
   onChange,
+  children,
+  studio = false,
+  ruleTest,
 }: {
   kind: 'node' | 'slot';
   path: string;
   value: Definition;
   onChange: (next: Definition) => void;
+  children?: ReactNode;
+  studio?: boolean;
+  ruleTest?: ReactNode;
 }) {
   const [added, setAdded] = useState<string[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const fields: Field[] = (
     kind === 'slot'
       ? slotFields
       : [...descriptions, contentKind, { key: 'repeated', kind: 'boolean' } as Field]
   ).map((field) => ({
     ...field,
-    label: propertyLabels[field.key],
+    label:
+      value.type === 'array' && ['minLength', 'maxLength'].includes(field.key)
+        ? `Items ${field.key === 'minLength' ? '≥' : '≤'}`
+        : (fieldConstraintLabels[field.key] ?? propertyLabels[field.key]),
     hint: propertyHints[field.key],
   }));
   const configured = fields.filter(
@@ -1185,81 +1209,115 @@ export function SchemaFieldProperties({
     (field) => field.key !== 'description' && !configured.includes(field)
   );
   const context = `${kind} ${path}`;
-  return (
-    <div className="space-y-4">
-      <Fields
-        context={context}
-        value={value}
-        fields={fields.filter((field) => field.key === 'description')}
-        onChange={onChange}
-      />
-      {configured.length ? (
-        <section
-          aria-label="Current field settings"
-          className="space-y-3 border-t border-[var(--stroke-divider)] pt-3"
-        >
-          <h4 className="text-xs font-medium">Current settings</h4>
-          <Fields context={context} value={value} fields={configured} onChange={onChange} />
-        </section>
-      ) : (
-        <p className="text-xs text-[var(--text-secondary)]">
-          No additional settings. Add one when you need it.
-        </p>
-      )}
-      {available.length ? (
-        <label className="block space-y-1 text-xs">
-          <span>Add a setting</span>
-          <select
-            className={inputClass}
-            value=""
-            onChange={(event) => {
-              const key = event.target.value;
-              if (key) setAdded((current) => [...current, key]);
-            }}
-          >
-            <option value="">Choose a setting…</option>
-            {propertyGroups.map((group) => {
-              const choices = available.filter((field) => group.keys.includes(field.key));
-              return choices.length ? (
-                <optgroup key={group.label} label={group.label}>
-                  {choices.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null;
-            })}
-          </select>
-        </label>
-      ) : null}
-      {kind === 'slot' ? (
-        <details className="space-y-3 border-t border-[var(--stroke-divider)] pt-3">
-          <summary className="cursor-pointer text-xs text-[var(--text-secondary)]">
-            YOps hints (advanced)
-            {Object.keys(record(value.yopsHint)).length ? ' · configured' : ''}
-          </summary>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Optional hints for generating write operations. These do not change validation.
-          </p>
-          <Fields
-            context={`YOps hint ${path}`}
-            value={record(value.yopsHint)}
-            fields={[
-              {
-                key: 'preferredOp',
-                label: 'Preferred YOps operation',
-                options: ['define', 'set', 'populate', 'append'],
-              },
-              { key: 'path', label: 'Target path' },
-              { key: 'slot', label: 'Target field' },
-            ]}
-            onChange={(hint) =>
-              onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
+  const ruleKeys = [
+    'enum',
+    'const',
+    'minimum',
+    'maximum',
+    'minLength',
+    'maxLength',
+    'maxWords',
+    'pattern',
+    'repeated',
+    'provenanceRequired',
+  ];
+  const rules = configured.filter((field) => ruleKeys.includes(field.key));
+  const advanced = configured.filter((field) => !ruleKeys.includes(field.key));
+  const advancedCount = advanced.length + (value.yopsHint ? 1 : 0);
+  const addSetting = (choices: Field[], label = 'Add a setting') =>
+    choices.length ? (
+      <label className="block space-y-1 text-xs">
+        <span>{label}</span>
+        <select
+          className={inputClass}
+          value=""
+          onChange={(event) => {
+            const key = event.target.value;
+            if (key) {
+              setAdded((current) => [...current, key]);
+              if (!ruleKeys.includes(key)) setAdvancedOpen(true);
             }
-          />
-        </details>
-      ) : null}
+          }}
+        >
+          <option value="">{label === 'Add rule' ? 'Choose a rule…' : 'Choose a setting…'}</option>
+          {propertyGroups.map((group) => {
+            const grouped = choices.filter((field) => group.keys.includes(field.key));
+            return grouped.length ? (
+              <optgroup key={group.label} label={group.label}>
+                {grouped.map((field) => (
+                  <option key={field.key} value={field.key}>
+                    {field.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null;
+          })}
+        </select>
+      </label>
+    ) : null;
+  return (
+    <div className="space-y-3">
+      <section aria-label="Basic properties" className={panelClass}>
+        <h3 className="text-xs font-medium">Basic properties</h3>
+        {children}
+        <Fields
+          context={context}
+          value={value}
+          fields={fields.filter((field) => field.key === 'description')}
+          onChange={onChange}
+        />
+      </section>
+      <section aria-label="Validation rules" className={panelClass}>
+        <h3 className="text-xs font-medium">Validation rules</h3>
+        {rules.length ? (
+          <Fields context={context} value={value} fields={rules} onChange={onChange} />
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">No additional rules.</p>
+        )}
+        {studio
+          ? addSetting(
+              available.filter((field) => ruleKeys.includes(field.key)),
+              'Add rule'
+            )
+          : null}
+      </section>
+      {ruleTest}
+      {!studio ? addSetting(available) : null}
+      <details
+        className={panelClass}
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+      >
+        <summary className={disclosureClass}>
+          Advanced settings{advancedCount ? ` · ${advancedCount}` : ''}
+        </summary>
+        <Fields context={context} value={value} fields={advanced} onChange={onChange} />
+        {studio ? addSetting(available.filter((field) => !ruleKeys.includes(field.key))) : null}
+        {kind === 'slot' ? (
+          <section aria-label="YOps hints" className="space-y-3">
+            <h4 className="text-xs font-medium">YOps hints</h4>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Optional hints for generating write operations. These do not change validation.
+            </p>
+            <Fields
+              context={`YOps hint ${path}`}
+              value={record(value.yopsHint)}
+              fields={[
+                {
+                  key: 'preferredOp',
+                  label: 'Preferred YOps operation',
+                  options: ['define', 'set', 'populate', 'append'],
+                },
+                { key: 'path', label: 'Target path' },
+                { key: 'slot', label: 'Target field' },
+              ]}
+              onChange={(hint) =>
+                onChange(withField(value, 'yopsHint', Object.keys(hint).length ? hint : undefined))
+              }
+            />
+          </section>
+        ) : null}
+      </details>
     </div>
   );
 }

@@ -49,6 +49,7 @@ export async function exportArtifactCard(
     doc.head.prepend(charset, viewport, style);
     doc.body.style.margin = '16px';
     doc.body.style.background = theme.getPropertyValue('--surface-panel');
+    copy.style.width = '100%';
     copy.style.marginInline = 'auto';
     const scrollTop = card.querySelector('pre')?.scrollTop ?? 0;
     doc.body.append(copy);

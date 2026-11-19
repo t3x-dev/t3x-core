@@ -61,10 +61,17 @@ export function RepositoryViewData({
   );
 }
 
+export function useRepositoryBranches(projectId: string | null, enabled: boolean) {
+  const context = useContext(RepositoryViewDataContext);
+  const shared = context?.projectId === projectId ? context : null;
+  const branches = useBranches(projectId, enabled && !shared);
+  return shared?.branches ?? branches;
+}
+
 export function useRepositoryViewData(projectId: string) {
   const context = useContext(RepositoryViewDataContext);
   const shared = context?.projectId === projectId ? context : null;
-  const branches = useBranches(projectId, !shared);
+  const branches = useRepositoryBranches(projectId, true);
   const workspaces = useProjectWorkspaces(projectId, !shared);
   return shared ?? { branches, workspaces };
 }

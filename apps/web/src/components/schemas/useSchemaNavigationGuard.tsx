@@ -14,6 +14,7 @@ import {
 export type SchemaEditorNavigation = {
   requestNavigation: (navigate: () => void) => void;
   save?: () => Promise<boolean>;
+  focusError?: () => void;
   undo?: () => void;
   openRules?: () => void;
   describeChanges?: () => void;
@@ -32,6 +33,7 @@ export function useSchemaNavigationGuard(options: {
   canSave: boolean;
   save: () => Promise<boolean>;
   discard: () => void;
+  pending?: boolean;
 }) {
   const current = useRef(options);
   current.current = options;
@@ -160,13 +162,13 @@ export function useSchemaNavigationGuard(options: {
             </Button>
             <Button
               variant="ghost"
-              disabled={saving}
+              disabled={saving || options.pending}
               onClick={() => void continueNavigation(false)}
             >
               Discard & continue
             </Button>
             <Button
-              disabled={saving || !options.canSave}
+              disabled={saving || options.pending || !options.canSave}
               onClick={() => void continueNavigation(true)}
             >
               {saving ? 'Saving…' : 'Save & continue'}

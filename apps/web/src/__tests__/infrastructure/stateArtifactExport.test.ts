@@ -8,6 +8,13 @@ it('embeds the preview theme in standalone HTML', async () => {
   theme.textContent = 'article { --text-primary: rebeccapurple; --surface-panel: linen; }';
   document.head.append(theme);
   document.body.append(card);
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = 'Full data (YAML)';
+  const data = document.createElement('pre');
+  data.textContent = 'name: <script>alert("unsafe")</script>\ncomplete: true';
+  details.append(summary, data);
+  card.append(details);
 
   const blob = await exportArtifactCard(
     card,
@@ -27,4 +34,8 @@ it('embeds the preview theme in standalone HTML', async () => {
     'rebeccapurple'
   );
   expect(html.body.style.background).toBe('linen');
+  expect(html.querySelector('article')?.style.width).toBe('100%');
+  expect(html.querySelector('details')?.open).toBe(false);
+  expect(html.querySelector('pre')?.textContent).toBe(data.textContent);
+  expect(html.querySelector('script')).toBeNull();
 });

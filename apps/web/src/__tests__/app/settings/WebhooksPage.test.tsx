@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WebhooksPage from '@/app/settings/webhooks/page';
@@ -68,6 +68,28 @@ describe('WebhooksPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Merge Completed' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Leaf Created' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Create Webhook' })).toBeDisabled();
+  });
+
+  it('keeps a failed save and the entered endpoint in the drawer', async () => {
+    createWebhook.mockRejectedValueOnce(new Error('This endpoint already exists.'));
+    render(<WebhooksPage />);
+    await waitFor(() => expect(listWebhooks).toHaveBeenCalledOnce());
+
+    const opener = screen.getByRole('button', { name: 'New webhook' });
+    fireEvent.click(opener);
+    const drawer = screen.getByRole('dialog', { name: 'New webhook' });
+    const endpoint = within(drawer).getByLabelText('Endpoint URL');
+    fireEvent.change(endpoint, { target: { value: 'https://example.com/existing' } });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Create Webhook' }));
+
+    expect(await within(drawer).findByText('Could not save webhook')).toBeVisible();
+    expect(within(drawer).getByText('This endpoint already exists.')).toBeVisible();
+    expect(endpoint).toHaveValue('https://example.com/existing');
+    expect(within(drawer).getByRole('button', { name: 'Create Webhook' })).toBeEnabled();
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(opener);
+    expect(screen.queryByText('Could not save webhook')).not.toBeInTheDocument();
   });
 
   it('describes the unscoped empty list without claiming a current project', async () => {

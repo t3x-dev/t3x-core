@@ -54,7 +54,7 @@ describe('Schema YAML editor', () => {
     const { change, onSave, onOpenChange, rerender, props } = setup();
     change(edited);
     fireEvent.click(screen.getByRole('button', { name: 'Save draft', exact: true }));
-    await waitFor(() => expect(screen.getByText('Draft saved · not committed')).toBeVisible());
+    await waitFor(() => expect(screen.getByText('Candidate saved · not adopted')).toBeVisible());
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ rules: [{ id: 'documented', description: 'Human review' }] }),
       'Edit Schema YAML.'
@@ -90,7 +90,7 @@ describe('Schema YAML editor', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Revision conflict'));
     expect(screen.getByLabelText('Schema definition YAML editor')).toHaveValue(edited);
     expect(onReview).not.toHaveBeenCalled();
-    expect(screen.getByText('Unsaved changes')).toBeVisible();
+    expect(screen.getByText('Save failed · edits kept')).toBeVisible();
   });
 
   it('retries Review after successful save without resaving the same revision', async () => {
@@ -137,6 +137,6 @@ describe('Schema YAML editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save and review' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     finish();
-    await waitFor(() => expect(screen.getByText('Draft saved · not committed')).toBeVisible());
+    await waitFor(() => expect(screen.getByText('Candidate saved · not adopted')).toBeVisible());
   });
 });

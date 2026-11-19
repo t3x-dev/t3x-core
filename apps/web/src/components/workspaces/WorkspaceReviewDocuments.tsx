@@ -22,6 +22,7 @@ import {
   walkDraftStructure,
 } from '@/domain/workspaces/draftStructure';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
+import { WorkspaceReviewComparison } from './WorkspaceReviewComparison';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';
 import styles from './WorkspaceReviewWorkbench.module.css';
 
@@ -215,34 +216,24 @@ export function WorkspaceReviewSchemaView({
       ) : null}
       {pane === 'changes' ? (
         review ? (
-          <table className={styles.definitionChanges}>
-            <thead>
-              <tr>
-                <th>Field or rule</th>
-                <th>Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              {review.changes.length ? (
-                review.changes.map((change) => (
-                  <tr key={`${change.kind}:${change.path}`}>
-                    <td>
-                      {change.kind} {change.path}
-                    </td>
-                    <td>{change.summary}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={2}>
-                    {review.base.status === 'unknown'
-                      ? 'Comparison unavailable.'
-                      : 'No Schema definition changes.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <WorkspaceReviewComparison
+            before={
+              review.base.status === 'unknown'
+                ? undefined
+                : review.base.status === 'unbound'
+                  ? {}
+                  : (review.base.definition ?? undefined)
+            }
+            after={
+              review.draft.status === 'unknown'
+                ? undefined
+                : review.draft.status === 'unbound'
+                  ? {}
+                  : (definition ?? undefined)
+            }
+            subject="Schema"
+            versionLabel={versionLabel ?? (frozen ? 'Fixed Review' : 'Saved Draft')}
+          />
         ) : (
           <p>
             {frozen

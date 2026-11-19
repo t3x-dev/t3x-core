@@ -12,11 +12,12 @@ import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/pr
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
 import {
   RepositoryAddressContext,
+  useRepositoryBranches,
   useRepositoryRouteParams,
 } from '@/components/project/RepositoryRouteContext';
 import { Button } from '@/components/ui/button';
 import { numberedRepositoryObject, repositoryObjectHref } from '@/domain/project/objectLocation';
-import { getProjectIdRepoPath, workspaceBranchFromSuffix } from '@/domain/project/repoPath';
+import { getProjectIdRepoPath, repositoryBranchRoute } from '@/domain/project/repoPath';
 import {
   isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
@@ -40,20 +41,33 @@ function OwnerRepoProjectPageContent() {
       Object.values(state.details).find((project) => project.canonical_path === repositoryPath) ??
       state.projects.find((project) => project.canonical_path === repositoryPath)
   );
-  const workspaceBranch = workspaceBranchFromSuffix(suffix);
+  const branchRoute = repositoryBranchRoute(suffix);
+  const pageSegments = branchRoute ? segments.slice(2) : segments;
+  const routeBranch = branchRoute?.branch ?? null;
   const numbered = numberedRepositoryObject(suffix);
   const view =
-    workspaceBranch || numbered?.section === 'reviews'
+    numbered?.section === 'reviews'
       ? 'workspaces'
       : numbered?.section === 'commits'
         ? 'state'
-        : (segments[0] ?? 'state');
+        : (pageSegments[0] ?? 'state');
   const query = useSearchParams().toString();
   const { current, retry } = useContext(RepositoryAddressContext);
   const address = current?.address;
-  const supported = isSupportedRepositorySuffix(suffix);
+  const invalidBranch =
+    !branchRoute && ['.', '..'].includes(new URLSearchParams(query).get('branch')?.trim() ?? '');
+  const supported = isSupportedRepositorySuffix(suffix) && !invalidBranch;
   const search = new URLSearchParams(query);
-  const legacyView = segments.length ? view : (search.get('tab') ?? view);
+  const legacyView = branchRoute || pageSegments.length ? view : (search.get('tab') ?? view);
+  const branchForPage =
+    routeBranch ??
+    (!numbered && legacyView === 'state' && !search.get('commit')
+      ? search.get('branch')?.trim() || 'main'
+      : null);
+  const branches = useRepositoryBranches(
+    address?.project_id ?? null,
+    Boolean(supported && branchForPage && address)
+  );
   const legacySnapshot =
     legacyView === 'workspaces' && search.get('reviewPane') !== 'checks'
       ? search.get('reviewSnapshot')
@@ -69,8 +83,9 @@ function OwnerRepoProjectPageContent() {
     numbered?.kind ?? (exactSnapshot ? 'review' : 'commit'),
     numbered?.number ?? exactSnapshot ?? exactCommit
   );
+  const resolvingExactObject = Boolean((exactSnapshot || exactCommit) && object.isLoading);
   let target =
-    address && supported
+    address && supported && !resolvingExactObject
       ? repositoryLocation(
           address.canonical_path ?? getProjectIdRepoPath(address.project_id),
           suffix,
@@ -83,6 +98,7 @@ function OwnerRepoProjectPageContent() {
     if (exactSnapshot && object.data.workspaceId === search.get('workspace')) {
       target = repositoryObjectHref(address.canonical_path, 'reviews', object.data.number, search);
     } else if (exactCommit) {
+      if (legacyView === 'history' && routeBranch) search.set('branch', routeBranch);
       target = repositoryObjectHref(
         address.canonical_path,
         legacyView === 'history' ? 'history' : 'commits',
@@ -102,17 +118,17 @@ function OwnerRepoProjectPageContent() {
 
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
-  if (isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
-  if (!current || canonicalizing) {
+  if (isRetiredRepositoryLocation(suffix, search)) notFound();
+  if (!current || canonicalizing || resolvingExactObject) {
     const loading = <LoadingSpinner message="Loading repository..." />;
     // The known header can render while the repository layout resolves access.
     return knownProject ? (
       <ProjectShell
         activeTab={resolveProjectRouteTab(
-          workspaceBranch ? view : (segments[0] ?? null),
+          branchRoute ? view : (pageSegments[0] ?? null),
           new URLSearchParams(query)
         )}
-        branch={workspaceBranch ?? new URLSearchParams(query).get('branch')}
+        branch={routeBranch ?? new URLSearchParams(query).get('branch')}
         pageTitle={null}
         project={knownProject}
       >
@@ -151,6 +167,16 @@ function OwnerRepoProjectPageContent() {
     );
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
+  if (branchForPage && !branches.branches.includes(branchForPage)) {
+    if (branches.loading) return <LoadingSpinner message="Loading branch…" />;
+    if (branches.error)
+      return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
+    return (
+      <p role="alert" className="p-6">
+        Branch {branchForPage} was not found in this repository.
+      </p>
+    );
+  }
   if (numbered && object.isLoading)
     return <LoadingSpinner message="Loading repository object..." />;
   if (numbered && (!object.data || (numbered.kind === 'review' && !object.data.workspaceId)))
@@ -176,7 +202,7 @@ function OwnerRepoProjectPageContent() {
       <RepositoryNestedPage
         key={address.project_id}
         projectId={address.project_id}
-        segments={segments}
+        segments={pageSegments}
         commitHash={numbered?.kind === 'commit' ? object.data?.id : undefined}
       />
     );
@@ -186,7 +212,7 @@ function OwnerRepoProjectPageContent() {
       initialTabOverride={parseProjectTab(view)}
       ownerSlugOverride={address.namespace ?? undefined}
       projectIdOverride={address.project_id}
-      workspaceBranch={workspaceBranch}
+      workspaceBranch={view === 'workspaces' ? routeBranch : null}
       commitAddress={numbered?.kind === 'commit' && object.data ? object.data : undefined}
       fixedReview={
         numbered?.kind === 'review' && object.data?.workspaceId

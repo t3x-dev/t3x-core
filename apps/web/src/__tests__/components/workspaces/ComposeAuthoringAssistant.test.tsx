@@ -1,14 +1,45 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposeAuthoringAssistant } from '@/components/workspaces/ComposeAuthoringAssistant';
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), generation: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  send: vi.fn(),
+  generation: vi.fn(),
+  stop: vi.fn(),
+  setInput: vi.fn(),
+  refresh: vi.fn(),
+  ready: true,
+  modelLoading: false,
+  chatLoading: false,
+  streaming: false,
+}));
+beforeEach(() => {
+  mocks.ready = true;
+  mocks.modelLoading = false;
+  mocks.chatLoading = false;
+  mocks.streaming = false;
+  mocks.send.mockClear();
+  mocks.stop.mockClear();
+  mocks.setInput.mockClear();
+  mocks.refresh.mockClear();
+});
+vi.mock('@/components/generation/InferenceAvailabilityNotice', () => ({
+  InferenceAvailabilityNotice: ({ onRetry }: { onRetry: () => void }) => (
+    <div>
+      AI unavailable{' '}
+      <button onClick={onRetry} type="button">
+        Retry AI
+      </button>
+    </div>
+  ),
+}));
 vi.mock('@/hooks/shared/useChatModelSelection', () => ({
   useChatModelSelection: () => ({
-    loading: false,
-    isSelectionReady: true,
+    loading: mocks.modelLoading,
+    isSelectionReady: mocks.ready,
+    refresh: mocks.refresh,
     selectedProvider: 'openai',
     selectedModel: 'gpt-5.4',
   }),
@@ -20,9 +51,11 @@ vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
       messages: [],
       streamingContent: '',
       input: '天气为晴天',
-      setInput: vi.fn(),
+      setInput: mocks.setInput,
       sendMessage: mocks.send,
-      isLoading: false,
+      stopGenerating: mocks.stop,
+      isLoading: mocks.chatLoading,
+      isStreaming: mocks.streaming,
     };
   },
 }));
@@ -289,5 +322,49 @@ describe('ComposeAuthoringAssistant proposal mode', () => {
         'Save every ungrouped manual card as a P before asking the assistant to add cards.'
       )
     ).toBeInTheDocument();
+  });
+});
+
+describe('Compose input feedback', () => {
+  const props = {
+    projectId: 'feedback-project',
+    context: { workspaceId: 'feedback-workspace', workspaceRevision: 1, sourceMaterialIds: [] },
+    onCreateConversation: vi.fn(),
+    onPublishCandidate: vi.fn(),
+  };
+  it('keeps input available without a model, blocks send, and offers the existing retry', () => {
+    mocks.ready = false;
+    render(
+      <ComposeAuthoringAssistant
+        {...props}
+        sourcesControl={<button type="button">Add source</button>}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeEnabled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this draft text' } });
+    expect(mocks.setInput).toHaveBeenCalledWith('Keep this draft text');
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+    expect(mocks.send).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry AI' }));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+  it('preserves Shift+Enter and IME Enter and displays sending and streaming states', () => {
+    const rendered = render(<ComposeAuthoringAssistant {...props} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(mocks.send).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    mocks.chatLoading = true;
+    rendered.rerender(<ComposeAuthoringAssistant {...props} />);
+    expect(screen.getByText('Sending…')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    mocks.streaming = true;
+    rendered.rerender(<ComposeAuthoringAssistant {...props} />);
+    expect(screen.getByText('Generating…')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }));
+    expect(mocks.stop).toHaveBeenCalledOnce();
   });
 });

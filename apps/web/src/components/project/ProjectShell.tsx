@@ -87,7 +87,7 @@ export function ProjectShell({
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (
     <div
-      className={`${workbench.shell} flex h-dvh min-h-[680px] flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]`}
+      className={`${workbench.shell} flex h-dvh ${activeTab === 'schemas' ? '' : 'min-h-[680px]'} flex-col overflow-hidden bg-[var(--surface-app)] text-[var(--text-primary)] [--text-base:14px] [--text-lg:16px] [--text-sm:13px] [--text-xs:12px]`}
       style={repositoryWorkbenchTracks}
     >
       <DiscoverHeader

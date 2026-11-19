@@ -19,6 +19,17 @@
   height: auto;
   overflow: visible;
   padding: 0;
+  background: transparent;
+}
+.reference .reviewBody .mainColumn {
+  overflow: hidden;
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.reference .reviewBody .toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--stroke-divider);
 }
 .reference .reviewBody .inspector {
   max-height: none;
@@ -589,7 +600,7 @@
   max-width: var(--project-page-max-width, 1264px);
   width: 100%;
   margin: 0 auto;
-  padding: 8px 24px 32px;
+  padding: 0;
   overflow: hidden;
   font-family: inherit;
 }
@@ -619,8 +630,8 @@
   margin-right: auto;
 }
 .diffHeading h1 {
-  font-size: 22px;
-  line-height: 1.25;
+  font-size: 14px;
+  line-height: 1.4;
   font-weight: 650;
 }
 .diffHeading p {

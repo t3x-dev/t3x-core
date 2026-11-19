@@ -50,7 +50,7 @@ it('does not ask managed inference users for local keys', () => {
 });
 it('shows a retryable discovery error instead of asserting missing credentials', () => {
   render(<InferenceAvailabilityNotice {...props} error="api_unavailable" />);
-  expect(screen.getByRole('alert')).toHaveTextContent('could not be checked');
+  expect(screen.getByRole('alert')).toHaveTextContent('AI status unavailable');
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(props.onRetry).toHaveBeenCalled();
 });

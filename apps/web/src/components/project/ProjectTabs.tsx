@@ -5,6 +5,7 @@ import {
   type ProjectTabId,
   projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { cn } from '@/utils/cn';
 
 export interface ProjectTabsProps {
@@ -55,10 +56,18 @@ export function ProjectTabs({
         if (workspaceId && projectTabKeepsWorkspace(tab.id)) {
           context.set('workspace', workspaceId);
         }
-        const contextQuery = context.toString();
-        const href = contextQuery
-          ? `${baseHref}${baseHref.includes('?') ? '&' : '?'}${contextQuery}`
-          : baseHref;
+        if (tab.id === 'checks' || tab.id === 'reviews' || tab.id === 'community')
+          context.delete('branch');
+        const href =
+          tab.id === 'settings'
+            ? settingsHref
+            : projectIdNavigation
+              ? `${baseHref}${context.size ? `${baseHref.includes('?') ? '&' : '?'}${context}` : ''}`
+              : repositoryLocation(
+                  repoPath,
+                  tab.id === 'state' ? '' : `/${getProjectTabSegment(tab.id)}`,
+                  context.toString()
+                );
         return (
           <Link
             aria-label={tab.label}

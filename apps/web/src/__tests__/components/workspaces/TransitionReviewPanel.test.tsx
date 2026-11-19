@@ -3,8 +3,9 @@
 import '@testing-library/jest-dom';
 import type { ChangeProjectionV1, ReviewSnapshotV1 } from '@t3x-dev/api-client';
 import type { TransitionViewV1 } from '@t3x-dev/core';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { ChangeDecisionPanel } from '@/components/workspaces/ChangeDecisionPanel';
 import { TransitionReviewPanel } from '@/components/workspaces/TransitionReviewPanel';
 
 const digest = (value: string) => `sha256:${value.repeat(64).slice(0, 64)}` as const;
@@ -307,5 +308,60 @@ describe('TransitionReviewPanel', () => {
       'href',
       '/project/proj_1?tab=workspaces&workspace=workspace_prd_handoff&workspaceMode=review&branch=feature%2Fprd-audience&reviewSnapshot=rvs_review_snapshot_panel'
     );
+  });
+});
+
+describe('Workspace Review decision layout', () => {
+  it('keeps commit blockers, busy state and historical snapshots read-only', () => {
+    const view = transitionView();
+    view.decision = { observation: 'not_supplied' };
+    view.history = { observation: 'not_committed' };
+    view.capabilities.accept = { disposition: 'allowed', reasons: [] };
+    const props = {
+      view,
+      branch: 'main',
+      busy: false,
+      onDecide: vi.fn(),
+      overrideReason: '',
+      onOverrideReasonChange: vi.fn(),
+      reviewLayout: true,
+    };
+    const rendered = render(
+      <ChangeDecisionPanel {...props} commitBlocker="Draft changed. Prepare a new Review." />
+    );
+    expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Draft changed');
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
+    expect(props.onDecide).not.toHaveBeenCalled();
+    rendered.rerender(<ChangeDecisionPanel {...props} busy />);
+    expect(screen.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
+    rendered.rerender(<ChangeDecisionPanel {...props} historical />);
+    expect(screen.queryByRole('button', { name: 'Approve and commit' })).toBeNull();
+    rendered.rerender(<ChangeDecisionPanel {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and commit' }));
+    expect(props.onDecide).toHaveBeenCalledWith('accepted');
+  });
+
+  it('still requires an explicit reason for an allowed override', () => {
+    const view = transitionView();
+    view.decision = { observation: 'not_supplied' };
+    view.history = { observation: 'not_committed' };
+    view.capabilities.override = { disposition: 'allowed', reasons: [] };
+    const props = {
+      view,
+      branch: 'main',
+      busy: false,
+      onDecide: vi.fn(),
+      overrideReason: '',
+      onOverrideReasonChange: vi.fn(),
+      reviewLayout: true,
+    };
+    const rendered = render(<ChangeDecisionPanel {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Commit with override/i }));
+    expect(props.onDecide).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a reason');
+    rendered.rerender(<ChangeDecisionPanel {...props} overrideReason="Reviewed exception" />);
+    fireEvent.click(screen.getByRole('button', { name: /Commit with override/i }));
+    expect(props.onDecide).toHaveBeenCalledWith('overridden', 'Reviewed exception');
   });
 });

@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   BookOpen,
   Braces,
+  FileCode2,
   GitCommitHorizontal,
   Globe2,
   List,
@@ -71,6 +72,7 @@ export function StateOverviewView({
   onSaveDescription,
   stateLoading = false,
   stateError,
+  onRetryState,
 }: {
   introductionSource?: 'repository' | 'version';
   repositoryProfile?: RepositoryProfile;
@@ -79,6 +81,7 @@ export function StateOverviewView({
   onSaveDescription?: (description: string) => Promise<void>;
   stateLoading?: boolean;
   stateError?: string | null;
+  onRetryState?: () => void;
   navigation?: ReactNode;
   headerOnly?: boolean;
   hideHeader?: boolean;
@@ -171,6 +174,7 @@ export function StateOverviewView({
   if (headerOnly) return <div className={styles.page}>{projectHeader}</div>;
 
   const failed = stateError || (!hasCommittedContent && (error || (!empty && !loading && !data)));
+  const retryContent = stateError ? onRetryState : error ? retry : undefined;
   return (
     <div
       ref={rootRef}
@@ -184,7 +188,7 @@ export function StateOverviewView({
         ) : (
           <div className={styles.toolbar}>
             <div className={styles.actions}>
-              {workspaceHref ? (
+              {workspaceHref && canEditRepository ? (
                 <Link href={workspaceHref} className={styles.primary}>
                   Propose change
                 </Link>
@@ -370,28 +374,76 @@ export function StateOverviewView({
                 <div role="alert" className={styles.feedback}>
                   <h3>State unavailable</h3>
                   <p>{stateError || error || 'This revision could not be loaded.'}</p>
-                  {error ? (
-                    <Button size="sm" variant="outline" onClick={retry}>
+                  {retryContent ? (
+                    <Button size="sm" variant="outline" onClick={retryContent}>
                       Retry State
                     </Button>
                   ) : null}
                 </div>
               ) : empty ? (
                 <div className={styles.emptyState}>
+                  <div className={styles.yamlIllustration} aria-hidden="true">
+                    <FileCode2 />
+                    <div>
+                      <span>YAML</span>
+                      <i />
+                      <i />
+                      <i />
+                    </div>
+                  </div>
                   <div className={styles.emptyContent}>
                     <h3>No commits yet</h3>
                     <p>
-                      Committed content will appear here. Prepare your first change in a Workspace,
-                      then review and commit it.
+                      Your committed data will appear here.{' '}
+                      {canEditRepository
+                        ? 'Choose how to start.'
+                        : 'Edit access is required to set up Schema or prepare a change. Ask a repository admin for access.'}
                     </p>
-                    {workspaceHref ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={workspaceHref}>
-                          Propose change
-                          <ArrowRight aria-hidden="true" />
+                  </div>
+                  <div className={styles.startActions}>
+                    {[
+                      {
+                        href: schemaHref,
+                        title: 'Set up Schema',
+                        Icon: Braces,
+                        description:
+                          'Choose a template or define data rules. You can skip this and start in Workspace.',
+                      },
+                      {
+                        href: workspaceHref,
+                        title: 'Open Workspace',
+                        Icon: Pencil,
+                        description:
+                          'Import data or start editing in Compose, then review and commit your first change.',
+                      },
+                    ].map(({ href, title, Icon, description }) => {
+                      const content = (
+                        <>
+                          <Icon className={styles.startIcon} aria-hidden="true" />
+                          <div>
+                            <h4>{title}</h4>
+                            <p>{description}</p>
+                          </div>
+                          {canEditRepository && href ? (
+                            <ArrowRight className={styles.startArrow} aria-hidden="true" />
+                          ) : null}
+                        </>
+                      );
+                      return canEditRepository && href ? (
+                        <Link
+                          key={title}
+                          href={href}
+                          className={styles.startCard}
+                          aria-label={title}
+                        >
+                          {content}
                         </Link>
-                      </Button>
-                    ) : null}
+                      ) : (
+                        <div key={title} className={styles.startCard} aria-disabled="true">
+                          {content}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : semantic ? (

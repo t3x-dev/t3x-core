@@ -5,10 +5,9 @@ import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
 import { StateExportButton } from '@/components/shared/StateExportButton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { shortHash } from '@/domain/format/formatters';
 import { historyCommitHref } from '@/domain/project/objectLocation';
 import type { ApiCommit } from '@/types/api';
-import type { ProjectSnapshotView } from './ProjectStateTab';
 import { RepositoryMark } from './RepositoryIdentity';
 import { StateBranchControls } from './StateBranchControls';
 import inspectionStyles from './StateInspection.module.css';
@@ -19,7 +18,6 @@ export function StatePageToolbar({
   projectId,
   projectName,
   repositoryIcon,
-  activeView,
   branch,
   branchOptions,
   headCommit,
@@ -30,12 +28,12 @@ export function StatePageToolbar({
   onCreateBranch,
   workspaceHref,
   historical,
+  canProposeChanges,
 }: {
   projectId: string;
   projectName: string;
   repositoryIcon?: RepositoryIcon | null;
   historical: boolean;
-  activeView: ProjectSnapshotView;
   branch: string;
   branchOptions: string[];
   headCommit: ApiCommit | null;
@@ -45,6 +43,7 @@ export function StatePageToolbar({
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   workspaceHref: string;
+  canProposeChanges: boolean;
 }) {
   const commitHref = headCommit ? historyCommitHref(historyHref, headCommit) : historyHref;
   return (
@@ -55,7 +54,7 @@ export function StatePageToolbar({
           <span>{projectName}</span>
         </h1>
         <div className={inspectionStyles.sub2}>
-          <div className={overviewStyles.toolbar}>
+          <div className={inspectionStyles.headerContext}>
             <StateBranchControls
               branch={branch}
               branchOptions={branchOptions}
@@ -73,7 +72,7 @@ export function StatePageToolbar({
               </span>
             ) : null}
           </div>
-          <div className={overviewStyles.actions}>
+          <div className={`${overviewStyles.actions} ${inspectionStyles.headerActions}`}>
             {headCommit ? (
               <StateExportButton
                 key={headCommit.hash}
@@ -84,10 +83,14 @@ export function StatePageToolbar({
             <Link href={historical ? commitHref : historyHref}>
               <History aria-hidden="true" /> History
             </Link>
-            <Link href={workspaceHref} className={overviewStyles.primary}>
-              <Pencil />
-              Propose change
-            </Link>
+            {canProposeChanges ? (
+              <Link href={workspaceHref} className={overviewStyles.primary}>
+                <Pencil aria-hidden="true" />
+                Propose change
+              </Link>
+            ) : (
+              <span className={overviewStyles.sidebarHint}>Read-only access</span>
+            )}
           </div>
         </div>
         <div className={inspectionStyles.viewNavigation}>
@@ -108,19 +111,6 @@ export function StatePageToolbar({
             })}
           </TabsList>
         </div>
-        {headCommit && activeView !== 'overview' ? (
-          <div className={inspectionStyles.commitSummary}>
-            <GitCommit aria-hidden="true" />
-            <Link href={commitHref}>{commitTitle(headCommit.message)}</Link>
-            <span>
-              {headCommit.author?.name ||
-                headCommit.author?.id ||
-                headCommit.author?.type ||
-                'Author not recorded'}
-            </span>
-            <time dateTime={headCommit.committed_at}>{relativeTime(headCommit.committed_at)}</time>
-          </div>
-        ) : null}
       </div>
     </header>
   );

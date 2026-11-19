@@ -113,9 +113,6 @@
 .footer > :last-child {
   margin-left: auto;
 }
-.error {
-  color: var(--status-error);
-}
 @media (max-width: 640px) {
   .body {
     grid-template-columns: minmax(0, 1fr);

@@ -67,7 +67,7 @@ describe('ProjectCommunityTab', () => {
     );
     expect(screen.getByRole('link', { name: 'Commit history' })).toHaveAttribute(
       'href',
-      '/project/project%20one/history?branch=feature%2Frelease&view=list&returnTo=%2Fteam%2Frepo%2Fcommunity%3Fbranch%3Dfeature%252Frelease'
+      '/project/project%20one/history?view=list&returnTo=%2Fteam%2Frepo%2Fcommunity%3Fbranch%3Dfeature%252Frelease&branch=feature%2Frelease'
     );
   });
 

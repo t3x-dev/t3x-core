@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 import { legacyExploreLocation } from '@/domain/project/exploreLocation';
+import { getCanonicalRepositoryPath, repositoryBranch } from '@/domain/project/repoPath';
 import { workspaceReviewHref } from '@/domain/workspaces/reviewNavigation';
 import headerStyles from './SchemaCatalogHeader.module.css';
 import { SchemaStudioExperience } from './SchemaStudioExperience';
@@ -28,8 +29,11 @@ function LegacyCatalogRedirect({
   tab: 'discover' | 'browse';
 }) {
   const search = useSearchParams();
+  const branch = repositoryBranch(usePathname(), search);
   const router = useRouter();
-  const href = legacyExploreLocation(projectId, tab, search.toString());
+  const query = new URLSearchParams(search.toString());
+  if (branch) query.set('branch', branch);
+  const href = legacyExploreLocation(projectId, tab, query.toString());
   useEffect(() => router.replace(`${href}${window.location.hash}`), [router, href]);
   return (
     <p className="p-6 text-sm">
@@ -45,7 +49,7 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
   return (
     <SchemaToolbarContext.Provider value={toolbarTarget}>
       <section
-        className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--surface-card)] text-[var(--text-primary)]"
+        className={`${headerStyles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden text-[var(--text-primary)]`}
         aria-label="Schema experience"
       >
         <header className={headerStyles.header}>
@@ -60,13 +64,15 @@ function ProjectSchemas({ projectId, children }: { projectId: string; children: 
 }
 
 function LegacySchemaReviewRedirect({ projectId }: { projectId: string }) {
+  const pathname = usePathname();
   const params = useSearchParams();
   const router = useRouter();
   const workspace = params.get('workspace');
   const href = workspace
     ? workspaceReviewHref(projectId, workspace, {
         snapshotId: params.get('reviewSnapshot') ?? undefined,
-        branch: params.get('branch') ?? undefined,
+        branch: repositoryBranch(pathname, params) ?? undefined,
+        repositoryPath: getCanonicalRepositoryPath(pathname),
         pane: params.get('reviewPane'),
       }) + (params.get('schemaDiagnostics') === '1' ? '&schemaDiagnostics=1' : '')
     : null;
