@@ -1,0 +1,40 @@
+'use client';
+
+import { usePathname, useSearchParams } from 'next/navigation';
+import { type ReactNode, Suspense } from 'react';
+import {
+  RepositoryAddressContext,
+  RepositoryViewData,
+  useRepositoryRouteParams,
+} from '@/components/project/RepositoryRouteContext';
+import { isRetiredRepositoryLocation } from '@/domain/project/repositoryLocation';
+import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
+
+function RepositoryLayoutContent({ children }: { children: ReactNode }) {
+  const { owner, name, creating, organizationSettings } = useRepositoryRouteParams();
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const suffix = pathname.split('/').slice(3).join('/');
+  const retired = isRetiredRepositoryLocation(suffix ? `/${suffix}` : '', query);
+  const lookup = useRepositoryAddress(owner, name, !creating && !organizationSettings && !retired);
+  const address = lookup.current?.address;
+  const canonical = address?.canonical_path;
+  const projectId =
+    canonical && (pathname === canonical || pathname === `${canonical}/schemas`)
+      ? address.project_id
+      : null;
+
+  return (
+    <RepositoryAddressContext.Provider value={lookup}>
+      <RepositoryViewData projectId={projectId}>{children}</RepositoryViewData>
+    </RepositoryAddressContext.Provider>
+  );
+}
+
+export default function RepositoryLayout({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <RepositoryLayoutContent>{children}</RepositoryLayoutContent>
+    </Suspense>
+  );
+}

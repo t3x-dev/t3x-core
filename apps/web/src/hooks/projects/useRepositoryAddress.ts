@@ -25,9 +25,9 @@ export function useRepositoryAddress(owner: string, name: string, enabled: boole
     };
   }, []);
   useEffect(() => {
+    setLookup(null);
     if (!enabled) return;
     let cancelled = false;
-    setLookup(null);
     void resolveRepository(owner, name)
       .then((address) => {
         if (!cancelled) setLookup({ key, address });
@@ -41,7 +41,7 @@ export function useRepositoryAddress(owner: string, name: string, enabled: boole
     };
   }, [key, owner, name, enabled, attempt]);
   return {
-    current: lookup?.key === key ? lookup : null,
+    current: enabled && lookup?.key === key ? lookup : null,
     retry: () => setAttempt((value) => value + 1),
   };
 }

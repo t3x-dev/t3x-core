@@ -25,6 +25,7 @@ import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspec
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
@@ -88,10 +89,8 @@ import {
 } from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
-import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceCommitChanges } from '@/hooks/workspaces/useWorkspaceCommitChanges';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
@@ -245,6 +244,8 @@ export function ProjectStateTab({
   const [freshnessChecking, setFreshnessChecking] = useState(false);
   const checkingFreshness = useRef(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const { branches: projectBranches, workspaces: projectWorkspaces } =
+    useRepositoryViewData(projectId);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -252,8 +253,7 @@ export function ProjectStateTab({
     loading: branchesLoading,
     error: branchesError,
     refresh,
-  } = useBranches(projectId, true);
-  const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  } = projectBranches;
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
