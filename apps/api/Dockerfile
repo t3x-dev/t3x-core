@@ -39,7 +39,7 @@ COPY packages/api/ ./packages/api/
 COPY apps/api/ ./apps/api/
 COPY apps/runner/ ./apps/runner/
 
-# Build all packages
+# Build all packages. Generating API declarations needs a larger Node heap.
 RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/yschema build && \
     pnpm --filter @t3x-dev/transition build && \
@@ -48,7 +48,7 @@ RUN pnpm --filter @t3x-dev/yops build && \
     pnpm --filter @t3x-dev/application build && \
     pnpm --filter @t3x-dev/storage build && \
     pnpm --filter @t3x-dev/runner build && \
-    pnpm --filter @t3x-dev/api build && \
+    NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter @t3x-dev/api build && \
     pnpm --filter t3x-api-server build
 
 # Production stage

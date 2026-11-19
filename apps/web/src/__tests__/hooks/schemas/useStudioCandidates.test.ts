@@ -51,3 +51,50 @@ it('refreshes persisted candidates after a successful add, and exposes access fa
   });
   expect(result.current.pending).toBe(false);
 });
+
+it('shares reads while loading and ignores notifications about saved edits', async () => {
+  let finish!: () => void;
+  mocks.list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve([]);
+      })
+  );
+  const { result } = renderHook(() => useStudioCandidates('target'));
+  act(() => {
+    window.dispatchEvent(new Event('focus'));
+    void result.current.refresh();
+  });
+  expect(mocks.list).toHaveBeenCalledExactlyOnceWith('target');
+
+  await act(async () => finish());
+  expect(result.current.loading).toBe(false);
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent('t3x-schema-candidate-updated', { detail: { projectId: 'target' } })
+    );
+  });
+  expect(mocks.list).toHaveBeenCalledTimes(1);
+});
+
+it('reads again after an acknowledged addition and ignores an earlier response', async () => {
+  let finish!: (items: Array<{ id: string }>) => void;
+  mocks.list
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    )
+    .mockResolvedValueOnce([{ id: 'new' }]);
+  mocks.add.mockResolvedValue({ id: 'new' });
+  const { result } = renderHook(() => useStudioCandidates('target'));
+
+  await act(async () => {
+    await result.current.add({ canonicalName: 't3x/core', version: '1' });
+    finish([{ id: 'old' }]);
+  });
+
+  expect(mocks.list).toHaveBeenCalledTimes(2);
+  expect(result.current.items[0]?.id).toBe('new');
+});

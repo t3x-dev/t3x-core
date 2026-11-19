@@ -243,6 +243,7 @@ export function ProjectStateTab({
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
   const [freshnessChecking, setFreshnessChecking] = useState(false);
+  const checkingFreshness = useRef(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
@@ -639,21 +640,24 @@ export function ProjectStateTab({
     ]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
+    if (branchesLoading || checkingFreshness.current) return;
+    checkingFreshness.current = true;
     setFreshnessChecking(true);
     try {
       await refresh();
     } finally {
+      checkingFreshness.current = false;
       setLastCheckedAt(new Date());
       setFreshnessChecking(false);
     }
-  }, [refresh]);
+  }, [branchesLoading, refresh]);
 
   useEffect(() => {
     setDismissedHeadHash(null);
     setLastCheckedAt(null);
-    const initialCheck = window.setTimeout(() => {
-      void checkCurrentBranchForUpdates();
-    }, 1100);
+  }, [branchFocus]);
+
+  useEffect(() => {
     const handleFocus = () => {
       void checkCurrentBranchForUpdates();
     };
@@ -663,11 +667,10 @@ export function ProjectStateTab({
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.clearTimeout(initialCheck);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [branchFocus, checkCurrentBranchForUpdates]);
+  }, [checkCurrentBranchForUpdates]);
 
   const handleViewLatest = useCallback(() => {
     const latestHash = availableHeadHash ?? latestBranchHeadHash;
@@ -706,11 +709,12 @@ export function ProjectStateTab({
                 ? 'Validation evidence unavailable'
                 : 'No validation recorded'
         : stateReadinessLabel(validationReady);
-  const lastCheckedLabel = freshnessChecking
-    ? 'Checking…'
-    : lastCheckedAt
-      ? 'Just now'
-      : 'Not checked';
+  const lastCheckedLabel =
+    freshnessChecking || branchesLoading
+      ? 'Checking…'
+      : lastCheckedAt || !branchesError
+        ? 'Just now'
+        : 'Not checked';
   const statePanel = activeView === 'overview' ? 'overview' : 'structure';
   return (
     <section

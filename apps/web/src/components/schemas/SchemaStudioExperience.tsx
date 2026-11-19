@@ -319,9 +319,14 @@ export function SchemaStudioExperience({
     !workspaces.loading && !workspaces.error && !projectBranches.loading && !projectBranches.error;
   const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
   const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
+  const explicitBranchWorkspace =
+    requestedBranch && !workspaces.loading && !workspaces.error
+      ? resolveStudioWorkspaceId(workspaces.workspaces, '', requestedBranch)
+      : '';
   const workspaceId =
     requestedWorkspaceId ||
     pinned?.id ||
+    explicitBranchWorkspace ||
     (targetsReady ? resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch) : '');
   const selectedTarget =
     draftWorkspaces.find((item) => item.id === workspaceId) ??
@@ -484,6 +489,10 @@ export function SchemaStudioExperience({
     !!currentBinding?.schemaHash &&
     schemaEdit.candidate?.authoringDraft?.base?.kind === 'composition' &&
     schemaEdit.candidate.authoringDraft.base.schemaHash === currentBinding.schemaHash;
+  const needsCandidateSources = Boolean(
+    schemaEdit.candidate?.baseSources?.length && !savedEditIsApplied && !savedEditUsesBinding
+  );
+  const definitionNeedsCandidates = needsCandidateSources || selection.length > 0;
   const recoveredCandidateKey = schemaEdit.candidate
     ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
     : schemaEdit.loading
@@ -559,7 +568,7 @@ export function SchemaStudioExperience({
   useEffect(() => {
     if (
       !persistedTarget ||
-      candidates.loading ||
+      (needsCandidateSources && candidates.loading) ||
       schemaEdit.loading ||
       pendingSchema.loading ||
       recoveredSelection.current === recoveryKey
@@ -587,6 +596,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     schemaEdit.candidate,
     schemaEdit.loading,
     pendingSchema.data,
@@ -598,7 +608,13 @@ export function SchemaStudioExperience({
     savedEditUsesBinding,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current || definitionOpen) return;
+    if (
+      schemaEdit.loading ||
+      (needsCandidateSources && candidates.loading) ||
+      dataDirtyRef.current ||
+      definitionOpen
+    )
+      return;
     if (recoveredEditIdentity === editIdentity) return;
     if (savedEditIsApplied || savedEditUsesBinding) setSelection([]);
     else if (schemaEdit.candidate?.baseSources?.length) {
@@ -638,6 +654,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     editIdentity,
     projectId,
     recoveredCandidateKey,
@@ -1377,17 +1394,17 @@ export function SchemaStudioExperience({
               pending={schemaEdit.pending || applying}
               loading={
                 workspaces.loading ||
-                projectBranches.loading ||
+                (!persistedTarget && projectBranches.loading) ||
                 pendingSchema.loading ||
                 preview.loading ||
                 schemaEdit.loading ||
-                candidates.loading
+                (definitionNeedsCandidates && candidates.loading)
               }
               previewError={
                 workspaces.error ||
                 recoveryError ||
                 schemaEdit.error ||
-                candidates.error ||
+                (definitionNeedsCandidates && candidates.error) ||
                 preview.error
               }
               previewErrorAction={
