@@ -141,4 +141,47 @@ for text and solid fill and `#DDF4FF` for soft fill. The green baseline is
 Use white on the specified solid fills. Choose dark-theme values for their
 actual foreground and background pairings. Select hover, pressed, selected,
 focus, and disabled treatments by control role. Check the existing mapping
-... (+44 lines) [see remaining: rtk proxy git show 0a7831c2e:apps/web/docs/design.md | tail -n +144]
+before applying these design baselines.
+[Primer color primitives](https://primer.style/product/primitives/color/)
+
+Reuse the closest matching [UI primitives](../src/components/ui/) or
+[shared components](../src/components/shared/). Get runtime values from
+the semantic tokens in [globals.css](../src/app/globals.css) and check
+existing [theme mappings](../src/utils/theme.ts). Prefer shared tokens and
+component variants over component-local color, radius, or shadow literals.
+Follow the [root typography configuration](../src/app/layout.tsx) and use
+monospace for code, YAML, hashes, and logs. Use the existing scale, typically
+12px for metadata and 14–15px for body text. Use the spacing scale and grouping
+to adjust density before reducing type size.
+
+### Interaction and accessibility
+
+- Use the existing control that matches the interaction. Give each icon
+  button an accessible name and keep keyboard focus visible. For dialogs,
+  move focus inside on open and restore it to a logical control on close.
+  Make touch targets easy to reach and activate accurately.
+- Keep essential information available without hover, animation, or a
+  transient toast. Use motion for feedback or orientation and respect
+  reduced-motion preferences.
+- Check actual text and background pairs across relevant states and themes.
+  Use 4.5:1 for normal text and 3:1 for qualifying large text, with the
+  standard's exceptions. Verify that text can reach 200% without losing
+  content or functionality.
+  [WCAG text contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html),
+  [WCAG text resizing](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+
+## Design review
+
+1. Identify the task, primary action, object or version, and evidence the user
+   needs. Check that wording and available actions match the governing contracts.
+2. Review the affected states, including content extremes and failure or
+   recovery where relevant. In grayscale, check page and card boundaries and
+   object and status recognition. With optional disclosure closed, check that
+   the user can still complete the main task. Check that layout and alignment
+   survive longer content, narrower widths, and larger text.
+3. For visual changes, inspect rendered screenshots from the intended checkout
+   for the relevant content states, widths, and themes. Check interactions such
+   as focus, keyboard navigation, and recovery with the appropriate separate
+   checks. Record any visual coverage gap. Follow the
+   [repository verification policy](../../../AGENTS.md#verification) for code
+   checks and business-flow acceptance.
