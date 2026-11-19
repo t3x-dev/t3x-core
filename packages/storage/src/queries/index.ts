@@ -355,6 +355,7 @@ export {
   findProjectById,
   findProjectByIdIncludingDeleted,
   findProjectListCounts,
+  findProjectListDetails,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,

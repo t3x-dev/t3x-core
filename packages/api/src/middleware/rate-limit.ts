@@ -15,6 +15,7 @@ import {
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import type { AppEnv } from '../types';
 
 export interface RateLimitStore {
@@ -160,7 +161,9 @@ export function createRateLimitL1(store: RateLimitStore) {
     const routePolicy = resolveIpRateLimitPolicy(pathname);
     const policy = ip ? routePolicy : RATE_LIMIT_POLICIES.unknownIp;
     const identity = ip ?? pathname;
-    const result = await consumeRateLimit(store, policy, identity);
+    const result = await timeRepositoryRead(c, 'ip_rate_limit', () =>
+      consumeRateLimit(store, policy, identity)
+    );
 
     applyRateLimitHeaders(c, policy, result);
     if (!result.allowed) {
@@ -178,7 +181,9 @@ export function createRateLimitL2(store: RateLimitStore) {
     if (!apiKey) return next();
 
     const policy = RATE_LIMIT_POLICIES.apiKey;
-    const result = await consumeRateLimit(store, policy, apiKey.id);
+    const result = await timeRepositoryRead(c, 'principal_rate_limit', () =>
+      consumeRateLimit(store, policy, apiKey.id)
+    );
     applyRateLimitHeaders(c, policy, result, 'Key');
 
     if (!result.allowed) {

@@ -32,13 +32,20 @@ import {
   branches,
   conversations,
   type NewProject,
+  namespaces,
   type Project,
   projects,
+  repositoryPaths,
   turns,
 } from '../schema';
 import { transitionCommits } from '../schema-transition-commits';
 import { leaves } from '../schema-trees';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+import {
+  repositoryAddress,
+  repositoryAddressColumns,
+  repositoryPathMatchesProject,
+} from './repository-paths';
 
 export interface CreateProjectInput {
   /** Caller-selected resource ID for reservation-safe orchestration. */
@@ -88,6 +95,7 @@ export interface ProjectStats {
 
 export interface ProjectWithStats extends Project {
   stats: ProjectStats;
+  address: ReturnType<typeof repositoryAddress>;
 }
 
 /**
@@ -478,6 +486,26 @@ export async function findProjectListCounts(db: AnyDB, projectIds: string[]) {
   return new Map(rows.map(({ projectId, ...counts }) => [projectId, counts]));
 }
 
+/** Enrich the authorized page with counts and addresses from one database read. */
+export async function findProjectListDetails(db: AnyDB, projectIds: string[]) {
+  const rows = projectIds.length
+    ? await db
+        .select({
+          projectId: projects.projectId,
+          name: projects.name,
+          ...repositoryAddressColumns,
+          counts: projectListCounts,
+        })
+        .from(projects)
+        .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
+        .leftJoin(repositoryPaths, repositoryPathMatchesProject)
+        .where(inArray(projects.projectId, projectIds))
+    : [];
+  return new Map(
+    rows.map((row) => [row.projectId, { counts: row.counts, address: repositoryAddress(row, row) }])
+  );
+}
+
 export async function findProjectWithStats(
   db: AnyDB,
   projectId: string
@@ -485,6 +513,7 @@ export async function findProjectWithStats(
   const [project] = await db
     .select({
       ...getTableColumns(projects),
+      ...repositoryAddressColumns,
       stats: {
         ...projectListCounts,
         turnsCount: sql<number>`(select count(*)::int from ${turns} where ${eq(turns.projectId, projects.projectId)})`,
@@ -492,7 +521,11 @@ export async function findProjectWithStats(
       },
     })
     .from(projects)
+    .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
+    .leftJoin(repositoryPaths, repositoryPathMatchesProject)
     .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
     .limit(1);
-  return project ?? null;
+  if (!project) return null;
+  const { slug, claimedBy, resolvable, ...details } = project;
+  return { ...details, address: repositoryAddress(project, { slug, claimedBy, resolvable }) };
 }

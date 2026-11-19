@@ -152,6 +152,7 @@ export {
   startRealtimeListener,
   stopRealtimeListener,
 } from './lib/realtime-listener';
+export { timeRepositoryRead } from './lib/repository-read-timing';
 export {
   getRequestPrincipal,
   localDevelopmentRequestPrincipal,
