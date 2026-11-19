@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   data: undefined as unknown,
   previewResult: undefined as ((input: unknown) => unknown) | undefined,
   pendingSchema: { status: 'none', pending: null } as unknown,
+  pendingSchemaLoading: false,
+  readPendingSchema: vi.fn(),
   query: 'candidate=provider',
   candidatesLoading: false,
   restoredSources: [] as StudioCandidate[],
@@ -188,11 +190,14 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
   }),
 }));
 vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
-  useWorkspaceSchemaPending: () => ({
-    data: mocks.pendingSchema,
-    loading: false,
-    refresh: vi.fn(),
-  }),
+  useWorkspaceSchemaPending: (...args: unknown[]) => {
+    mocks.readPendingSchema(...args);
+    return {
+      data: mocks.pendingSchema,
+      loading: mocks.pendingSchemaLoading,
+      refresh: vi.fn(),
+    };
+  },
 }));
 beforeEach(() => {
   mocks.draftLoading = false;
@@ -243,6 +248,8 @@ beforeEach(() => {
   mocks.saveSchemaEdit.mockReset();
   mocks.schemaEditCandidate = null;
   mocks.pendingSchema = { status: 'none', pending: null };
+  mocks.pendingSchemaLoading = false;
+  mocks.readPendingSchema.mockReset();
   mocks.previewInputs = [];
   mocks.saveDraft.mockResolvedValue({});
   mocks.saveSchemaEdit.mockImplementation(async (input) => ({
@@ -1321,6 +1328,51 @@ it('opens an exact saved branch Workspace while branch options and unused source
   expect(await screen.findByText('This workspace has no schema')).toBeVisible();
   expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeDisabled();
+});
+
+it('starts the default saved Workspace read while a known branch list is refreshing', async () => {
+  const main = { ...boundWorkspace(), schemaBindings: [] };
+  mocks.query = '';
+  mocks.branches = ['main', 'feature'];
+  mocks.branchesLoading = true;
+  mocks.workspaces = [main, { ...main, id: 'feature-draft', targetBranch: 'feature' }];
+  mocks.pendingSchemaLoading = true;
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision);
+  expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+
+  mocks.pendingSchemaLoading = false;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(await screen.findByText('This workspace has no schema')).toBeVisible();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeDisabled();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+
+  mocks.branches = ['feature', 'main'];
+  mocks.branchesLoading = false;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
+  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith('p', 'feature-draft', main.revision);
+});
+
+it.each([
+  'empty inventory',
+  'missing saved default',
+  'failed inventory',
+] as const)('waits for the branch list before selecting a default when there is %s', (state) => {
+  const feature = { ...boundWorkspace(), id: 'feature-draft', targetBranch: 'feature' };
+  mocks.query = '';
+  mocks.branches = state === 'empty inventory' ? [] : ['main', 'feature'];
+  mocks.branchesLoading = true;
+  mocks.branchesError = state === 'failed inventory' ? 'Offline' : null;
+  mocks.workspaces = state === 'missing saved default' ? [feature] : [boundWorkspace(), feature];
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined);
+  expect(mocks.readPendingSchema.mock.calls.every(([, workspaceId]) => workspaceId === '')).toBe(
+    true
+  );
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
 });
 
 it('removes the old Studio view flag without changing the explicit Workspace', () => {
