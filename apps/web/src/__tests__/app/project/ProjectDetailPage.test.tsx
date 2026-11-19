@@ -759,6 +759,32 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
+  it('renders a cached summary while loading fresh project statistics', async () => {
+    useProjectStore.setState({
+      details: { proj_test: { id: 'proj_test', name: 'Cached project', commitsCount: 1 } as never },
+      projects: [],
+    });
+    let resolveDetail!: (detail: Awaited<ReturnType<typeof fetchProject>>) => void;
+    vi.mocked(fetchProject).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDetail = resolve;
+        })
+    );
+
+    renderProjectContent();
+
+    expect(screen.getByRole('tab', { name: 'Structure' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading project...')).not.toBeInTheDocument();
+    resolveDetail({
+      project_id: 'proj_test',
+      name: 'Cached project',
+      created_at: '2026-05-28T00:00:00.000Z',
+      commits_count: 3,
+    } as never);
+    await waitFor(() => expect(useProjectStore.getState().details.proj_test.commitsCount).toBe(3));
+  });
+
   it('redirects the History query entry to its standalone page without rendering State', async () => {
     searchParamsValue = new URLSearchParams(
       'tab=history&branch=feature%2Frelease&commit=sha256%3Aabc&view=list&q=fix'

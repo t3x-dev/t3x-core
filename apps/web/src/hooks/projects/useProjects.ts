@@ -22,7 +22,7 @@ import {
   PROJECT_RESTORED_EVENT,
   type ProjectDeletedDetail,
 } from '@/hooks/shared/deleteEvents';
-import { deleteProject, listProjects } from '@/infrastructure/projects';
+import { deleteProject, listProjectPage, listProjects } from '@/infrastructure/projects';
 import type { Project } from '@/infrastructure/types';
 
 export interface UseProjectsResult {
@@ -30,6 +30,8 @@ export interface UseProjectsResult {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  hasMore: boolean;
+  loadMore: () => Promise<boolean>;
   remove: (projectId: string) => Promise<void>;
   create: (name?: string) => Promise<Project>;
   rename: (projectId: string, name: string) => Promise<Project>;
@@ -38,17 +40,27 @@ export interface UseProjectsResult {
 export function useProjects(
   limit = 50,
   namespaceSlug?: string,
-  loadAll = false
+  mode: boolean | 'on-demand' = false
 ): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const nextPageRequest = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
+      if (mode === 'on-demand') {
+        const data = await listProjectPage(limit, '', namespaceSlug);
+        if (requestId !== requestIdRef.current) return;
+        setProjects(data.items);
+        setNextCursor(data.next_cursor);
+        setError(null);
+        return;
+      }
       const collected = new Map<string, Project>();
       let offset = 0;
       for (;;) {
@@ -57,7 +69,7 @@ export function useProjects(
         const rows = data.projects ?? [];
         const previousSize = collected.size;
         for (const project of rows) collected.set(project.project_id, project);
-        if (!loadAll || rows.length < limit) break;
+        if (!mode || rows.length < limit) break;
         if (collected.size === previousSize)
           throw new Error('Repository pagination did not advance. Please refresh.');
         offset += rows.length;
@@ -70,10 +82,41 @@ export function useProjects(
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, namespaceSlug, loadAll]);
+  }, [limit, namespaceSlug, mode]);
+
+  const loadMore = useCallback(async () => {
+    const requestId = requestIdRef.current;
+    if (!nextCursor || loading || nextPageRequest.current === requestId) return false;
+    nextPageRequest.current = requestId;
+    setLoading(true);
+    try {
+      const data = await listProjectPage(limit, nextCursor, namespaceSlug);
+      if (requestId !== requestIdRef.current) return false;
+      if (data.next_cursor === nextCursor)
+        throw new Error('Repository pagination did not advance. Please refresh.');
+      setProjects((previous) => {
+        const collected = new Map(previous.map((project) => [project.project_id, project]));
+        for (const project of data.items) collected.set(project.project_id, project);
+        return [...collected.values()];
+      });
+      setNextCursor(data.next_cursor);
+      setError(null);
+      return data.items.length > 0;
+    } catch (err) {
+      if (requestId === requestIdRef.current)
+        setError(formatUserFacingError(err, 'Failed to load more projects.'));
+      return false;
+    } finally {
+      if (requestId === requestIdRef.current) {
+        nextPageRequest.current = null;
+        setLoading(false);
+      }
+    }
+  }, [limit, namespaceSlug, nextCursor, loading]);
 
   useEffect(() => {
     setProjects([]);
+    setNextCursor(null);
     void refresh();
     return () => {
       requestIdRef.current += 1;
@@ -91,6 +134,9 @@ export function useProjects(
   useEffect(() => {
     const removeProjectFromList = (projectId: string) => {
       setProjects((prev) => prev.filter((project) => project.project_id !== projectId));
+      if (mode === 'on-demand' && nextPageRequest.current === requestIdRef.current) {
+        void refresh();
+      }
     };
     const handleIntroDemoDeleted = (event: Event) => {
       const detail = (event as CustomEvent<IntroDemoProjectDeletedDetail>).detail;
@@ -109,7 +155,7 @@ export function useProjects(
       window.removeEventListener(INTRO_DEMO_PROJECT_DELETED_EVENT, handleIntroDemoDeleted);
       window.removeEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
     };
-  }, []);
+  }, [mode, refresh]);
 
   const remove = useCallback(async (projectId: string) => {
     await deleteProject(projectId);
@@ -140,5 +186,15 @@ export function useProjects(
     return project;
   }, []);
 
-  return { projects, loading, error, refresh, remove, create, rename };
+  return {
+    projects,
+    loading,
+    error,
+    refresh,
+    hasMore: nextCursor !== null,
+    loadMore,
+    remove,
+    create,
+    rename,
+  };
 }

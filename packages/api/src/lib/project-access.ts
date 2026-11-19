@@ -32,6 +32,7 @@ import {
   findProjectAuthorityFacts,
   findProjectById,
   findProjectByIdIncludingDeleted,
+  findProjectsAuthorityFacts,
   listTransitionCommitProjectIds,
   type NamespaceMembershipRecord,
   type ProjectGrantRecord,
@@ -271,20 +272,41 @@ export async function listAuthorizedProjectActions(
   projectId: string,
   options: { includeDeleted?: boolean } = {}
 ): Promise<ProjectAction[]> {
+  const actions = await listAuthorizedProjectActionsForPage(c, db, [projectId], options);
+  return actions.get(projectId) ?? [];
+}
+
+export async function listAuthorizedProjectActionsForPage(
+  c: Context,
+  db: AnyDB,
+  projectIds: string[],
+  options: { includeDeleted?: boolean } = {}
+): Promise<Map<string, ProjectAction[]>> {
   const credential = getProjectAccessPrincipal(c);
-  if (!credential) return isAuthenticationDisabled() ? [...PROJECT_ACTIONS] : [];
+  if (!credential) {
+    return isAuthenticationDisabled()
+      ? new Map(projectIds.map((id) => [id, [...PROJECT_ACTIONS]]))
+      : new Map();
+  }
 
   const principal = canonicalPrincipal(credential);
-  if (!principal) return [];
-  const stored = await findProjectAuthorityFacts(db, {
-    projectId,
+  if (!principal) return new Map();
+  const rows = await findProjectsAuthorityFacts(db, {
+    projectIds,
     principal: { kind: principal.kind, principalId: principal.principal_id },
     includeDeleted: options.includeDeleted,
   });
-  if (!stored) return [];
-  const facts = trustedProjectAuthorityFacts(stored, principal, credential);
-  if (!facts) return [];
-  return PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed);
+  const actions = new Map<string, ProjectAction[]>();
+  for (const stored of rows) {
+    const facts = trustedProjectAuthorityFacts(stored, principal, credential);
+    if (facts) {
+      actions.set(
+        stored.project.projectId,
+        PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed)
+      );
+    }
+  }
+  return actions;
 }
 
 /** Principal shape used by tenant-safe project list queries. */

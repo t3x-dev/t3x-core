@@ -16,6 +16,7 @@ import {
   and,
   desc,
   eq,
+  getTableColumns,
   ilike,
   inArray,
   isNotNull,
@@ -36,6 +37,7 @@ import {
   turns,
 } from '../schema';
 import { transitionCommits } from '../schema-transition-commits';
+import { leaves } from '../schema-trees';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
@@ -81,6 +83,7 @@ export interface ProjectStats {
   commitsCount: number;
   branchesCount: number;
   draftsCount: number;
+  outputsCount: number;
 }
 
 export interface ProjectWithStats extends Project {
@@ -457,50 +460,39 @@ export async function permanentDeleteProject(
   return result.length > 0;
 }
 
-/**
- * Find project with stats (counts of related entities)
- */
+const projectListCounts = {
+  conversationsCount: sql<number>`(select count(*)::int from ${conversations} where ${eq(conversations.projectId, projects.projectId)})`,
+  commitsCount: sql<number>`(select count(*)::int from ${transitionCommits} where ${eq(transitionCommits.projectId, projects.projectId)})`,
+  branchesCount: sql<number>`(select count(*)::int from ${branches} where ${eq(branches.projectId, projects.projectId)})`,
+  outputsCount: sql<number>`(select count(*)::int from ${leaves} where ${and(eq(leaves.projectId, projects.projectId), isNotNull(leaves.generatedAt))})`,
+};
+
+/** Read counts for the authorized page in one database round trip. */
+export async function findProjectListCounts(db: AnyDB, projectIds: string[]) {
+  const rows = projectIds.length
+    ? await db
+        .select({ projectId: projects.projectId, ...projectListCounts })
+        .from(projects)
+        .where(inArray(projects.projectId, projectIds))
+    : [];
+  return new Map(rows.map(({ projectId, ...counts }) => [projectId, counts]));
+}
+
 export async function findProjectWithStats(
   db: AnyDB,
   projectId: string
 ): Promise<ProjectWithStats | null> {
-  const project = await findProjectById(db, projectId);
-  if (!project) return null;
-
-  // Get counts for all related entities
-  const [convCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(conversations)
-    .where(eq(conversations.projectId, projectId));
-
-  const [turnCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(turns)
-    .where(eq(turns.projectId, projectId));
-
-  const [commitCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(transitionCommits)
-    .where(eq(transitionCommits.projectId, projectId));
-
-  const [branchCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(branches)
-    .where(eq(branches.projectId, projectId));
-
-  const [draftCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(agentDrafts)
-    .where(eq(agentDrafts.projectId, projectId));
-
-  return {
-    ...project,
-    stats: {
-      conversationsCount: Number(convCount?.count ?? 0),
-      turnsCount: Number(turnCount?.count ?? 0),
-      commitsCount: Number(commitCount?.count ?? 0),
-      branchesCount: Number(branchCount?.count ?? 0),
-      draftsCount: Number(draftCount?.count ?? 0),
-    },
-  };
+  const [project] = await db
+    .select({
+      ...getTableColumns(projects),
+      stats: {
+        ...projectListCounts,
+        turnsCount: sql<number>`(select count(*)::int from ${turns} where ${eq(turns.projectId, projects.projectId)})`,
+        draftsCount: sql<number>`(select count(*)::int from ${agentDrafts} where ${eq(agentDrafts.projectId, projects.projectId)})`,
+      },
+    })
+    .from(projects)
+    .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+    .limit(1);
+  return project ?? null;
 }
