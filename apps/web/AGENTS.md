@@ -8,6 +8,8 @@ point; detailed contracts live in `docs/`.
 - Read the relevant sections of [architecture](docs/architecture.md) before
   changing module responsibilities or data flow, and [business contracts](docs/business.md)
   before changing State, Schema or Workspace behavior.
+- Use the [design principles](docs/design.md) when making or reviewing decisions
+  about page structure, interaction, visual hierarchy, or accessibility.
 - **Applies when** a WebUI task needs changes across packages or layers.
   - **Action** Use the task authorization to determine what can change and the
     owning contracts to determine where it belongs. Make authorized changes in
