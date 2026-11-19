@@ -289,6 +289,7 @@ export {
 export {
   findNamespaceMembershipForPrincipal,
   findProjectAuthorityFacts,
+  findProjectsAuthorityFacts,
   type StoredAuthorityPrincipal,
   type StoredPrincipalKind,
   type StoredProjectAuthorityFacts,
@@ -353,6 +354,7 @@ export {
   deleteProject,
   findProjectById,
   findProjectByIdIncludingDeleted,
+  findProjectListCounts,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,
@@ -714,6 +716,7 @@ export {
   type ListProjectYSchemaVersionHistoryOptions,
   type ListYSchemaArtifactsOptions,
   listProjectYSchemaVersionHistory,
+  listPublicYSchemaArtifactVersionRefs,
   listYSchemaArtifactVersions,
   type PublishYSchemaArtifactVersionInput,
   publishYSchemaArtifactVersion,

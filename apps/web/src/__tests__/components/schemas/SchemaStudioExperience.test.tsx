@@ -45,12 +45,15 @@ const mocks = vi.hoisted(() => ({
   previewResult: undefined as ((input: unknown) => unknown) | undefined,
   pendingSchema: { status: 'none', pending: null } as unknown,
   pathname: '/team/project/schemas',
+  pendingSchemaLoading: false,
+  readPendingSchema: vi.fn(),
   query: 'candidate=provider',
   candidatesLoading: false,
   restoredSources: [] as StudioCandidate[],
   restoreSource: vi.fn(),
   branches: [] as string[],
   branchesError: null as string | null,
+  branchesLoading: false,
   refreshBranches: vi.fn(),
   workspacesLoading: false,
   workspacesError: null as string | null,
@@ -166,7 +169,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branchHeads: {},
     branches: mocks.branches,
     error: mocks.branchesError,
-    loading: false,
+    loading: mocks.branchesLoading,
     refresh: mocks.refreshBranches,
     create: mocks.createBranch,
   }),
@@ -205,11 +208,14 @@ vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
   }),
 }));
 vi.mock('@/hooks/schemas/useWorkspaceSchemaPending', () => ({
-  useWorkspaceSchemaPending: () => ({
-    data: mocks.pendingSchema,
-    loading: false,
-    refresh: vi.fn(),
-  }),
+  useWorkspaceSchemaPending: (...args: unknown[]) => {
+    mocks.readPendingSchema(...args);
+    return {
+      data: mocks.pendingSchema,
+      loading: mocks.pendingSchemaLoading,
+      refresh: vi.fn(),
+    };
+  },
 }));
 beforeEach(() => {
   mocks.draftLoading = false;
@@ -261,6 +267,8 @@ beforeEach(() => {
   mocks.saveSchemaEdit.mockReset();
   mocks.schemaEditCandidate = null;
   mocks.pendingSchema = { status: 'none', pending: null };
+  mocks.pendingSchemaLoading = false;
+  mocks.readPendingSchema.mockReset();
   mocks.previewInputs = [];
   mocks.saveDraft.mockResolvedValue({});
   mocks.saveSchemaEdit.mockImplementation(async (input) => ({
@@ -274,6 +282,7 @@ beforeEach(() => {
     },
   }));
   mocks.branchesError = null;
+  mocks.branchesLoading = false;
   mocks.branches = [];
   mocks.workspacesLoading = false;
   mocks.workspacesError = null;
@@ -1355,6 +1364,63 @@ it('uses the resolved branch target in outbound links without expanding the Stud
   openSources();
   expect(screen.getByRole('button', { name: 'Import schema…' })).toBeVisible();
   closeSources();
+});
+
+it('opens an exact saved branch Workspace while branch options and unused sources are loading', async () => {
+  mocks.query = 'branch=main';
+  mocks.workspaces = [{ ...boundWorkspace(), schemaBindings: [] }];
+  mocks.branchesLoading = true;
+  mocks.candidatesLoading = true;
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(await screen.findByText('This workspace has no schema')).toBeVisible();
+  expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeDisabled();
+});
+
+it('starts the default saved Workspace read while a known branch list is refreshing', async () => {
+  const main = { ...boundWorkspace(), schemaBindings: [] };
+  mocks.query = '';
+  mocks.branches = ['main', 'feature'];
+  mocks.branchesLoading = true;
+  mocks.workspaces = [main, { ...main, id: 'feature-draft', targetBranch: 'feature' }];
+  mocks.pendingSchemaLoading = true;
+  const { rerender } = render(<SchemaStudioExperience projectId="p" />);
+
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision);
+  expect(screen.getByText('Loading Schema definition…')).toBeVisible();
+
+  mocks.pendingSchemaLoading = false;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(await screen.findByText('This workspace has no schema')).toBeVisible();
+  expect(screen.getByRole('button', { name: /Switch branches\/tags/ })).toBeDisabled();
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
+
+  mocks.branches = ['feature', 'main'];
+  mocks.branchesLoading = false;
+  rerender(<SchemaStudioExperience projectId="p" />);
+  expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
+  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith('p', 'feature-draft', main.revision);
+});
+
+it.each([
+  'empty inventory',
+  'missing saved default',
+  'failed inventory',
+] as const)('waits for the branch list before selecting a default when there is %s', (state) => {
+  const feature = { ...boundWorkspace(), id: 'feature-draft', targetBranch: 'feature' };
+  mocks.query = '';
+  mocks.branches = state === 'empty inventory' ? [] : ['main', 'feature'];
+  mocks.branchesLoading = true;
+  mocks.branchesError = state === 'failed inventory' ? 'Offline' : null;
+  mocks.workspaces = state === 'missing saved default' ? [feature] : [boundWorkspace(), feature];
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined);
+  expect(mocks.readPendingSchema.mock.calls.every(([, workspaceId]) => workspaceId === '')).toBe(
+    true
+  );
+  expect(mocks.saveDraft).not.toHaveBeenCalled();
 });
 
 it('removes the old Studio view flag without changing the explicit Workspace', () => {

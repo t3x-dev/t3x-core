@@ -1,16 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { notFound, useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { notFound, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useContext, useEffect } from 'react';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
-import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { parseProjectTab, resolveProjectRouteTab } from '@/components/project/projectTabModel';
 import { RepositoryNestedPage } from '@/components/project/RepositoryNestedPage';
+import {
+  RepositoryAddressContext,
+  useRepositoryBranches,
+  useRepositoryRouteParams,
+} from '@/components/project/RepositoryRouteContext';
 import { Button } from '@/components/ui/button';
 import { numberedRepositoryObject, repositoryObjectHref } from '@/domain/project/objectLocation';
 import { getProjectIdRepoPath, repositoryBranchRoute } from '@/domain/project/repoPath';
@@ -19,23 +23,13 @@ import {
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
-import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { useRepositoryObjectAddress } from '@/hooks/projects/useRepositoryObjectAddress';
-import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectStore } from '@/store/projectStore';
 import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 function OwnerRepoProjectPageContent() {
-  const params = useParams<{ owner: string; repoPath?: string[] }>();
+  const { owner, segments, creating, organizationSettings } = useRepositoryRouteParams();
   const pathname = usePathname();
-  const owner = params.owner;
-  const segments = params.repoPath ?? [];
-  const name = segments[0] ?? '';
-  const directory = !name;
-  const creating = name.toLowerCase() === 'new' && segments.length === 1;
-  const organizationSettings =
-    owner.toLowerCase() === 't3x-dev' && name.toLowerCase() === 'settings' && segments.length === 1;
-  const special = directory || creating || organizationSettings;
   const router = useRouter();
   // Preserve the URL's encoded suffix: encoding route params again can turn
   // %3A into %253A on every canonical redirect and prevent the route from settling.
@@ -48,7 +42,7 @@ function OwnerRepoProjectPageContent() {
       state.projects.find((project) => project.canonical_path === repositoryPath)
   );
   const branchRoute = repositoryBranchRoute(suffix);
-  const pageSegments = branchRoute ? segments.slice(3) : segments.slice(1);
+  const pageSegments = branchRoute ? segments.slice(2) : segments;
   const routeBranch = branchRoute?.branch ?? null;
   const numbered = numberedRepositoryObject(suffix);
   const view =
@@ -58,7 +52,7 @@ function OwnerRepoProjectPageContent() {
         ? 'state'
         : (pageSegments[0] ?? 'state');
   const query = useSearchParams().toString();
-  const { current, retry } = useRepositoryAddress(owner, name, !special);
+  const { current, retry } = useContext(RepositoryAddressContext);
   const address = current?.address;
   const invalidBranch =
     !branchRoute && ['.', '..'].includes(new URLSearchParams(query).get('branch')?.trim() ?? '');
@@ -70,7 +64,7 @@ function OwnerRepoProjectPageContent() {
     (!numbered && legacyView === 'state' && !search.get('commit')
       ? search.get('branch')?.trim() || 'main'
       : null);
-  const branches = useBranches(
+  const branches = useRepositoryBranches(
     address?.project_id ?? null,
     Boolean(supported && branchForPage && address)
   );
@@ -122,14 +116,12 @@ function OwnerRepoProjectPageContent() {
     router.replace(`${target}${window.location.hash}`, { scroll: false });
   }, [address, canonicalizing, repositoryPath, router, suffix, target]);
 
-  if (!special && isRetiredRepositoryLocation(suffix, new URLSearchParams(query))) notFound();
-  if (directory) return <ProjectDirectoryPage ownerSlug={owner} />;
   if (creating) return <NewRepositoryPage />;
   if (organizationSettings) return <OrganizationSettingsPage ownerSlug={owner} />;
+  if (isRetiredRepositoryLocation(suffix, search)) notFound();
   if (!current || canonicalizing || resolvingExactObject) {
     const loading = <LoadingSpinner message="Loading repository..." />;
-    // Keep only the known header during navigation; repository content still
-    // waits for a fresh address lookup and its access checks.
+    // The known header can render while the repository layout resolves access.
     return knownProject ? (
       <ProjectShell
         activeTab={resolveProjectRouteTab(
@@ -175,16 +167,15 @@ function OwnerRepoProjectPageContent() {
     );
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
-  if (branchForPage) {
+  if (branchForPage && !branches.branches.includes(branchForPage)) {
     if (branches.loading) return <LoadingSpinner message="Loading branch…" />;
     if (branches.error)
       return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
-    if (!branches.branches.includes(branchForPage))
-      return (
-        <p role="alert" className="p-6">
-          Branch {branchForPage} was not found in this repository.
-        </p>
-      );
+    return (
+      <p role="alert" className="p-6">
+        Branch {branchForPage} was not found in this repository.
+      </p>
+    );
   }
   if (numbered && object.isLoading)
     return <LoadingSpinner message="Loading repository object..." />;

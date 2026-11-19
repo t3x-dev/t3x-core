@@ -1033,7 +1033,7 @@ describe('ProjectReviewsTab', () => {
       ...blockedPullRequestDetail,
       status: 'ready',
     });
-    pullRequestApi.fetchMergeReview.mockResolvedValue({
+    const savedReview = {
       ...conflictReview,
       decisions: {
         conflictResolutions: { 'candidate/product': 'source', 'candidate/requirements': 'source' },
@@ -1042,25 +1042,48 @@ describe('ProjectReviewsTab', () => {
         keepRelationsFromSource: true,
         keepRelationsFromTarget: true,
       },
-    });
+    };
+    let finishComparison!: () => void;
+    pullRequestApi.fetchMergeReview.mockReturnValue(
+      new Promise((resolve) => {
+        finishComparison = () => resolve(savedReview);
+      })
+    );
     pullRequestApi.saveMergeDecision.mockResolvedValue(1);
-    render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled());
+
+    await act(async () => {
+      render(<ProjectReviewsTab projectId="proj_real" initialPullRequestNumber={1} />);
+    });
+    const mergeButton = () => screen.getByRole('button', { name: 'Merge PR' });
     const header = within(
       screen.getByRole('heading', { name: blockedPullRequest.title }).closest('header')!
     );
-    expect(header.getByText('Ready to merge')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset', exact: true }));
-    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
-    expect(header.queryByText('Ready to merge')).not.toBeInTheDocument();
-    expect(header.getByText('Needs decision')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Keep main', exact: true }));
     expect(header.getByText('Checks running')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge PR' })).toBeEnabled());
+    expect(mergeButton()).toBeDisabled();
+
+    await act(async () => finishComparison());
+    expect(mergeButton()).toBeEnabled();
     expect(header.getByText('Ready to merge')).toBeVisible();
-    expect(pullRequestApi.mergePullRequest).not.toHaveBeenCalled();
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reset', exact: true }));
+      expect(mergeButton()).toBeDisabled();
+      expect(header.queryByText('Ready to merge')).not.toBeInTheDocument();
+      expect(header.getByText('Needs decision')).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep main', exact: true }));
+      expect(header.getByText('Checks running')).toBeVisible();
+      expect(mergeButton()).toBeDisabled();
+
+      await act(async () => vi.runOnlyPendingTimersAsync());
+      expect(mergeButton()).toBeEnabled();
+      expect(header.getByText('Ready to merge')).toBeVisible();
+      expect(pullRequestApi.saveMergeDecision).toHaveBeenCalledTimes(1);
+      expect(pullRequestApi.mergePullRequest).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('uses the actual merge comparison for Overview and exposes each check status', async () => {

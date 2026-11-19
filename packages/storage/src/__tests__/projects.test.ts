@@ -8,10 +8,12 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertAgentDraft } from '../queries/agent-drafts';
+import { createLeaf } from '../queries/leaves';
 import {
   deleteProject,
   findProjectById,
   findProjectByIdIncludingDeleted,
+  findProjectListCounts,
   findProjects,
   findProjectWithStats,
   insertProject,
@@ -323,6 +325,7 @@ describe('Projects Storage', () => {
         commitsCount: 0,
         branchesCount: 0,
         draftsCount: 0,
+        outputsCount: 0,
       });
     });
 
@@ -339,6 +342,12 @@ describe('Projects Storage', () => {
         llmConfig: { provider: 'test', model: 'test' },
         text: 'Draft text',
       });
+      await createLeaf(db, {
+        commit_hash: seeded.leaf!.commit_hash,
+        project_id: projectId,
+        title: 'Pending output',
+        type: seeded.leaf!.type,
+      });
 
       const result = await findProjectWithStats(db, projectId);
 
@@ -348,6 +357,22 @@ describe('Projects Storage', () => {
       expect(result!.stats.branchesCount).toBe(1);
       expect(result!.stats.draftsCount).toBe(1);
       expect(result!.stats.commitsCount).toBe(1);
+      expect(result!.stats.outputsCount).toBe(1);
+
+      const other = await insertProject(db, testData.project({ name: 'Other project' }));
+      const counts = await findProjectListCounts(db, [projectId, other.projectId]);
+      expect(counts.get(projectId)).toMatchObject({
+        conversationsCount: 1,
+        commitsCount: 1,
+        branchesCount: 1,
+        outputsCount: 1,
+      });
+      expect(counts.get(other.projectId)).toEqual({
+        conversationsCount: 0,
+        commitsCount: 0,
+        branchesCount: 0,
+        outputsCount: 0,
+      });
     });
   });
 });

@@ -7,10 +7,12 @@ import {
   updateYSchemaArtifactIdentity,
   upsertYSchemaArtifactVersion,
 } from '@t3x-dev/storage';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { yschemaArtifacts, yschemaArtifactVersions } from '../../../storage/src/schema';
+import { getDB } from '../lib/db';
+import * as registry from '../lib/yschema-artifact-registry';
 import { setupTestDB, testData } from './setup';
 
 let db: AnyDB;
@@ -82,6 +84,7 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
+  expect(await registry.ensureBuiltInYSchemaArtifacts(db)).toBeGreaterThan(0);
   projectId = (
     await insertProject(db, {
       ...testData.project({ name: 'Catalog owner' }),
@@ -124,6 +127,20 @@ async function page(query = '', project?: string) {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   return SchemaCatalogPageSchema.parse((await response.json()).data);
 }
+it('seeds once and serves public and project catalogs without registry initialization', async () => {
+  expect(await registry.ensureBuiltInYSchemaArtifacts(db)).toBe(0);
+  const initialize = vi.spyOn(registry, 'ensureBuiltInYSchemaArtifacts');
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      vi.mocked(getDB).mockResolvedValueOnce(tx).mockResolvedValueOnce(tx);
+      await Promise.all([page(), page('', projectId)]);
+    });
+    expect(initialize).not.toHaveBeenCalled();
+  } finally {
+    initialize.mockRestore();
+  }
+});
 it('returns only visible, active-identity published releases, without manifests or draft versions', async () => {
   const result = await page();
   expect(result.items.map((item) => item.identity.canonicalName).sort()).toEqual([

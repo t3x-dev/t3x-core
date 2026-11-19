@@ -235,6 +235,9 @@ export async function deleteBranch(
  * Ensure main branch exists for project
  */
 export async function ensureMainBranch(db: AnyDB, projectId: string): Promise<Branch> {
+  const main = await findBranchByName(db, projectId, 'main');
+  if (main) return main;
+
   return db.transaction(async (tx) => {
     const transactionDB = tx as AnyDB;
     const existing = await findBranchByName(transactionDB, projectId, 'main');

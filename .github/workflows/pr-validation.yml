@@ -82,6 +82,8 @@ jobs:
 
       - name: Typecheck production sources
         run: pnpm typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Check release surface
         run: pnpm check:release-surface
@@ -97,6 +99,8 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Run authenticated security smoke
         env:

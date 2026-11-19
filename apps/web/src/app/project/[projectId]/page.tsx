@@ -337,7 +337,11 @@ export function ProjectDetailPageContent({
             setProjectLookupError(null);
             setFetchedProject(null);
             void fetchProject(projectId)
-              .then((detail) => setFetchedProject(apiProjectToSummary(detail)))
+              .then((detail) => {
+                const summary = apiProjectToSummary(detail);
+                setFetchedProject(summary);
+                useProjectStore.getState().cacheProject(summary);
+              })
               .catch((err) =>
                 setProjectLookupError(err instanceof Error ? err : new Error(String(err)))
               )
@@ -349,7 +353,7 @@ export function ProjectDetailPageContent({
   }
 
   // Show not-found page only when a single-project lookup confirms it.
-  if (!project) {
+  if (!project || (projectLookupError && isNotFoundError(projectLookupError))) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
         <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">

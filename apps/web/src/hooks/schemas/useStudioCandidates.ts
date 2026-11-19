@@ -14,20 +14,36 @@ export function useStudioCandidates(projectId: string) {
   }>();
   const [pending, setPending] = useState(false);
   const epoch = useRef(0);
-  const refresh = useCallback(async () => {
-    const current = epoch.current;
-    try {
-      const items = await listStudioCandidates(projectId);
-      if (epoch.current === current) setResult({ projectId, items });
-    } catch (error) {
-      if (epoch.current === current)
-        setResult({
-          projectId,
-          items: [],
-          error: error instanceof Error ? error.message : 'Studio unavailable',
+  const read = useRef<{ epoch: number; promise: Promise<void> } | null>(null);
+  const load = useCallback(
+    (afterWrite: boolean) => {
+      const current = epoch.current;
+      if (!afterWrite && read.current?.epoch === current) return read.current.promise;
+
+      const request = listStudioCandidates(projectId)
+        .then(
+          (items) => {
+            if (epoch.current === current && read.current?.promise === request)
+              setResult({ projectId, items });
+          },
+          (error: unknown) => {
+            if (epoch.current === current && read.current?.promise === request)
+              setResult({
+                projectId,
+                items: [],
+                error: error instanceof Error ? error.message : 'Studio unavailable',
+              });
+          }
+        )
+        .finally(() => {
+          if (read.current?.promise === request) read.current = null;
         });
-    }
-  }, [projectId]);
+      read.current = { epoch: current, promise: request };
+      return request;
+    },
+    [projectId]
+  );
+  const refresh = useCallback(() => load(false), [load]);
   useEffect(() => {
     ++epoch.current;
     setResult(undefined);
@@ -40,10 +56,8 @@ export function useStudioCandidates(projectId: string) {
   useEffect(() => {
     const reload = () => void refresh();
     window.addEventListener('focus', reload);
-    window.addEventListener('t3x-schema-candidate-updated', reload);
     return () => {
       window.removeEventListener('focus', reload);
-      window.removeEventListener('t3x-schema-candidate-updated', reload);
     };
   }, [refresh]);
   async function mutate<T>(action: () => Promise<T>) {
@@ -52,7 +66,7 @@ export function useStudioCandidates(projectId: string) {
     try {
       const value = await action();
       if (epoch.current !== current) return undefined;
-      await refresh();
+      await load(true);
       return epoch.current === current ? value : undefined;
     } finally {
       if (epoch.current === current) setPending(false);

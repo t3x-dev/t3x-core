@@ -71,10 +71,8 @@
   background: var(--state-control-bg, var(--surface-card));
   color: var(--text-primary);
 }
-[data-state-view]:not([data-state-view="canvas"]) .branch.branch.branch:is(
-    :hover:not(:disabled),
-    [data-state="open"]
-  ) {
+[data-state-view]:not([data-state-view="canvas"])
+  .branch.branch.branch:is(:hover:not(:disabled), [data-state="open"]) {
   background: var(--state-control-hover, var(--hover-bg));
 }
 [data-state-view]:not([data-state-view="canvas"]) .branch.branch.branch:focus-visible {

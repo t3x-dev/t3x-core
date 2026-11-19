@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -53,8 +54,6 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
-import { useBranches } from '@/hooks/shared/useBranches';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import type { SchemaSaveState } from '@/types/schemas';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
@@ -200,8 +199,7 @@ export function SchemaStudioExperience({
   const pathname = usePathname();
   const repositoryPath = getCanonicalRepositoryPath(pathname);
   const candidates = useStudioCandidates(projectId);
-  const workspaces = useProjectWorkspaces(projectId);
-  const projectBranches = useBranches(projectId, true);
+  const { branches: projectBranches, workspaces } = useRepositoryViewData(projectId);
   const { saveDraft } = useWorkspaceFlow();
   const [workspaceSetupFailures, setWorkspaceSetupFailures] = useState<{
     scope: object;
@@ -330,14 +328,32 @@ export function SchemaStudioExperience({
       ),
     [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
   );
-  const targetsReady =
-    !workspaces.loading && !workspaces.error && !projectBranches.loading && !projectBranches.error;
+  const workspacesReady = !workspaces.loading && !workspaces.error;
+  const targetsReady = workspacesReady && !projectBranches.loading && !projectBranches.error;
   const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
   const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
+  const explicitBranchWorkspace =
+    requestedBranch && workspacesReady
+      ? resolveStudioWorkspaceId(workspaces.workspaces, '', requestedBranch)
+      : '';
+  const defaultWorkspaceId = resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch);
+  // A branch refresh retains the previous inventory. Reuse its saved draft while
+  // keeping initial discovery and creation dependent on a completed branch read.
+  const canReuseSavedDraft =
+    !requestedBranch &&
+    workspacesReady &&
+    projectBranches.loading &&
+    !projectBranches.error &&
+    projectBranches.branches.length > 0 &&
+    workspaces.workspaces.some(
+      ({ id, status }) => id === defaultWorkspaceId && status !== 'committed'
+    );
+  const defaultReady = targetsReady || canReuseSavedDraft;
   const workspaceId =
     requestedWorkspaceId ||
     pinned?.id ||
-    (targetsReady ? resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch) : '');
+    explicitBranchWorkspace ||
+    (defaultReady ? defaultWorkspaceId : '');
   const selectedTarget =
     draftWorkspaces.find((item) => item.id === workspaceId) ??
     workspaces.workspaces.find((item) => item.id === workspaceId);
@@ -364,10 +380,10 @@ export function SchemaStudioExperience({
   const invalidTarget = Boolean(targetMismatch || (workspaceId && !selectedTarget));
   const targetCommitted = target?.status === 'committed';
   useEffect(() => {
-    if (!requestedWorkspaceId && !pinned && targetsReady && target) {
+    if (!requestedWorkspaceId && !pinned && defaultReady && target) {
       setImplicitTarget({ scope: implicitScope, id: target.id, branch: target.targetBranch });
     }
-  }, [implicitScope, pinned, requestedWorkspaceId, target, targetsReady]);
+  }, [defaultReady, implicitScope, pinned, requestedWorkspaceId, target]);
   const setupBranch =
     requestedBranch || target?.targetBranch || pinned?.branch || projectBranches.branches[0];
   const setupKey = JSON.stringify([projectId, setupBranch]);
@@ -486,6 +502,10 @@ export function SchemaStudioExperience({
     !!currentBinding?.schemaHash &&
     schemaEdit.candidate?.authoringDraft?.base?.kind === 'composition' &&
     schemaEdit.candidate.authoringDraft.base.schemaHash === currentBinding.schemaHash;
+  const needsCandidateSources = Boolean(
+    schemaEdit.candidate?.baseSources?.length && !savedEditIsApplied && !savedEditUsesBinding
+  );
+  const definitionNeedsCandidates = needsCandidateSources || selection.length > 0;
   const recoveredCandidateKey = schemaEdit.candidate
     ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
     : schemaEdit.loading
@@ -561,7 +581,7 @@ export function SchemaStudioExperience({
   useEffect(() => {
     if (
       !persistedTarget ||
-      candidates.loading ||
+      (needsCandidateSources && candidates.loading) ||
       schemaEdit.loading ||
       pendingSchema.loading ||
       recoveredSelection.current === recoveryKey
@@ -589,6 +609,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     schemaEdit.candidate,
     schemaEdit.loading,
     pendingSchema.data,
@@ -600,7 +621,13 @@ export function SchemaStudioExperience({
     savedEditUsesBinding,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current || definitionOpen) return;
+    if (
+      schemaEdit.loading ||
+      (needsCandidateSources && candidates.loading) ||
+      dataDirtyRef.current ||
+      definitionOpen
+    )
+      return;
     if (recoveredEditIdentity === editIdentity) return;
     if (savedEditIsApplied || savedEditUsesBinding) setSelection([]);
     else if (schemaEdit.candidate?.baseSources?.length) {
@@ -640,6 +667,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     editIdentity,
     projectId,
     recoveredCandidateKey,
@@ -1495,17 +1523,17 @@ export function SchemaStudioExperience({
               pending={applying}
               loading={
                 workspaces.loading ||
-                projectBranches.loading ||
+                (!persistedTarget && projectBranches.loading) ||
                 pendingSchema.loading ||
                 preview.loading ||
                 schemaEdit.loading ||
-                candidates.loading
+                (definitionNeedsCandidates && candidates.loading)
               }
               previewError={
                 workspaces.error ||
                 recoveryError ||
                 schemaEdit.error ||
-                candidates.error ||
+                (definitionNeedsCandidates && candidates.error) ||
                 preview.error
               }
               previewErrorAction={

@@ -25,6 +25,7 @@ import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspec
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
@@ -92,10 +93,8 @@ import {
 } from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
-import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceCommitChanges } from '@/hooks/workspaces/useWorkspaceCommitChanges';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
@@ -111,8 +110,8 @@ import {
   stateStructureValueTypographyClass,
 } from './StateFieldTable';
 import inspectionStyles from './StateInspection.module.css';
-import frameStyles from './StatePageFrame.module.css';
 import { StatePageFrame } from './StatePageFrame';
+import frameStyles from './StatePageFrame.module.css';
 import { StatePageToolbar } from './StatePageToolbar';
 
 export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
@@ -248,7 +247,10 @@ export function ProjectStateTab({
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
   const [freshnessChecking, setFreshnessChecking] = useState(false);
+  const checkingFreshness = useRef(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const { branches: projectBranches, workspaces: projectWorkspaces } =
+    useRepositoryViewData(projectId);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -256,8 +258,7 @@ export function ProjectStateTab({
     loading: branchesLoading,
     error: branchesError,
     refresh,
-  } = useBranches(projectId, true);
-  const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  } = projectBranches;
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -646,21 +647,24 @@ export function ProjectStateTab({
     ]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
+    if (branchesLoading || checkingFreshness.current) return;
+    checkingFreshness.current = true;
     setFreshnessChecking(true);
     try {
       await refresh();
     } finally {
+      checkingFreshness.current = false;
       setLastCheckedAt(new Date());
       setFreshnessChecking(false);
     }
-  }, [refresh]);
+  }, [branchesLoading, refresh]);
 
   useEffect(() => {
     setDismissedHeadHash(null);
     setLastCheckedAt(null);
-    const initialCheck = window.setTimeout(() => {
-      void checkCurrentBranchForUpdates();
-    }, 1100);
+  }, [branchFocus]);
+
+  useEffect(() => {
     const handleFocus = () => {
       void checkCurrentBranchForUpdates();
     };
@@ -670,11 +674,10 @@ export function ProjectStateTab({
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.clearTimeout(initialCheck);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [inspectedBranch, checkCurrentBranchForUpdates]);
+  }, [checkCurrentBranchForUpdates]);
 
   const handleViewLatest = useCallback(() => {
     const latestHash = availableHeadHash ?? latestBranchHeadHash;
@@ -722,11 +725,12 @@ export function ProjectStateTab({
                 ? 'Validation evidence unavailable'
                 : 'No validation recorded'
         : stateReadinessLabel(validationReady);
-  const lastCheckedLabel = freshnessChecking
-    ? 'Checking…'
-    : lastCheckedAt
-      ? 'Just now'
-      : 'Not checked';
+  const lastCheckedLabel =
+    freshnessChecking || branchesLoading
+      ? 'Checking…'
+      : lastCheckedAt || !branchesError
+        ? 'Just now'
+        : 'Not checked';
   const statePanel = activeView === 'overview' ? 'overview' : 'structure';
   const branchBlocksState = Boolean(branchesError && snapshot.primaryError === branchesError);
   const stateLoadError = branchBlocksState
@@ -802,10 +806,7 @@ export function ProjectStateTab({
                           View latest
                         </button>
                         {historicalReturnHref ? (
-                          <Link
-                            href={historicalReturnHref}
-                            className="text-[var(--accent-commit)]"
-                          >
+                          <Link href={historicalReturnHref} className="text-[var(--accent-commit)]">
                             Back to previous page
                           </Link>
                         ) : null}
@@ -825,8 +826,7 @@ export function ProjectStateTab({
                   <div className="sr-only">
                     <span>{readinessLabel}</span>
                     <span>
-                      {inspectedBranch} · pinned{' '}
-                      {headCommit ? shortHash(headCommit.hash) : 'empty'}
+                      {inspectedBranch} · pinned {headCommit ? shortHash(headCommit.hash) : 'empty'}
                     </span>
                     <span>{lastCheckedLabel}</span>
                     <span>{schemaName}</span>

@@ -70,7 +70,9 @@
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  transition: background-color var(--duration-fast), color var(--duration-fast);
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
 }
 .actions > :is(a, button):not(.primary, :disabled):hover {
   background: var(--state-control-hover, var(--hover-bg));
@@ -132,7 +134,9 @@
   border-bottom: 2px solid transparent;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--text-secondary);
-  transition: background-color var(--duration-fast), color var(--duration-fast);
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
 }
 .viewTabs button:hover {
   background: var(--state-control-bg, var(--hover-bg));
