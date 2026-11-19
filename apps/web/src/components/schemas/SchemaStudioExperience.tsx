@@ -313,19 +313,32 @@ export function SchemaStudioExperience({
       ),
     [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
   );
-  const targetsReady =
-    !workspaces.loading && !workspaces.error && !projectBranches.loading && !projectBranches.error;
+  const workspacesReady = !workspaces.loading && !workspaces.error;
+  const targetsReady = workspacesReady && !projectBranches.loading && !projectBranches.error;
   const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
   const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
   const explicitBranchWorkspace =
-    requestedBranch && !workspaces.loading && !workspaces.error
+    requestedBranch && workspacesReady
       ? resolveStudioWorkspaceId(workspaces.workspaces, '', requestedBranch)
       : '';
+  const defaultWorkspaceId = resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch);
+  // A branch refresh retains the previous inventory. Reuse its saved draft while
+  // keeping initial discovery and creation dependent on a completed branch read.
+  const canReuseSavedDraft =
+    !requestedBranch &&
+    workspacesReady &&
+    projectBranches.loading &&
+    !projectBranches.error &&
+    projectBranches.branches.length > 0 &&
+    workspaces.workspaces.some(
+      ({ id, status }) => id === defaultWorkspaceId && status !== 'committed'
+    );
+  const defaultReady = targetsReady || canReuseSavedDraft;
   const workspaceId =
     requestedWorkspaceId ||
     pinned?.id ||
     explicitBranchWorkspace ||
-    (targetsReady ? resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch) : '');
+    (defaultReady ? defaultWorkspaceId : '');
   const selectedTarget =
     draftWorkspaces.find((item) => item.id === workspaceId) ??
     workspaces.workspaces.find((item) => item.id === workspaceId);
@@ -336,10 +349,10 @@ export function SchemaStudioExperience({
   const invalidTarget = Boolean(targetMismatch || (workspaceId && !selectedTarget));
   const targetCommitted = target?.status === 'committed';
   useEffect(() => {
-    if (!requestedWorkspaceId && !pinned && targetsReady && target) {
+    if (!requestedWorkspaceId && !pinned && defaultReady && target) {
       setImplicitTarget({ scope: implicitScope, id: target.id, branch: target.targetBranch });
     }
-  }, [implicitScope, pinned, requestedWorkspaceId, target, targetsReady]);
+  }, [defaultReady, implicitScope, pinned, requestedWorkspaceId, target]);
   const setupBranch =
     requestedBranch || target?.targetBranch || pinned?.branch || projectBranches.branches[0];
   const setupKey = JSON.stringify([projectId, setupBranch]);
