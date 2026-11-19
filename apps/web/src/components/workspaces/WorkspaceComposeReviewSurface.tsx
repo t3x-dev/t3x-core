@@ -1266,7 +1266,7 @@ function ComposeSurface({
         <button
           type="button"
           onClick={() => {
-            setTurn(null);
+            setActivitySelection(null);
             setRightView('structure');
             setSidePanel('chat');
             setDraftSubject('schema');
