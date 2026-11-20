@@ -1,3 +1,4 @@
+import { cleanupProject, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 import { isExpectedConsoleError } from '../fixtures/test-data-factory';
 
@@ -21,13 +22,14 @@ test.describe('Error Scenarios', () => {
   });
 
   // ES-02: Invalid conversation ID shows error
-  test('ES-02: Invalid conversation shows error', async ({ page }) => {
-    await page.goto('/project/proj_invalid/conversation/conv_invalid');
-
-    const errorMsg = page
-      .locator('text=/not found|error|404/i')
-      .or(page.locator('text=Project not found'));
-    await expect(errorMsg.first()).toBeVisible({ timeout: 15000 });
+  test('ES-02: Invalid conversation shows error', async ({ page, request }) => {
+    const { projectId } = await createTestProject(request, `Missing-source-${Date.now()}`);
+    try {
+      await page.goto(`/project/${projectId}/sources/conversations/conv_invalid`);
+      await expect(page.getByText('This conversation is no longer available.')).toBeVisible();
+    } finally {
+      await cleanupProject(request, projectId);
+    }
   });
 
   // ES-03: Retired Leaf routes show not found

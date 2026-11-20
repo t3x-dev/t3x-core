@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
+import { finishSchemaReview } from '../fixtures/schema-review';
 import { expect, test } from '../fixtures/test';
 
 test('no-AI definition adoption, native repair, reviewed decision and exact Commit export', async ({ page, request }, testInfo) => {
@@ -22,13 +23,14 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
     await page.getByRole('searchbox', { name: 'Search projects and schemas' }).fill('Care checklist');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('button', { name: 'Explore Care checklist', exact: true }).click();
-    await expect(page).toHaveURL(/catalogName=t3x%2Fcare-checklist/);
+    await expect(page).toHaveURL(url => url.pathname === '/explore/schemas/t3x/care-checklist/1.0.0');
     await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
     await page.getByLabel('Destination project', { exact: true }).selectOption(projectId);
     await page.getByRole('button', { name: 'Add & open Studio', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ })).toBeEnabled();
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
     await expect(page.getByRole('region', { name: 'Workspace Review', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     const applied = (await (await request.get(endpoint)).json()).data.workspace;
@@ -78,13 +80,16 @@ test('no-AI definition adoption, native repair, reviewed decision and exact Comm
       await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
       const result = await response;
       expect(result.ok(), await result.text()).toBe(true);
-      await expect(page).toHaveURL(/reviewSnapshot=/);
-      const snapshotId = new URL(page.url()).searchParams.get('reviewSnapshot');
-      const snapshot = await request.get(`${endpoint}/transition/review-snapshots/${snapshotId}`);
-      expect(snapshot.ok()).toBe(true);
-      const snapshotDigest = (await snapshot.json()).data.snapshot_digest;
-      expect(snapshotDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+      await expect(page).toHaveURL(/\/reviews\/\d+(?:\?|$)/);
       const { view } = (await result.json()).data;
+      const snapshot = await request.get(`${endpoint}/transition/review-snapshots/latest`, {
+        params: { transition_id: view.transition_id },
+      });
+      expect(snapshot.ok(), await snapshot.text()).toBe(true);
+      const { snapshot_id: snapshotId, snapshot_digest: snapshotDigest, address_number: addressNumber } =
+        (await snapshot.json()).data;
+      expect(new URL(page.url()).pathname).toMatch(new RegExp(`/reviews/${addressNumber}$`));
+      expect(snapshotDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
       const { workspace_revision, ref_head, effect_digest, proposal_digest, statement_digests, policy_digest } = view.precondition;
       return { transition_id: view.transition_id, precondition: { workspace_revision, ref_head, effect_digest, proposal_digest, statement_digests, policy_digest: policy_digest ?? '' }, snapshotId, snapshotDigest };
     };

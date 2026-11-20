@@ -51,16 +51,16 @@ test.describe('authenticated browser boundaries', () => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/login\?callbackUrl=%2F$/);
 
-    await page.getByRole('button', { name: 'Register' }).click();
+    await page.getByRole('link', { name: 'Create account', exact: true }).click();
     await page.getByLabel('Username').fill(alice.username);
     await page.getByLabel('Password').fill(alice.password);
-    await page.getByLabel(/Display Name/).fill(alice.name);
+    await page.getByLabel(/Display name/).fill(alice.name);
 
     const registration = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/v1/auth/register') && response.request().method() === 'POST'
     );
-    await page.getByRole('button', { name: 'Create Account' }).click();
+    await page.getByRole('button', { name: 'Create account' }).click();
 
     const response = await registration;
     expect(response.status()).toBe(200);
@@ -165,18 +165,18 @@ test.describe('authenticated browser boundaries', () => {
     };
 
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Register' }).click();
+    await page.getByRole('link', { name: 'Create account', exact: true }).click();
     await page.getByLabel('Username').fill(identity.username);
     await page.getByLabel('Password').fill(identity.password);
-    await page.getByLabel(/Display Name/).fill(identity.name);
-    await page.getByRole('button', { name: 'Create Account' }).click();
+    await page.getByLabel(/Display name/).fill(identity.name);
+    await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page).toHaveURL('/onboarding/namespace');
 
     expect((await browserApi(page, 'POST', '/auth/logout')).status).toBe(200);
     await page.goto('/login');
     await page.getByLabel('Username').fill(identity.username.toUpperCase());
     await page.getByLabel('Password').fill(identity.password);
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect(page).toHaveURL('/onboarding/namespace');
     await expect.poll(() => readSessionKey(page)).toBeNull();
@@ -234,7 +234,7 @@ async function loginThroughBrowser(
   await page.goto('/login');
   await page.getByLabel('Username').fill(identity.username);
   await page.getByLabel('Password').fill(identity.password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page).toHaveURL(expectedDestination);
   await expect.poll(() => readSessionKey(page)).toBeNull();

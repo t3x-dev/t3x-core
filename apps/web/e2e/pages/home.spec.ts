@@ -44,7 +44,7 @@ test.describe('Home Page', () => {
     await expect(navigation).toBeVisible({ timeout: 15000 });
     await expect(navigation.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/settings/provider-credentials?owner=t3x-dev'
+      '/settings?namespace=t3x-dev&returnTo=%2F'
     );
     await expect(page.getByRole('link', { name: 'New repository', exact: true }).first()).toHaveAttribute(
       'href',
@@ -111,8 +111,8 @@ test.describe('Home Page', () => {
     const projectId = createdBody.data.project_id as string;
     projectIdsToCleanup.push(projectId);
 
-    await expect(page).toHaveURL(new RegExp(`/t3x-dev/${projectName}/workspaces\\?`));
-    await expect(page.getByRole('region', { name: 'Workspace detail' })).toBeVisible({
+    await expect(page).toHaveURL(`/t3x-dev/${projectName}?view=overview`);
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible({
       timeout: 15000,
     });
 
