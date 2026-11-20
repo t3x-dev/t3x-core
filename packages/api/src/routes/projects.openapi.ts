@@ -12,32 +12,29 @@ import {
   getModelInfo,
 } from '@t3x-dev/core';
 import {
-  branches,
   claimUnownedProjects,
-  conversations,
   DEFAULT_ORGANIZATION_NAMESPACE_SLUG,
   deleteProject,
   ensureMainBranch,
   findNamespaceBySlug,
   findPersonalNamespaceByOwner,
+  findProjectListDetails,
   findProjects,
   findProjectWithStats,
   findUnownedProjects,
   getBusinessRules,
   getRepositoryAddress,
   insertProject,
-  leaves,
   permanentDeleteProject,
   projects,
   putBusinessRules,
   repositoryPathError,
   restoreProject,
   seedDemoWorkspace,
-  transitionCommits,
   updateProject,
   verifyHashChain,
 } from '@t3x-dev/storage';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
@@ -48,9 +45,10 @@ import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
   assertProjectCreationAccess,
+  assertProjectReadWithEditPermission,
   getProjectListAuthority,
   getUserId,
-  listAuthorizedProjectActions,
+  listAuthorizedProjectActionsForPage,
 } from '../lib/project-access';
 import {
   getProjectLifecyclePolicy,
@@ -60,6 +58,7 @@ import {
 } from '../lib/project-lifecycle-policy';
 import { createPrdStarterContent } from '../lib/project-starter';
 import { projectMetadataFields } from '../lib/repository-profile';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import {
   commitRepositoryYOpsState,
   createRepositoryYOpsStateFromSemanticContent,
@@ -84,6 +83,7 @@ import {
   ProjectWithStatsSchema,
   UpdateProjectSchema,
 } from '../schemas/projects';
+import type { AppEnv } from '../types';
 
 export const projectRoutes = new OpenAPIHono();
 
@@ -173,65 +173,55 @@ const listProjectsRoute = createRoute({
 projectRoutes.openapi(listProjectsRoute, async (c) => {
   const { limit, offset, cursor, namespace: namespaceSlug, status } = c.req.valid('query');
 
-  // Shared helper: enrich a project row with counts
-  const enrichProject = async (
+  const enrichProjects = async (
     db: Awaited<ReturnType<typeof getDB>>,
-    p: {
+    page: {
       projectId: string;
-      namespaceId?: string | null;
       name: string;
       visibility: 'private' | 'unlisted' | 'public';
       createdAt: Date;
       deletedAt: Date | null;
       metadataJson: string | null;
-    }
+    }[]
   ) => {
-    const [convCountRow, commitCountRow, branchCountRow, outputCountRow] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(conversations)
-        .where(eq(conversations.projectId, p.projectId))
-        .then((rows) => rows[0]),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(transitionCommits)
-        .where(eq(transitionCommits.projectId, p.projectId))
-        .then((rows) => rows[0]),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(branches)
-        .where(eq(branches.projectId, p.projectId))
-        .then((rows) => rows[0]),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(leaves)
-        .where(and(eq(leaves.projectId, p.projectId), isNotNull(leaves.generatedAt)))
-        .then((rows) => rows[0]),
+    const projectIds = page.map((project) => project.projectId);
+    const [detailsById, actionsById] = await Promise.all([
+      timeRepositoryRead(c, 'list_metadata', () => findProjectListDetails(db, projectIds)),
+      timeRepositoryRead(c, 'list_permissions', () =>
+        listAuthorizedProjectActionsForPage(c, db, projectIds, {
+          includeDeleted: status === 'deleted',
+        })
+      ),
     ]);
-    const actions = await listAuthorizedProjectActions(c, db, p.projectId, {
-      includeDeleted: status === 'deleted',
+    return page.map((p) => {
+      const actions = actionsById.get(p.projectId) ?? [];
+      const { counts, address } = detailsById.get(p.projectId) ?? {};
+      return {
+        ...(address ?? {
+          namespace: null,
+          canonical_path: null,
+          path_status: 'pending_migration' as const,
+        }),
+        can_edit: actions.includes('project:edit'),
+        can_delete: actions.includes('project:delete'),
+        deleted_at: p.deletedAt?.toISOString() ?? null,
+        ...(status === 'deleted'
+          ? {
+              can_restore: actions.includes('project:restore'),
+              can_permanently_delete: actions.includes('project:delete'),
+            }
+          : {}),
+        project_id: p.projectId,
+        name: p.name,
+        visibility: p.visibility,
+        created_at: p.createdAt.toISOString(),
+        ...projectMetadataFields(p.metadataJson),
+        conversations_count: counts?.conversationsCount ?? 0,
+        commits_count: counts?.commitsCount ?? 0,
+        branches_count: counts?.branchesCount ?? 0,
+        outputs_count: counts?.outputsCount ?? 0,
+      };
     });
-    return {
-      ...(await getRepositoryAddress(db, p)),
-      can_edit: actions.includes('project:edit'),
-      can_delete: actions.includes('project:delete'),
-      deleted_at: p.deletedAt?.toISOString() ?? null,
-      ...(status === 'deleted'
-        ? {
-            can_restore: actions.includes('project:restore'),
-            can_permanently_delete: actions.includes('project:delete'),
-          }
-        : {}),
-      project_id: p.projectId,
-      name: p.name,
-      visibility: p.visibility,
-      created_at: p.createdAt.toISOString(),
-      ...projectMetadataFields(p.metadataJson),
-      conversations_count: Number(convCountRow?.count ?? 0),
-      commits_count: Number(commitCountRow?.count ?? 0),
-      branches_count: Number(branchCountRow?.count ?? 0),
-      outputs_count: Number(outputCountRow?.count ?? 0),
-    };
   };
 
   try {
@@ -241,12 +231,18 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     if (!authority && !isAuthenticationDisabled()) {
       return errorResponse(c, 'FORBIDDEN', 'Project access denied');
     }
-    const namespace = namespaceSlug ? await findNamespaceBySlug(db, namespaceSlug) : null;
+    const namespace = namespaceSlug
+      ? await timeRepositoryRead(c, 'namespace_lookup', () =>
+          findNamespaceBySlug(db, namespaceSlug)
+        )
+      : null;
     if (namespaceSlug && !namespace) {
       return errorResponse(c, 'NOT_FOUND', 'Namespace not found');
     }
     if (namespace) {
-      const denied = await assertNamespaceAccess(c, db, namespace, 'namespace:read');
+      const denied = await timeRepositoryRead(c, 'namespace_access', () =>
+        assertNamespaceAccess(c, db, namespace, 'namespace:read')
+      );
       if (denied) return denied;
     }
     if (status === 'active' && !namespaceSlug && !authority)
@@ -254,14 +250,16 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findProjects(db, {
-        status,
-        cursor,
-        limit,
-        authority,
-        namespace_id: namespace?.namespaceId,
-      });
-      const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
+      const result = await timeRepositoryRead(c, 'list_page', () =>
+        findProjects(db, {
+          status,
+          cursor,
+          limit,
+          authority,
+          namespace_id: namespace?.namespaceId,
+        })
+      );
+      const apiProjects = await enrichProjects(db, result.items);
       return c.json(
         {
           success: true as const,
@@ -277,16 +275,17 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const projects = await findProjects(db, {
-      status,
-      limit,
-      offset,
-      authority,
-      namespace_id: namespace?.namespaceId,
-    });
+    const projects = await timeRepositoryRead(c, 'list_page', () =>
+      findProjects(db, {
+        status,
+        limit,
+        offset,
+        authority,
+        namespace_id: namespace?.namespaceId,
+      })
+    );
 
-    // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
-    const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
+    const apiProjects = await enrichProjects(db, projects);
 
     return c.json(
       {
@@ -828,10 +827,18 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     const db = await getDB();
 
     // Access control check
-    const accessResult = await assertProjectAccess(c, db, id);
+    const checkedAccess = (c as Context<AppEnv>).get('repositoryReadAccess');
+    const accessResult =
+      checkedAccess?.projectId === id
+        ? checkedAccess
+        : await timeRepositoryRead(c, 'project_access', () =>
+            assertProjectReadWithEditPermission(c, db, id)
+          );
     if (accessResult instanceof Response) return accessResult;
 
-    const project = await findProjectWithStats(db, id);
+    const project = await timeRepositoryRead(c, 'project_details', () =>
+      findProjectWithStats(db, id)
+    );
 
     if (!project) {
       return c.json(
@@ -843,24 +850,8 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
-    // Count CommitV2 rows for this project
-    const [commitCountRow, outputCountRow] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(transitionCommits)
-        .where(eq(transitionCommits.projectId, id))
-        .then((rows) => rows[0]),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(leaves)
-        .where(and(eq(leaves.projectId, id), isNotNull(leaves.generatedAt)))
-        .then((rows) => rows[0]),
-    ]);
-    const commitsCount = Number(commitCountRow?.count ?? 0);
-    const outputsCount = Number(outputCountRow?.count ?? 0);
-
     const apiProject = {
-      ...(await getRepositoryAddress(db, project)),
+      ...project.address,
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
@@ -869,12 +860,12 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
-      commits_count: commitsCount || project.stats.commitsCount,
+      commits_count: project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
-      outputs_count: outputsCount,
+      outputs_count: project.stats.outputsCount,
       extraction_style: project.extractionStyle ?? null,
-      can_edit: (await listAuthorizedProjectActions(c, db, id)).includes('project:edit'),
+      can_edit: accessResult.canEdit === true,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

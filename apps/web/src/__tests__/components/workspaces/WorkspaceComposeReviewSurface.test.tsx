@@ -176,13 +176,18 @@ const schemaEditingMocks = vi.hoisted(() => ({ hasPendingEdit: vi.fn(), read: vi
 vi.mock('@/hooks/workspaces/useWorkspaceSchemaEditingRequests', () => ({
   useWorkspaceSchemaEditingRequests: () => schemaEditingMocks,
 }));
-const savedSchemaMock = vi.hoisted(() => ({ candidate: null as StudioSchemaEditCandidate | null }));
+const savedSchemaMock = vi.hoisted(() => ({
+  candidate: null as StudioSchemaEditCandidate | null,
+  loading: false,
+  error: undefined as string | undefined,
+  refresh: vi.fn(),
+}));
 vi.mock('@/hooks/schemas/useStudioSchemaEditCandidate', () => ({
   useStudioSchemaEditCandidate: () => ({
     candidate: savedSchemaMock.candidate,
-    loading: false,
-    error: undefined,
-    refresh: vi.fn(),
+    loading: savedSchemaMock.loading,
+    error: savedSchemaMock.error,
+    refresh: savedSchemaMock.refresh,
   }),
 }));
 const schemaDiscussion = vi.fn();
@@ -201,6 +206,7 @@ const modelSelectionMocks = vi.hoisted(() => ({
 }));
 const sourceGenerationMocks = vi.hoisted(() => ({
   input: '',
+  messages: [] as Array<Record<string, unknown>>,
   send: vi.fn(),
   options: null as null | {
     conversationId?: string;
@@ -231,7 +237,7 @@ vi.mock('@/hooks/sourceThreads/useSourceThreadGeneration', () => ({
   }) => {
     sourceGenerationMocks.options = options;
     return {
-      messages: [],
+      messages: sourceGenerationMocks.messages,
       streamingContent: '',
       error: null,
       warning: null,
@@ -286,6 +292,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     useProjectStore.setState({ projects: [], details: {} });
     schemaCardMocks.record = null;
     savedSchemaMock.candidate = null;
+    savedSchemaMock.loading = false;
+    savedSchemaMock.error = undefined;
+    savedSchemaMock.refresh.mockClear();
     schemaEditingMocks.hasPendingEdit.mockReset().mockResolvedValue(false);
     schemaEditingMocks.read.mockReset().mockRejectedValue(new Error('Candidate must be loaded'));
     localStorage.removeItem('t3x-workspace-draft-width');
@@ -306,6 +315,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     modelSelectionMocks.handleModelChange.mockReset();
     sourceGenerationMocks.options = null;
     sourceGenerationMocks.input = '';
+    sourceGenerationMocks.messages = [];
     sourceGenerationMocks.send.mockClear();
     conversationMocks.value.data.conversations = [];
     conversationMocks.value.loading = false;
@@ -478,6 +488,8 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     renderCompose();
     expect(screen.queryByRole('navigation', { name: 'Workspace tools' })).not.toBeInTheDocument();
     openInspector();
+    expect(screen.queryByRole('region', { name: 'Workspace chat list' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
     const sidebar = screen.getByRole('complementary', { name: 'Workspace conversations' });
     expect(within(sidebar).getByRole('region', { name: 'Workspace chat list' })).toBeVisible();
     expect(
@@ -494,6 +506,57 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(graph).toHaveTextContent('Graph for proj_1 · main');
     fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse conversation panel' }));
     expect(screen.getByRole('region', { name: 'Commit graph' })).toBeVisible();
+  });
+
+  it('opens All draft changes when a reply receipt is clicked', () => {
+    enableComposeActivity();
+    const action = {
+      actionId: 'reply-action',
+      sequence: 1,
+      channel: 'assistant' as const,
+      actor: { id: 'service:t3x-proposal-generator', kind: 'service' as const },
+      publishedAt: '2026-10-29T00:00:00Z',
+      beforeRevision: 0,
+      afterRevision: 1,
+      operations: [{ set: { path: 'title', value: 'Learning reminder' } }],
+      reason: 'Add learning reminder',
+      generation: { transitionId: 'candidate' },
+    } as ReturnType<typeof useComposeActivity>['actions'][number];
+    activityMocks.value!.actions = [action];
+    activityMocks.value!.cards = {
+      [action.actionId]: [
+        { nodeId: 'title', path: 'title', before: undefined, after: 'Learning reminder' },
+      ],
+    };
+    sourceGenerationMocks.messages = [
+      {
+        id: 'assistant-turn',
+        role: 'assistant',
+        content: 'Added a learning reminder.',
+        rings: {
+          workspace_assistant: {
+            operations: [
+              {
+                type: 'operation',
+                operationId: 'proposal',
+                name: 'requestProposal',
+                result: { transitionId: 'candidate' },
+              },
+            ],
+          },
+        },
+      },
+    ];
+    renderCompose();
+    openInspector();
+    fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
+    fireEvent.click(screen.getByRole('button', { name: /This reply/ }));
+    expect(screen.getByRole('tab', { name: 'All changes' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'All draft changes' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'This reply’s changes' })).not.toBeInTheDocument();
   });
 
   function renderCompose() {
@@ -515,6 +578,62 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
   }
+
+  it.each([
+    0, 1,
+  ])('shows a saved Schema candidate separately from %i Content changes without adopting it', (count) => {
+    enableComposeActivity();
+    savedSchemaMock.candidate = {
+      candidateId: 'schema-edit',
+      revision: 4,
+    } as StudioSchemaEditCandidate;
+    activityMocks.value!.view!.base = { title: 'Before' };
+    activityMocks.value!.view!.current = { title: count ? 'After' : 'Before' };
+    activityMocks.value!.view!.netDiff = count
+      ? [{ nodeId: 'title', path: 'title', before: 'Before', after: 'After' }]
+      : [];
+    renderCompose();
+    expect(screen.getByRole('button', { name: 'Open Draft' })).toHaveTextContent(
+      'Schema candidate r4'
+    );
+    openInspector();
+    expect(screen.getByRole('region', { name: 'Saved Schema candidate' })).toHaveTextContent(
+      'Saved · not applied'
+    );
+    expect(
+      screen.getByText(`${count} Content change${count === 1 ? '' : 's'}`, {
+        selector: 'span[title="Proposed changes"]',
+      })
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'View Schema status', exact: true }));
+    expect(screen.getByRole('button', { name: 'Schema', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'Saved Schema candidate' })).toHaveTextContent(
+      'Schema candidate r4'
+    );
+    expect(screen.queryByRole('button', { name: 'View Schema status' })).not.toBeInTheDocument();
+    expect(activityMocks.value!.publish).not.toHaveBeenCalled();
+    expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes loading and failed Schema status from having no candidate', () => {
+    savedSchemaMock.loading = true;
+    const pending = renderCompose();
+    openInspector();
+    expect(
+      screen.getByText('Checking saved Schema…', { selector: 'div:not([hidden]) > output' })
+    ).toBeInTheDocument();
+    pending.unmount();
+    savedSchemaMock.loading = false;
+    savedSchemaMock.error = 'Read unavailable';
+    renderCompose();
+    openInspector();
+    expect(screen.getByRole('alert')).toHaveTextContent('Saved Schema status unavailable');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Schema status' }));
+    expect(savedSchemaMock.refresh).toHaveBeenCalledOnce();
+  });
 
   it('opens a separate shared Details card for each recorded operation field', () => {
     enableComposeActivity();
@@ -648,7 +767,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         onModeChange={vi.fn()}
       />
     );
-    expect(screen.getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Structure', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     );
@@ -1294,8 +1413,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
 
   it('limits conversation width so changes and Chat retain room, and ignores invalid saved preferences', () => {
     localStorage.setItem('t3x-compose-balanced-conversation-width', 'not-a-width');
-    const { splitter } = renderResizableCompose();
+    renderResizableCompose();
     openInspector();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
+    const splitter = screen.getByRole('separator', { name: 'Resize conversation panel' });
     expect(splitter).toHaveAttribute('aria-valuenow', '216');
     Object.defineProperty(splitter.parentElement, 'clientWidth', {
       value: 1000,
@@ -1429,6 +1550,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     openInspector();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand conversation panel' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Latest' }));
 
     expect(screen.getByRole('tab', { name: 'Compose' })).toBeInTheDocument();
@@ -2167,7 +2289,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(snapshotMocks.list).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(screen.getByLabelText('Rendered result')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     expect(document.querySelector('.workspace-rendered-review-theme')).not.toBeInTheDocument();
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
@@ -2191,7 +2313,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
     expect(within(selectedChange).getByText('Previous outcome')).toBeInTheDocument();
     expect(within(selectedChange).getByText('Auditable rollout outcome')).toBeInTheDocument();
-    const reviewDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const reviewDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(reviewDetails).toHaveTextContent('prd/summary/outcome');
     expect(reviewDetails).toHaveTextContent('Previous outcome');
     expect(reviewDetails).toHaveTextContent('Auditable rollout outcome');
@@ -2238,9 +2360,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         'prd/requirements/canary/title'
       )
     ).toHaveTextContent('prd.requirements.canary.title');
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
-      'prd/requirements/canary/title'
-    );
+    expect(screen.queryByRole('complementary', { name: 'Review Details' })).toBeNull();
     expect(screen.getAllByRole('region', { name: 'Review readiness' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Continue to decision' })).not.toBeInTheDocument();
     navigationMocks.searchParams = new URLSearchParams('workspaceMode=review&reviewPane=yaml');
@@ -2596,7 +2716,10 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       netDiff: [card, otherCard],
       hasChanges: true,
     });
+    const prefillAssistant = vi.fn();
+    const onModeChange = vi.fn();
     const controller = {
+      prefillAssistant,
       candidate,
       isBusy: false,
       busyAction: null,
@@ -2608,17 +2731,17 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         candidate={candidate}
         controller={controller}
         mode="review"
-        onModeChange={vi.fn()}
+        onModeChange={onModeChange}
       />
     );
 
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'prd/summary/outcome'
     );
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/outcome').closest('tr')!
     );
-    const details = screen.getByRole('region', { name: 'Selected review Details' });
+    const details = screen.getByRole('complementary', { name: 'Review Details' });
     expect(details).toHaveTextContent('Before');
     expect(details).toHaveTextContent('After');
     const actionDetails = within(details).getByRole('region', { name: 'Action details' });
@@ -2631,7 +2754,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/title').closest('tr')!
     );
-    const otherDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const otherDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(otherDetails).toHaveTextContent('Old title');
     expect(otherDetails).toHaveTextContent('New title');
     expect(within(otherDetails).queryByRole('region', { name: 'Action details' })).toBeNull();
@@ -2639,7 +2762,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     fireEvent.click(
       within(screen.getByRole('table')).getByTitle('prd/summary/priority').closest('tr')!
     );
-    const unchangedDetails = screen.getByRole('region', { name: 'Selected review Details' });
+    const unchangedDetails = screen.getByRole('complementary', { name: 'Review Details' });
     expect(unchangedDetails).toHaveTextContent('prd/summary/priority');
     expect(unchangedDetails).toHaveTextContent('Matches Base · no change');
     expect(unchangedDetails).toHaveTextContent(
@@ -2653,16 +2776,21 @@ describe('WorkspaceComposeReviewSurface composer', () => {
         .getByTitle('content/trees/[key=prd]/children/[key=summary]/slots/priority')
         .closest('tr')!
     );
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'prd/summary/priority'
     );
-    expect(screen.getByRole('region', { name: 'Selected review Details' })).toHaveTextContent(
+    expect(screen.getByRole('complementary', { name: 'Review Details' })).toHaveTextContent(
       'Matches Base · no change'
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    expect(screen.queryByText('Selected change · actions')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Ask AI to revise' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI to revise' }));
+    expect(prefillAssistant).toHaveBeenCalledWith('Revise prd/summary/priority: ');
+    expect(onModeChange).toHaveBeenCalledWith('compose');
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     fireEvent.click(within(screen.getByRole('table')).getByTitle('prd/summary').closest('tr')!);
     expect(
-      within(screen.getByRole('region', { name: 'Selected review Details' })).getByRole('region', {
+      within(screen.getByRole('complementary', { name: 'Review Details' })).getByRole('region', {
         name: 'Action details',
       })
     ).toHaveTextContent('Clarify the intended outcome.');
@@ -2802,13 +2930,16 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Validation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Structure' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     expect(screen.getByRole('region', { name: 'Review readiness' })).toBeInTheDocument();
     expect(
       within(screen.getByRole('navigation', { name: 'Review views' }))
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Changes', 'YAML', 'Preview']);
+    ).toEqual(['Structure', 'YAML', 'Preview']);
     expect(navigationMocks.replace).toHaveBeenCalledWith(
       '/t3x-dev/test-project/workspaces?workspaceMode=review&reviewPane=changes',
       { scroll: false }
@@ -3159,7 +3290,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(screen.queryByText(candidate.summary)).not.toBeInTheDocument();
     expect(screen.queryByText('No rollout plan recorded.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure' }));
     expect(await screen.findByLabelText('Workspace review structure')).toBeInTheDocument();
     expect(screen.queryByText('No structured changes are prepared yet')).not.toBeInTheDocument();
     expect(
@@ -3291,15 +3422,12 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(within(review).getByRole('status')).toHaveTextContent(
       'This draft has no Content or Schema changes to review.'
     );
-    const changes = within(review).getByRole('table', { name: 'Draft changes' });
-    expect(
-      within(changes)
-        .getAllByRole('columnheader')
-        .map((item) => item.textContent)
-    ).toEqual(['Field', 'Before', 'After']);
-    expect(within(review).getByRole('button', { name: 'YAML' })).toBeDisabled();
-    expect(within(review).getByRole('region', { name: 'Check summary' })).toBeVisible();
-    expect(within(review).queryByRole('button', { name: 'Edit in Compose' })).toBeNull();
+    expect(within(review).getByRole('heading', { name: 'Nothing to review' })).toBeVisible();
+    expect(within(review).queryByRole('table')).toBeNull();
+    expect(within(review).queryByRole('navigation', { name: 'Review views' })).toBeNull();
+    expect(within(review).queryByText('Not prepared')).toBeNull();
+    fireEvent.click(within(review).getByRole('button', { name: 'Edit in Compose' }));
+    expect(onModeChange).toHaveBeenCalledWith('compose');
     expect(screen.queryByRole('button', { name: 'Prepare review' })).not.toBeInTheDocument();
     expect(screen.queryByText(/天气为晴天/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Compose' }));
@@ -3313,6 +3441,7 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       preview: {
         schema: { nodes: { aaa: { description: 'Saved description' } } },
         workspace: {
+          binding: null,
           changes: [{ kind: 'ADD', path: 'nodes.aaa.description', summary: 'Saved description' }],
         },
       },
@@ -3326,7 +3455,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
       />
     );
     expect(within(review).getByRole('button', { name: 'Schema', exact: true })).toBeEnabled();
-    expect(await screen.findByText('nodes.aaa.description')).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Inspect nodes/aaa/description' })
+    ).toBeVisible();
     expect(screen.getByText(/Saved Schema candidate r2/)).toBeVisible();
     expect(controller.prepareReview).not.toHaveBeenCalled();
     expect(schemaEditingMocks.hasPendingEdit).not.toHaveBeenCalled();

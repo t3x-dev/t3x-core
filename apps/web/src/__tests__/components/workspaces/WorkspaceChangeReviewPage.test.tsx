@@ -54,11 +54,10 @@ describe('legacy Changes entry', () => {
       );
       const href = screen.getByRole('link', { name: 'Continue to Review' }).getAttribute('href')!;
       const url = new URL(href, 'http://localhost');
-      expect(url.pathname).toBe('/owner/repo/workspaces');
+      expect(url.pathname).toBe('/owner/repo/branches/feature%2Fx/workspaces');
       expect(Object.fromEntries(url.searchParams)).toEqual({
         workspace: 'ws:main',
         workspaceMode: 'review',
-        branch: 'feature/x',
         reviewSnapshot: 'rvs_saved',
         reviewPane: 'yaml',
         schemaDiagnostics: '1',

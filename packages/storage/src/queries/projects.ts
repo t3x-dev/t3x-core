@@ -16,6 +16,7 @@ import {
   and,
   desc,
   eq,
+  getTableColumns,
   ilike,
   inArray,
   isNotNull,
@@ -31,12 +32,20 @@ import {
   branches,
   conversations,
   type NewProject,
+  namespaces,
   type Project,
   projects,
+  repositoryPaths,
   turns,
 } from '../schema';
 import { transitionCommits } from '../schema-transition-commits';
+import { leaves } from '../schema-trees';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+import {
+  repositoryAddress,
+  repositoryAddressColumns,
+  repositoryPathMatchesProject,
+} from './repository-paths';
 
 export interface CreateProjectInput {
   /** Caller-selected resource ID for reservation-safe orchestration. */
@@ -81,10 +90,12 @@ export interface ProjectStats {
   commitsCount: number;
   branchesCount: number;
   draftsCount: number;
+  outputsCount: number;
 }
 
 export interface ProjectWithStats extends Project {
   stats: ProjectStats;
+  address: ReturnType<typeof repositoryAddress>;
 }
 
 /**
@@ -457,50 +468,64 @@ export async function permanentDeleteProject(
   return result.length > 0;
 }
 
-/**
- * Find project with stats (counts of related entities)
- */
+const projectListCounts = {
+  conversationsCount: sql<number>`(select count(*)::int from ${conversations} where ${eq(conversations.projectId, projects.projectId)})`,
+  commitsCount: sql<number>`(select count(*)::int from ${transitionCommits} where ${eq(transitionCommits.projectId, projects.projectId)})`,
+  branchesCount: sql<number>`(select count(*)::int from ${branches} where ${eq(branches.projectId, projects.projectId)})`,
+  outputsCount: sql<number>`(select count(*)::int from ${leaves} where ${and(eq(leaves.projectId, projects.projectId), isNotNull(leaves.generatedAt))})`,
+};
+
+/** Read counts for the authorized page in one database round trip. */
+export async function findProjectListCounts(db: AnyDB, projectIds: string[]) {
+  const rows = projectIds.length
+    ? await db
+        .select({ projectId: projects.projectId, ...projectListCounts })
+        .from(projects)
+        .where(inArray(projects.projectId, projectIds))
+    : [];
+  return new Map(rows.map(({ projectId, ...counts }) => [projectId, counts]));
+}
+
+/** Enrich the authorized page with counts and addresses from one database read. */
+export async function findProjectListDetails(db: AnyDB, projectIds: string[]) {
+  const rows = projectIds.length
+    ? await db
+        .select({
+          projectId: projects.projectId,
+          name: projects.name,
+          ...repositoryAddressColumns,
+          counts: projectListCounts,
+        })
+        .from(projects)
+        .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
+        .leftJoin(repositoryPaths, repositoryPathMatchesProject)
+        .where(inArray(projects.projectId, projectIds))
+    : [];
+  return new Map(
+    rows.map((row) => [row.projectId, { counts: row.counts, address: repositoryAddress(row, row) }])
+  );
+}
+
 export async function findProjectWithStats(
   db: AnyDB,
   projectId: string
 ): Promise<ProjectWithStats | null> {
-  const project = await findProjectById(db, projectId);
+  const [project] = await db
+    .select({
+      ...getTableColumns(projects),
+      ...repositoryAddressColumns,
+      stats: {
+        ...projectListCounts,
+        turnsCount: sql<number>`(select count(*)::int from ${turns} where ${eq(turns.projectId, projects.projectId)})`,
+        draftsCount: sql<number>`(select count(*)::int from ${agentDrafts} where ${eq(agentDrafts.projectId, projects.projectId)})`,
+      },
+    })
+    .from(projects)
+    .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
+    .leftJoin(repositoryPaths, repositoryPathMatchesProject)
+    .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+    .limit(1);
   if (!project) return null;
-
-  // Get counts for all related entities
-  const [convCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(conversations)
-    .where(eq(conversations.projectId, projectId));
-
-  const [turnCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(turns)
-    .where(eq(turns.projectId, projectId));
-
-  const [commitCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(transitionCommits)
-    .where(eq(transitionCommits.projectId, projectId));
-
-  const [branchCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(branches)
-    .where(eq(branches.projectId, projectId));
-
-  const [draftCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(agentDrafts)
-    .where(eq(agentDrafts.projectId, projectId));
-
-  return {
-    ...project,
-    stats: {
-      conversationsCount: Number(convCount?.count ?? 0),
-      turnsCount: Number(turnCount?.count ?? 0),
-      commitsCount: Number(commitCount?.count ?? 0),
-      branchesCount: Number(branchCount?.count ?? 0),
-      draftsCount: Number(draftCount?.count ?? 0),
-    },
-  };
+  const { slug, claimedBy, resolvable, ...details } = project;
+  return { ...details, address: repositoryAddress(project, { slug, claimedBy, resolvable }) };
 }

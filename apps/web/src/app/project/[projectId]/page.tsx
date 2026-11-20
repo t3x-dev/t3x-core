@@ -21,8 +21,9 @@ import { isRefHeadIntegrityInvalid } from '@/domain/format/errors';
 import { repositoryObjectHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
-  getProjectIdRepoPath,
   getProjectRepoPath,
+  repositoryBranch,
+  repositoryBranchHref,
 } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
@@ -336,7 +337,11 @@ export function ProjectDetailPageContent({
             setProjectLookupError(null);
             setFetchedProject(null);
             void fetchProject(projectId)
-              .then((detail) => setFetchedProject(apiProjectToSummary(detail)))
+              .then((detail) => {
+                const summary = apiProjectToSummary(detail);
+                setFetchedProject(summary);
+                useProjectStore.getState().cacheProject(summary);
+              })
               .catch((err) =>
                 setProjectLookupError(err instanceof Error ? err : new Error(String(err)))
               )
@@ -348,7 +353,7 @@ export function ProjectDetailPageContent({
   }
 
   // Show not-found page only when a single-project lookup confirms it.
-  if (!project) {
+  if (!project || (projectLookupError && isNotFoundError(projectLookupError))) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
         <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
@@ -403,7 +408,12 @@ export function ProjectDetailPageContent({
                   commitAddress.number,
                   new URLSearchParams({ view: 'overview' })
                 )
-              : `${routeProjectId ? getProjectIdRepoPath(projectId) : getProjectRepoPath(project)}?${new URLSearchParams({ branch: searchParams.get('branch') ?? 'main', view: 'overview' })}`
+              : repositoryBranchHref(
+                  getProjectRepoPath(project),
+                  '',
+                  repositoryBranch(pathname, searchParams) ?? 'main',
+                  new URLSearchParams({ view: 'overview' })
+                )
           }
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
@@ -493,7 +503,7 @@ export function ProjectDetailPageContent({
     <>
       <ProjectShell
         activeTab={activeTab}
-        branch={workspaceBranch ?? searchParams.get('branch')}
+        branch={workspaceBranch ?? repositoryBranch(pathname, searchParams)}
         immersive={isSchemaStudio || isSchemaRelease}
         ownerSlug={project.namespace ?? ownerSlugOverride}
         pageTitle={

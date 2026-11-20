@@ -7,8 +7,13 @@ it('shows actual values in ordinary nested YAML, including lists and falsy value
     'unused: true'
   );
   expect(summary.rows).toEqual([
-    { path: [], fields: [{ name: 'domain', value: 'demo' }] },
-    { path: [], fields: [{ name: 'version', value: '1' }] },
+    {
+      path: [],
+      fields: [
+        { name: 'domain', value: 'demo' },
+        { name: 'version', value: '1' },
+      ],
+    },
     {
       path: ['content', '[1]'],
       fields: [
@@ -30,8 +35,35 @@ it('bounds the summary without treating an empty document as a field', () => {
     JSON.stringify(Array.from({ length: 100 }, (_, i) => i)),
     ''
   );
-  expect(summary.rows).toHaveLength(16);
+  expect(summary.rows[0].fields).toHaveLength(16);
   expect(summary.hasMore).toBe(true);
+});
+
+it('preserves field order across object groups and distinguishes paths containing separators', () => {
+  const summary = summarizeArtifactState(
+    JSON.stringify({
+      first: null,
+      'a / b': { name: '' },
+      a: { b: { name: 'nested' } },
+      last: false,
+      list: [{ value: 0, empty: [] }, { value: 1 }],
+    }),
+    ''
+  );
+  expect(summary.rows).toEqual([
+    { path: [], fields: [{ name: 'first', value: 'null' }] },
+    { path: ['a / b'], fields: [{ name: 'name', value: 'Empty text' }] },
+    { path: ['a', 'b'], fields: [{ name: 'name', value: 'nested' }] },
+    { path: [], fields: [{ name: 'last', value: 'false' }] },
+    {
+      path: ['list', '[1]'],
+      fields: [
+        { name: 'value', value: '0' },
+        { name: 'empty', value: 'Empty list' },
+      ],
+    },
+    { path: ['list', '[2]'], fields: [{ name: 'value', value: '1' }] },
+  ]);
 });
 
 it('labels only the Schema identity and version present in each binding', () => {

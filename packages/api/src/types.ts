@@ -1,5 +1,5 @@
 import type { RequestPrincipal } from '@t3x-dev/application';
-import type { ApiKey } from '@t3x-dev/core';
+import type { ApiKey, Draft } from '@t3x-dev/core';
 import type { WebSession } from '@t3x-dev/storage';
 import type { InferenceIngressChannel } from './lib/inference';
 import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
@@ -26,5 +26,7 @@ export type AppEnv = {
     rateLimitStore?: RateLimitStore;
     /** Host-owned policy around project admissions into a namespace. */
     projectLifecyclePolicy?: ProjectLifecyclePolicy;
+    repositoryReadAccess?: { projectId: string; canEdit?: boolean };
+    pendingSchemaWorkspace?: Draft;
   };
 };

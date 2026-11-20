@@ -10,10 +10,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
   Box as BoxIcon,
-  Check,
   ChevronDown,
   ChevronRight,
-  CircleDot,
   Copy,
   ExternalLink,
   FileCode2,
@@ -61,6 +59,7 @@ import { balancedRailWidth } from '@/components/project/repositoryWorkbenchLayou
 import { StateBranchControls } from '@/components/project/StateBranchControls';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { SchemaContentPreparationDialog } from '@/components/schemas/SchemaContentPreparationDialog';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -85,7 +84,6 @@ import { ComposeDraftChangeRow } from '@/components/workspaces/ComposeDraftChang
 import { OutputTargetsTab } from '@/components/workspaces/OutputTargetsTab';
 import { SourceArtifactRoleEditor } from '@/components/workspaces/SourceArtifactRoleEditor';
 import { SourceTransitionTab } from '@/components/workspaces/SourceTransitionTab';
-import { WorkspaceNotice } from '@/components/workspaces/WorkspaceNotice';
 import { WorkspaceReconciliationResolver } from '@/components/workspaces/WorkspaceReconciliationResolver';
 import type { WorkspaceYOpsFlowView } from '@/components/workspaces/YOpsDraftTab';
 import { getSchemaRegistryPreview } from '@/data/schemaReleases';
@@ -117,7 +115,7 @@ import {
   authoringSemanticPath,
   buildAuthoringReviewProjection,
 } from '@/domain/workspaces/authoringReview';
-import { EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
+import { changeCheckRows, EMPTY_WORKSPACE_REVIEW } from '@/domain/workspaces/changeDecision';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { composeValuesEqual } from '@/domain/workspaces/composeObjectChanges';
 import { type DraftYOp, nextAuthoringRequestId } from '@/domain/workspaces/draftStructure';
@@ -180,7 +178,6 @@ import {
   ComposeNodeHistoryPanel,
 } from './ComposeNodeHistoryPanel';
 import { useWorkspaceContentNavigation } from './useWorkspaceContentNavigation';
-import { type PublishedTurnChanges, WorkspaceTurnChanges } from './WorkspaceAssistantActivity';
 import {
   type CommitChangeInspection,
   WorkspaceCommitChangeDetails,
@@ -190,7 +187,6 @@ import { WorkspaceCommitHistoryPanel } from './WorkspaceCommitHistoryPanel';
 import composeStyles from './WorkspaceComposeSurface.module.css';
 import { WorkspaceCurrentDraft } from './WorkspaceCurrentDraft';
 import { WorkspacePendingSchemaReview } from './WorkspacePendingSchemaReview';
-import checksStyles from './WorkspaceReviewChecks.module.css';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import diffStyles from './WorkspaceReviewDiff.module.css';
 import {
@@ -200,6 +196,7 @@ import {
   WorkspaceReviewYaml,
 } from './WorkspaceReviewDocuments';
 import reviewStyles from './WorkspaceReviewReference.module.css';
+import { WorkspaceReviewValidation } from './WorkspaceReviewValidation';
 import {
   useWorkspaceReviewSubject,
   WorkspaceReviewWorkbench,
@@ -592,8 +589,10 @@ export function WorkspaceComposeReviewSurface({
             }
           />
           {syncRequired ? (
-            <WorkspaceNotice
+            <Alert
               label="Workspace synchronization"
+              layout="banner"
+              tone="warning"
               title={
                 activity.reconciliationPreview?.conflicts.length
                   ? 'Branch changes overlap with your Draft'
@@ -619,7 +618,7 @@ export function WorkspaceComposeReviewSurface({
               {activity.reconciliationError ? (
                 <p role="alert">{activity.reconciliationError}</p>
               ) : null}
-            </WorkspaceNotice>
+            </Alert>
           ) : null}
           {workspaceTool ? (
             <>
@@ -896,7 +895,6 @@ function ComposeSurface({
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [turn, setTurn] = useState<PublishedTurnChanges | null>(null);
   const [mobileChats, setMobileChats] = useState(false);
   const draftButton = useRef<HTMLButtonElement>(null);
   const closeDraftButton = useRef<HTMLButtonElement>(null);
@@ -907,11 +905,7 @@ function ComposeSurface({
   const [resizing, setResizing] = useState(false);
   const balancedDraftWidth = balancedRailWidth('navigation', boardWidth);
   const balancedDiscussionWidth = balancedRailWidth('inspector', boardWidth);
-  const compact =
-    inspectorOpen &&
-    boardWidth > 840 &&
-    boardWidth - balancedDraftWidth - balancedDiscussionWidth < 480;
-  const draftCollapsed = collapsedPreference ?? compact;
+  const draftCollapsed = collapsedPreference ?? inspectorOpen;
   const draftWidth = Math.max(
     180,
     Math.min(customDraftWidth ?? balancedDraftWidth, boardWidth - (inspectorOpen ? 640 : 320))
@@ -947,7 +941,7 @@ function ComposeSurface({
     }
   }, []);
   const toggleDraft = (collapsed: boolean) => {
-    setCollapsedPreference(compact || collapsed ? collapsed : null);
+    setCollapsedPreference(inspectorOpen || collapsed ? collapsed : null);
     try {
       localStorage.setItem('t3x-workspace-draft-collapsed', String(collapsed));
     } catch {
@@ -1063,7 +1057,6 @@ function ComposeSurface({
         const next = stageDraftOps(workingCurrent, operations, reason);
         setStaged((current) => [...current, ...next.items]);
         setInspectorOpen(true);
-        setTurn(null);
         setRightView('changes');
         setSidePanel('chat');
         setChangeScope('latest');
@@ -1196,7 +1189,6 @@ function ComposeSurface({
     setFieldDialog(null);
     setInspectorOpen(false);
     setMobileChats(false);
-    setTurn(null);
     setDraftSubject('content');
     setFocusSchemaPath(undefined);
     setSidePanel('chat');
@@ -1244,6 +1236,47 @@ function ComposeSurface({
     schemaConversationId ?? activeConversationId,
     String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
   );
+  const savedSchema = useStudioSchemaEditCandidate(
+    candidate.projectId,
+    candidate.id,
+    candidate.revision
+  );
+  const hasSavedSchema = hasUnappliedSchemaEdit(
+    savedSchema.candidate,
+    candidate,
+    activity.view?.currentSchema?.schemaHash
+  );
+  const schemaCandidateNotice = savedSchema.loading ? (
+    <output className={composeStyles.savedSchemaNotice}>Checking saved Schema…</output>
+  ) : savedSchema.error ? (
+    <div className={composeStyles.savedSchemaNotice} role="alert">
+      <strong>Saved Schema status unavailable</strong>
+      <span>{savedSchema.error}</span>
+      <button type="button" onClick={() => void savedSchema.refresh()}>
+        Retry Schema status
+      </button>
+    </div>
+  ) : hasSavedSchema ? (
+    <section className={composeStyles.savedSchemaNotice} aria-label="Saved Schema candidate">
+      <div>
+        <strong>Schema candidate r{savedSchema.candidate!.revision}</strong>
+        <span>Saved · not applied</span>
+      </div>
+      {rightView !== 'structure' || draftSubject !== 'schema' ? (
+        <button
+          type="button"
+          onClick={() => {
+            setActivitySelection(null);
+            setRightView('structure');
+            setSidePanel('chat');
+            setDraftSubject('schema');
+          }}
+        >
+          View Schema status
+        </button>
+      ) : null}
+    </section>
+  ) : null;
   const selectedSchema =
     schemaSelection?.workspaceId === candidate.id
       ? (
@@ -1270,7 +1303,6 @@ function ComposeSurface({
         .length
     : candidate.yopsDraft.operations.length;
   const openDraft = () => {
-    setTurn(null);
     setInspectorOpen(true);
     setMobileChats(false);
     setRightView('changes');
@@ -1279,14 +1311,12 @@ function ComposeSurface({
   };
   const closeInspector = () => {
     setInspectorOpen(false);
-    setTurn(null);
     requestAnimationFrame(() => draftButton.current?.focus());
   };
   useEffect(() => {
     if (inspectorOpen) closeDraftButton.current?.focus();
-  }, [inspectorOpen, turn]);
+  }, [inspectorOpen]);
   const openChat = () => {
-    setTurn(null);
     setInspectorOpen(false);
     setSidePanel('chat');
     requestAnimationFrame(() =>
@@ -1302,7 +1332,6 @@ function ComposeSurface({
     setActiveConversationTitle('Compose assistant');
     setSchemaConversationId(undefined);
     setSidePanel('chat');
-    setTurn(null);
     setMobileChats(false);
     return conversationId;
   }, [activity.createAssistantConversation]);
@@ -1476,7 +1505,6 @@ function ComposeSurface({
             onCreate={createConversation}
             onSelect={(conversationId, conversationTitle) => {
               setMobileChats(false);
-              setTurn(null);
               setActiveConversationId(conversationId);
               setActiveConversationTitle(conversationTitle);
               setSchemaConversationId(undefined);
@@ -1512,10 +1540,13 @@ function ComposeSurface({
             >
               <PanelRightOpen aria-hidden="true" /> Draft
               <span id={draftCountId}>
-                {contentChangeCount} {activity.view ? 'Content changes' : 'Draft operations'}
+                {contentChangeCount} {activity.view ? 'Content change' : 'Draft operation'}
+                {contentChangeCount === 1 ? '' : 's'}
               </span>
-              {schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
-                <small>Schema</small>
+              {hasSavedSchema ? (
+                <small>Schema candidate r{savedSchema.candidate!.revision}</small>
+              ) : schemaSettings.record && schemaSettings.record.status !== 'cancelled' ? (
+                <small>Schema proposal</small>
               ) : null}
               {staged.length ? <small>{staged.length} unsaved</small> : null}
             </button>
@@ -1570,12 +1601,9 @@ function ComposeSurface({
                   }
                 : undefined
             }
-            onOpenTurn={(changes) => {
-              setTurn(changes);
-              setInspectorOpen(true);
-              setMobileChats(false);
-              setRightView('changes');
-              setSidePanel('chat');
+            onOpenTurn={() => {
+              openDraft();
+              setChangeScope('all');
             }}
             activityActions={activity.actions}
             activityCards={activity.cards}
@@ -1612,7 +1640,6 @@ function ComposeSurface({
                 type="button"
                 aria-pressed={rightView === view}
                 onClick={() => {
-                  setTurn(null);
                   setRightView(view);
                   setSidePanel('chat');
                 }}
@@ -1648,6 +1675,7 @@ function ComposeSurface({
               stagedCount={staged.length}
               authoring={activity.view}
               subject={draftSubject}
+              schemaCandidateNotice={schemaCandidateNotice}
               onSubjectChange={setDraftSubject}
               schemaControl={
                 <WorkspaceSchemaSelect
@@ -1772,23 +1800,10 @@ function ComposeSurface({
                 }}
               />
             )
-          ) : rightView === 'changes' && turn ? (
-            <section className={composeStyles.turnView} aria-label="This reply’s changes">
-              <button type="button" onClick={openDraft}>
-                <ArrowLeft aria-hidden="true" /> All draft changes
-              </button>
-              <h3>This reply’s changes</h3>
-              <p>
-                Content r{turn.action.beforeRevision} → r{turn.action.afterRevision}
-              </p>
-              <WorkspaceTurnChanges
-                action={turn.action}
-                cards={activity.cards[turn.action.actionId] ?? turn.cards}
-              />
-            </section>
           ) : rightView === 'changes' ? (
             <div className={composeStyles.changesBody} hidden={showingDetails}>
               <ChangesToolbar
+                countUnit={activity.view ? 'Content change' : 'Draft operation'}
                 proposedChangeCount={
                   activity.view
                     ? (changeScope === 'all'
@@ -1803,6 +1818,7 @@ function ComposeSurface({
                 changeScope={changeScope}
                 onChangeScope={setChangeScope}
               />
+              {schemaCandidateNotice}
               {schemaSettings.error && !schemaSettings.record ? (
                 <p role="alert">{schemaSettings.error}</p>
               ) : null}
@@ -2560,10 +2576,11 @@ function WorkspaceSourcesMenu({
                 <Plus aria-hidden="true" />
                 {controller.sourceBusy ? (
                   <span>Updating sources…</span>
-                ) : included.length > 0 ? (
-                  <small>{included.length}</small>
                 ) : (
-                  <span>Add source</span>
+                  <>
+                    <span>Add source</span>
+                    {included.length > 0 ? <small>{included.length}</small> : null}
+                  </>
                 )}
               </button>
             </DropdownMenuTrigger>
@@ -2607,10 +2624,12 @@ function WorkspaceSourcesMenu({
 }
 
 function ChangesToolbar({
+  countUnit,
   proposedChangeCount,
   changeScope,
   onChangeScope,
 }: {
+  countUnit: 'Content change' | 'Draft operation';
   proposedChangeCount: number;
   changeScope: 'latest' | 'all';
   onChangeScope: (scope: 'latest' | 'all') => void;
@@ -2631,7 +2650,8 @@ function ChangesToolbar({
         ))}
       </div>
       <span className={composeStyles.changeCount} title="Proposed changes">
-        {proposedChangeCount} {proposedChangeCount === 1 ? 'change' : 'changes'}
+        {proposedChangeCount} {countUnit}
+        {proposedChangeCount === 1 ? '' : 's'}
       </span>
     </div>
   );
@@ -3204,7 +3224,7 @@ function ReviewSurface({
   );
   const sourceRefs = getProposalSourceRefs(controller.candidate);
   const sourceLabel =
-    controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'source_chat:current';
+    controller.candidate.sourceBundle[0]?.id ?? sourceRefs[0] ?? 'Source not recorded';
   const materialLabel = sourceLabel.length > 36 ? `${sourceLabel.slice(0, 33)}…` : sourceLabel;
   const activeStructureRow =
     selectedStructureRow ?? changedStructureRows[0] ?? structureModel.rows[0] ?? null;
@@ -3326,7 +3346,7 @@ function ReviewSurface({
           ) : null
         }
         pane={showEmptyWorkbench ? 'changes' : pane}
-        viewsDisabled={showEmptyWorkbench}
+        hideNavigation={showEmptyWorkbench}
         onPaneChange={setPane}
         subject={subject}
         subjectChanges={subjectChanges}
@@ -3346,23 +3366,19 @@ function ReviewSurface({
         }
         emptyState={
           showEmptyWorkbench ? (
-            <table
-              className={cn(diffStyles.tree, diffStyles.referenceTree)}
-              aria-label="Draft changes"
-            >
-              <ReviewDiffColumns />
-              <tbody>
-                <tr>
-                  <td colSpan={3}>
-                    <output className={workbenchStyles.empty}>
-                      {savedSchema.loading
-                        ? 'Checking for saved changes…'
-                        : 'This draft has no Content or Schema changes to review.'}
-                    </output>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <section className={workbenchStyles.emptyReview} aria-label="Draft changes">
+              <h2>{savedSchema.loading ? 'Checking for changes…' : 'Nothing to review'}</h2>
+              <output>
+                {savedSchema.loading
+                  ? 'Checking for saved changes…'
+                  : 'This draft has no Content or Schema changes to review.'}
+              </output>
+              {!savedSchema.loading ? (
+                <Button size="sm" variant="outline" onClick={() => onModeChange('compose')}>
+                  <Pencil aria-hidden="true" /> Edit in Compose
+                </Button>
+              ) : null}
+            </section>
           ) : hasSavedSchema ? (
             <p className="text-sm text-[var(--text-secondary)]">
               Saved Schema changes are awaiting preparation. Prepare review to inspect the complete
@@ -3386,52 +3402,45 @@ function ReviewSurface({
             </Button>
           )
         }
-        sidebar={
-          showEmptyWorkbench ? (
-            <section className={workbenchStyles.draftChecks} aria-label="Review readiness">
-              <h2>Review checks</h2>
-              <ReviewCheckList checks={checks} />
-            </section>
-          ) : (
-            <>
-              {subject === 'content' && activeStructureRow ? (
-                <WorkspaceReviewSelectedDetails
-                  activity={activity}
-                  candidate={candidate}
-                  model={structureModel}
-                  row={activeStructureRow}
-                />
-              ) : null}
-              <WorkspaceReviewSummary
-                candidate={candidate}
-                controller={controller}
-                snapshotStatus={snapshotStatus}
-                hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
-                preparingSchema={preparingSchema || Boolean(schemaPreparation)}
-                schemaLoading={Boolean(
-                  savedSchema.loading ||
-                    savedSchema.error ||
-                    activity.loading ||
-                    (activity.enabled && !authoring) ||
-                    newerDraft
-                )}
-                hasSavedSchema={hasSavedSchema}
-                draftUnavailable={Boolean(draftLoading || draftUnavailable)}
-                preparationError={
-                  preparationError ?? savedSchema.error ?? controller.error ?? undefined
-                }
-                onEdit={() => onModeChange('compose')}
-                onOpenChecks={() => setPane('checks')}
-                onPrepare={() => void prepareReview()}
-              />
-              <WorkspaceSchemaDiagnostics
-                key={`${candidate.projectId}:${candidate.id}:${candidate.revision}`}
-                projectId={candidate.projectId}
-                workspaceId={candidate.id}
-                revision={candidate.revision}
-              />
-            </>
+        readiness={
+          showEmptyWorkbench ? null : (
+            <WorkspaceReviewSummary
+              candidate={candidate}
+              controller={controller}
+              snapshotStatus={snapshotStatus}
+              hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
+              preparingSchema={preparingSchema || Boolean(schemaPreparation)}
+              schemaLoading={Boolean(
+                savedSchema.loading ||
+                  savedSchema.error ||
+                  activity.loading ||
+                  (activity.enabled && !authoring) ||
+                  newerDraft
+              )}
+              hasSavedSchema={hasSavedSchema}
+              draftUnavailable={Boolean(draftLoading || draftUnavailable)}
+              preparationError={
+                preparationError ?? savedSchema.error ?? controller.error ?? undefined
+              }
+              onEdit={() => onModeChange('compose')}
+              onOpenChecks={() => setPane('checks')}
+              onPrepare={() => void prepareReview()}
+            />
           )
+        }
+        sidebar={
+          !showEmptyWorkbench && subject === 'content' && activeStructureRow && pane !== 'yaml' ? (
+            <WorkspaceReviewSelectedDetails
+              activity={activity}
+              candidate={candidate}
+              model={structureModel}
+              row={activeStructureRow}
+              onRevise={() => {
+                controller.prefillAssistant(`Revise ${activeStructureRow.path}: `);
+                onModeChange('compose');
+              }}
+            />
+          ) : undefined
         }
       >
         {comparisonScenario ? (
@@ -3485,10 +3494,8 @@ function ReviewSurface({
         ) : pane === 'rendered' ? (
           <WorkspaceRenderedReview
             model={structureModel}
-            selectedRow={activeStructureRow}
             onSelectRow={setSelectedStructureRowId}
             controller={controller}
-            onModeChange={onModeChange}
           />
         ) : comparisonStatus ? (
           comparisonStatus
@@ -3498,10 +3505,8 @@ function ReviewSurface({
             activeRowId={activeStructureRow?.id ?? null}
             candidate={candidate}
             checks={checks}
-            controller={controller}
             modifiedLabel={formatRelativeTime(controller.candidate.updatedAt)}
             modifiedOnly={false}
-            onEditInCompose={() => onModeChange('compose')}
             onSelectRow={setSelectedStructureRowId}
             preparing={preparing}
             query=""
@@ -3557,32 +3562,6 @@ function ReviewSurface({
   );
 }
 
-function ReviewCheckList({
-  checks,
-  snapshotCurrent = false,
-}: {
-  checks: ReviewCheckView[];
-  snapshotCurrent?: boolean;
-}) {
-  return (
-    <section aria-label="Check summary">
-      <ul className={workbenchStyles.checkList}>
-        {checks.map((check) => (
-          <li key={check.label}>
-            <CheckStatusMark status={snapshotCurrent ? check.status : 'pending'} />
-            <span>{check.label}</span>
-            {snapshotCurrent ? (
-              <CheckStatusBadge status={check.status} />
-            ) : (
-              <span>Not reviewed</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function WorkspaceReviewSummary({
   candidate,
   controller,
@@ -3611,7 +3590,10 @@ function WorkspaceReviewSummary({
   onPrepare: () => void;
 }) {
   const snapshotCurrent = snapshotStatus === 'matching';
-  const checks = getReviewChecks(controller);
+  const checks =
+    snapshotCurrent && controller.review.view?.mode === 'transition'
+      ? changeCheckRows(controller.review.view, controller.review.schemaReview?.contentValidation)
+      : [];
   const preparing = preparingSchema || controller.busyAction === 'review.prepare';
   const status = preparing
     ? 'Preparing review…'
@@ -3648,11 +3630,22 @@ function WorkspaceReviewSummary({
           need confirmation.
         </p>
       ) : null}
-      <ReviewCheckList checks={checks} snapshotCurrent={snapshotCurrent} />
-      <p>
-        Commit to <strong>{candidate.targetBranch || 'main'}</strong> after reviewing the fixed
-        snapshot.
-      </p>
+      <WorkspaceReviewValidation
+        checks={checks}
+        running={preparing}
+        actions={
+          <Button size="sm" variant="canvas-outline" onClick={onOpenChecks}>
+            Open Run <ExternalLink aria-hidden="true" />
+          </Button>
+        }
+      >
+        <WorkspaceSchemaDiagnostics
+          key={`${candidate.projectId}:${candidate.id}:${candidate.revision}`}
+          projectId={candidate.projectId}
+          workspaceId={candidate.id}
+          revision={candidate.revision}
+        />
+      </WorkspaceReviewValidation>
       {preparationError ? (
         <div role="alert">
           <p>{preparationError}</p>
@@ -3676,9 +3669,6 @@ function WorkspaceReviewSummary({
           type="button"
         >
           {preparing ? 'Preparing…' : 'Prepare review'}
-        </Button>
-        <Button size="sm" variant="canvas-outline" onClick={onOpenChecks} type="button">
-          Open Run <ExternalLink aria-hidden="true" />
         </Button>
       </div>
     </section>
@@ -3825,6 +3815,7 @@ function findWorkspaceReviewRow(rows: WorkspaceReviewStructureRow[], path: strin
 }
 
 function WorkspaceReviewSelectedDetails({
+  onRevise,
   activity,
   candidate,
   model,
@@ -3834,6 +3825,7 @@ function WorkspaceReviewSelectedDetails({
   candidate: WorkspaceCandidate;
   model: WorkspaceReviewStructureModel;
   row: WorkspaceReviewStructureRow;
+  onRevise: () => void;
 }) {
   const before = readStatePointValue(model.baseline, row.path);
   const after = readStatePointValue(model.head, row.path);
@@ -3878,13 +3870,15 @@ function WorkspaceReviewSelectedDetails({
         path={row.path}
         revisionLabel={version}
         current={current}
+        showCurrentValue={matchesBase}
         unknown={false}
         comparison={{ before: previous, after: current }}
         comparisonLabel={`Whole draft · Base → ${version}`}
         matchesBase={matchesBase}
       />
       {action ? (
-        <div className={workbenchStyles.selectedDetailsReason}>
+        <details className={workbenchStyles.selectedDetailsReason}>
+          <summary>Latest action · A{action.sequence}</summary>
           <ComposeChangeReason
             reason={action.reason ?? ''}
             actor={action.actor.id}
@@ -3893,7 +3887,7 @@ function WorkspaceReviewSelectedDetails({
             action={action}
             contextLabel={`Latest saved action affecting this path · A${action.sequence}. YOps describes the whole action.`}
           />
-        </div>
+        </details>
       ) : (
         <p className={workbenchStyles.selectedDetailsUnavailable}>
           {matchesBase
@@ -3901,6 +3895,11 @@ function WorkspaceReviewSelectedDetails({
             : 'Saved action details are unavailable for this path in the loaded history.'}
         </p>
       )}
+      <div className={workbenchStyles.fieldActions}>
+        <Button size="sm" variant="canvas-outline" onClick={onRevise}>
+          <Sparkles aria-hidden="true" /> Ask AI to revise
+        </Button>
+      </div>
     </section>
   );
 }
@@ -3930,26 +3929,13 @@ type WorkspaceReviewDiffChange = StructuredDiffChange & { path: string };
 
 function WorkspaceRenderedReview({
   model,
-  selectedRow,
   onSelectRow,
   controller,
-  onModeChange,
 }: {
   model: WorkspaceReviewStructureModel;
-  selectedRow: WorkspaceReviewStructureRow | null;
   onSelectRow: (id: string) => void;
   controller: WorkspaceComposeReviewController;
-  onModeChange: (mode: WorkspaceSurfaceMode) => void;
 }) {
-  const selectedKind = selectedRow?.diff?.kind;
-  const copyPath = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard)
-      void navigator.clipboard.writeText(selectedRow?.path ?? '');
-  };
-  const revise = () => {
-    controller.prefillAssistant(`Revise ${selectedRow?.path ?? ''}: `);
-    onModeChange('compose');
-  };
   return (
     <section aria-label="Rendered result">
       {controller.error ? <p role="alert">{controller.error}</p> : null}
@@ -3960,79 +3946,7 @@ function WorkspaceRenderedReview({
           if (row) onSelectRow(row.id);
         }}
       />
-      <details className={workbenchStyles.selection}>
-        <summary>Selected change · actions</summary>
-        <section aria-label="Review details">
-          <section aria-label="Selected section" className={reviewStyles.panel}>
-            <header>
-              <h2>
-                <Pencil aria-hidden="true" /> Selected change
-              </h2>
-              <button onClick={copyPath} type="button">
-                <Copy aria-hidden="true" /> Copy path
-              </button>
-            </header>
-            <code className={reviewStyles.path}>
-              {selectedRow?.path.split('/').join(' / ') ?? 'Current draft'}
-            </code>
-            <span className={reviewStyles.kind} data-kind={selectedKind}>
-              {selectedRow ? workspaceReviewKindLabel(selectedRow) : 'Unchanged'}
-            </span>
-            <button className={reviewStyles.primary} onClick={revise} type="button">
-              <Sparkles aria-hidden="true" /> Ask AI to revise
-            </button>
-          </section>
-        </section>
-      </details>
     </section>
-  );
-}
-
-function CheckStatusMark({
-  status,
-  large = false,
-}: {
-  status: ReviewCheckStatus;
-  large?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        checksStyles.statusMark,
-        checksStyles[status],
-        large && checksStyles.statusMarkLarge
-      )}
-    >
-      {status === 'passed' ? (
-        <Check aria-hidden="true" />
-      ) : status === 'failed' ? (
-        <X aria-hidden="true" />
-      ) : (
-        <CircleDot aria-hidden="true" />
-      )}
-    </span>
-  );
-}
-
-function CheckStatusBadge({
-  status,
-  ready = false,
-}: {
-  status: ReviewCheckStatus;
-  ready?: boolean;
-}) {
-  return (
-    <span className={cn(checksStyles.statusBadge, checksStyles[status])}>
-      {ready
-        ? status === 'passed'
-          ? 'Ready'
-          : 'Not ready'
-        : status === 'passed'
-          ? 'Passed'
-          : status === 'failed'
-            ? 'Failed'
-            : 'Pending'}
-    </span>
   );
 }
 
@@ -4040,10 +3954,8 @@ function WorkspaceReviewStructureView({
   activeRowId,
   candidate,
   checks,
-  controller,
   modifiedLabel,
   modifiedOnly,
-  onEditInCompose,
   onSelectRow,
   preparing,
   query,
@@ -4057,10 +3969,8 @@ function WorkspaceReviewStructureView({
   activeRowId: string | null;
   candidate: WorkspaceCandidate;
   checks: ReviewCheckView[];
-  controller: WorkspaceComposeReviewController;
   modifiedLabel: string;
   modifiedOnly: boolean;
-  onEditInCompose: () => void;
   onSelectRow: (rowId: string) => void;
   preparing: boolean;
   query: string;
@@ -4155,17 +4065,15 @@ function WorkspaceReviewStructureView({
               rows={rows}
             />
           )}
+          <details className={workbenchStyles.selection}>
+            <summary>Selected change · source and actions</summary>
+            <WorkspaceReviewNodeInspector
+              candidate={candidate}
+              selectedRow={selectedRow}
+              sourceLabel={sourceLabel}
+            />
+          </details>
         </div>
-        <details className={workbenchStyles.selection}>
-          <summary>Selected change · source and actions</summary>
-          <WorkspaceReviewNodeInspector
-            candidate={candidate}
-            controller={controller}
-            onEditInCompose={onEditInCompose}
-            selectedRow={selectedRow}
-            sourceLabel={sourceLabel}
-          />
-        </details>
       </div>
     </section>
   );
@@ -4387,7 +4295,18 @@ function WorkspaceReviewStructureTableRow({
           </span>
         </span>
       </td>
-      {reference ? (
+      {reference &&
+      row.diff?.exact &&
+      (row.diff.kind === 'added' || row.diff.kind === 'removed') ? (
+        <td className={diffStyles.referenceValue} colSpan={2}>
+          <small>{row.diff.kind === 'added' ? '+ Added' : '− Removed'}</small>{' '}
+          {row.diff.kind === 'added' ? (
+            <ins>{row.diff.afterValue}</ins>
+          ) : (
+            <del>{row.diff.beforeValue}</del>
+          )}
+        </td>
+      ) : reference ? (
         <>
           <td className={diffStyles.referenceValue}>
             {row.diff?.exact && row.diff.kind === 'added' ? (
@@ -4484,14 +4403,10 @@ function WorkspaceReviewDiffMarker({ kind }: { kind: StructuredDiffKind }) {
 
 function WorkspaceReviewNodeInspector({
   candidate,
-  controller,
-  onEditInCompose,
   selectedRow,
   sourceLabel,
 }: {
   candidate: WorkspaceCandidate;
-  controller: WorkspaceComposeReviewController;
-  onEditInCompose: () => void;
   selectedRow: WorkspaceReviewStructureRow | null;
   sourceLabel: string;
 }) {
@@ -4500,24 +4415,15 @@ function WorkspaceReviewNodeInspector({
     : { href: null, label: sourceLabel };
   return (
     <aside aria-label="Workspace selected change" className={diffStyles.inspector}>
-      <WorkspaceReviewChangeReviewPanel
-        controller={controller}
-        onEditInCompose={onEditInCompose}
-        row={selectedRow}
-        source={source}
-      />
+      <WorkspaceReviewChangeReviewPanel row={selectedRow} source={source} />
     </aside>
   );
 }
 
 function WorkspaceReviewChangeReviewPanel({
-  controller,
-  onEditInCompose,
   row,
   source,
 }: {
-  controller: WorkspaceComposeReviewController;
-  onEditInCompose: () => void;
   row: WorkspaceReviewStructureRow | null;
   source: { href: string | null; label: string };
 }) {
@@ -4526,10 +4432,6 @@ function WorkspaceReviewChangeReviewPanel({
   }
   const beforeValue = workspaceReviewBeforeValue(row);
   const resultValue = workspaceReviewResultValue(row);
-  const revise = () => {
-    controller.prefillAssistant(`Revise ${row.path}: `);
-    onEditInCompose();
-  };
   const copyPath = () => {
     if (navigator.clipboard) void navigator.clipboard.writeText(row.path);
   };
@@ -4578,9 +4480,6 @@ function WorkspaceReviewChangeReviewPanel({
             <span>{source.label}</span>
           </div>
         )}
-        <button className={diffStyles.revise} onClick={revise} type="button">
-          <Sparkles aria-hidden="true" className="size-4" /> Ask AI to revise
-        </button>
       </div>
     </section>
   );

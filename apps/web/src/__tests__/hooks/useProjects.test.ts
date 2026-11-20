@@ -10,6 +10,7 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 // Mock infrastructure (listProjects for initial load + deleteProject) and
 // commands (createProject) before importing the hook.
 vi.mock('@/infrastructure/projects', () => ({
+  listProjectPage: vi.fn(),
   listProjects: vi.fn(),
   deleteProject: vi.fn(),
 }));
@@ -21,7 +22,7 @@ vi.mock('@/commands/projects', () => ({
 import { createProject as createProjectCommand } from '@/commands/projects';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { dispatchProjectRestored } from '@/hooks/shared/deleteEvents';
-import { listProjects } from '@/infrastructure/projects';
+import { listProjectPage, listProjects } from '@/infrastructure/projects';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,6 +34,27 @@ afterEach(() => {
 });
 
 describe('useProjects.create', () => {
+  it('loads only the first cursor page until the next page is requested', async () => {
+    const first = { project_id: 'one', name: 'First' };
+    const second = { project_id: 'two', name: 'Second' };
+    vi.mocked(listProjectPage)
+      .mockResolvedValueOnce({ items: [first], next_cursor: 'next', has_more: true } as never)
+      .mockResolvedValueOnce({ items: [second], next_cursor: null, has_more: false } as never);
+    const { result } = renderHook(() => useProjects(1, 'alice', 'on-demand'));
+    await waitForHook();
+    expect(listProjectPage).toHaveBeenCalledExactlyOnceWith(1, '', 'alice');
+    expect(result.current.projects).toEqual([first]);
+    expect(result.current.hasMore).toBe(true);
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(listProjectPage).toHaveBeenLastCalledWith(1, 'next', 'alice');
+    expect(result.current.projects).toEqual([first, second]);
+    expect(result.current.hasMore).toBe(false);
+    expect(listProjects).not.toHaveBeenCalled();
+  });
+
   it('loads every backend page for directory search, while keeping default callers bounded', async () => {
     const first = [
       { project_id: 'one', name: 'First' },

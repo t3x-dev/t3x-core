@@ -63,6 +63,25 @@
 .branch.branch.branch:hover {
   background: #e9eaee;
 }
+.branchIcon {
+  color: var(--accent-branch);
+}
+[data-state-view]:not([data-state-view="canvas"]) .branch.branch.branch {
+  border: 1px solid var(--state-control-border, var(--stroke-default));
+  background: var(--state-control-bg, var(--surface-card));
+  color: var(--text-primary);
+}
+[data-state-view]:not([data-state-view="canvas"])
+  .branch.branch.branch:is(:hover:not(:disabled), [data-state="open"]) {
+  background: var(--state-control-hover, var(--hover-bg));
+}
+[data-state-view]:not([data-state-view="canvas"]) .branch.branch.branch:focus-visible {
+  outline: 2px solid var(--state-tab-accent, var(--ring));
+  outline-offset: 2px;
+}
+[data-state-view]:not([data-state-view="canvas"]) .branchIcon {
+  color: var(--state-tab-accent, var(--accent-commit));
+}
 .branch.branch.branch.subtle {
   background: transparent;
   color: var(--text-primary);

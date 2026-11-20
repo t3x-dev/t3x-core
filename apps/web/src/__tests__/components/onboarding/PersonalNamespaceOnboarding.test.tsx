@@ -53,6 +53,14 @@ describe('PersonalNamespaceOnboarding', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });
 
+  it('offers a valid namespace for an account handle with underscores', () => {
+    render(<PersonalNamespaceOnboarding suggestedNamespace="ux_audit_member_2" />);
+
+    expect(screen.getByLabelText('Personal namespace')).toHaveValue('ux-audit-member-2');
+    expect(screen.getByRole('button', { name: 'Use @ux-audit-member-2' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
   it('restores the suggested namespace after editing', () => {
     render(<PersonalNamespaceOnboarding suggestedNamespace="lqw905" />);
     const input = screen.getByLabelText('Personal namespace');

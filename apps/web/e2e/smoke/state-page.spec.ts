@@ -65,7 +65,12 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push('pageerror: ' + error.message));
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push('console.error: ' + message.text());
+      if (message.type() !== 'error') return;
+      const missingCandidate = message.text().includes('status of 404') &&
+        message.location().url.endsWith(
+          `/api/v1/projects/${projectId}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`
+        );
+      if (!missingCandidate) errors.push('console.error: ' + message.text());
     });
 
     const response = await page.goto(
@@ -118,8 +123,7 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     await page.setViewportSize({ width: 1280, height: 720 });
 
 
-    await page.getByRole('button', { name: 'History', exact: true }).click();
-    await page.getByRole('link', { name: 'History canvas', exact: true }).click();
+    await page.goto(`/project/${projectId}?view=canvas&branch=${encodeURIComponent('feature/prd-audience')}`);
     await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'canvas');
     const canvasRegion = page.getByRole('region', { name: 'Multi-commit state canvas' });
     await expect(canvasRegion).toBeVisible();
@@ -138,16 +142,15 @@ test('State page smoke: repository controls, snapshot views, and Canvas remain o
     ).toBeLessThanOrEqual(2);
 
     await page.locator('[data-intro-target="canvas-back-to-state"]:visible').click();
-    await expect(page.getByRole('region', { name: 'State structure' })).toBeVisible();
-    await expect(page).toHaveURL((url) => url.searchParams.get('branch') === 'feature/prd-audience');
+    await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Structure', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'State structure', exact: true })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname.endsWith('/branches/feature%2Fprd-audience'));
 
     await page.getByRole('link', { name: 'Propose change' }).click();
-    await expect(page).toHaveURL((url) => {
-      return (
-        (url.pathname.endsWith('/workspaces') || url.searchParams.get('tab') === 'workspaces') &&
-        url.searchParams.get('branch') === 'feature/prd-audience'
-      );
-    });
+    await expect(page).toHaveURL(
+      (url) => url.pathname.endsWith('/branches/feature%2Fprd-audience/workspaces')
+    );
     await expect(page.getByRole('link', { name: 'Workspace' })).toHaveAttribute(
       'aria-current',
       'page'

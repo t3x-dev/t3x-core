@@ -55,25 +55,58 @@
   gap: 8px;
   margin-left: auto;
 }
-.actions a {
+.actions > :is(a, button) {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-height: 32px;
   padding: 4px 10px;
-  border: 1px solid var(--stroke-default);
+  border: 1px solid var(--state-control-border, var(--stroke-default));
   border-radius: var(--radius-md);
+  background: var(--state-control-bg, var(--surface-card));
+  box-shadow: none;
   color: var(--text-secondary);
   font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
 }
-.actions a:hover {
-  background: var(--hover-bg);
+.actions > :is(a, button):not(.primary, :disabled):hover {
+  background: var(--state-control-hover, var(--hover-bg));
+  color: var(--text-primary);
 }
-.actions a.primary {
-  background: var(--accent-commit);
-  border-color: var(--accent-commit);
-  color: var(--text-on-accent, #fff);
+.actions > :is(a, button):not(.primary, :disabled):active {
+  background: color-mix(
+    in srgb,
+    var(--state-control-hover, var(--hover-bg)) 92%,
+    var(--text-primary)
+  );
+}
+.actions > :is(a, button):focus-visible {
+  outline: 2px solid var(--state-tab-accent, var(--ring));
+  outline-offset: 2px;
+}
+.actions > a.primary {
+  background: var(--state-primary-bg, var(--accent-commit));
+  border-color: var(--state-primary-bg, var(--accent-commit));
+  color: var(--state-primary-fg, var(--text-on-accent, #fff));
+}
+.actions > a.primary:hover {
+  background: color-mix(
+    in srgb,
+    var(--state-primary-bg, var(--accent-commit)) 90%,
+    var(--text-primary)
+  );
+}
+.actions > a.primary:active {
+  background: color-mix(
+    in srgb,
+    var(--state-primary-bg, var(--accent-commit)) 85%,
+    var(--text-primary)
+  );
 }
 .actions svg {
   width: 14px;
@@ -94,22 +127,40 @@
   gap: 6px;
   min-height: 36px;
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   flex: none;
   border: 0;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--text-secondary);
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+.viewTabs button:hover {
+  background: var(--state-control-bg, var(--hover-bg));
+  color: var(--text-primary);
 }
 .viewTabs button[aria-selected="true"] {
-  background: transparent;
-  border-bottom-color: var(--accent-commit);
-  color: var(--text-primary);
-  font-weight: 600;
+  background: color-mix(in srgb, var(--state-tab-accent, var(--accent-commit)) 6%, transparent);
+  border-bottom-color: var(--state-tab-accent, var(--accent-commit));
+  color: var(--state-tab-accent, var(--accent-commit));
+}
+.viewTabs button:focus-visible {
+  outline: 2px solid var(--state-tab-accent, var(--ring));
+  outline-offset: -3px;
+  box-shadow: none;
 }
 .viewTabs svg {
   width: 14px;
   height: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .actions > :is(a, button),
+  .viewTabs button {
+    transition: none;
+  }
 }
 
 .informationLayout {
@@ -118,13 +169,16 @@
   display: grid;
   grid-template-columns: var(--repo-main-with-inspector);
   align-items: start;
-  gap: var(--repo-frame-gap);
-  padding: 24px 0 32px;
+  gap: 16px;
+  padding: 16px 0 32px;
 }
 .mainColumn {
   composes: primary from "./RepositoryWorkbench.module.css";
-  --readme-inset: clamp(12px, 2vw, 24px);
+  --repo-frame-radius: var(--radius-lg);
+  --readme-inset: clamp(16px, 2.4vw, 28px);
   padding: 0 var(--readme-inset) var(--readme-inset);
+  border-color: var(--state-divider, var(--stroke-default));
+  background: var(--state-card-bg, var(--surface-card));
 }
 .mainColumn,
 .sidebar {
@@ -133,11 +187,13 @@
 .sidebar {
   display: grid;
   align-content: start;
-  align-self: stretch;
-  contain: size;
-  overflow: auto;
-  gap: 32px;
-  padding: 7px 0 0 12px;
+  gap: 12px;
+}
+.sidebar > :is(.about, .stateContent, .version) {
+  padding: 14px 16px;
+  border: 1px solid var(--state-divider, var(--stroke-default));
+  border-radius: var(--radius-lg);
+  background: var(--state-card-bg, var(--surface-card));
 }
 .about {
   display: grid;
@@ -233,11 +289,12 @@
   font-size: 15px;
   line-height: 24px;
   font-weight: 650;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 .rootCount {
   font-size: 12px;
   color: var(--text-secondary);
+  text-align: right;
 }
 .sidebarLink {
   display: inline-flex;
@@ -282,7 +339,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  color: var(--identity-teal);
 }
 .structureToggle:hover,
 .structureKey:is(button):hover {
@@ -352,6 +409,7 @@ a.commitMessage:hover {
 .commitHash svg {
   width: 14px;
   height: 14px;
+  color: var(--identity-sky);
 }
 .metadata {
   display: grid;
@@ -406,10 +464,10 @@ a.commitMessage:hover {
   justify-content: space-between;
   gap: 8px;
   margin: 0 calc(-1 * var(--readme-inset)) 20px;
-  padding: 5px 12px;
-  border-bottom: 1px solid var(--stroke-divider);
+  padding: 5px var(--readme-inset);
+  border-bottom: 1px solid var(--state-divider, var(--stroke-divider));
   border-radius: var(--repo-frame-radius) var(--repo-frame-radius) 0 0;
-  background: color-mix(in srgb, var(--surface-panel) 35%, var(--surface-card));
+  background: var(--state-panel-bg, var(--surface-panel));
 }
 .readmeHeader h2 {
   display: flex;
@@ -605,7 +663,7 @@ a.commitMessage:hover {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--surface-panel);
+  background: var(--state-panel-bg, var(--surface-panel));
 }
 .readmeEditor .readmeActions button[type="submit"] {
   color: var(--text-on-accent, #fff);
@@ -671,6 +729,9 @@ a.commitMessage:hover {
   font-weight: 600;
   color: var(--text-primary);
 }
+.feedback[role="alert"] h3 {
+  color: var(--status-error);
+}
 .feedback p {
   margin: 8px 0;
 }
@@ -705,9 +766,111 @@ a.commitMessage:hover {
   font-weight: 500;
 }
 .emptyContent p {
-  margin: 8px 0 12px;
+  margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.7;
+  color: var(--text-secondary);
+}
+.sidebar:has(.emptyState) {
+  contain: none;
+  overflow: visible;
+}
+.emptyState {
+  display: grid;
+  gap: 16px;
+}
+.yamlIllustration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  padding: 12px 16px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--identity-teal);
+}
+.yamlIllustration > svg {
+  width: 40px;
+  height: 48px;
+  stroke-width: 1.25;
+}
+.yamlIllustration > div {
+  display: grid;
+  gap: 5px;
+  width: 48px;
+}
+.yamlIllustration span {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.yamlIllustration i {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--stroke-default);
+}
+.yamlIllustration i:nth-child(2) {
+  width: 65%;
+  background: var(--identity-teal);
+}
+.yamlIllustration i:nth-child(3) {
+  margin-left: 8px;
+}
+.startActions {
+  display: grid;
+  gap: 10px;
+}
+.startCard {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: start;
+  gap: 10px;
+  padding: 14px 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+a.startCard:first-child {
+  background: var(--state-panel-bg, var(--surface-panel));
+}
+a.startCard:first-child .startIcon {
+  color: var(--identity-sky);
+}
+a.startCard:not(:first-child) {
+  background: var(--state-card-bg, var(--surface-card));
+}
+a.startCard:hover {
+  border-color: var(--accent-commit);
+}
+a.startCard:hover h4 {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.startCard h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.startCard p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.startIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-commit);
+}
+.startArrow {
+  width: 14px;
+  height: 20px;
+  color: var(--text-secondary);
+}
+.startCard[aria-disabled="true"] .startIcon {
   color: var(--text-secondary);
 }
 .root :is(button, a, textarea):focus-visible,
@@ -722,24 +885,31 @@ a.commitMessage:hover {
   }
   .informationLayout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 40px;
-    padding-top: 20px;
   }
   .sidebar {
-    contain: none;
-    overflow: visible;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 28px;
-    padding: 0;
   }
   .about {
     grid-column: 1 / -1;
+  }
+  .sidebar:has(.emptyState) .stateContent {
+    grid-column: 1 / -1;
+  }
+  .startActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .markdown h1 {
     font-size: 28px;
   }
 }
 @media (max-width: 480px) {
+  .actions,
+  .readmeActions {
+    margin-left: 0;
+  }
+  .startActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .sidebar {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -748,6 +918,7 @@ a.commitMessage:hover {
 .root.embedded {
   display: flex;
   overflow: visible;
+  background: transparent;
 }
 .embedded > .page {
   padding: 0;

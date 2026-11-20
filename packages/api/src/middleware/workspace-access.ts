@@ -1,11 +1,17 @@
-import { findWorkspaceDraftOwner, type WorkspaceOwner } from '@t3x-dev/storage';
+import {
+  findWorkspaceDraftForOwner,
+  findWorkspaceDraftOwner,
+  type WorkspaceOwner,
+} from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { logAuthorizationDenial } from '../lib/authorization-denial-audit';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import { projectActionForRequest } from '../lib/project-access';
+import { isPendingSchemaRead, timeRepositoryRead } from '../lib/repository-read-timing';
 import { getRequestPrincipal } from '../lib/request-principal';
+import type { AppEnv } from '../types';
 
 /**
  * Resolve Workspace ownership from trusted authentication state. A user-bound
@@ -62,7 +68,7 @@ async function workspaceRouteIdentity(
  * Missing Workspaces continue to the route so the canonical save/create path
  * can create a principal-bound Workspace.
  */
-export async function workspaceAccessMiddleware(c: Context, next: Next) {
+export async function workspaceAccessMiddleware(c: Context<AppEnv>, next: Next) {
   if (isAuthenticationDisabled()) return next();
   const identity = await workspaceRouteIdentity(c);
   if (!identity) return next();
@@ -76,11 +82,19 @@ export async function workspaceAccessMiddleware(c: Context, next: Next) {
     });
     return c.json(createError('FORBIDDEN', 'Access denied'), 403);
   }
-  const storedOwner = await findWorkspaceDraftOwner(
-    await getDB(),
-    identity.projectId,
-    identity.workspaceId
-  );
+  const db = await getDB();
+  if (isPendingSchemaRead(c)) {
+    // Reuse the exact owner-scoped read in the handler without loading a foreign draft.
+    const draft = await timeRepositoryRead(c, 'owned_workspace', () =>
+      findWorkspaceDraftForOwner(db, identity.projectId, identity.workspaceId, owner)
+    );
+    if (draft) {
+      c.set('pendingSchemaWorkspace', draft);
+      return next();
+    }
+    // Keep the existing denial audit and missing-workspace response on misses.
+  }
+  const storedOwner = await findWorkspaceDraftOwner(db, identity.projectId, identity.workspaceId);
   if (
     storedOwner !== undefined &&
     (storedOwner === null || storedOwner.kind !== owner.kind || storedOwner.id !== owner.id)

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { namespaces, projects, repositoryPaths } from '../schema';
 
@@ -54,12 +54,46 @@ export async function getRepositoryAddress(
       )
     )
     .where(eq(namespaces.namespaceId, project.namespaceId));
+  return repositoryAddress(project, row);
+}
+
+export const repositoryAddressColumns = {
+  slug: namespaces.slug,
+  claimedBy: repositoryPaths.projectId,
+  resolvable: repositoryPaths.resolvable,
+};
+
+export const repositoryPathMatchesProject = and(
+  eq(repositoryPaths.namespaceId, namespaces.namespaceId),
+  eq(repositoryPaths.nameKey, sql`lower(${projects.name})`)
+);
+
+export function repositoryAddress(
+  project: { projectId: string; name: string },
+  row?: { slug: string | null; claimedBy: string | null; resolvable: boolean | null }
+) {
   const ready = row?.claimedBy === project.projectId && row.resolvable === true;
   return {
     namespace: row?.slug ?? null,
     canonical_path: ready ? `/${row.slug}/${project.name}` : null,
     path_status: ready ? ('ready' as const) : ('pending_migration' as const),
   };
+}
+
+export async function getRepositoryAddresses(db: AnyDB, projectIds: string[]) {
+  const rows = projectIds.length
+    ? await db
+        .select({
+          projectId: projects.projectId,
+          name: projects.name,
+          ...repositoryAddressColumns,
+        })
+        .from(projects)
+        .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))
+        .leftJoin(repositoryPaths, repositoryPathMatchesProject)
+        .where(inArray(projects.projectId, projectIds))
+    : [];
+  return new Map(rows.map((row) => [row.projectId, repositoryAddress(row, row)]));
 }
 
 /** Walk Drizzle's cause chain without exposing SQL or private row details. */

@@ -28,6 +28,7 @@ export function WorkspaceCurrentDraft({
   stagedCount = 0,
   authoring,
   schemaControl,
+  schemaCandidateNotice,
   subject = 'content',
   onSubjectChange,
   onEdit,
@@ -42,6 +43,7 @@ export function WorkspaceCurrentDraft({
   stagedCount?: number;
   authoring?: Pick<WorkspaceAuthoringView, 'workspaceRevision' | 'currentSchema'> | null;
   schemaControl?: ReactNode;
+  schemaCandidateNotice?: ReactNode;
   subject?: 'content' | 'schema';
   onSubjectChange?: (subject: 'content' | 'schema') => void;
   onEdit?: (subject: 'content' | 'schema', path?: string) => void;
@@ -50,7 +52,24 @@ export function WorkspaceCurrentDraft({
   const [selectedContent, setSelectedContent] = useState<string>();
   const schema = useWorkspaceDraftSchema(candidate, authoring);
   const pending = useWorkspaceSchemaPending(candidate.projectId, candidate.id, candidate.revision);
-  const binding = candidate.schemaBindings[0];
+  const inspectedSchema = authoring?.currentSchema;
+  const binding = inspectedSchema
+    ? inspectedSchema.status === 'bound'
+      ? inspectedSchema.bindings[0]
+      : undefined
+    : candidate.schemaBindings[0];
+  const bindingName =
+    typeof binding?.schemaName === 'string' ? binding.schemaName : 'Name not recorded';
+  const displayName = /^studio:sha256:[a-f0-9]{64}$/.test(bindingName)
+    ? 'Workspace Schema'
+    : bindingName;
+  const bindingVersion =
+    typeof binding?.version === 'string' || typeof binding?.version === 'number'
+      ? String(binding.version)
+      : 'not recorded';
+  const canonicalName =
+    typeof binding?.canonicalName === 'string' ? binding.canonicalName : undefined;
+  const bindingHash = typeof binding?.schemaHash === 'string' ? binding.schemaHash : undefined;
   const selectedNode = walkDraftStructure(current).find((item) => item.path === selectedContent);
   const semanticPath = selectedNode
     ? (authoringSemanticPath(selectedNode.path) ?? selectedNode.path)
@@ -85,7 +104,10 @@ export function WorkspaceCurrentDraft({
         ) : (
           <h2>Current Draft</h2>
         )}
-        {revision !== undefined ? (
+        {subject === 'schema' &&
+        (authoring?.workspaceRevision ?? candidate.revision) !== undefined ? (
+          <span>Workspace r{authoring?.workspaceRevision ?? candidate.revision}</span>
+        ) : subject === 'content' && revision !== undefined ? (
           <span title="Content editing revision">Content r{revision}</span>
         ) : null}
         {!onEdit ? <small>Read-only</small> : null}
@@ -149,19 +171,34 @@ export function WorkspaceCurrentDraft({
           className={styles.currentDraftSection}
         >
           {!onSubjectChange ? <h3>Structure definition · YSchema</h3> : null}
-          {schemaControl ? (
-            <div className={styles.schemaBindingControl}>
-              <span>Bound Schema</span>
-              {schemaControl}
-            </div>
-          ) : null}
-          {schemaControl ? null : binding ? (
-            <p className={styles.currentDraftBinding} title={binding.schemaHash}>
-              {binding.schemaName} · {binding.version} <span>Bound</span>
-            </p>
-          ) : (
-            <p>No Schema bound.</p>
-          )}
+          {schemaCandidateNotice}
+          <section className={styles.currentSchemaBinding} aria-label="Current Schema binding">
+            <h3>Current binding</h3>
+            {binding ? (
+              <>
+                <strong>{displayName}</strong>
+                <span>Version {bindingVersion}</span>
+                <details>
+                  <summary>Binding details</summary>
+                  {displayName !== bindingName ? <p>{bindingName}</p> : null}
+                  {canonicalName ? <p>{canonicalName}</p> : null}
+                  {bindingHash ? <code>{bindingHash}</code> : <p>Schema hash not recorded.</p>}
+                </details>
+              </>
+            ) : (
+              <p>
+                {inspectedSchema?.status === 'unknown'
+                  ? 'Current Schema unavailable.'
+                  : 'No Schema bound.'}
+              </p>
+            )}
+            {schemaControl ? (
+              <div className={styles.schemaBindingControl}>
+                <span>Choose binding</span>
+                {schemaControl}
+              </div>
+            ) : null}
+          </section>
           {corresponding ? (
             <div className="flex flex-wrap gap-2 p-2 text-xs">
               <strong>{corresponding.semanticPath}</strong>
@@ -192,9 +229,9 @@ export function WorkspaceCurrentDraft({
               ) : null}
             </div>
           ) : null}
-          {schema.loading ? (
+          {binding && schema.loading ? (
             <p>Loading bound Schema…</p>
-          ) : schema.definition ? (
+          ) : binding && schema.definition ? (
             <div className={styles.currentDraftSchema}>
               {Object.keys(schema.definition.nodes ?? {}).length ? (
                 <SchemaDefinitionTree schema={schema.definition} />
@@ -202,19 +239,15 @@ export function WorkspaceCurrentDraft({
                 <p>No nodes defined.</p>
               )}
             </div>
-          ) : schema.error ? (
+          ) : binding && schema.error ? (
             <output>{schema.error}</output>
           ) : null}
-          {schema.hasCandidate || pending.data?.pending ? (
+          {pending.data?.pending ? (
             <p className={styles.currentDraftNotice}>
-              Schema candidate available in Studio · current binding shown above
-              {pending.data?.status === 'stale' ? ' · needs a new preview' : ''}
+              {pending.data.status === 'stale'
+                ? 'Schema preparation needs a new preview.'
+                : 'Schema change awaiting preparation.'}
             </p>
-          ) : null}
-          {onEdit && (schema.hasCandidate || pending.data?.pending) ? (
-            <button type="button" className="text-sm underline" onClick={() => onEdit('schema')}>
-              Resume Schema candidate
-            </button>
           ) : null}
           <Link href={studioHref}>Open Schema Studio →</Link>
         </section>

@@ -2,7 +2,11 @@
 
 import { notFound, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
-import { getProjectIdRepoPath } from '@/domain/project/repoPath';
+import {
+  getProjectIdRepoPath,
+  repositoryBranch,
+  repositoryBranchRoute,
+} from '@/domain/project/repoPath';
 import {
   isRetiredRepositoryLocation,
   isSupportedRepositorySuffix,
@@ -86,7 +90,7 @@ export function ProjectRouteShell({
   }, [resolvedProject?.canonical_path, pathname, query, projectId, router]);
 
   const suffix = `/${pathname.split('/').slice(3).join('/')}`;
-  const [, view = '', detail] = suffix.split('/');
+  const [, view = '', detail] = (repositoryBranchRoute(suffix)?.suffix ?? suffix).split('/');
   const pageTitle =
     view === 'checks' && detail
       ? /^(review|validation|schema|pr)-[1-9][0-9]*$/.test(detail)
@@ -116,7 +120,11 @@ export function ProjectRouteShell({
   return (
     <ProjectShell
       activeTab={resolveProjectRouteTab(view || null, new URLSearchParams(query))}
-      branch={searchParams.get('branch') === 'all' ? null : searchParams.get('branch')}
+      branch={
+        repositoryBranch(pathname, searchParams) === 'all'
+          ? null
+          : repositoryBranch(pathname, searchParams)
+      }
       pageTitle={resolvedProject ? pageTitle : null}
       project={project}
       projectIdNavigation={Boolean(projectId)}

@@ -69,7 +69,7 @@ describe('ProjectRouteShell', () => {
     expect(await screen.findByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     await waitFor(() =>
       expect(navigation.replace).toHaveBeenCalledWith(
-        '/team/Test-Project/history?branch=main&view=list',
+        '/team/Test-Project/branches/main/history?view=list',
         { scroll: false }
       )
     );
@@ -120,10 +120,9 @@ describe('ProjectRouteShell', () => {
     );
 
     await waitFor(() =>
-      expect(navigation.replace).toHaveBeenCalledWith(
-        '/team/Test-Project/pull-requests?branch=feature%2Frelease&pr=7',
-        { scroll: false }
-      )
+      expect(navigation.replace).toHaveBeenCalledWith('/team/Test-Project/pull-requests?pr=7', {
+        scroll: false,
+      })
     );
   });
 
@@ -160,7 +159,7 @@ describe('ProjectRouteShell', () => {
       );
       expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute(
         'href',
-        '/team/Test-Project?branch=feature%2Frelease'
+        '/team/Test-Project/branches/feature%2Frelease'
       );
     });
   });
@@ -192,7 +191,7 @@ describe('ProjectRouteShell', () => {
     );
     await waitFor(() =>
       expect(navigation.replace).toHaveBeenCalledWith(
-        `/team/Test-Project/history?${navigation.search.replace('tab=history&', '')}`,
+        `/team/Test-Project/branches/feature%2Frelease/history?${navigation.search.replace('tab=history&branch=feature%2Frelease&', '')}`,
         { scroll: false }
       )
     );

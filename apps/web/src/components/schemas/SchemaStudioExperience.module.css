@@ -76,6 +76,43 @@
 }
 .toolbarActions {
   margin-left: auto;
+  gap: 12px;
+}
+.editingTools {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.editingTools button {
+  color: var(--text-secondary);
+}
+.moreMenu {
+  width: 288px;
+  max-width: calc(100vw - 24px);
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow-y: auto;
+}
+.menuLabel {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.menuHint {
+  margin: 0;
+  padding: 0 8px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.destructiveAction,
+.destructiveAction:focus {
+  color: var(--status-error);
 }
 .navLink {
   min-height: 32px;
@@ -99,8 +136,8 @@
 .body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  flex: 1 0 420px;
-  min-height: 420px;
+  flex: 1 0 320px;
+  min-height: 0;
   position: relative;
   gap: 16px;
 }
@@ -108,8 +145,10 @@
   display: flex;
   min-height: 0;
   min-width: 0;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--repo-frame-radius, 12px);
   overflow: hidden;
-  background: var(--surface-card);
+  background: var(--schema-card-bg, var(--surface-card));
 }
 .body:has([data-schema-unavailable], [data-schema-empty]) {
   flex: 0 0 auto;
@@ -212,9 +251,16 @@
   .app {
     padding-inline: 16px;
   }
+  .tool,
+  .toolbarActions {
+    gap: 8px;
+  }
   .toolbarActions {
     justify-content: flex-start;
     margin-left: 0;
+  }
+  .body {
+    flex-basis: 260px;
   }
 }
 

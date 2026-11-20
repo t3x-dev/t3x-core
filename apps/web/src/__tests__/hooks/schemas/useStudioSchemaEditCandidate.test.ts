@@ -217,3 +217,31 @@ it('synchronizes generated snapshots only for the matching Workspace and removes
   window.dispatchEvent(new Event('focus'));
   expect(mocks.read).toHaveBeenCalledTimes(after);
 });
+
+it('rejects queued writes and late replies after the browser account changes', async () => {
+  localStorage.removeItem('t3x-user');
+  mocks.read.mockResolvedValue(null);
+  const pending = deferred<unknown>();
+  mocks.save.mockReturnValue(pending.promise);
+  const { result, unmount } = renderHook(() =>
+    useStudioSchemaEditCandidate('project', 'workspace', 7)
+  );
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  let request!: ReturnType<typeof result.current.save>;
+  act(() => {
+    request = result.current.save(saveInput);
+  });
+  const failed = expect(request).rejects.toThrow(/context changed/);
+  act(() => {
+    localStorage.setItem('t3x-user', JSON.stringify({ id: 'another-account' }));
+    window.dispatchEvent(new StorageEvent('storage', { key: 't3x-user' }));
+  });
+  await act(async () => pending.resolve({ candidate: { revision: 1 }, workspaceRevision: 8 }));
+  await failed;
+  expect(result.current.candidate).toBeNull();
+  expect(result.current.error).toMatch(/Account changed/);
+  await expect(result.current.save(saveInput)).rejects.toThrow(/context changed/);
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  unmount();
+  localStorage.removeItem('t3x-user');
+});

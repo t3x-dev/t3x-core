@@ -1,12 +1,14 @@
 'use client';
 
 import type { SchemaPreparationTarget, StudioCandidate, StudioPreview } from '@t3x-dev/api-client';
-import { Settings2 } from 'lucide-react';
+import { BookOpen, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateBranchControls } from '@/components/project/StateBranchControls';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,9 +20,16 @@ import {
 } from '@/components/ui/dialog';
 import { WorkspaceStageNavigation } from '@/components/workspaces/WorkspaceStageNavigation';
 import { getProjectWorkspaceStarterCandidate } from '@/data/workspaceCandidates';
-import { getProjectIdWorkspacePath } from '@/domain/project/repoPath';
+import {
+  getCanonicalRepositoryPath,
+  getProjectIdRepoPath,
+  getProjectIdWorkspacePath,
+  repositoryBranch,
+  workspaceLocation,
+} from '@/domain/project/repoPath';
 import { schemaFieldRows } from '@/domain/schemas/schemaFieldEditing';
 import {
+  schemaBrowseHref,
   schemaReviewHref,
   schemaSourceHref,
   schemaWorkspaceHref,
@@ -45,9 +54,8 @@ import { useStudioCandidates } from '@/hooks/schemas/useStudioCandidates';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
-import { useBranches } from '@/hooks/shared/useBranches';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import type { SchemaSaveState } from '@/types/schemas';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaSourceComposition } from './SchemaSourceComposition';
@@ -189,20 +197,23 @@ export function SchemaStudioExperience({
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const repositoryPath = getCanonicalRepositoryPath(pathname);
   const candidates = useStudioCandidates(projectId);
-  const workspaces = useProjectWorkspaces(projectId);
-  const projectBranches = useBranches(projectId, true);
+  const { branches: projectBranches, workspaces } = useRepositoryViewData(projectId);
   const { saveDraft } = useWorkspaceFlow();
   const [workspaceSetupFailures, setWorkspaceSetupFailures] = useState<{
     scope: object;
     errors: Record<string, string>;
   }>();
-  const [workspaceSetupRetry, setWorkspaceSetupRetry] = useState(0);
+  const [workspaceSetupPending, setWorkspaceSetupPending] = useState<{
+    scope: object;
+    key: string;
+  }>();
   const [selection, setSelection] = useState<string[]>([]);
   const navigationRef = useRef<SchemaEditorNavigation | null>(null);
   const reviewFlow = useSchemaReviewFlow(projectId);
   const requestedWorkspaceId = params?.get('workspace') ?? '';
-  const requestedBranch = params?.get('branch');
+  const requestedBranch = repositoryBranch(pathname, params);
   const query = params?.toString() ?? '';
   const [implicitTarget, setImplicitTarget] = useState<{
     scope: string;
@@ -246,6 +257,8 @@ export function SchemaStudioExperience({
   const [editorInvalid, setEditorInvalid] = useState(false);
   const [dataDirty, setDataDirty] = useState(false);
   const [dataCanSave, setDataCanSave] = useState(false);
+  const [saveState, setSaveState] = useState<SchemaSaveState>({ status: 'idle' });
+  const localEditVersion = useRef(0);
   const dataDirtyRef = useRef(false);
   const updateDataDirty = useCallback((dirty: boolean) => {
     dataDirtyRef.current = dirty;
@@ -315,14 +328,32 @@ export function SchemaStudioExperience({
       ),
     [projectBranches.branchHeads, projectBranches.branches, projectId, workspaces.workspaces]
   );
-  const targetsReady =
-    !workspaces.loading && !workspaces.error && !projectBranches.loading && !projectBranches.error;
+  const workspacesReady = !workspaces.loading && !workspaces.error;
+  const targetsReady = workspacesReady && !projectBranches.loading && !projectBranches.error;
   const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
   const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
+  const explicitBranchWorkspace =
+    requestedBranch && workspacesReady
+      ? resolveStudioWorkspaceId(workspaces.workspaces, '', requestedBranch)
+      : '';
+  const defaultWorkspaceId = resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch);
+  // A branch refresh retains the previous inventory. Reuse its saved draft while
+  // keeping initial discovery and creation dependent on a completed branch read.
+  const canReuseSavedDraft =
+    !requestedBranch &&
+    workspacesReady &&
+    projectBranches.loading &&
+    !projectBranches.error &&
+    projectBranches.branches.length > 0 &&
+    workspaces.workspaces.some(
+      ({ id, status }) => id === defaultWorkspaceId && status !== 'committed'
+    );
+  const defaultReady = targetsReady || canReuseSavedDraft;
   const workspaceId =
     requestedWorkspaceId ||
     pinned?.id ||
-    (targetsReady ? resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch) : '');
+    explicitBranchWorkspace ||
+    (defaultReady ? defaultWorkspaceId : '');
   const selectedTarget =
     draftWorkspaces.find((item) => item.id === workspaceId) ??
     workspaces.workspaces.find((item) => item.id === workspaceId);
@@ -330,13 +361,29 @@ export function SchemaStudioExperience({
     selectedTarget && requestedBranch && selectedTarget.targetBranch !== requestedBranch
   );
   const target = targetMismatch ? undefined : selectedTarget;
+  useEffect(() => {
+    if (repositoryPath && requestedWorkspaceId && !requestedBranch && target && targetsReady) {
+      router.replace(`${schemaWorkspaceHref(pathname, query, target)}${window.location.hash}`, {
+        scroll: false,
+      });
+    }
+  }, [
+    repositoryPath,
+    requestedWorkspaceId,
+    requestedBranch,
+    target,
+    targetsReady,
+    pathname,
+    query,
+    router,
+  ]);
   const invalidTarget = Boolean(targetMismatch || (workspaceId && !selectedTarget));
   const targetCommitted = target?.status === 'committed';
   useEffect(() => {
-    if (!requestedWorkspaceId && !pinned && targetsReady && target) {
+    if (!requestedWorkspaceId && !pinned && defaultReady && target) {
       setImplicitTarget({ scope: implicitScope, id: target.id, branch: target.targetBranch });
     }
-  }, [implicitScope, pinned, requestedWorkspaceId, target, targetsReady]);
+  }, [defaultReady, implicitScope, pinned, requestedWorkspaceId, target]);
   const setupBranch =
     requestedBranch || target?.targetBranch || pinned?.branch || projectBranches.branches[0];
   const setupKey = JSON.stringify([projectId, setupBranch]);
@@ -348,73 +395,44 @@ export function SchemaStudioExperience({
       : undefined
     : undefined;
   const editorUnavailable = Boolean(invalidTarget || targetCommitted || workspaceSetupError);
-  useEffect(() => {
-    if (
-      !projectId ||
-      projectBranches.loading ||
-      projectBranches.error ||
-      workspaces.loading ||
-      workspaces.error ||
-      invalidTarget
-    )
-      return;
-    const persistedBranches = new Set(
-      workspaces.workspaces.map((workspace) => workspace.targetBranch)
-    );
-    const missing = projectBranches.branches.filter((branch) => {
-      const key = JSON.stringify([projectId, branch]);
-      return !persistedBranches.has(branch) && !projectScope.attempts.has(key);
-    });
-    if (missing.length === 0) return;
+  async function setupWorkspace(retry = false) {
+    if (!targetsReady || !target || invalidTarget || targetCommitted) return;
+    if (workspaces.workspaces.some((item) => item.id === target.id)) return;
+    if (retry) projectScope.attempts.delete(setupKey);
+    if (projectScope.attempts.has(setupKey)) return;
     const scope = projectScope;
     const isCurrent = () => scope.active && activeProjectScope.current === scope;
-    void (async () => {
-      await Promise.all(
-        missing.map(async (branch) => {
-          const key = JSON.stringify([projectId, branch]);
-          projectScope.attempts.add(key);
-          try {
-            const starter = getProjectWorkspaceStarterCandidate(
-              projectId,
-              [],
-              branch,
-              projectBranches.branchHeads[branch] ?? null
-            );
-            await saveDraft(starter);
-          } catch (error) {
-            if (isCurrent())
-              setWorkspaceSetupFailures((previous) => ({
-                scope,
-                errors: {
-                  ...(previous?.scope === scope ? previous.errors : {}),
-                  [key]:
-                    (error as { code?: unknown } | null)?.code === 'CONFLICT'
-                      ? `Workspace creation for ${branch} conflicted. Refresh or retry before editing.`
-                      : error instanceof Error
-                        ? error.message
-                        : `Could not create a Workspace for ${branch}.`,
-                },
-              }));
-          }
-        })
-      );
+    scope.attempts.add(setupKey);
+    setWorkspaceSetupPending({ scope, key: setupKey });
+    setWorkspaceSetupFailures((previous) => ({
+      scope,
+      errors: { ...(previous?.scope === scope ? previous.errors : {}), [setupKey]: '' },
+    }));
+    try {
+      await saveDraft(target);
       if (isCurrent()) await workspaces.refresh();
-    })();
-  }, [
-    projectBranches.branchHeads,
-    projectBranches.branches,
-    projectBranches.loading,
-    projectBranches.error,
-    projectId,
-    saveDraft,
-    workspaces.refresh,
-    workspaces.workspaces,
-    workspaces.loading,
-    workspaces.error,
-    invalidTarget,
-    workspaceSetupRetry,
-    projectScope,
-  ]);
+    } catch (error) {
+      if (isCurrent()) {
+        setWorkspaceSetupFailures((previous) => ({
+          scope,
+          errors: {
+            ...(previous?.scope === scope ? previous.errors : {}),
+            [setupKey]:
+              (error as { code?: unknown } | null)?.code === 'CONFLICT'
+                ? `Workspace creation for ${target.targetBranch} conflicted. Refresh or retry before editing.`
+                : error instanceof Error
+                  ? error.message
+                  : 'Could not create a Workspace.',
+          },
+        }));
+      }
+    } finally {
+      if (isCurrent())
+        setWorkspaceSetupPending((pending) =>
+          pending?.scope === scope && pending.key === setupKey ? undefined : pending
+        );
+    }
+  }
   const replaceRoute = router.replace;
   useEffect(() => {
     const next = new URLSearchParams(query);
@@ -484,6 +502,10 @@ export function SchemaStudioExperience({
     !!currentBinding?.schemaHash &&
     schemaEdit.candidate?.authoringDraft?.base?.kind === 'composition' &&
     schemaEdit.candidate.authoringDraft.base.schemaHash === currentBinding.schemaHash;
+  const needsCandidateSources = Boolean(
+    schemaEdit.candidate?.baseSources?.length && !savedEditIsApplied && !savedEditUsesBinding
+  );
+  const definitionNeedsCandidates = needsCandidateSources || selection.length > 0;
   const recoveredCandidateKey = schemaEdit.candidate
     ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
     : schemaEdit.loading
@@ -559,7 +581,7 @@ export function SchemaStudioExperience({
   useEffect(() => {
     if (
       !persistedTarget ||
-      candidates.loading ||
+      (needsCandidateSources && candidates.loading) ||
       schemaEdit.loading ||
       pendingSchema.loading ||
       recoveredSelection.current === recoveryKey
@@ -587,6 +609,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     schemaEdit.candidate,
     schemaEdit.loading,
     pendingSchema.data,
@@ -598,7 +621,13 @@ export function SchemaStudioExperience({
     savedEditUsesBinding,
   ]);
   useEffect(() => {
-    if (schemaEdit.loading || candidates.loading || dataDirtyRef.current || definitionOpen) return;
+    if (
+      schemaEdit.loading ||
+      (needsCandidateSources && candidates.loading) ||
+      dataDirtyRef.current ||
+      definitionOpen
+    )
+      return;
     if (recoveredEditIdentity === editIdentity) return;
     if (savedEditIsApplied || savedEditUsesBinding) setSelection([]);
     else if (schemaEdit.candidate?.baseSources?.length) {
@@ -638,6 +667,7 @@ export function SchemaStudioExperience({
   }, [
     candidates.items,
     candidates.loading,
+    needsCandidateSources,
     editIdentity,
     projectId,
     recoveredCandidateKey,
@@ -808,7 +838,7 @@ export function SchemaStudioExperience({
     for (const id of selection) diagnosticsParams.append('schemaSource', id);
     const navigate = () =>
       router.push(
-        `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch)}&${diagnosticsParams}`
+        `${schemaReviewHref(projectId, persistedTarget.id, undefined, persistedTarget.targetBranch, repositoryPath)}&${diagnosticsParams}`
       );
     if (!saved && navigationRef.current) navigationRef.current.requestNavigation(navigate);
     else navigate();
@@ -834,7 +864,15 @@ export function SchemaStudioExperience({
         if (!(await navigationRef.current?.save?.())) return;
         await workspaces.refresh();
         if (!isCurrent()) return;
-        router.push(schemaReviewHref(projectId, targetId, undefined, persistedTarget.targetBranch));
+        router.push(
+          schemaReviewHref(
+            projectId,
+            targetId,
+            undefined,
+            persistedTarget.targetBranch,
+            repositoryPath
+          )
+        );
         return;
       }
       if (!isCurrent()) return;
@@ -901,6 +939,8 @@ export function SchemaStudioExperience({
       throw new Error('Create or select a persisted Workspace before saving a Schema candidate.');
     if (!selection.length && !currentBinding && !creatingBlank && !activeCandidate)
       throw new Error('Create a blank Schema or choose a source first.');
+    const scope = reviewScope;
+    const version = localEditVersion.current;
     const saved = await schemaEdit.save({
       workspaceId: persistedTarget.id,
       candidateIds: [...selection],
@@ -918,14 +958,20 @@ export function SchemaStudioExperience({
           }
         : {}),
     });
+    if (!mounted.current || activeReviewScope.current !== scope)
+      throw new Error('The Schema editing context changed. Reopen the Draft.');
     setUsingSavedCandidate(true);
     setLocalContribution(structuredClone(saved.candidate.localContribution));
-    setSchemaDefinition(undefined);
-    setSavedCandidateRef({
-      candidateId: saved.candidate.candidateId,
-      revision: saved.candidate.revision,
-    });
+    if (localEditVersion.current === version) {
+      setSchemaDefinition(undefined);
+      setSavedCandidateRef({
+        candidateId: saved.candidate.candidateId,
+        revision: saved.candidate.revision,
+      });
+    }
     await workspaces.refresh();
+    if (!mounted.current || activeReviewScope.current !== scope)
+      throw new Error('The Schema editing context changed. Reopen the Draft.');
     return {
       candidateId: saved.candidate.candidateId,
       revision: saved.candidate.revision,
@@ -1066,7 +1112,8 @@ export function SchemaStudioExperience({
           projectId,
           persistedTarget.id,
           !dataDirty && workflow.matchesReview ? reviewStatus.latest?.snapshot_id : undefined,
-          target?.targetBranch
+          target?.targetBranch,
+          repositoryPath
         )
       );
     if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
@@ -1222,10 +1269,23 @@ export function SchemaStudioExperience({
     />
   );
 
+  const retrySchema = () => {
+    void workspaces.refresh();
+    void candidates.refresh();
+    void schemaEdit.refresh();
+    void reviewStatus.refresh();
+    void draftState.refresh();
+    preview.refresh();
+  };
+  const hiddenEditorError =
+    editorUnavailable && !dataDirty
+      ? workspaces.error || schemaEdit.error || candidates.error || preview.error
+      : undefined;
+
   return (
     <section
       aria-label="Schema Studio"
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface-card)]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
     >
       <BranchLoadError
         error={projectBranches.error}
@@ -1233,16 +1293,16 @@ export function SchemaStudioExperience({
         onRetry={projectBranches.refresh}
       />
       {!workspaces.loading && !workspaces.error && targetMismatch ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           Workspace {workspaceId} belongs to {selectedTarget?.targetBranch}, not {requestedBranch}.
           Select the matching branch before editing.
-        </p>
+        </Alert>
       ) : null}
       {!workspaces.loading && !workspaces.error && workspaceId && !selectedTarget ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           Workspace {workspaceId} was not found in this project. Select a valid Workspace before
           applying.
-        </p>
+        </Alert>
       ) : null}
       {!projectBranches.error &&
       !projectBranches.loading &&
@@ -1251,23 +1311,40 @@ export function SchemaStudioExperience({
       !workspaceId &&
       requestedBranch &&
       !target ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Schema editing unavailable" tone="error" layout="banner">
           No Workspace is available for branch {requestedBranch}. Select a valid Workspace before
           editing.
-        </p>
+        </Alert>
       ) : null}
       {workspaceSetupError ? (
-        <div className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
-          {workspaceSetupError}
+        <Alert
+          title="Could not create Draft"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => void setupWorkspace(true)}>
+              Retry workspace setup
+            </Button>
+          }
+        >
+          <p>{workspaceSetupError}</p>
+        </Alert>
+      ) : null}
+      {targetsReady && target && !targetCommitted && !persistedTarget && !workspaceSetupError ? (
+        <div className="flex items-center gap-3 px-6 py-2 text-sm text-muted-foreground">
+          <span>Create a Draft for {target.targetBranch} to edit its Schema.</span>
           <Button
-            variant="ghost"
             size="sm"
-            onClick={() => {
-              projectScope.attempts.delete(setupKey);
-              setWorkspaceSetupRetry((value) => value + 1);
-            }}
+            variant="outline"
+            onClick={() => void setupWorkspace()}
+            disabled={
+              workspaceSetupPending?.scope === projectScope &&
+              workspaceSetupPending.key === setupKey
+            }
           >
-            Retry workspace setup
+            {workspaceSetupPending?.scope === projectScope && workspaceSetupPending.key === setupKey
+              ? 'Creating Draft…'
+              : 'Start editing schema'}
           </Button>
         </div>
       ) : null}
@@ -1276,16 +1353,68 @@ export function SchemaStudioExperience({
           This Workspace is committed. Continue in Workspace to start the next iteration.{' '}
           <Link
             className="underline"
-            href={getProjectIdWorkspacePath(projectId, { branch: target.targetBranch })}
+            href={getProjectIdWorkspacePath(projectId, {
+              branch: target.targetBranch,
+              repositoryPath,
+            })}
           >
             Open Workspace
           </Link>
         </output>
       ) : null}
       {error ? (
-        <p className="px-6 py-2 text-sm text-[var(--status-error)]" role="alert">
+        <Alert title="Could not complete Schema action" tone="error" layout="banner">
           {error}
-        </p>
+        </Alert>
+      ) : null}
+      {draftState.error ? (
+        <Alert
+          title="Could not determine Draft changes"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void workspaces.refresh();
+                void draftState.refresh();
+              }}
+            >
+              Retry Draft status
+            </Button>
+          }
+        >
+          <p>{draftState.error}</p>
+        </Alert>
+      ) : null}
+      {reviewStatus.error ? (
+        <Alert
+          title="Could not determine Review status"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => void reviewStatus.refresh()}>
+              Retry Review status
+            </Button>
+          }
+        >
+          <p>{reviewStatus.error}</p>
+        </Alert>
+      ) : null}
+      {hiddenEditorError ? (
+        <Alert
+          title="Could not load Schema"
+          tone="error"
+          layout="banner"
+          actions={
+            <Button size="sm" variant="outline" onClick={retrySchema}>
+              Retry loading Schema
+            </Button>
+          }
+        >
+          <p>{hiddenEditorError}</p>
+        </Alert>
       ) : null}
       <SchemaStudioSurface
         hidden={!!preparation}
@@ -1307,6 +1436,7 @@ export function SchemaStudioExperience({
         }
         contextLocked={dataDirty || definitionOpen || applying}
         editorInvalid={editorInvalid}
+        onLocateError={() => navigationRef.current?.focusError?.()}
         dataEditor={() =>
           editorUnavailable && !dataDirty ? null : (
             <SchemaDataEditor
@@ -1314,6 +1444,9 @@ export function SchemaStudioExperience({
               showSaveAction={false}
               externalActions
               workbenchFooter
+              autoSave={!definitionOpen && !compositionRequest}
+              autoSavePaused={!data?.report.valid}
+              onSaveStateChange={setSaveState}
               onActionsAvailabilityChange={setEditorActions}
               onSaveAvailabilityChange={setDataCanSave}
               onValidationChange={setEditorInvalid}
@@ -1323,18 +1456,31 @@ export function SchemaStudioExperience({
               projectId={projectId}
               sources={candidates.items}
               sourceManagement={
-                <Button
-                  ref={sourceManagerTrigger}
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Manage sources"
-                  title="Manage sources"
-                  aria-haspopup="dialog"
-                  aria-expanded={sourceManagerOpen}
-                  onClick={() => setSourceManagerOpen(true)}
-                >
-                  <Settings2 size={14} aria-hidden="true" /> Manage sources…
-                </Button>
+                <>
+                  <Button variant="canvas-ghost" size="sm" asChild>
+                    <Link
+                      href={schemaBrowseHref(
+                        projectId,
+                        workspaceId,
+                        target?.targetBranch ?? requestedBranch ?? undefined
+                      )}
+                    >
+                      <BookOpen size={14} aria-hidden="true" /> Browse schemas
+                    </Link>
+                  </Button>
+                  <Button
+                    ref={sourceManagerTrigger}
+                    variant="canvas-ghost"
+                    size="sm"
+                    aria-label="Manage sources"
+                    title="Manage sources"
+                    aria-haspopup="dialog"
+                    aria-expanded={sourceManagerOpen}
+                    onClick={() => setSourceManagerOpen(true)}
+                  >
+                    <Settings2 size={14} aria-hidden="true" /> Manage sources…
+                  </Button>
+                </>
               }
               baseDefinition={
                 editorBase?.schema ??
@@ -1374,20 +1520,20 @@ export function SchemaStudioExperience({
                 recoveryError ??
                 (!persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined)
               }
-              pending={schemaEdit.pending || applying}
+              pending={applying}
               loading={
                 workspaces.loading ||
-                projectBranches.loading ||
+                (!persistedTarget && projectBranches.loading) ||
                 pendingSchema.loading ||
                 preview.loading ||
                 schemaEdit.loading ||
-                candidates.loading
+                (definitionNeedsCandidates && candidates.loading)
               }
               previewError={
                 workspaces.error ||
                 recoveryError ||
                 schemaEdit.error ||
-                candidates.error ||
+                (definitionNeedsCandidates && candidates.error) ||
                 preview.error
               }
               previewErrorAction={
@@ -1402,16 +1548,10 @@ export function SchemaStudioExperience({
                   </Button>
                 ) : undefined
               }
-              onRetry={() => {
-                void workspaces.refresh();
-                void candidates.refresh();
-                void schemaEdit.refresh();
-                void reviewStatus.refresh();
-                void draftState.refresh();
-                preview.refresh();
-              }}
+              onRetry={retrySchema}
               onDirtyChange={updateDataDirty}
               onPreview={(definition, mappings) => {
+                ++localEditVersion.current;
                 setSourceMappings(mappings ?? []);
                 if (!editorBase && basePreview.data && data) {
                   setEditorBase({
@@ -1443,14 +1583,34 @@ export function SchemaStudioExperience({
                 changeDefinitionOpen(false);
               }}
               onSave={async (definition, intent, mappings) => {
-                await saveDefinition(definition, intent, mappings);
-                setEditorBase(undefined);
-                updateDataDirty(false);
+                const saved = await saveDefinition(definition, intent, mappings);
+                return {
+                  revisionKey: `${workspaceId}:${saved.candidateId}:${saved.revision}:${candidateSelectionKey}:${boundRevision}`,
+                };
               }}
             />
           )
         }
         sourceHref={sourceHref}
+        onCompose={
+          persistedTarget && !editorUnavailable && !applying
+            ? () => {
+                const navigate = () =>
+                  router.push(
+                    workspaceLocation(
+                      repositoryPath ?? getProjectIdRepoPath(projectId),
+                      persistedTarget.targetBranch,
+                      new URLSearchParams({
+                        workspace: persistedTarget.id,
+                        workspaceMode: 'compose',
+                      })
+                    )
+                  );
+                if (navigationRef.current) navigationRef.current.requestNavigation(navigate);
+                else navigate();
+              }
+            : undefined
+        }
         branchControl={
           <StateBranchControls
             key={JSON.stringify([projectId, workspaceId, target?.targetBranch])}
@@ -1473,28 +1633,46 @@ export function SchemaStudioExperience({
             }
           />
         }
+        saveStatus={
+          editorUnavailable
+            ? undefined
+            : saveState.status === 'saving'
+              ? 'Saving…'
+              : saveState.status === 'conflict'
+                ? 'Save conflict · edits kept'
+                : saveState.status === 'failed'
+                  ? 'Save failed · edits kept'
+                  : editorInvalid
+                    ? 'Not saved · fix field errors'
+                    : dataDirty && preview.error
+                      ? 'Autosave paused · preview unavailable'
+                      : dataDirty
+                        ? !preview.loading && data && !data.report.valid
+                          ? 'Autosave paused · resolve Schema checks'
+                          : 'Waiting to save…'
+                        : saveState.status === 'saved'
+                          ? 'All changes saved'
+                          : 'Autosave on'
+        }
         draftStatus={
-          dataDirty
-            ? 'Unsaved changes'
+          saveState.status === 'saved' && workflow.candidateChanged
+            ? 'Candidate · not adopted'
             : workflow.rejected
               ? 'Changes rejected · draft kept'
-              : workflow.matchesReview && workflow.hasChanges
+              : workflow.matchesReview && workflow.hasChanges && !editorInvalid && !dataDirty
                 ? 'Ready for review'
                 : (savedCandidateRef || activeCandidate) && workflow.hasChanges
-                  ? 'Draft saved · not committed'
+                  ? 'Draft · not committed'
                   : draftView?.hasChanges === false && draftView.basis.refHead
                     ? `Committed · ${draftView.basis.refHead.slice(7, 19)}`
                     : draftView?.hasChanges === true
-                      ? 'Draft saved · not committed'
+                      ? 'Draft · not committed'
                       : draftView?.hasChanges === false
                         ? 'No changes to review'
                         : undefined
         }
         pending={applying || preview.loading || candidates.pending}
         loading={candidates.loading}
-        error={
-          candidates.error || schemaEdit.error || preview.error || workspaces.error || undefined
-        }
         data={data}
         canEditDefinition={Boolean(
           persistedTarget &&
@@ -1573,29 +1751,6 @@ export function SchemaStudioExperience({
         canReview={canReview}
         hasUnsavedChanges={dataDirty}
       />
-      {draftState.error ? (
-        <p role="alert" className="px-4 py-2 text-sm">
-          Could not determine Draft changes: {draftState.error}{' '}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void workspaces.refresh();
-              void draftState.refresh();
-            }}
-          >
-            Retry Draft status
-          </Button>
-        </p>
-      ) : null}
-      {reviewStatus.error ? (
-        <p role="alert" className="px-4 py-2 text-sm">
-          Could not determine Review status: {reviewStatus.error}{' '}
-          <Button variant="ghost" size="sm" onClick={() => void reviewStatus.refresh()}>
-            Retry Review status
-          </Button>
-        </p>
-      ) : null}
       {sourceManager}
       <Dialog
         open={!!discardRequest && !editorUnavailable}
@@ -1637,6 +1792,8 @@ export function SchemaStudioExperience({
         </DialogContent>
       </Dialog>
       <SchemaYamlEditor
+        autoSave
+        autoSavePaused={!data?.report.valid}
         open={definitionOpen}
         onOpenChange={setDefinitionOpen}
         workspaceTitle={selectedWorkspaceTitle}
@@ -1680,7 +1837,8 @@ export function SchemaStudioExperience({
                   projectId,
                   preparation.workspaceId,
                   undefined,
-                  target?.targetBranch
+                  target?.targetBranch,
+                  repositoryPath
                 )
               );
             }

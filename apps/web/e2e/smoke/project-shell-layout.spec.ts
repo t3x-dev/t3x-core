@@ -3,14 +3,14 @@ import { cleanupProject, createTestProject } from '../fixtures/api-helpers';
 
 test('shared project shell keeps navigation separate from long project names', async ({ page, request }, testInfo) => {
   test.setTimeout(120_000);
-  const projectName = 'Long-project-name-for-infrastructure-and-evaluation-configuration';
+  const projectName = `Long-project-name-for-infrastructure-and-evaluation-${Date.now()}`;
   const { projectId } = await createTestProject(request, projectName);
   try {
     for (const width of [1480, 1200, 1000, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/project/${projectId}`, { waitUntil: 'networkidle' });
       const nav = page.getByRole('navigation', { name: 'Project views' });
-      const title = page.getByRole('heading', { name: projectName, exact: true });
+      const title = page.getByRole('link', { name: projectName, exact: true }).getByRole('heading');
       await expect(nav).toBeVisible();
       await expect(nav.getByRole('link', { name: 'Outputs' })).toHaveCount(0);
       // The Project ID route remounts the shell at its canonical repository address.

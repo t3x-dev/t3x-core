@@ -3,6 +3,7 @@
 import type { AddStudioCandidate, StudioCandidate } from '@t3x-dev/api-client';
 import { MoreHorizontal, Plus } from 'lucide-react';
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -159,9 +160,9 @@ export function SchemaSourceManager({
                   <div className={s.scroll}>
                     {loading ? <output className={s.feedback}>Loading sources…</output> : null}
                     {error ? (
-                      <p role="alert" className={`${s.feedback} ${s.error}`}>
-                        {error}
-                      </p>
+                      <Alert title="Could not update sources" tone="error">
+                        <p>{error}</p>
+                      </Alert>
                     ) : null}
                     {visible.map((module, index) => {
                       const reason = removalBlockers[module.id];

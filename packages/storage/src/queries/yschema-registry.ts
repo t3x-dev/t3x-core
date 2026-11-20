@@ -436,6 +436,26 @@ export async function listProjectYSchemaVersionHistory(
   );
 }
 
+/** Read registered public versions of the built-in names in one query. */
+export async function listPublicYSchemaArtifactVersionRefs(db: AnyDB, canonicalNames: string[]) {
+  return db
+    .select({
+      canonicalName: yschemaArtifacts.canonicalName,
+      version: yschemaArtifactVersions.version,
+    })
+    .from(yschemaArtifacts)
+    .innerJoin(
+      yschemaArtifactVersions,
+      eq(yschemaArtifactVersions.artifactId, yschemaArtifacts.artifactId)
+    )
+    .where(
+      and(
+        inArray(yschemaArtifacts.canonicalName, canonicalNames),
+        inArray(yschemaArtifacts.visibility, ['official', 'community'])
+      )
+    );
+}
+
 /** Resolve one exact immutable version visible to the requesting project. */
 export async function findYSchemaArtifactVersion(
   db: AnyDB,

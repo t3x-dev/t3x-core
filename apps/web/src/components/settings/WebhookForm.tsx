@@ -2,6 +2,7 @@
 
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ interface WebhookFormProps {
   onCancel: () => void;
   /** Whether the form is currently submitting */
   loading?: boolean;
+  error?: string | null;
   projectId?: string;
   variant?: 'default' | 'drawer';
 }
@@ -47,6 +49,7 @@ export function WebhookForm({
   onSubmit,
   onCancel,
   loading = false,
+  error,
   projectId: scopedProjectId,
   variant = 'default',
 }: WebhookFormProps) {
@@ -264,6 +267,14 @@ export function WebhookForm({
           </div>
         ) : null}
       </div>
+
+      {error ? (
+        <div className={isDrawer ? 'shrink-0 px-5 pb-4' : undefined}>
+          <Alert title="Could not save webhook" tone="error">
+            <p>{error}</p>
+          </Alert>
+        </div>
+      ) : null}
 
       {/* Actions */}
       <div

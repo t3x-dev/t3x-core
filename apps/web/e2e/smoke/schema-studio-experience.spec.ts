@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { finishSchemaReview } from '../fixtures/schema-review';
 import { expect, test } from '../fixtures/test';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
 
@@ -21,7 +22,7 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     await page.setViewportSize({ width: 1480, height: 960 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&candidate=${candidates['t3x/prd-core']}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('region', { name: 'Schema Studio', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ })).toBeEnabled();
     await page.getByRole('button', { name: 'Manage sources', exact: true }).click();
     // Legacy V1 requires are suggestions in open V2 composition, not mandatory locks.
     await page.getByRole('checkbox', { name: 'Select Technology Stack for combination' }).check();
@@ -34,7 +35,7 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     expect((await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data.workspace.schemaBindings).toHaveLength(0);
     await page.screenshot({ path: testInfo.outputPath('studio-desktop.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Schema actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Edit YAML…', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'View draft YAML', exact: true }).click();
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download YAML', exact: true }).click();
     const stream = await (await download).createReadStream();
@@ -42,8 +43,10 @@ test('Studio combines exact sources, reviews apply, and returns to active diagno
     for await (const chunk of stream!) yaml += chunk.toString();
     expect(yaml).toContain('system_architecture');
     await page.getByRole('dialog', { name: 'Schema YAML editor' }).getByRole('button', { name: 'Close' }).click();
-    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
     await expect(page.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Review subject' }).getByRole('button', { name: 'Schema', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Schema review' })).toContainText('system_architecture');
     await expect(page.getByRole('button', { name: 'Approve and commit' })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('studio-review.png'), animations: 'disabled' });

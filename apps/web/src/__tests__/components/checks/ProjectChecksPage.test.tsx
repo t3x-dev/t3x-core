@@ -102,7 +102,7 @@ describe('Repository Checks', () => {
     );
     expect(screen.getByRole('link', { name: 'Open Workspaces' })).toHaveAttribute(
       'href',
-      '/owner/repo/workspaces'
+      '/owner/repo/branches/main/workspaces'
     );
     fireEvent.click(screen.getByRole('button', { name: /Older records/ }));
     await waitFor(() =>
@@ -214,15 +214,15 @@ describe('Repository Checks', () => {
     expect(screen.getByText('summary/audience')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Review snapshot' })).toHaveAttribute(
       'href',
-      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12'
+      '/owner/repo/branches/main/workspaces?workspace=ws%3Amain&workspaceMode=review&reviewSnapshot=r12'
     );
     expect(screen.getByRole('link', { name: 'Open current Workspace' })).toHaveAttribute(
       'href',
-      '/owner/repo/workspaces?workspace=ws%3Amain&branch=main'
+      '/owner/repo/branches/main/workspaces?workspace=ws%3Amain'
     );
     expect(screen.getByRole('link', { name: 'Schema checks & impact' })).toHaveAttribute(
       'href',
-      '/owner/repo/workspaces?workspace=ws%3Amain&workspaceMode=review&branch=main&reviewSnapshot=r12&schemaDiagnostics=1'
+      '/owner/repo/branches/main/workspaces?workspace=ws%3Amain&workspaceMode=review&reviewSnapshot=r12&schemaDiagnostics=1'
     );
     expect(mocks.detail).toHaveBeenCalledWith('p', 'review:r12', expect.any(AbortSignal));
     expect(mocks.list).not.toHaveBeenCalled();

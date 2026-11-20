@@ -34,14 +34,14 @@ test('add a pinned source from Overview to another project Studio without changi
     const canonicalName = `catalog-${projectId.toLowerCase().replace(/[^a-z0-9]/g, '')}/release`;
     const published = await request.post(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}/schema-composition/publish`, { data: {
       composition_revision: compiled.composition.revision, composition_hash: compiled.preview.compositionHash,
-      canonical_name: canonicalName, version: '1.2.3', title: 'Team release definition', description: 'Review a service definition before delivery.', tags: ['infrastructure', 'ecosystem:t3x'], visibility: 'community', license: 'MIT',
+      canonical_name: canonicalName, version: '1.2.3', title: 'Pinned handoff definition', description: 'Review a service definition before delivery.', tags: ['infrastructure', 'ecosystem:t3x'], visibility: 'community', license: 'MIT',
       presentation_ref: { commitDigest, presentationDigest, coverPath: 'images/overview.png' },
     } });
     expect(published.ok(), await published.text()).toBeTruthy();
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.goto(`/explore?view=discover&type=schemas&studioTarget=${projectId}`, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Explore Team release definition' }).last().click();
-    await expect(page).toHaveURL(/catalogName=/);
+    await page.getByRole('button', { name: 'Explore Pinned handoff definition' }).last().click();
+    await expect(page).toHaveURL(url => url.pathname === `/explore/schemas/${canonicalName}/1.2.3`);
     await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
     const drawer = page.getByRole('dialog', { name: 'Use Schema' });
     await drawer.getByLabel('Destination project', { exact: true }).selectOption(destination.projectId);
@@ -55,15 +55,15 @@ test('add a pinned source from Overview to another project Studio without changi
     expect(candidates).toHaveLength(1);
     expect(candidates[0].source).toMatchObject({ projectId: null, version: '1.2.3' });
     const before = (await (await request.get(`${API_BASE}/projects/${projectId}/workspaces/${workspaceId}`)).json()).data;
-    await page.getByRole('button', { name: 'Explore Team release definition' }).last().click();
-    await expect(page).toHaveURL(/catalogName=/);
+    await page.getByRole('button', { name: 'Explore Pinned handoff definition' }).last().click();
+    await expect(page).toHaveURL(url => url.pathname === `/explore/schemas/${canonicalName}/1.2.3`);
     await page.getByRole('button', { name: 'Use Schema', exact: true }).click();
     await drawer.getByLabel('Destination project', { exact: true }).selectOption(destination.projectId);
     await expect(
       drawer.getByText('This exact release is already saved in this Studio.')
     ).toBeVisible();
     await drawer.getByRole('button', { name: 'Open Studio', exact: true }).click();
-    await expect(page.getByRole('complementary', { name: 'Available Schema sources' })).toContainText('Team release definition');
+    await expect(page.getByRole('complementary', { name: 'Available Schema sources' })).toContainText('Pinned handoff definition');
     await page.setViewportSize({ width: 1480, height: 900 });
     await page.screenshot({ path: testInfo.outputPath('candidates-desktop.png'), animations: 'disabled' });
     expect((await (await request.get(`${API_BASE}/projects/${destination.projectId}/schema-studio/candidates`)).json()).data.items).toHaveLength(1);

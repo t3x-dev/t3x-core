@@ -36,6 +36,7 @@ import {
   defaultGenerationProviderRuntime,
   type GenerationProviderRuntime,
 } from './lib/provider-runtime';
+import { repositoryReadTimingMiddleware } from './lib/repository-read-timing';
 import type { TransitionControlPlaneOptions } from './lib/transition-control-plane';
 import {
   createWorkspaceSourceRunnerProvider,
@@ -134,6 +135,8 @@ import type { AppEnv } from './types';
 export interface CreateAppOptions {
   /** Shared rate-limit backend. Defaults to persistent PostgreSQL counters. */
   rateLimitStore?: RateLimitStore;
+  /** Expose successful repository-read durations on diagnostic deployments. */
+  repositoryReadTiming?: boolean;
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
   skipLocalAuth?: boolean;
   /** Skip built-in API Key auth middleware. Set true when cloud repo provides its own auth. */
@@ -197,6 +200,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   app.use('*', createInferenceRuntimeMiddleware(inferenceRuntime));
   app.use('*', corsMiddleware);
   app.use('*', loggerMiddleware);
+  if (options?.repositoryReadTiming) app.use('*', repositoryReadTimingMiddleware);
   app.use('*', responseCachePolicyMiddleware);
   app.use('*', createRateLimitL1(rateLimitStore));
 

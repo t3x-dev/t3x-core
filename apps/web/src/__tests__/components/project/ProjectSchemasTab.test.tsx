@@ -9,6 +9,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 let schemaRouteQuery = '';
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/project/proj_test',
   useSearchParams: () => new URLSearchParams(schemaRouteQuery),
 }));
 

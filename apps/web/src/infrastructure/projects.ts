@@ -47,6 +47,12 @@ export async function listProjects(
   return data;
 }
 
+export async function listProjectPage(limit: number, cursor: string, namespace?: string) {
+  const query = buildQueryString({ limit, cursor, namespace });
+  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
+  return handleResponse<{ items: Project[]; next_cursor: string | null; has_more: boolean }>(res);
+}
+
 export async function getProject(projectId: string): Promise<ProjectDetail> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
   return handleResponse<ProjectDetail>(res);

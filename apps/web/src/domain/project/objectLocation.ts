@@ -1,4 +1,4 @@
-import { getProjectIdRepoPath } from './repoPath';
+import { getProjectIdRepoPath, repositoryBranchHref } from './repoPath';
 
 export function numberedRepositoryObject(suffix: string) {
   const match = /^\/(commits|history|reviews)\/([1-9][0-9]{0,17})\/?$/.exec(suffix);
@@ -19,12 +19,19 @@ export function repositoryObjectHref(
   search?: URLSearchParams
 ) {
   const params = new URLSearchParams(search);
+  const branch = params.get('branch');
+  if (section === 'history' && branch && branch !== 'all') {
+    const listQuery = new URLSearchParams(params);
+    listQuery.delete('commit');
+    listQuery.delete('tab');
+    params.set('returnTo', repositoryBranchHref(base, '/history', branch, listQuery));
+  }
   params.delete('tab');
+  params.delete('branch');
   if (section === 'reviews') {
     params.delete('reviewSnapshot');
     params.delete('workspace');
     params.delete('workspaceMode');
-    params.delete('branch');
   } else {
     params.delete('commit');
   }
@@ -38,7 +45,13 @@ export function historyCommitHref(
   const [path, query] = historyHref.split('?');
   const params = new URLSearchParams(query);
   if (commit.address_number && !path.startsWith('/project/')) {
-    return `${path}/${commit.address_number}${params.size ? `?${params}` : ''}`;
+    if (/\/branches\/[^/]+\/history$/.test(path)) params.set('returnTo', historyHref);
+    return repositoryObjectHref(
+      path.split('/').slice(0, 3).join('/'),
+      'history',
+      commit.address_number,
+      params
+    );
   }
   params.set('commit', commit.hash);
   return `${path}?${params}`;
@@ -49,11 +62,15 @@ export function commitStructureHref(
   preview = false
 ) {
   const query = new URLSearchParams({ view: 'structure' });
-  if (commit.branch && commit.branch !== 'main') query.set('branch', commit.branch);
   if (preview) query.set('artifact', '1');
   if (repositoryPath && commit.address_number) {
     return repositoryObjectHref(repositoryPath, 'commits', commit.address_number, query);
   }
   query.set('commit', commit.hash);
-  return `${repositoryPath ?? getProjectIdRepoPath(commit.project_id)}?${query}`;
+  return repositoryBranchHref(
+    repositoryPath ?? getProjectIdRepoPath(commit.project_id),
+    '',
+    commit.branch,
+    query
+  );
 }

@@ -25,12 +25,14 @@ import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspec
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
 import { StatePromptReader } from '@/components/project/StatePromptReader';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { StateSkillReader } from '@/components/project/StateSkillReader';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tabs } from '@/components/ui/tabs';
@@ -44,13 +46,16 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import { commitStructureHref, historyCommitHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
+  repositoryBranch,
+  repositoryBranchHref,
+  workspaceLocation,
 } from '@/domain/project/repoPath';
 import {
   filterCollapsedStateRows,
@@ -88,10 +93,8 @@ import {
 } from '@/hooks/projects/useRepositoryProfile';
 import { useSkillArtifact } from '@/hooks/projects/useSkillArtifact';
 import { useSchemaArtifactRegistry } from '@/hooks/schemas/useSchemaArtifactRegistry';
-import { useBranches } from '@/hooks/shared/useBranches';
 import { useStateViewPreference } from '@/hooks/shared/useStateViewPreference';
 import { useCommitTransitionView } from '@/hooks/workspaces/useCommitTransitionView';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import { useWorkspaceCommitChanges } from '@/hooks/workspaces/useWorkspaceCommitChanges';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
@@ -108,6 +111,7 @@ import {
 } from './StateFieldTable';
 import inspectionStyles from './StateInspection.module.css';
 import { StatePageFrame } from './StatePageFrame';
+import frameStyles from './StatePageFrame.module.css';
 import { StatePageToolbar } from './StatePageToolbar';
 
 export type ProjectSnapshotView = 'overview' | 'structure' | 'code';
@@ -228,7 +232,7 @@ export function ProjectStateTab({
         : (initialView ?? preferredView)
       : routeView
   );
-  const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
+  const branchFocus: BranchFocus = repositoryBranch(pathname, searchParams) ?? 'main';
   const branchScope = JSON.stringify([projectId, branchFocus]);
   const inspectedHeadByBranchRef = useRef<Record<string, string>>({});
   const addressedCommit = commitAddress?.id ?? (searchParams.get('commit')?.trim() || undefined);
@@ -243,7 +247,10 @@ export function ProjectStateTab({
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const [dismissedHeadHash, setDismissedHeadHash] = useState<string | null>(null);
   const [freshnessChecking, setFreshnessChecking] = useState(false);
+  const checkingFreshness = useRef(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const { branches: projectBranches, workspaces: projectWorkspaces } =
+    useRepositoryViewData(projectId);
   const {
     branchHeads = EMPTY_BRANCH_HEADS,
     branches,
@@ -251,8 +258,7 @@ export function ProjectStateTab({
     loading: branchesLoading,
     error: branchesError,
     refresh,
-  } = useBranches(projectId, true);
-  const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  } = projectBranches;
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -302,15 +308,12 @@ export function ProjectStateTab({
       ++branchCreationScope.request;
       const params = new URLSearchParams(routeQueryRef.current);
       params.delete('commit');
-      if (focus === 'main') params.delete('branch');
-      else params.set('branch', focus);
-      const query = params.toString();
       replaceRoute(
-        `${commitAddress && repositoryPath ? repositoryPath : pathname}${query ? `?${query}` : ''}`,
+        repositoryBranchHref(repositoryPath ?? getProjectIdRepoPath(projectId), '', focus, params),
         { scroll: false }
       );
     },
-    [branchCreationScope, commitAddress, pathname, replaceRoute, repositoryPath]
+    [branchCreationScope, projectId, replaceRoute, repositoryPath]
   );
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
@@ -412,6 +415,7 @@ export function ProjectStateTab({
   ]);
 
   const headCommit = snapshot.headCommit;
+  const inspectedBranch = focusedCommitHash && headCommit ? headCommit.branch : branchFocus;
   function changeArtifactVisibility(open: boolean) {
     if (!headCommit) return;
     const params = new URLSearchParams(routeQueryRef.current);
@@ -562,7 +566,7 @@ export function ProjectStateTab({
   );
   const nativeReview = useCommitTransitionView(
     projectId,
-    branchFocus,
+    inspectedBranch,
     isNativeCommit ? (headCommit?.hash ?? null) : null
   );
   const nativeChecks =
@@ -593,21 +597,25 @@ export function ProjectStateTab({
   const currentStateReturnTo = buildReturnTo(pathname, routeQuery);
   const historyHref = getProjectIdHistoryPath(projectId, {
     repositoryPath,
-    branch: branchFocus,
+    branch: inspectedBranch,
     returnTo: currentStateReturnTo,
   });
   const snapshotQuery = new URLSearchParams(routeQuery);
   snapshotQuery.set('view', lastSnapshotView);
   const snapshotHref = `${pathname}?${snapshotQuery.toString()}`;
   const historicalReturnHref = safeInternalReturnTo(searchParams.get('returnTo'), '');
-  const schemaHref = repositoryPath
-    ? `${repositoryPath}/schemas?${new URLSearchParams({ branch: branchFocus })}`
-    : `${getProjectIdRepoPath(projectId)}?${new URLSearchParams({ tab: 'schemas', branch: branchFocus })}`;
-  const workspaceHref = getProjectIdWorkspacePath(projectId, {
-    branch: branchFocus,
-    repositoryPath,
-  });
-  const latestBranchHeadHash = branchHeads[branchFocus] ?? null;
+  const schemaHref = repositoryBranchHref(
+    repositoryPath ?? getProjectIdRepoPath(projectId),
+    repositoryPath ? '/schemas' : '',
+    inspectedBranch,
+    new URLSearchParams(repositoryPath ? '' : 'tab=schemas')
+  );
+  const workspaceHref = workspaceLocation(
+    repositoryPath ?? getProjectIdRepoPath(projectId),
+    inspectedBranch,
+    new URLSearchParams({ workspaceMode: 'compose' })
+  );
+  const latestBranchHeadHash = branchHeads[inspectedBranch] ?? null;
   const availableHeadHash =
     latestBranchHeadHash &&
     headCommit &&
@@ -616,7 +624,7 @@ export function ProjectStateTab({
       ? latestBranchHeadHash
       : null;
   const handleCreateBranch = useCallback(
-    async (name: string, fromBranch = branchFocus) => {
+    async (name: string, fromBranch = inspectedBranch) => {
       const request = ++branchCreationScope.request;
       const isCurrent = () =>
         branchCreationScope.active &&
@@ -630,7 +638,7 @@ export function ProjectStateTab({
     },
     [
       branchCreationScope,
-      branchFocus,
+      inspectedBranch,
       createBranch,
       focusedCommitHash,
       projectId,
@@ -639,21 +647,24 @@ export function ProjectStateTab({
     ]
   );
   const checkCurrentBranchForUpdates = useCallback(async () => {
+    if (branchesLoading || checkingFreshness.current) return;
+    checkingFreshness.current = true;
     setFreshnessChecking(true);
     try {
       await refresh();
     } finally {
+      checkingFreshness.current = false;
       setLastCheckedAt(new Date());
       setFreshnessChecking(false);
     }
-  }, [refresh]);
+  }, [branchesLoading, refresh]);
 
   useEffect(() => {
     setDismissedHeadHash(null);
     setLastCheckedAt(null);
-    const initialCheck = window.setTimeout(() => {
-      void checkCurrentBranchForUpdates();
-    }, 1100);
+  }, [branchFocus]);
+
+  useEffect(() => {
     const handleFocus = () => {
       void checkCurrentBranchForUpdates();
     };
@@ -663,11 +674,10 @@ export function ProjectStateTab({
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.clearTimeout(initialCheck);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [branchFocus, checkCurrentBranchForUpdates]);
+  }, [checkCurrentBranchForUpdates]);
 
   const handleViewLatest = useCallback(() => {
     const latestHash = availableHeadHash ?? latestBranchHeadHash;
@@ -678,8 +688,15 @@ export function ProjectStateTab({
     if (focusedCommitHash) {
       const params = new URLSearchParams(routeQueryRef.current);
       params.delete('commit');
-      const query = params.toString();
-      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+      replaceRoute(
+        repositoryBranchHref(
+          repositoryPath ?? getProjectIdRepoPath(projectId),
+          '',
+          inspectedBranch,
+          params
+        ),
+        { scroll: false }
+      );
     }
     setSnapshotRefreshVersion((version) => version + 1);
   }, [
@@ -687,7 +704,9 @@ export function ProjectStateTab({
     latestBranchHeadHash,
     branchScope,
     focusedCommitHash,
-    pathname,
+    repositoryPath,
+    projectId,
+    inspectedBranch,
     replaceRoute,
   ]);
 
@@ -706,12 +725,18 @@ export function ProjectStateTab({
                 ? 'Validation evidence unavailable'
                 : 'No validation recorded'
         : stateReadinessLabel(validationReady);
-  const lastCheckedLabel = freshnessChecking
-    ? 'Checking…'
-    : lastCheckedAt
-      ? 'Just now'
-      : 'Not checked';
+  const lastCheckedLabel =
+    freshnessChecking || branchesLoading
+      ? 'Checking…'
+      : lastCheckedAt || !branchesError
+        ? 'Just now'
+        : 'Not checked';
   const statePanel = activeView === 'overview' ? 'overview' : 'structure';
+  const branchBlocksState = Boolean(branchesError && snapshot.primaryError === branchesError);
+  const stateLoadError = branchBlocksState
+    ? 'Retry the branch list above to load committed State.'
+    : snapshot.primaryError;
+  const retryState = () => setSnapshotRefreshVersion((version) => version + 1);
   return (
     <section
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-card)]"
@@ -724,11 +749,16 @@ export function ProjectStateTab({
         />
       </div>
 
-      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
+      {activeView === 'canvas' ? (
+        <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
+      ) : null}
       <div className="grid min-h-0 flex-1 overflow-auto min-[1121px]:overflow-hidden">
         <Tabs
           activationMode="manual"
-          className="flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden bg-[var(--surface-card)]"
+          className={cn(
+            'flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden',
+            activeView === 'canvas' ? 'bg-[var(--surface-card)]' : frameStyles.palette
+          )}
           role="main"
           value={statePanel}
           onValueChange={(value) =>
@@ -738,74 +768,84 @@ export function ProjectStateTab({
           {activeView !== 'canvas' ? (
             <>
               <StatePageToolbar
-                key={`${projectId}:${branchFocus}`}
-                activeView={activeView}
-                branch={branchFocus || 'main'}
+                key={`${projectId}:${inspectedBranch}`}
+                projectId={projectId}
+                projectName={projectName}
+                repositoryIcon={repositoryProfile?.icon}
+                branch={inspectedBranch || 'main'}
                 branchOptions={branchOptions}
                 headCommit={headCommit}
-                headCommitHash={branchHeads[branchFocus] ?? null}
+                headCommitHash={branchHeads[inspectedBranch] ?? null}
                 sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 workspaceHref={workspaceHref}
+                canProposeChanges={canEditRepository}
               />
-              {focusedCommitHash ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">
-                  <button
-                    type="button"
-                    onClick={handleViewLatest}
-                    className="text-[var(--accent-commit)]"
-                  >
-                    View latest
-                  </button>
-                  {historicalReturnHref ? (
-                    <Link href={historicalReturnHref} className="text-[var(--accent-commit)]">
-                      Back to previous page
-                    </Link>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {activeView === 'structure' ? (
-                <div className="sr-only">
-                  <span>{readinessLabel}</span>
-                  <span>
-                    {branchFocus} · pinned {headCommit ? shortHash(headCommit.hash) : 'empty'}
-                  </span>
-                  <span>{lastCheckedLabel}</span>
-                  <span>{schemaName}</span>
-                  {stateWarning ? <span>{stateWarning}</span> : null}
-                  {Array.from(
-                    new Set(pointRows.map((row) => row.sourceOp).filter((value) => value !== '-'))
-                  ).map((label) => (
-                    <span key={label}>{label}</span>
-                  ))}
-                  {headCommit && !isNativeCommit && !validationReady && onRunValidation ? (
-                    <button
-                      disabled={validationRunning}
-                      onClick={() => onRunValidation(headCommit.hash, schemaName)}
-                      type="button"
-                    >
-                      Run validation
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {availableHeadHash && !focusedCommitHash ? (
-                <StateUpdateBanner
-                  branch={branchFocus}
-                  hash={availableHeadHash}
-                  onDismiss={() => setDismissedHeadHash(availableHeadHash)}
-                  onViewLatest={handleViewLatest}
-                />
-              ) : null}
               <StatePageFrame
                 projectName={projectName}
-                branch={branchFocus || 'main'}
+                branch={inspectedBranch || 'main'}
                 view={statePanel}
               >
+                {branchesError || focusedCommitHash || availableHeadHash ? (
+                  <div className={inspectionStyles.stateNotices}>
+                    <BranchLoadError
+                      error={branchesError}
+                      loading={branchesLoading}
+                      onRetry={refresh}
+                    />
+                    {focusedCommitHash ? (
+                      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+                        <button
+                          type="button"
+                          onClick={handleViewLatest}
+                          className="text-[var(--accent-commit)]"
+                        >
+                          View latest
+                        </button>
+                        {historicalReturnHref ? (
+                          <Link href={historicalReturnHref} className="text-[var(--accent-commit)]">
+                            Back to previous page
+                          </Link>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {availableHeadHash && !focusedCommitHash ? (
+                      <StateUpdateBanner
+                        branch={inspectedBranch}
+                        hash={availableHeadHash}
+                        onDismiss={() => setDismissedHeadHash(availableHeadHash)}
+                        onViewLatest={handleViewLatest}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+                {activeView === 'structure' ? (
+                  <div className="sr-only">
+                    <span>{readinessLabel}</span>
+                    <span>
+                      {inspectedBranch} · pinned {headCommit ? shortHash(headCommit.hash) : 'empty'}
+                    </span>
+                    <span>{lastCheckedLabel}</span>
+                    <span>{schemaName}</span>
+                    {Array.from(
+                      new Set(pointRows.map((row) => row.sourceOp).filter((value) => value !== '-'))
+                    ).map((label) => (
+                      <span key={label}>{label}</span>
+                    ))}
+                    {headCommit && !isNativeCommit && !validationReady && onRunValidation ? (
+                      <button
+                        disabled={validationRunning}
+                        onClick={() => onRunValidation(headCommit.hash, schemaName)}
+                        type="button"
+                      >
+                        Run validation
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
                 {activeView !== 'overview' &&
                 (snapshot.primaryError || snapshot.loading || !headCommit) ? (
                   <section
@@ -817,10 +857,19 @@ export function ProjectStateTab({
                       onDataModeChange={updateActiveView}
                     />
                     {snapshot.primaryError ? (
-                      <StateEmpty
-                        message={snapshot.primaryError}
+                      <Alert
                         title="No committed state loaded"
-                      />
+                        tone="error"
+                        actions={
+                          branchBlocksState ? undefined : (
+                            <Button size="sm" variant="outline" onClick={retryState}>
+                              Retry State
+                            </Button>
+                          )
+                        }
+                      >
+                        {stateLoadError}
+                      </Alert>
                     ) : snapshot.loading ? (
                       <output className={inspectionStyles.pending}>Loading state</output>
                     ) : (
@@ -846,7 +895,8 @@ export function ProjectStateTab({
                       snapshot.loading || snapshot.primaryError ? null : (headCommit?.hash ?? null)
                     }
                     stateLoading={snapshot.loading}
-                    stateError={snapshot.primaryError}
+                    stateError={stateLoadError}
+                    onRetryState={branchBlocksState ? undefined : retryState}
                     projectName={projectName}
                     projectDescription={projectDescription}
                     projectOwner={projectOwner}
@@ -864,13 +914,21 @@ export function ProjectStateTab({
                       updateActiveView('structure');
                     }}
                     validationLabel={readinessLabel}
-                    refName={branchFocus}
+                    refName={inspectedBranch}
                     onAuthorRevision={(digest) => {
                       void refresh();
                       const params = new URLSearchParams(routeQueryRef.current);
                       params.set('commit', digest);
                       params.set('view', 'overview');
-                      replaceRoute(`${repositoryPath ?? pathname}?${params}`, { scroll: false });
+                      replaceRoute(
+                        repositoryBranchHref(
+                          repositoryPath ?? getProjectIdRepoPath(projectId),
+                          '',
+                          inspectedBranch,
+                          params
+                        ),
+                        { scroll: false }
+                      );
                     }}
                     reader={
                       skillRenderModel || prdRenderModel || promptRenderModel
@@ -926,51 +984,68 @@ export function ProjectStateTab({
                 !snapshot.loading &&
                 headCommit &&
                 (activeView === 'structure' || activeView === 'code') ? (
-                  <StateStructureView
-                    artifactAction={
-                      <StateArtifactDialog
-                        key={`${projectId}:${headCommit.hash}`}
-                        projectId={projectId}
-                        projectName={projectName}
-                        projectDescription={projectDescription}
-                        schemaBindings={committedSchema.snapshot?.bindings}
-                        commitDigest={headCommit.hash}
-                        structureYaml={yamlText}
-                        href={commitStructureHref(repositoryPath, headCommit, true)}
-                        open={artifactCommit === headCommit.hash}
-                        onOpenChange={changeArtifactVisibility}
-                      />
-                    }
-                    committedSchema={committedSchema}
-                    workspaceHref={workspaceHref}
-                    schemaHref={schemaHref}
-                    dataMode={activeView}
-                    onDataModeChange={updateActiveView}
-                    yamlText={yamlText}
-                    branch={branchFocus || 'main'}
-                    changeReason={headCommit.message?.trim() ?? ''}
-                    diffChanges={committedDiffChanges}
-                    contextLoading={contextLoading}
-                    contextError={context?.error}
-                    headCommit={headCommit}
-                    parentCommit={context?.parentCommit ?? null}
-                    modifiedLabel={relativeTime(headCommit.committed_at)}
-                    modifiedTimes={modifiedTimes}
-                    pathQuery={pathQuery}
-                    onPathQueryChange={setPathQuery}
-                    rows={pointRows}
-                    schemaName={schemaName}
-                    validationIssues={currentValidation?.issues ?? validationGaps}
-                    validationReady={validationReady}
-                    readOnly
-                  />
+                  <>
+                    <div className={inspectionStyles.commitSummary}>
+                      <GitCommit aria-hidden="true" />
+                      <Link href={historyCommitHref(historyHref, headCommit)}>
+                        {commitTitle(headCommit.message)}
+                      </Link>
+                      <span>
+                        {headCommit.author?.name ||
+                          headCommit.author?.id ||
+                          headCommit.author?.type ||
+                          'Author not recorded'}
+                      </span>
+                      <time dateTime={headCommit.committed_at}>
+                        {relativeTime(headCommit.committed_at)}
+                      </time>
+                    </div>
+                    <StateStructureView
+                      artifactAction={
+                        <StateArtifactDialog
+                          key={`${projectId}:${headCommit.hash}`}
+                          projectId={projectId}
+                          projectName={projectName}
+                          projectDescription={projectDescription}
+                          schemaBindings={committedSchema.snapshot?.bindings}
+                          commitDigest={headCommit.hash}
+                          structureYaml={yamlText}
+                          href={commitStructureHref(repositoryPath, headCommit, true)}
+                          open={artifactCommit === headCommit.hash}
+                          onOpenChange={changeArtifactVisibility}
+                        />
+                      }
+                      committedSchema={committedSchema}
+                      workspaceHref={workspaceHref}
+                      schemaHref={schemaHref}
+                      dataMode={activeView}
+                      onDataModeChange={updateActiveView}
+                      yamlText={yamlText}
+                      branch={inspectedBranch || 'main'}
+                      changeReason={headCommit.message?.trim() ?? ''}
+                      diffChanges={committedDiffChanges}
+                      contextLoading={contextLoading}
+                      contextError={joinWarnings(stateWarning, context?.error)}
+                      headCommit={headCommit}
+                      parentCommit={context?.parentCommit ?? null}
+                      modifiedLabel={relativeTime(headCommit.committed_at)}
+                      modifiedTimes={modifiedTimes}
+                      pathQuery={pathQuery}
+                      onPathQueryChange={setPathQuery}
+                      rows={pointRows}
+                      schemaName={schemaName}
+                      validationIssues={currentValidation?.issues ?? validationGaps}
+                      validationReady={validationReady}
+                      readOnly
+                    />
+                  </>
                 ) : null}
               </StatePageFrame>
             </>
           ) : (
             <StateCanvasView
-              branch={branchFocus || 'main'}
-              branchHeadHash={branchHeads[branchFocus] ?? null}
+              branch={inspectedBranch || 'main'}
+              branchHeadHash={branchHeads[inspectedBranch] ?? null}
               focusedCommitHash={focusedCommitHash}
               projectId={projectId}
               projectName={projectName}
@@ -1407,7 +1482,6 @@ export function StateStructureView({
             <span>{structureRows.length} fields</span>
             <span>{structureRows.filter((row) => row.type === 'object').length} objects</span>
             {contextLoading ? <output>Loading change details…</output> : null}
-            {contextError ? <output>{contextError}</output> : null}
           </div>
           <label className={inspectionStyles.detailsControl}>
             <input
@@ -1419,6 +1493,13 @@ export function StateStructureView({
           </label>
           {artifactAction}
         </StateStructureHeader>
+        {contextError ? (
+          <div className="mb-3">
+            <Alert title="Some State details are unavailable" tone="warning">
+              {contextError}
+            </Alert>
+          </div>
+        ) : null}
         {!rows.length ? (
           <StateEmptyContent
             key={`${headCommit.hash}:${dataMode}`}

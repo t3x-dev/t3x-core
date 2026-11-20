@@ -1,5 +1,10 @@
 export type SchemaReleaseStatus = 'draft' | 'active' | 'published' | 'deprecated';
 
+export type SchemaSaveState = {
+  status: 'idle' | 'unsaved' | 'saving' | 'saved' | 'failed' | 'conflict';
+  message?: string;
+};
+
 export type SchemaBreakingChangeLevel = 'none' | 'minor' | 'breaking';
 
 export interface SchemaRelease {

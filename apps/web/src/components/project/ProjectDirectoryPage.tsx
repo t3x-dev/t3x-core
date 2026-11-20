@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
@@ -70,6 +71,12 @@ import { RepositoryTagPicker, repositoryTagOptions } from './RepositoryTagPicker
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
 const REPOSITORIES_PER_PAGE = 20;
+
+function openDirectoryRepository(project: ProjectSummary) {
+  const { details, cacheProject } = useProjectStore.getState();
+  if (!details[project.id]) cacheProject(project);
+  recordRecentProjectOpen(project.id);
+}
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
@@ -111,7 +118,10 @@ function ProjectActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={cn(palette.scope, styles.menu)}>
         <DropdownMenuItem asChild>
-          <Link href={path} onClick={() => recordRecentProjectOpen(project.id)}>
+          <Link
+            href={repositoryLocation(path, '', '')}
+            onClick={() => openDirectoryRepository(project)}
+          >
             <FolderOpen aria-hidden="true" size={15} />
             Open repository
           </Link>
@@ -175,9 +185,9 @@ function ProjectRow({
       <div className={styles.rowContent}>
         <div className={styles.rowHeading}>
           <Link
-            href={getProjectRepoPath(project)}
+            href={repositoryLocation(getProjectRepoPath(project), '', '')}
             title={getProjectRepoPath(project)}
-            onClick={() => recordRecentProjectOpen(project.id)}
+            onClick={() => openDirectoryRepository(project)}
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
@@ -323,16 +333,19 @@ function ProjectDirectoryContent({
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
     error,
+    hasMore,
+    loadMore,
     loading,
     projects,
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects(100, accessible ? undefined : ownerSlug, true);
+  } = useProjects(REPOSITORIES_PER_PAGE, accessible ? undefined : ownerSlug, 'on-demand');
   const [query, setQuery] = useState('');
   const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
   const [visibility, setVisibility] = useState('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [sort, setSort] = useState('created');
   const [page, setPage] = useState(1);
   useEffect(() => {
@@ -362,6 +375,7 @@ function ProjectDirectoryContent({
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
   const handleRefreshProjects = useCallback(async () => {
+    setPage(1);
     await refreshProjects();
   }, [refreshProjects]);
 
@@ -471,6 +485,22 @@ function ProjectDirectoryContent({
   );
   const hasLoadedProjects = projectSummaries.length > 0;
   const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
+  const needsCompleteList = hasFilter || directoryView === 'recent' || sort === 'name';
+  const resultsPending = needsCompleteList && hasMore && !error;
+  useEffect(() => {
+    if (!deletedView && (needsCompleteList || tagPickerOpen) && hasMore && !loading && !error) {
+      void loadMore();
+    }
+  }, [deletedView, error, hasMore, loadMore, loading, needsCompleteList, tagPickerOpen]);
+
+  async function nextPage() {
+    const targetPage = currentPage + 1;
+    setPage(targetPage);
+    if (currentPage >= totalPages && !(await loadMore())) {
+      setPage((requested) => (requested === targetPage ? currentPage : requested));
+    }
+  }
+
   function clearFilters() {
     setQuery('');
     setSelectedTags([]);
@@ -532,7 +562,11 @@ function ProjectDirectoryContent({
               <div className={styles.titleRow}>
                 <h1>
                   {accessible ? 'Your repositories' : 'Repositories'}{' '}
-                  <span>{loading && !hasLoadedProjects ? '…' : projectSummaries.length}</span>
+                  <span>
+                    {loading && !hasLoadedProjects
+                      ? '…'
+                      : `${projectSummaries.length}${hasMore ? '+' : ''}`}
+                  </span>
                 </h1>
                 <div className={styles.titleActions}>
                   {!accessible && (
@@ -575,7 +609,11 @@ function ProjectDirectoryContent({
                     setPage(1);
                   }}
                 >
-                  All repositories <span>{projectSummaries.length}</span>
+                  All repositories{' '}
+                  <span>
+                    {projectSummaries.length}
+                    {hasMore ? '+' : ''}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -585,7 +623,11 @@ function ProjectDirectoryContent({
                     setPage(1);
                   }}
                 >
-                  Recently opened <span>{recentProjects.length}</span>
+                  Recently opened{' '}
+                  <span>
+                    {recentProjects.length}
+                    {hasMore && recentProjects.length < recentProjectIds.length ? '+' : ''}
+                  </span>
                 </button>
               </nav>
               <div className={styles.toolbar}>
@@ -616,6 +658,8 @@ function ProjectDirectoryContent({
                 />
                 <RepositoryTagPicker
                   className={styles.tagFilter}
+                  onOpenChange={setTagPickerOpen}
+                  loading={hasMore && !error}
                   selected={selectedTags}
                   onChange={(values) => {
                     setSelectedTags(values);
@@ -662,9 +706,9 @@ function ProjectDirectoryContent({
                     {recentProjects.slice(0, 4).map((project) => (
                       <Link
                         key={project.id}
-                        href={getProjectRepoPath(project)}
+                        href={repositoryLocation(getProjectRepoPath(project), '', '')}
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
-                        onClick={() => recordRecentProjectOpen(project.id)}
+                        onClick={() => openDirectoryRepository(project)}
                       >
                         <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
                         <span>
@@ -701,11 +745,11 @@ function ProjectDirectoryContent({
               <div className={styles.results}>
                 <div className={styles.resultLine}>
                   <output aria-live="polite">
-                    {loading
+                    {resultsPending || (loading && !hasLoadedProjects)
                       ? 'Loading repositories…'
                       : error && !hasLoadedProjects
                         ? 'List unavailable'
-                        : `${filteredProjects.length} ${hasFilter ? 'matching ' : ''}repositories`}
+                        : `${filteredProjects.length}${hasMore ? '+' : ''} ${hasFilter ? 'matching ' : ''}repositories`}
                   </output>
                   {hasFilter && (
                     <button type="button" onClick={clearFilters}>
@@ -713,7 +757,7 @@ function ProjectDirectoryContent({
                     </button>
                   )}
                 </div>
-                {loading && !hasLoadedProjects ? (
+                {resultsPending || (loading && !hasLoadedProjects) ? (
                   <output className={styles.loading}>Loading repositories...</output>
                 ) : error && !hasLoadedProjects ? (
                   <DirectoryLoadFailure
@@ -737,7 +781,7 @@ function ProjectDirectoryContent({
                           showAccess={accessible}
                         />
                       ))
-                    ) : (
+                    ) : hasMore && error ? null : (
                       <div className={styles.noResults}>
                         <Search aria-hidden="true" size={20} />
                         <h3>
@@ -763,9 +807,9 @@ function ProjectDirectoryContent({
                   <span>
                     {error && !hasLoadedProjects
                       ? 'List unavailable'
-                      : loading
+                      : resultsPending || (loading && !hasLoadedProjects)
                         ? 'Loading…'
-                        : `${filteredProjects.length ? (currentPage - 1) * REPOSITORIES_PER_PAGE + 1 : 0}–${Math.min(currentPage * REPOSITORIES_PER_PAGE, filteredProjects.length)} of ${filteredProjects.length} repositories`}
+                        : `${filteredProjects.length ? (currentPage - 1) * REPOSITORIES_PER_PAGE + 1 : 0}–${Math.min(currentPage * REPOSITORIES_PER_PAGE, filteredProjects.length)} of ${filteredProjects.length}${hasMore ? '+' : ''} repositories`}
                   </span>
                   <nav aria-label="Repository pagination">
                     <Button
@@ -778,14 +822,17 @@ function ProjectDirectoryContent({
                       <ChevronLeft aria-hidden="true" size={16} />
                     </Button>
                     <span>
-                      Page {currentPage} of {totalPages}
+                      Page {currentPage}
+                      {!hasMore && ` of ${totalPages}`}
                     </span>
                     <Button
                       aria-label="Next page"
-                      disabled={loading || currentPage >= totalPages}
+                      disabled={
+                        loading || resultsPending || (currentPage >= totalPages && !hasMore)
+                      }
                       variant="outline"
                       size="icon-sm"
-                      onClick={() => setPage(currentPage + 1)}
+                      onClick={() => void nextPage()}
                     >
                       <ChevronRight aria-hidden="true" size={16} />
                     </Button>

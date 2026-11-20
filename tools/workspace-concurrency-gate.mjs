@@ -25,7 +25,7 @@ const checks = [
   {
     id: 'web-unsaved-buffer',
     package: 't3x-webui',
-    files: ['src/__tests__/components/workspaces/WorkspaceContentEditor.test.tsx'],
+    files: ['src/__tests__/components/workspaces/WorkspaceComposeReviewSurface.test.tsx'],
   },
   {
     id: 'cli-commit-contract',

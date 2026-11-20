@@ -32,6 +32,7 @@ import {
   findProjectAuthorityFacts,
   findProjectById,
   findProjectByIdIncludingDeleted,
+  findProjectsAuthorityFacts,
   listTransitionCommitProjectIds,
   type NamespaceMembershipRecord,
   type ProjectGrantRecord,
@@ -53,7 +54,11 @@ export interface ProjectAccessPrincipal {
 }
 
 export type ProjectAccessDecision =
-  | { allowed: true; project: NonNullable<Awaited<ReturnType<typeof findProjectById>>> }
+  | {
+      allowed: true;
+      project: NonNullable<Awaited<ReturnType<typeof findProjectById>>>;
+      canEdit?: boolean;
+    }
   | {
       allowed: false;
       status: 403 | 404;
@@ -146,7 +151,7 @@ async function evaluateProjectAccessFromFacts(
   projectId: string,
   principal: ProjectAccessPrincipal | undefined,
   action: ProjectAction,
-  options: { includeDeleted?: boolean; allowLocalBypass?: boolean }
+  options: { includeDeleted?: boolean; allowLocalBypass?: boolean; includeEditPermission?: boolean }
 ): Promise<ProjectAccessDecision> {
   if (!principal) {
     const project = await (options.includeDeleted
@@ -162,7 +167,7 @@ async function evaluateProjectAccessFromFacts(
       };
     }
     return options.allowLocalBypass
-      ? { allowed: true, project }
+      ? { allowed: true, project, ...(options.includeEditPermission ? { canEdit: true } : {}) }
       : {
           allowed: false,
           status: 403,
@@ -220,7 +225,13 @@ async function evaluateProjectAccessFromFacts(
     };
   }
 
-  return { allowed: true, project: facts.project };
+  return {
+    allowed: true,
+    project: facts.project,
+    ...(options.includeEditPermission
+      ? { canEdit: evaluateProjectAction(authorityFacts, 'project:edit').allowed }
+      : {}),
+  };
 }
 
 /**
@@ -271,20 +282,41 @@ export async function listAuthorizedProjectActions(
   projectId: string,
   options: { includeDeleted?: boolean } = {}
 ): Promise<ProjectAction[]> {
+  const actions = await listAuthorizedProjectActionsForPage(c, db, [projectId], options);
+  return actions.get(projectId) ?? [];
+}
+
+export async function listAuthorizedProjectActionsForPage(
+  c: Context,
+  db: AnyDB,
+  projectIds: string[],
+  options: { includeDeleted?: boolean } = {}
+): Promise<Map<string, ProjectAction[]>> {
   const credential = getProjectAccessPrincipal(c);
-  if (!credential) return isAuthenticationDisabled() ? [...PROJECT_ACTIONS] : [];
+  if (!credential) {
+    return isAuthenticationDisabled()
+      ? new Map(projectIds.map((id) => [id, [...PROJECT_ACTIONS]]))
+      : new Map();
+  }
 
   const principal = canonicalPrincipal(credential);
-  if (!principal) return [];
-  const stored = await findProjectAuthorityFacts(db, {
-    projectId,
+  if (!principal) return new Map();
+  const rows = await findProjectsAuthorityFacts(db, {
+    projectIds,
     principal: { kind: principal.kind, principalId: principal.principal_id },
     includeDeleted: options.includeDeleted,
   });
-  if (!stored) return [];
-  const facts = trustedProjectAuthorityFacts(stored, principal, credential);
-  if (!facts) return [];
-  return PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed);
+  const actions = new Map<string, ProjectAction[]>();
+  for (const stored of rows) {
+    const facts = trustedProjectAuthorityFacts(stored, principal, credential);
+    if (facts) {
+      actions.set(
+        stored.project.projectId,
+        PROJECT_ACTIONS.filter((action) => evaluateProjectAction(facts, action).allowed)
+      );
+    }
+  }
+  return actions;
 }
 
 /** Principal shape used by tenant-safe project list queries. */
@@ -326,13 +358,30 @@ export async function assertProjectAccess(
   projectId: string,
   action: ProjectAction = projectActionForRequest(c)
 ) {
-  const decision = await evaluateProjectAccess(
+  const decision = await assertProjectAccessDecision(c, db, projectId, action);
+  return decision instanceof Response ? decision : decision.project;
+}
+
+/** Detail views use the same current membership and grant for both actions. */
+export function assertProjectReadWithEditPermission(c: Context, db: AnyDB, projectId: string) {
+  return assertProjectAccessDecision(c, db, projectId, 'project:read', true);
+}
+
+async function assertProjectAccessDecision(
+  c: Context,
+  db: AnyDB,
+  projectId: string,
+  action: ProjectAction,
+  includeEditPermission?: boolean
+) {
+  const decision = await evaluateProjectAccessFromFacts(
     db,
     projectId,
     getProjectAccessPrincipal(c),
     action,
     {
       allowLocalBypass: isAuthenticationDisabled(),
+      includeEditPermission,
     }
   );
   if (!decision.allowed) {
@@ -346,7 +395,7 @@ export async function assertProjectAccess(
     }
     return c.json(createError(decision.code, decision.message), decision.status);
   }
-  return decision.project;
+  return decision;
 }
 
 /**

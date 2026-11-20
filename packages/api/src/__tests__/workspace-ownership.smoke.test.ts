@@ -30,7 +30,11 @@ const keyB = 't3xk_workspace_test_b_0123456789abcdef';
 
 describe('principal-private Workspace boundary', () => {
   const originalAuthDisabled = process.env.AUTH_DISABLED;
-  const { app } = createApp({ skipLocalAuth: true, rateLimitStore: createTestRateLimitStore() });
+  const { app } = createApp({
+    skipLocalAuth: true,
+    rateLimitStore: createTestRateLimitStore(),
+    repositoryReadTiming: true,
+  });
   let cleanup: () => Promise<void>;
   let projectId: string;
   let testAId: string;
@@ -194,12 +198,22 @@ describe('principal-private Workspace boundary', () => {
       id: `service:api-key:${mcpKeyId}`,
       delegator: { kind: 'human', id: `user:${testAId}` },
     });
+    const pending = `/api/v1/projects/${projectId}/schema-studio/pending/workspace-a`;
+    const pendingView = await request(pending, keyA);
+    expect(pendingView.status).toBe(200);
+    await expect(pendingView.json()).resolves.toMatchObject({ data: { status: 'none' } });
+    const timing = pendingView.headers.get('server-timing');
+    for (const phase of ['project_access', 'owned_workspace', 'pending_schema', 'railway_api']) {
+      expect(timing).toContain(`${phase};dur=`);
+    }
     for (const target of [
       `/api/v1/projects/${projectId}/workspaces/workspace-a`,
       `/api/v1/projects/${projectId}/workspaces/workspace-a/authoring`,
+      pending,
     ]) {
       const response = await request(target, keyB);
       expect(response.status).toBe(404);
+      expect(response.headers.get('server-timing')).toBeNull();
       await expect(response.json()).resolves.toMatchObject({
         success: false,
         error: { code: 'NOT_FOUND', message: 'Workspace not found' },

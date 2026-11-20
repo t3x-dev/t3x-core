@@ -1,16 +1,19 @@
 'use client';
 import type { StudioPreview } from '@t3x-dev/api-client';
-import { ArrowUpRight, ChevronDown, Shapes } from 'lucide-react';
+import { ArrowUpRight, Braces, ChevronDown, Undo2 } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import s from './SchemaStudioExperience.module.css';
 import { SchemaToolbarSlot } from './SchemaToolbarSlot';
 
@@ -19,16 +22,18 @@ export function SchemaStudioSurface({
   hidden = false,
   dataEditor,
   editorInvalid = false,
+  onLocateError,
   canEditDefinition = false,
   contextLocked = false,
   sourceHref,
   branchControl,
   draftStatus,
+  saveStatus,
   pending = false,
   loading = false,
-  error,
   data,
   onEditDefinition,
+  onCompose,
   onPublish,
   publishBlocker,
   onReview,
@@ -49,17 +54,19 @@ export function SchemaStudioSurface({
   navigation?: ReactNode;
   hidden?: boolean;
   editorInvalid?: boolean;
+  onLocateError?: () => void;
   canEditDefinition?: boolean;
   dataEditor?: () => ReactNode;
   contextLocked?: boolean;
   sourceHref?: string;
   branchControl?: ReactNode;
   draftStatus?: string;
+  saveStatus?: string;
   pending?: boolean;
   loading?: boolean;
-  error?: string;
   data?: StudioPreview;
   onEditDefinition?: () => void;
+  onCompose?: () => void;
   onPublish?: () => void;
   publishBlocker?: string;
   onReview?: () => void;
@@ -77,6 +84,7 @@ export function SchemaStudioSurface({
   onDiscardSaved?: () => void;
   canDiscardSaved?: boolean;
 }) {
+  const fieldHint = useId();
   return (
     <main
       aria-label="Schema editor"
@@ -94,7 +102,7 @@ export function SchemaStudioSurface({
             {navigation}
             <div className={s.heading}>
               <span className={s.schemaIcon}>
-                <Shapes size={18} aria-hidden="true" />
+                <Braces size={18} aria-hidden="true" />
               </span>
               <div className={s.headingContent}>
                 <h1>Schema</h1>
@@ -105,56 +113,66 @@ export function SchemaStudioSurface({
               </div>
             </div>
             <div className={s.toolbarActions}>
-              <fieldset aria-label="Schema save and review" className={s.saveGroup}>
-                {onUndo || onDiscard || onDiscardSaved ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="canvas-outline"
-                        size="sm"
-                        aria-label="Undo and discard"
-                        disabled={!canUndo && !canDiscard && !canDiscardSaved}
-                      >
-                        Undo <ChevronDown size={14} aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {onUndo ? (
-                        <DropdownMenuItem disabled={!canUndo} onSelect={onUndo}>
-                          Undo last change
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onUndo && onDiscard ? <DropdownMenuSeparator /> : null}
-                      {onDiscard ? (
-                        <DropdownMenuItem disabled={!canDiscard} onSelect={onDiscard}>
-                          Discard all unsaved changes
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onDiscardSaved ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem disabled={!canDiscardSaved} onSelect={onDiscardSaved}>
-                            Discard saved Schema draft…
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              <fieldset className={s.editingTools} aria-label="Schema editing tools">
+                {onUndo ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Undo last change"
+                    disabled={!canUndo}
+                    onClick={onUndo}
+                  >
+                    <Undo2 size={14} aria-hidden="true" /> Undo
+                  </Button>
                 ) : null}
-                <Button variant="canvas-outline" size="sm" disabled={!canSave} onClick={onSave}>
-                  Save draft
-                </Button>
-                <Button
-                  variant="commit"
-                  className={s.reviewButton}
-                  size="sm"
-                  aria-label={hasUnsavedChanges ? 'Save and review' : 'Review changes'}
-                  disabled={!canReview}
-                  onClick={onReview}
-                >
-                  {hasUnsavedChanges ? 'Save and review' : 'Review changes'}
-                  <ArrowUpRight size={14} aria-hidden="true" />
-                </Button>
+                {saveStatus ? <output className={s.draftStatus}>{saveStatus}</output> : null}
+                {editorInvalid && onLocateError ? (
+                  <Button variant="ghost" size="sm" onClick={onLocateError}>
+                    Find field error
+                  </Button>
+                ) : null}
+              </fieldset>
+              <fieldset aria-label="Schema next steps" className={s.saveGroup}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="canvas-outline"
+                      size="sm"
+                      aria-label="Continue in Compose"
+                      disabled={!onCompose || pending}
+                      onClick={onCompose}
+                    >
+                      Compose <ArrowUpRight size={14} aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Continue editing content in Compose.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex" tabIndex={editorInvalid ? 0 : undefined}>
+                      <Button
+                        variant="commit"
+                        className={s.reviewButton}
+                        size="sm"
+                        aria-label={
+                          hasUnsavedChanges ? 'Save and review in Workspace' : 'Review in Workspace'
+                        }
+                        disabled={!canReview}
+                        onClick={onReview}
+                      >
+                        Review
+                        <ArrowUpRight size={14} aria-hidden="true" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {editorInvalid
+                      ? 'Fix the highlighted fields before review.'
+                      : hasUnsavedChanges
+                        ? 'Save Schema changes, then open Review in Workspace.'
+                        : 'Open Review in Workspace.'}
+                  </TooltipContent>
+                </Tooltip>
               </fieldset>
               {sourceHref ? (
                 <Link href={sourceHref} className={s.navLink}>
@@ -167,35 +185,85 @@ export function SchemaStudioSurface({
                     More <ChevronDown size={14} aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {onRules ? (
-                    <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
-                      Relationships & rules…
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem disabled={!canEditDefinition} onSelect={onEditDefinition}>
-                    Edit YAML…{editorInvalid ? ' (fix field errors first)' : ''}
+                <DropdownMenuContent align="end" className={s.moreMenu}>
+                  <DropdownMenuItem
+                    aria-describedby={editorInvalid ? fieldHint : undefined}
+                    disabled={!canEditDefinition}
+                    onSelect={onEditDefinition}
+                  >
+                    View draft YAML
                   </DropdownMenuItem>
-                  {onPublish ? (
-                    <>
-                      <DropdownMenuItem onSelect={onPublish} disabled={!!publishBlocker}>
-                        Publish to public catalog…
+                  {editorInvalid ? (
+                    <p id={fieldHint} className={s.menuHint}>
+                      Fix field errors before opening YAML.
+                    </p>
+                  ) : null}
+                  <DropdownMenuItem disabled={!canSave} onSelect={onSave}>
+                    Save now
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {onRules ? (
+                    <DropdownMenuGroup aria-label="Schema settings">
+                      <DropdownMenuLabel className={s.menuLabel}>Schema settings</DropdownMenuLabel>
+                      <DropdownMenuItem disabled={!canOpenRules} onSelect={onRules}>
+                        Relationships & rules…
                       </DropdownMenuItem>
-                      {publishBlocker ? (
-                        <p className="px-2 py-1 text-xs text-[var(--text-secondary)]">
-                          {publishBlocker}
-                        </p>
-                      ) : null}
+                    </DropdownMenuGroup>
+                  ) : null}
+                  {onInspect || onPublish ? (
+                    <>
+                      {onRules ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuGroup aria-label="Check and publish">
+                        <DropdownMenuLabel className={s.menuLabel}>
+                          Check & publish
+                        </DropdownMenuLabel>
+                        {onInspect ? (
+                          <DropdownMenuItem
+                            onSelect={onInspect}
+                            title="Open schema checks and affected content in Workspace Review."
+                            disabled={!data || contextLocked || pending}
+                          >
+                            View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
+                          </DropdownMenuItem>
+                        ) : null}
+                        {onPublish ? (
+                          <>
+                            <DropdownMenuItem onSelect={onPublish} disabled={!!publishBlocker}>
+                              Publish to public catalog…
+                            </DropdownMenuItem>
+                            {publishBlocker ? <p className={s.menuHint}>{publishBlocker}</p> : null}
+                          </>
+                        ) : null}
+                      </DropdownMenuGroup>
                     </>
                   ) : null}
-                  {onInspect ? (
-                    <DropdownMenuItem
-                      onSelect={onInspect}
-                      title="Open schema checks and affected content in Workspace Review."
-                      disabled={!data || contextLocked || pending}
-                    >
-                      View checks and impact <ArrowUpRight size={14} aria-hidden="true" />
-                    </DropdownMenuItem>
+                  {onDiscard || onDiscardSaved ? (
+                    <>
+                      {onRules || onInspect || onPublish ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuGroup aria-label="Discard changes">
+                        <DropdownMenuLabel className={s.menuLabel}>
+                          Discard changes
+                        </DropdownMenuLabel>
+                        {onDiscard ? (
+                          <DropdownMenuItem
+                            className={s.destructiveAction}
+                            disabled={!canDiscard}
+                            onSelect={onDiscard}
+                          >
+                            Discard all unsaved changes
+                          </DropdownMenuItem>
+                        ) : null}
+                        {onDiscardSaved ? (
+                          <DropdownMenuItem
+                            className={s.destructiveAction}
+                            disabled={!canDiscardSaved}
+                            onSelect={onDiscardSaved}
+                          >
+                            Discard saved Schema draft…
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuGroup>
+                    </>
                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -204,11 +272,6 @@ export function SchemaStudioSurface({
         </SchemaToolbarSlot>
       ) : null}
       {loading ? <output className={s.feedback}>Loading candidates…</output> : null}
-      {error ? (
-        <p role="alert" className={s.feedback}>
-          {error}
-        </p>
-      ) : null}
       <div className={s.body}>
         <section aria-label="Schema definition" className={s.canvas}>
           <div className={s.dataEditor}>{dataEditor?.()}</div>

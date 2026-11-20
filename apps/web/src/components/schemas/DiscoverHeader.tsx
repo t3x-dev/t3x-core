@@ -30,7 +30,7 @@ import {
 } from '@/components/project/projectTabModel';
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
-import { workspaceLocation } from '@/domain/project/repoPath';
+import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { usePendingInvitations } from '@/hooks/accounts/usePendingInvitations';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
@@ -87,7 +87,8 @@ export function DiscoverHeader({
   newProjectHref?: string;
   repositoriesNavigation?: boolean;
 }) {
-  const hasPendingInvitations = usePendingInvitations();
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const hasPendingInvitations = usePendingInvitations(!authDisabled);
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
@@ -99,7 +100,6 @@ export function DiscoverHeader({
     : owner
       ? `/${encodeURIComponent(owner)}`
       : '/';
-  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const homeHref = authDisabled ? '/t3x-dev' : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
@@ -116,13 +116,15 @@ export function DiscoverHeader({
     if (projectIdNavigation && tab !== 'state') params.set('tab', getProjectTabSegment(tab));
     if (branch) params.set('branch', branch);
     if (workspaceId && projectTabKeepsWorkspace(tab)) params.set('workspace', workspaceId);
-    if (tab === 'workspaces' && !projectIdNavigation)
-      return workspaceLocation(repoPath, branch ?? null, params);
-    const path =
-      projectIdNavigation || tab === 'state'
-        ? repoPath
-        : `${repoPath}/${getProjectTabSegment(tab)}`;
-    return params.size ? `${path}?${params}` : path;
+    if (projectIdNavigation) {
+      if (tab === 'checks' || tab === 'reviews' || tab === 'community') params.delete('branch');
+      return `${repoPath}${params.size ? `?${params}` : ''}`;
+    }
+    return repositoryLocation(
+      repoPath,
+      tab === 'state' ? '' : `/${getProjectTabSegment(tab)}`,
+      params.toString()
+    );
   }
 
   return (
@@ -162,7 +164,10 @@ export function DiscoverHeader({
                 <span className={styles.separator} aria-hidden="true">
                   /
                 </span>
-                <Link href={repoPath || '/'} className={styles.repository}>
+                <Link
+                  href={repoPath ? repositoryLocation(repoPath, '', '') : '/'}
+                  className={styles.repository}
+                >
                   {projectIdentity && (
                     <RepositoryMark {...projectIdentity} className={styles.repositoryMark} />
                   )}
@@ -206,18 +211,20 @@ export function DiscoverHeader({
             </Link>
           </nav>
           <div className={styles.actions}>
-            <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
-              <Link
-                href="/invitations"
-                aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
-                title="Invitations"
-              >
-                <Mail aria-hidden="true" />
-                {hasPendingInvitations && (
-                  <span className={styles.invitationDot} aria-hidden="true" />
-                )}
-              </Link>
-            </Button>
+            {!authDisabled && (
+              <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
+                <Link
+                  href="/invitations"
+                  aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
+                  title="Invitations"
+                >
+                  <Mail aria-hidden="true" />
+                  {hasPendingInvitations && (
+                    <span className={styles.invitationDot} aria-hidden="true" />
+                  )}
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
               <Link href="/settings/profile" aria-label="Account settings" title="Account settings">
                 <CircleUserRound aria-hidden="true" />

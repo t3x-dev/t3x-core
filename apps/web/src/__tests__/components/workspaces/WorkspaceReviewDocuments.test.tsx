@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
+import type { WorkspaceFullSchemaReview } from '@t3x-dev/api-client';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { WorkspaceReviewContentPreview } from '@/components/workspaces/WorkspaceReviewDocuments';
+import {
+  WorkspaceReviewContentPreview,
+  WorkspaceReviewSchemaView,
+} from '@/components/workspaces/WorkspaceReviewDocuments';
 
 const draft = {
   candidate: {
@@ -72,4 +76,26 @@ describe('Workspace result field table', () => {
     ).toBeVisible();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
+});
+
+it('does not render a missing bound Schema definition as additions against an empty Schema', () => {
+  const review = {
+    schema: 't3x.application/workspace-schema-review/v1',
+    base: { status: 'bound', schemaHash: 'sha256:base', definition: null, bindings: [] },
+    draft: {
+      status: 'bound',
+      schemaHash: 'sha256:result',
+      definition: { title: 'Current' },
+      bindings: [],
+    },
+    changes: [],
+    actionCount: 1,
+    baseContent: {},
+    draftContent: {},
+  } as WorkspaceFullSchemaReview;
+  render(<WorkspaceReviewSchemaView review={review} pane="changes" branch="main" frozen />);
+  expect(
+    screen.getByText('The exact Schema comparison is unavailable for this revision.')
+  ).toBeVisible();
+  expect(screen.queryByRole('table')).toBeNull();
 });

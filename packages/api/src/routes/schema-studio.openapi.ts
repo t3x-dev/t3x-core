@@ -25,6 +25,7 @@ import {
   ConflictError,
   DraftAuthoringConflictError,
   findWorkspaceDraft,
+  findWorkspaceDraftForOwner,
   findYSchemaCompositionSnapshot,
   getTransitionRefHead,
   listSchemaStudioCandidates,
@@ -35,9 +36,12 @@ import {
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, parseYSchema, sha256CompositionValue } from '@t3x-dev/yschema';
+import type { Context } from 'hono';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
@@ -55,8 +59,9 @@ import {
   savePendingWorkspaceSchema,
 } from '../lib/workspace-schema-pending';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
-import { ensureBuiltInYSchemaArtifacts } from '../lib/yschema-artifact-registry';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import type { AppEnv } from '../types';
 import { schemaPreparationRoutes } from './schema-preparation.openapi';
 import { schemaPublishRoutes } from './schema-publish.openapi';
 
@@ -197,7 +202,6 @@ schemaStudioRoutes.openapi(readSourceRoute, async (c) => {
   const input = c.req.valid('query');
   const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
   const view = await resolveStudioSource(c, db, {
     sourceProjectId: input.sourceProjectId ?? null,
     canonicalName: input.canonicalName,
@@ -240,7 +244,6 @@ schemaStudioRoutes.openapi(addRoute, async (c) => {
   const input = c.req.valid('json');
   const access = await assertProjectAccess(c, db, projectId, 'project:edit');
   if (access instanceof Response) return access;
-  await ensureBuiltInYSchemaArtifacts(db);
   if (input.sourceProjectId) {
     const sourceAccess = await assertProjectAccess(c, db, input.sourceProjectId, 'project:read');
     if (sourceAccess instanceof Response)
@@ -673,16 +676,28 @@ const readPendingRoute = createRoute({
 schemaStudioRoutes.openapi(readPendingRoute, async (c) => {
   const db = await getDB();
   const { projectId, workspaceId } = c.req.valid('param');
-  const access = await assertProjectAccess(c, db, projectId, 'project:read');
-  if (access instanceof Response) return access;
-  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const request = c as Context<AppEnv>;
+  if (request.get('repositoryReadAccess')?.projectId !== projectId) {
+    const access = await timeRepositoryRead(c, 'project_access', () =>
+      assertProjectAccess(c, db, projectId, 'project:read')
+    );
+    if (access instanceof Response) return access;
+  }
+  const owner = workspaceOwnerFromContext(c);
+  const draft =
+    request.get('pendingSchemaWorkspace') ??
+    (await timeRepositoryRead(c, 'owned_workspace', () => {
+      if (owner) return findWorkspaceDraftForOwner(db, projectId, workspaceId, owner);
+      if (isAuthenticationDisabled()) return findWorkspaceDraft(db, projectId, workspaceId);
+      return Promise.resolve(null);
+    }));
   if (!draft?.workspace_state)
     return errorResponse(c, 'NOT_FOUND', 'Target Workspace is unavailable.');
   c.header('Cache-Control', 'private, no-store');
-  return c.json(
-    { success: true as const, data: await readPendingWorkspaceSchema(c, db, projectId, draft) },
-    200
+  const data = await timeRepositoryRead(c, 'pending_schema', () =>
+    readPendingWorkspaceSchema(c, db, projectId, draft)
   );
+  return c.json({ success: true as const, data }, 200);
 });
 
 // Initial YAML binding is restricted to an empty Workspace; existing proposals use Studio review.

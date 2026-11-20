@@ -58,7 +58,10 @@ import {
   WorkspaceTransitionReviewStaleError,
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
-import { resolveWorkspaceTransitionAuthority } from '../lib/workspace-transition-authority';
+import {
+  canRequestWorkspaceOverride,
+  resolveWorkspaceTransitionAuthority,
+} from '../lib/workspace-transition-authority';
 import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { workspaceDeliveryRoutes } from './workspace-deliveries.openapi';
@@ -193,6 +196,7 @@ const WorkspaceTransitionReviewSnapshotResponseSchema = z.object({
   supersedes_snapshot_id: ReviewSnapshotIdSchema.nullable(),
   supersedes_snapshot_digest: TransitionDigestSchema.nullable(),
   snapshot: z.any(),
+  can_request_override: z.boolean().optional(),
   change_projection: z.any(),
   created_at: z.string(),
 });
@@ -746,7 +750,10 @@ workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => 
   return c.json(
     {
       success: true as const,
-      data: await transitionReviewSnapshotToWire(db, snapshot),
+      data: {
+        ...(await transitionReviewSnapshotToWire(db, snapshot)),
+        can_request_override: canRequestWorkspaceOverride(getRequestPrincipal(c), projectId),
+      },
     },
     200
   );
