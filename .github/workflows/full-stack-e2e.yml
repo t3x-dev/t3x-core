@@ -27,6 +27,8 @@ jobs:
     # Playwright 1.58 cannot install Chromium on Ubuntu 26.04.
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     services:
       postgres:
         image: postgres:16
