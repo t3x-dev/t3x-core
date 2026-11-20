@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { APIResponse } from '@playwright/test';
 import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
+import { finishSchemaReview, savePreparedSchema } from '../fixtures/schema-review';
 import { expect, test } from '../fixtures/test';
 
 test('saved snapshot → edit → Review → commit → edit again, including empty content and required fields', async ({ page, request }, testInfo) => {
@@ -50,7 +51,7 @@ test('saved snapshot → edit → Review → commit → edit again, including em
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&workspace=${workspaceId}&branch=main`);
     await expect(page.getByLabel('Type item/title', { exact: true })).toHaveValue('string');
-    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
+    await expect(page.getByText('Draft · not committed', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('saved-draft-editable.png'), fullPage: true });
 
     const commit = async () => {
@@ -59,18 +60,20 @@ test('saved snapshot → edit → Review → commit → edit again, including em
       await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
       const result = await data(await response);
       expect(result.commit.schema).toBe('t3x/commit/v2');
-      await expect(page.getByRole('heading', { name: 'Committed', exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'View commit in History' })).toBeVisible();
       await page.getByRole('link', { name: 'Schema', exact: true }).click();
       await expect(page.getByText(/^Committed · /)).toBeVisible();
-      await expect(page.getByRole('button', { name: /^(Review changes|Save and review)$/ })).toBeDisabled();
+      await expect(page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ })).toBeDisabled();
     };
     // Dirty Review saves the exact definition and reviews unchanged empty content.
     await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Type item/title', { exact: true }).selectOption('number');
-    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
-    await expect(page).toHaveURL(/reviewSnapshot=/);
-    await expect(page.getByRole('region', { name: 'Schema review', exact: true })).toContainText('nodes.item');
-    await expect(page).toHaveURL(/workspaceMode=review/);
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
+    await page.getByRole('navigation', { name: 'Review subject' }).getByRole('button', { name: 'Schema', exact: true }).click();
+    await expect(
+      page.getByRole('row', { name: 'Inspect nodes/item/slots/title/type + Added number' })
+    ).toBeVisible();
     await expect(page.getByRole('region', { name: 'Schema review', exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('empty-content-review.png'), fullPage: true });
     await commit();
@@ -79,12 +82,11 @@ test('saved snapshot → edit → Review → commit → edit again, including em
     // Save without committing, then reload and keep editing the saved definition.
     await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Type item/title', { exact: true }).selectOption('string');
-    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
+    await expect(page.getByText('All changes saved', { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByLabel('Type item/title', { exact: true })).toHaveValue('string');
-    await expect(page.getByText('Draft saved · not committed', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
     await commit();
 
     // Once real content exists, new required nodes and slots must be repaired.
@@ -100,21 +102,24 @@ test('saved snapshot → edit → Review → commit → edit again, including em
     await page.getByLabel('Required item', { exact: true }).check();
     await page.getByRole('textbox', { name: 'Name item/title', exact: true }).click();
     await page.getByLabel('Required item/title', { exact: true }).check();
-    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
-    const repair = page.getByRole('region', { name: 'Update content for this schema', exact: true });
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
+    const repair = page.getByRole('dialog', { name: 'Prepare Schema content', exact: true });
     await expect(repair).toBeVisible();
-    await expect(repair.getByRole('button', { name: 'Save and continue to review' })).toBeDisabled();
+    await expect(repair.getByRole('button', { name: 'Save prepared Draft' })).toBeDisabled();
     await repair.getByRole('button', { name: 'Add node item', exact: true }).click();
     await repair.getByRole('button', { name: 'Preview changes' }).click();
     await repair.getByRole('button', { name: 'Fill item/title', exact: true }).click();
     await repair.getByLabel('Value for item/title', { exact: true }).fill('User supplied title');
     await repair.getByRole('button', { name: 'Preview changes' }).click();
-    await expect(repair.getByRole('button', { name: 'Save and continue to review' })).toBeEnabled();
+    await expect(repair.getByRole('button', { name: 'Save prepared Draft' })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('required-content-repair.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: testInfo.outputPath('required-content-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await repair.getByRole('button', { name: 'Save and continue to review' }).click();
+    await savePreparedSchema(page);
+    await expect(repair).toBeHidden();
+    await finishSchemaReview(page);
     await commit();
     const final = await data(await request.get(`${endpoint}/authoring`));
     expect(final.hasChanges).toBe(false);
@@ -154,16 +159,16 @@ test('new empty project adopts the unmodified Skill Schema, commits, and stays e
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/project/${projectId}?tab=schemas&schemaView=studio&workspace=${workspaceId}&branch=main&candidate=${candidate.id}`);
     await expect(page.getByLabel('Required activation', { exact: true })).toBeChecked();
-    await page.getByRole('button', { name: /^(Review changes|Save and review)$/ }).click();
-    await expect(page).toHaveURL(/reviewSnapshot=/);
-    await expect(page.getByRole('region', { name: 'Update content for this schema' })).toHaveCount(0);
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
+    await page.getByText('Validation', { exact: true }).click();
     await expect(page.getByText('Not applicable: no business content is being submitted. Required fields apply when content is added.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and commit', exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('initial-skill-review.png'), fullPage: true });
     const response = page.waitForResponse(response => response.url().endsWith(`/workspaces/${workspaceId}/transition/decide`) && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
     expect((await data(await response)).commit.schema).toBe('t3x/commit/v2');
-    await expect(page.getByRole('heading', { name: 'Committed', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View commit in History' })).toBeVisible();
     await page.getByRole('link', { name: 'Schema', exact: true }).click();
     await expect(page.getByText(/^Committed · /)).toBeVisible();
     await page.reload();

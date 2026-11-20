@@ -16,12 +16,12 @@ test('original ecosystem starters are discoverable, filterable and importable at
     await page.screenshot({ path: testInfo.outputPath('starters-discover.png'), animations: 'disabled' });
     await page.getByRole('searchbox', { name: 'Search projects and schemas' }).fill('Care checklist');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
-    await expect(page).toHaveURL(/view=browse/);
+    await expect(page).toHaveURL(url => url.pathname === '/explore/browse');
     await expect(page.getByRole('button', { name: 'Explore Care checklist', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Explore Compose services', exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('starters-browse.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Explore Care checklist', exact: true }).click();
-    await expect(page).toHaveURL(/catalogName=t3x%2Fcare-checklist/);
+    await expect(page).toHaveURL(url => url.pathname === '/explore/schemas/t3x/care-checklist/1.0.0');
     await expect(page.getByRole('heading', { name: 'Care checklist' })).toBeVisible();
     await expect(page.getByText('Apache-2.0').first()).toBeVisible();
     await expect(page.getByRole('region', { name: 'Author README' })).toContainText('Rename the routine');

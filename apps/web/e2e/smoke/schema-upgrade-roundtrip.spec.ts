@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { finishSchemaReview } from '../fixtures/schema-review';
 import { expect, test } from '../fixtures/test';
 import {
   API_BASE,
@@ -169,13 +170,19 @@ test('reviews a real published upgrade and retains the exact target Workspace th
       path: testInfo.outputPath('upgrade-active.png'),
       animations: 'disabled',
     });
-    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ })).toBeEnabled();
+    await page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ }).click();
+    await finishSchemaReview(page);
     await expect(page.getByRole('region', { name: 'Workspace Review' })).toBeVisible();
-    await expect(page).toHaveURL((url) => url.searchParams.get('workspace') === targetWorkspaceId && url.searchParams.get('branch') === 'target');
+    await expect(page).toHaveURL(/\/reviews\/\d+(?:\?|$)/);
+    await page.getByRole('navigation', { name: 'Review subject' }).getByRole('button', { name: 'Schema', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Schema review' })).toContainText('system_architecture');
     await page.screenshot({ path: testInfo.outputPath('upgrade-review.png'), animations: 'disabled' });
     await page.getByRole('link', { name: 'Edit in Compose', exact: true }).click();
+    await expect(page).toHaveURL((url) =>
+      url.pathname.endsWith('/branches/target/workspaces') &&
+      url.searchParams.get('workspace') === targetWorkspaceId
+    );
     const current = await workspace(targetWorkspaceId);
     // Review prepares the upgraded Draft but cannot advance committed history.
     expect(current.schemaBindings[0]).toMatchObject({ mode: 'pinned', canonicalName, version: '2.0.0' });

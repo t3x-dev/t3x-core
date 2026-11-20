@@ -210,7 +210,7 @@ test('signed-in Studio preserves community releases while enforcing destination 
     await page.goto('/login');
     await page.getByLabel('Username').fill(reader.username);
     await page.getByLabel('Password').fill(reader.password);
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`/studio-reader-${suffix}`);
     await page.goto(`/project/${target}?tab=schemas&schemaView=studio&candidate=${candidate.id}`, {
       waitUntil: 'domcontentloaded',
@@ -220,7 +220,7 @@ test('signed-in Studio preserves community releases while enforcing destination 
         .getByRole('complementary', { name: 'Available Schema sources' })
         .getByText('Community release definition')
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^(Save and review|Review) in Workspace$/ })).toBeEnabled();
     await page.screenshot({
       path: testInfo.outputPath('studio-community-release.png'),
       animations: 'disabled',
