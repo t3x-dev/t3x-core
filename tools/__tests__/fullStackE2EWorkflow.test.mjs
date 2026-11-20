@@ -11,6 +11,7 @@ test('full-stack E2E qualifies exact dev pushes, supports reruns, and produces a
   assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
   assert.match(workflow, /^\s+workflow_dispatch:$/m);
   assert.doesNotMatch(workflow, /^\s+pull_request:/m);
+  assert.match(workflow, /^ {4}runs-on: ubuntu-24\.04$/m);
   assert.match(workflow, /image: postgres:16/);
   assert.match(workflow, /pnpm check$/m);
   assert.match(workflow, /pnpm build$/m);
