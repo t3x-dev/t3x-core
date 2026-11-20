@@ -338,9 +338,13 @@ test('post-commit: historical State creates an isolated branch Workspace pinned 
     await page.getByRole('button', { name: /Switch branches\/tags, current branch main/ }).click();
     await page.getByPlaceholder('Find or create branch').fill(branchName);
     await page
-      .getByRole('menuitem', { name: `Create branch ${branchName} from main` })
+      .getByRole('menuitem', {
+        name: `Create branch ${branchName} from commit hash:${historicalCommit.replace('sha256:', '').slice(0, 7)}`,
+      })
       .click();
-    await expect(page).toHaveURL(new RegExp(`branch=${encodeURIComponent(branchName)}`));
+    await expect(page).toHaveURL(
+      (url) => url.pathname.endsWith(`/branches/${encodeURIComponent(branchName)}/workspaces`)
+    );
 
     const branchWorkspaceId = `workspace_branch:${encodeURIComponent(branchName)}`;
     const branchWorkspaceResponse = await request.get(

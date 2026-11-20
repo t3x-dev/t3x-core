@@ -51,7 +51,8 @@ test.describe('two-account browser collaboration', () => {
       );
       await pageA.getByRole('button', { name: 'Create repository', exact: true }).click();
       expect((await createRepository).status()).toBe(201);
-      await expect(pageA).toHaveURL(new RegExp(`/${accountA.namespace}/${repositoryName}/workspaces`));
+      await expect(pageA).toHaveURL(`/${accountA.namespace}/${repositoryName}?view=overview`);
+      await pageA.getByRole('link', { name: 'Workspace', exact: true }).click();
       await pageA.screenshot({
         path: testInfo.outputPath('01-account-a-created-repository.png'),
         fullPage: true,
@@ -76,8 +77,11 @@ test.describe('two-account browser collaboration', () => {
       await pageA.getByRole('menuitem', { name: 'Edit Draft', exact: true }).click();
       const initialDraftDialog = pageA.getByRole('dialog', { name: 'Edit Workspace Draft' });
       await initialDraftDialog.getByRole('button', { name: 'Edit audience', exact: true }).click();
-      await initialDraftDialog.getByLabel('Value').fill('Product collaborators');
-      await initialDraftDialog.getByRole('button', { name: 'Apply', exact: true }).click();
+      await initialDraftDialog
+        .getByRole('textbox', { name: 'New value', exact: true })
+        .fill('Product collaborators');
+      await initialDraftDialog.getByLabel('Reason').fill('Establish the collaboration baseline');
+      await initialDraftDialog.getByRole('button', { name: 'Save change', exact: true }).click();
       await expect(initialDraftDialog.getByRole('button', { name: 'Edit audience' })).toBeVisible();
       await initialDraftDialog.getByRole('button', { name: 'Close', exact: true }).click();
       const saveInitialDraft = pageA.waitForResponse(
@@ -110,20 +114,7 @@ test.describe('two-account browser collaboration', () => {
       );
       await pageA.getByRole('button', { name: 'Approve and commit', exact: true }).click();
       expect((await commitInitialReview).ok()).toBe(true);
-      const initialCommitted = pageA.getByText('Committed', { exact: true }).first();
-      await expect(initialCommitted)
-        .toBeVisible({ timeout: 2_000 })
-        .catch(async () => {
-          const retryInitialDecision = pageA.waitForResponse(
-            (response) =>
-              /\/workspaces\/[^/]+\/transition\/decide$/.test(
-                new URL(response.url()).pathname
-              ) && response.request().method() === 'POST'
-          );
-          await pageA.getByRole('button', { name: 'Retry original decision' }).click();
-          expect((await retryInitialDecision).ok()).toBe(true);
-          await expect(initialCommitted).toBeVisible();
-        });
+      await expect(pageA.getByRole('link', { name: 'View commit in History' })).toBeVisible();
 
       await pageA.getByRole('link', { name: 'Settings', exact: true }).click();
       await pageA.getByRole('link', { name: 'Access', exact: true }).click();
@@ -182,8 +173,7 @@ test.describe('two-account browser collaboration', () => {
       expect((await createBranch).status()).toBe(201);
       await expect(pageB).toHaveURL(
         (url) =>
-          url.searchParams.get('tab') === 'workspaces' &&
-          url.searchParams.get('branch') === branchName
+          url.pathname.endsWith(`/branches/${encodeURIComponent(branchName)}/workspaces`)
       );
       expect((await branchWorkspaceReady).ok()).toBe(true);
 
@@ -225,13 +215,17 @@ test.describe('two-account browser collaboration', () => {
       await expect(draftDialog.getByRole('button', { name: 'Edit outcome' })).toBeVisible();
       await draftDialog.getByRole('button', { name: 'Close', exact: true }).click();
 
+      const loadLatest = pageB.getByRole('button', { name: 'Load latest', exact: true });
+      await loadLatest.click();
+      await expect(loadLatest).toBeHidden();
       const saveDraft = pageB.waitForResponse(
         (response) =>
           /\/workspaces\/[^/]+\/authoring\/actions$/.test(new URL(response.url()).pathname) &&
           response.request().method() === 'POST'
       );
       await pageB.getByRole('button', { name: /^Save selected as P/ }).click();
-      expect((await saveDraft).ok()).toBe(true);
+      const savedDraft = await saveDraft;
+      expect(savedDraft.ok(), await savedDraft.text()).toBe(true);
       await expect(pageB.getByRole('button', { name: /^Save selected as P/ })).toBeHidden();
 
       const prepareReview = pageB.waitForResponse(
@@ -262,7 +256,7 @@ test.describe('two-account browser collaboration', () => {
       );
       await approveAndCommit.click();
       expect((await commitBranch).ok()).toBe(true);
-      await expect(pageB.getByText('Committed', { exact: true }).first()).toBeVisible();
+      await expect(pageB.getByRole('link', { name: 'View commit in History' })).toBeVisible();
       await pageB.screenshot({
         path: testInfo.outputPath('03-account-b-committed-feature-branch.png'),
         fullPage: true,
@@ -361,11 +355,11 @@ async function registerAndOnboard(
   }
 ): Promise<void> {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Register', exact: true }).click();
+  await page.getByRole('link', { name: 'Create account', exact: true }).click();
   await page.getByLabel('Username').fill(account.username);
   await page.getByLabel('Password').fill(account.password);
-  await page.getByLabel(/Display Name/).fill(account.displayName);
-  await page.getByRole('button', { name: 'Create Account', exact: true }).click();
+  await page.getByLabel(/Display name/).fill(account.displayName);
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page).toHaveURL('/onboarding/namespace');
   await page.getByLabel('Personal namespace').fill(account.namespace);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

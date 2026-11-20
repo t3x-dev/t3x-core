@@ -214,19 +214,19 @@ test('complex workspace: multiple sources flow through authoring and a safe revi
     const authoringPayload = await authoringResponse.json();
     expect(authoringResponse.status(), JSON.stringify(authoringPayload)).toBe(200);
     expect(authoringPayload.data.current.trees).toEqual(COMPLEX_TREE);
+    expect(authoringPayload.data.basis.refHead).toBeNull();
 
     await page.reload();
     await page.getByRole('button', { name: 'Open Draft', exact: true }).click();
-    await expect(
-      page.getByText('Branch head precondition', { exact: true }).filter({ visible: true }).first()
-    ).toBeVisible();
     await page.getByRole('tab', { name: 'Review', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Review', exact: true })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
-    await expect(page).toHaveURL(/reviewSnapshot=/);
+    await expect(page).toHaveURL(/\/reviews\/\d+(?:\?|$)/);
     await page.screenshot({ path: testInfo.outputPath('workspace-review-validated.png') });
     await expect(page.getByRole('button', { name: 'Approve and commit' })).toBeDisabled();
-    await expect(page.getByText('The bound Schema has no conclusive validation result.')).toBeVisible();
+    await expect(page.getByRole('alert').filter({
+      hasText: 'The bound Schema has no conclusive validation result.',
+    })).toBeVisible();
     expect(browserErrors).toEqual([]);
 
     test.info().annotations.push({

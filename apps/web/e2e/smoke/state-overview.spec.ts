@@ -20,9 +20,11 @@ test('Overview shows author content and exact State on desktop and mobile', asyn
     await page.setViewportSize({ width: 1480, height: 1060 });
     await page.goto(`/project/${projectId}?view=overview&commit=${encodeURIComponent(hash)}`, { waitUntil: 'networkidle' });
     await expect(page.getByTestId('state-overview')).toBeVisible();
+    await expect(page).toHaveURL(/\/commits\/\d+\?view=overview/);
+    const exactCommitPath = new URL(page.url()).pathname;
     await page.getByRole('tab', { name: /Structure/ }).click();
     await expect(page.getByRole('tab', { name: /Structure/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page).toHaveURL(new RegExp(encodeURIComponent(hash)));
+    await expect(page).toHaveURL((url) => url.pathname === exactCommitPath);
     await page.getByRole('tab', { name: /Overview/ }).click();
     await expect(page.getByRole('tab', { name: /Overview/ })).toHaveAttribute('aria-selected', 'true');
 
