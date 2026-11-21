@@ -46,7 +46,7 @@ test('selectStandardsRows maps PR paths to filtered and always-run rows', () => 
 test('matchesStandardsPathFilter supports standards workflow globs', () => {
   assert.equal(
     matchesStandardsPathFilter(
-      '.github/workflows/standards-pr.yml',
+      '.github/workflows/standards-nightly.yml',
       '.github/workflows/standards-*.yml'
     ),
     true

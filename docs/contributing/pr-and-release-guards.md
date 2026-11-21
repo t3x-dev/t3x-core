@@ -34,6 +34,13 @@ pnpm test
 through environment variables. Locally, use it with explicit metadata when
 testing a release PR guard.
 
+The `PR Validation` workflow runs the required `Check, build, and test` job.
+On PRs into `dev` or `main`, it also runs Standards and the independent
+Transition verifier in parallel. The API snapshot and diff job runs when the
+PR changes API-related paths. A manual workflow run includes the specialist
+checks. Use the job's **Re-run job** action to retry an individual check.
+The required build and test job covers YSchema.
+
 Large PRs may need more targeted smoke checks. Product release PRs into `main`
 use the full release guard described in
 [Maintainer Release Flow](../../.github/release-flow.md).
