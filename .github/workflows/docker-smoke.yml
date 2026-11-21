@@ -1,4 +1,4 @@
-name: docker-smoke
+name: Deployment - Docker Compose Smoke (Manual)
 
 # Manual only. Not a required check. Promote to push triggers after 3 clean runs.
 on:

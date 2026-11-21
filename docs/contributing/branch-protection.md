@@ -17,7 +17,7 @@ Recommended settings:
 
 Current required status check:
 
-- `PR Validation / Check, build, and test`
+- `Check, build, and test`
 
 During the bootstrap phase, approving reviews and CODEOWNERS review are
 recommended for protected files but are not enforced by the active ruleset.
@@ -39,15 +39,15 @@ Recommended settings:
 
 Current required status check:
 
-- `PR Validation / Check, build, and test`
+- `Check, build, and test`
 
-`PR Validation` runs `tools/check-release-pr.mjs` for pull requests. For PRs
+`CI - PR Validation` runs `tools/check-release-pr.mjs` for pull requests. For PRs
 targeting `main`, it blocks ordinary feature branches and requires product
 release metadata in the PR body unless the PR is the Changesets version package
 PR.
 
-`local-smoke / Clean install smoke` is a target release guard for package and
-runtime-sensitive changes. It is not currently a required branch rule.
+`CI - Full-Stack E2E Qualification` checks clean local installs after pushes to
+`dev`. Maintainers can also run it manually against a release candidate.
 
 ## Protected File Ownership
 

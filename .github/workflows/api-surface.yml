@@ -1,4 +1,4 @@
-name: API Surface
+name: CI - API Snapshots and Diff
 
 on:
   pull_request:
@@ -25,7 +25,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: API Surface-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:

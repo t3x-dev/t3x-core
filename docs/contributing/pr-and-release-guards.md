@@ -116,6 +116,19 @@ Changes to these areas require owner review:
 - `docs/contributing/branch-protection.md`
 - `docs/contributing/pr-and-release-guards.md`
 
+## Workflow Names
+
+Use lowercase kebab-case for workflow filenames. For the Actions display name,
+use `Area - Purpose` in English title case and preserve acronyms such as API,
+CI, E2E, and PR. The area describes where the work belongs, such as CI,
+Deployment, Release, Integration, Repository, or Security. Add a trigger in
+parentheses when it helps people choose a workflow, as in
+`CI - Standards Checks (Nightly)` or
+`Deployment - Docker Compose Smoke (Manual)`.
+
+Keep required job names in sync with branch rulesets. Use stable concurrency
+keys so a display-name change does not split in-flight runs into separate groups.
+
 ## Review Tools
 
 No AI reviewer is required today. AI review tools can help catch mistakes once

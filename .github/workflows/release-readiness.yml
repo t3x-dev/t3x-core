@@ -1,4 +1,4 @@
-name: Release Readiness
+name: Release - Readiness Report
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
       - ready_for_review
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: Release Readiness-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
