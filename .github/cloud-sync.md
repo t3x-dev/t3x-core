@@ -1,6 +1,6 @@
 # Cloud Sync Candidate Automation
 
-The `Cloud Sync Candidate` workflow converts an accepted Core `dev` revision
+The `Integration - Prepare Cloud Sync Candidate` workflow converts an accepted Core `dev` revision
 into a reviewable branch from `t3x-dev/t3x-cloud` `dev`. It deliberately stops
 before creating a pull request. Cloud review and merge to `dev` qualify the
 staging deployment; the explicit `dev` to `main` promotion remains the separate

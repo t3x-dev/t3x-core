@@ -1,4 +1,4 @@
-name: Hosted Deployment Build
+name: Deployment - Build Hosted Images
 
 on:
   pull_request:
@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: hosted-deployment-${{ github.workflow }}-${{ github.ref }}
+  group: hosted-deployment-Hosted Deployment Build-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

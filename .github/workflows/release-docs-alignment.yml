@@ -1,4 +1,4 @@
-name: Release Docs Alignment
+name: Release - Check Versioned Docs
 
 on:
   push:
@@ -31,7 +31,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: Release Docs Alignment-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:

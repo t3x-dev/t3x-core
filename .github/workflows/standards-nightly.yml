@@ -1,4 +1,4 @@
-name: Standards Nightly
+name: CI - Standards Checks (Nightly)
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: Standards Nightly
   cancel-in-progress: false
 
 permissions:

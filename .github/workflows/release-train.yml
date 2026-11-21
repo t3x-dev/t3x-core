@@ -1,4 +1,4 @@
-name: Release Train
+name: Release - Prepare Release PR
 
 on:
   schedule:

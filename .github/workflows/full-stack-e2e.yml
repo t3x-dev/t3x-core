@@ -1,4 +1,4 @@
-name: Full-stack E2E
+name: CI - Full-Stack E2E Qualification
 
 # Every dev merge is qualified at its immutable post-merge SHA. Manual dispatch
 # remains available for release candidates and exact-SHA reruns.
@@ -177,7 +177,7 @@ jobs:
 
           fs.appendFileSync(
             process.env.GITHUB_STEP_SUMMARY,
-            `## Full-stack E2E\n\n- Qualified SHA: \`${process.env.QUALIFIED_SHA}\`\n- Event: \`${process.env.QUALIFICATION_EVENT}\`\n\n${sections.join('\n')}`
+            `## Full-Stack E2E\n\n- Qualified SHA: \`${process.env.QUALIFIED_SHA}\`\n- Event: \`${process.env.QUALIFICATION_EVENT}\`\n\n${sections.join('\n')}`
           );
           NODE
         env:

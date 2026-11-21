@@ -34,7 +34,7 @@ pnpm test
 through environment variables. Locally, use it with explicit metadata when
 testing a release PR guard.
 
-The `PR Validation` workflow runs the required `Check, build, and test` job.
+The `CI - PR Validation` workflow runs the required `Check, build, and test` job.
 On PRs into `dev` or `main`, it also runs Standards and the independent
 Transition verifier in parallel. The API snapshot and diff job runs when the
 PR changes API-related paths. A manual workflow run includes the specialist
@@ -122,6 +122,19 @@ Changes to these areas require owner review:
 - `docs/release/`
 - `docs/contributing/branch-protection.md`
 - `docs/contributing/pr-and-release-guards.md`
+
+## Workflow Names
+
+Use lowercase kebab-case for workflow filenames. For the Actions display name,
+use `Area - Purpose` in English title case and preserve acronyms such as API,
+CI, E2E, and PR. The area describes where the work belongs, such as CI,
+Deployment, Release, Integration, Repository, or Security. Add a trigger in
+parentheses when it helps people choose a workflow, as in
+`CI - Standards Checks (Nightly)` or
+`Deployment - Docker Compose Smoke (Manual)`.
+
+Keep required job names in sync with branch rulesets. Use stable concurrency
+keys so a display-name change does not split in-flight runs into separate groups.
 
 ## Review Tools
 
