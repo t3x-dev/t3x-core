@@ -24,7 +24,7 @@ test('standards row-4 runs the release surface check through the standards runne
   ]);
 });
 
-test('standards row-4 runs when release surface guard files change', async () => {
+test('PR validation changes select the release surface and contributor rows', async () => {
   const result = await runStandards({
     rootDir: root,
     mode: 'pr',
@@ -32,5 +32,5 @@ test('standards row-4 runs when release surface guard files change', async () =>
   });
 
   assert.equal(result.exitCode, 0);
-  assert.deepEqual(result.selectedRows, ['row-4']);
+  assert.deepEqual(result.selectedRows, ['row-4', 'row-6']);
 });
