@@ -1,4 +1,4 @@
-name: Cloud Sync Candidate
+name: Integration - Prepare Cloud Sync Candidate
 
 on:
   push:

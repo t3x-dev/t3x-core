@@ -95,7 +95,7 @@ gh pr create \
 
 ### 5. 合并前检查
 
-`dev` 和 `main` 当前都要求 PR Validation；该检查对应 `PR Validation / Check, build, and test`。合并前还应确保：
+`dev` 和 `main` 当前都要求 `Check, build, and test`，由 `CI - PR Validation` 工作流运行。合并前还应确保：
 
 - PR 描述完整，Issue、Release Impact 与 Changeset 状态一致。
 - CI 结果和实际改动一致。
@@ -217,7 +217,7 @@ Not run locally; centralized validation pending.
 
 T3X 的发版工具由 **Release Train** 自动化流程和命令行计划工具组成。它的职责是：基于 `dev` 生成 `release/x.y.z` 分支和对应的发版 PR；它本身不直接发布 npm 包。
 
-正常情况下，优先通过 GitHub Actions 使用该工具：进入仓库的 **Actions → Release Train → Run workflow**，工作流会从 `dev` 读取代码并生成计划或草稿 PR。
+正常情况下，优先通过 GitHub Actions 使用该工具：进入仓库的 **Actions → Release - Prepare Release PR → Run workflow**，工作流会从 `dev` 读取代码并生成计划或草稿 PR。
 
 ### 发版前的判断
 
@@ -255,7 +255,7 @@ dry run 会输出：推导出的产品版本、拟创建的 `release/x.y.z` 分�
 
 ### 创建纯代码发版 PR
 
-确认 dry run 的版本、范围和生成正文后，在 **Release Train** 手动运行中设置：
+确认 dry run 的版本、范围和生成正文后，在 **Release - Prepare Release PR** 手动运行中设置：
 
 ```text
 version: auto 或 x.y.z
@@ -271,7 +271,7 @@ draft: true
 
 ### 创建带 npm 包发布意图的发版 PR
 
-仅当确认某个活跃公开包需要发布时，才在 **Release Train** 使用：
+仅当确认某个活跃公开包需要发布时，才在 **Release - Prepare Release PR** 使用：
 
 ```text
 version: auto 或 x.y.z

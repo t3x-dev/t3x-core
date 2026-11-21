@@ -1,4 +1,4 @@
-name: Sync Main Into Dev
+name: Repository - Sync Main into Dev
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: Sync Main Into Dev
   cancel-in-progress: false
 
 permissions:
@@ -95,8 +95,8 @@ jobs:
 
           ## Verification
 
-          - PR Validation is expected to run on this generated PR.
-          - Full-stack E2E qualifies the exact merged `dev` SHA automatically; manual exact-ref reruns remain available.
+          - **CI - PR Validation** runs on this PR.
+          - **CI - Full-Stack E2E Qualification** runs against the exact `dev` SHA after merge and supports manual reruns for a specific ref.
           EOF
 
           pr_number="$(

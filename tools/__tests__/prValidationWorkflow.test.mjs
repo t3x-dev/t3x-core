@@ -54,7 +54,7 @@ test('PR validation qualifies merge groups and immutable dev pushes', () => {
   assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
   assert.match(
     workflow,
-    /^ {2}group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}$/m
+    /^ {2}group: PR Validation-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}$/m
   );
   assert.match(
     workflow,

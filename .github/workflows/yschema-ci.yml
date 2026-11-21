@@ -1,4 +1,4 @@
-name: YSchema CI
+name: CI - YSchema Tests
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: YSchema CI-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:

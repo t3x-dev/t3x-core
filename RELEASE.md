@@ -21,12 +21,12 @@ without selecting it in the default release train.
 
 ## Retrying Package Publishing
 
-After a version-packages PR is merged, the Release workflow publishes the selected
-versions directly. Ignored WebUI changesets may remain and must not send this step
+After a version-packages PR merges, the **Release - Record and Publish**
+workflow publishes the selected versions directly. Ignored WebUI changesets may remain and must not send this step
 back into Changesets PR creation.
 
-To recover a failed publish after fixing its cause, run the **Release** workflow
-manually on `main`. Set `packages` to the comma-separated active package names,
+After fixing a failed publish, run **Release - Record and Publish** manually
+on `main`. Set `packages` to the comma-separated active package names,
 for example `yops,yschema`. This publishes the versions currently in those package
 manifests without bumping them. The publisher skips versions already on npm and
 uploads the package assets to the existing product release that declares them.

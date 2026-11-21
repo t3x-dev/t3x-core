@@ -15,7 +15,7 @@ async function loadPrContext() {
 test('release readiness workflow generates, comments, and uploads one report', () => {
   const workflow = readText('.github/workflows/release-readiness.yml');
 
-  assert.match(workflow, /^name: Release Readiness$/m);
+  assert.match(workflow, /^name: Release - Readiness Report$/m);
   assert.match(workflow, /^\s+pull_request:$/m);
   assert.match(workflow, /^\s+issues: write$/m);
   assert.match(workflow, /^\s+pull-requests: write$/m);
@@ -32,7 +32,7 @@ test('release readiness workflow generates, comments, and uploads one report', (
 test('release readiness signoff workflow handles only owner commands on PR comments', () => {
   const workflow = readText('.github/workflows/release-readiness-signoff.yml');
 
-  assert.match(workflow, /^name: Release Readiness Signoff$/m);
+  assert.match(workflow, /^name: Release - Owner Signoff$/m);
   assert.match(workflow, /^\s+issue_comment:$/m);
   assert.match(workflow, /github\.event\.issue\.pull_request/);
   assert.match(workflow, /\/t3x readiness/);

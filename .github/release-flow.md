@@ -134,8 +134,7 @@ the first public alpha publish.
 
 ## Release Train Automation
 
-The `Release Train` workflow prepares release pull requests. It does not publish
-npm packages by itself.
+The `Release - Prepare Release PR` workflow opens draft release pull requests.
 
 - Scheduled runs execute every Friday at 10:00 China Standard Time.
 - Scheduled runs use `version=auto`, `mode=code-only`, `dry_run=false`, and
@@ -239,7 +238,8 @@ Release PR checklist:
 11. Merge to `main` only after required checks pass and review expectations are
    satisfied.
 
-After the product release PR merges, the `Release` workflow runs on `main`.
+The `Release - Record and Publish` workflow runs on `main` after the product
+release PR merges.
 
 - If unconsumed changesets are present, Changesets creates a
   `chore: version packages` pull request.
@@ -259,8 +259,8 @@ After the product release PR merges, the `Release` workflow runs on `main`.
   manifest, checksums, and a combined package archive for the selected packages;
   npm remains the primary install source.
 
-The `Release` workflow must create the `chore: version packages` pull request
-with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
+The `Release - Record and Publish` workflow must use the `CHANGESETS_TOKEN`
+repository secret to create the `chore: version packages` pull request. This secret should be a GitHub
 personal access token from a human or bot account with permission to create pull
 requests. Do not rely on the default `GITHUB_TOKEN` for this step: pull requests
 created by `GITHUB_TOKEN` do not recursively run GitHub Actions, so required
@@ -269,8 +269,8 @@ checks can stay stuck as `Expected - Waiting to be reported`.
 When the workflow needs to create the version packages pull request and
 `CHANGESETS_TOKEN` is missing, it should fail before opening the pull request.
 
-After every push to `main`, the `Sync Main Into Dev` workflow checks whether
-merging `main` into `dev` would introduce file changes. If main-only content is
+After every push to `main`, the `Repository - Sync Main into Dev` workflow
+checks whether merging `main` into `dev` would introduce file changes. If main-only content is
 present, it creates or updates an `automation/sync-main-into-dev` branch from
 the current `dev`, merges `main` into it, and opens a pull request back to
 `dev`. This covers package version commits, removed changesets, changelog
