@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import yaml from 'js-yaml';
 
@@ -90,4 +93,87 @@ test('PR validation runs the authenticated security smoke before the full suite'
   assert.ok(
     workflow.indexOf('run: pnpm test:security-smoke') < workflow.indexOf('run: pnpm test\n')
   );
+});
+
+test('specialist checks retain PR and manual eligibility alongside the required job', () => {
+  const workflow = yaml.load(
+    readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8')
+  );
+  const { on: triggers, jobs } = workflow;
+  assert.deepEqual(triggers.pull_request, { branches: ['dev', 'main'] });
+  assert.deepEqual(triggers.push, { branches: ['dev'] });
+  assert.ok('merge_group' in triggers);
+  assert.ok('workflow_dispatch' in triggers);
+  assert.equal(jobs.validate.needs, undefined);
+
+  for (const job of [jobs.standards, jobs['independent-verifier']]) {
+    assert.equal(
+      job.if,
+      "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'"
+    );
+    assert.equal(job.needs, undefined);
+  }
+
+  const api = jobs['api-surface'];
+  assert.equal(api.needs, 'api-changes');
+  assert.equal(jobs['api-changes'].if, "github.event_name == 'pull_request'");
+  assert.match(api.if, /github\.event_name == 'workflow_dispatch' \|\|/);
+  assert.match(
+    api.if,
+    /github\.event_name == 'pull_request' && needs\.api-changes\.outputs\.relevant == 'true'/
+  );
+});
+
+test('the API job uses the PR merge base and still detects changed or removed API paths', (t) => {
+  const workflow = yaml.load(
+    readFileSync(new URL('.github/workflows/pr-validation.yml', root), 'utf8')
+  );
+  const script = workflow.jobs['api-changes'].steps.find((step) => step.id === 'paths').run;
+  const cwd = mkdtempSync(join(tmpdir(), 't3x-api-workflow-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const commit = (message) => {
+    git('add', '-A');
+    git(
+      '-c',
+      'user.name=Workflow Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '--quiet',
+      '--no-gpg-sign',
+      '-m',
+      message
+    );
+    return git('rev-parse', 'HEAD');
+  };
+  const apiPath = join(cwd, 'packages/example/src/nested/entry.ts');
+  const outputPath = join(cwd, '.git', 'action-output');
+  const detect = (base, head) => {
+    writeFileSync(outputPath, '');
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      cwd,
+      env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, GITHUB_OUTPUT: outputPath },
+      encoding: 'utf8',
+    });
+    return { status: result.status, output: readFileSync(outputPath, 'utf8').trim() };
+  };
+  git('init', '--quiet');
+  mkdirSync(join(cwd, 'packages/example/src/nested'), { recursive: true });
+  writeFileSync(apiPath, 'initial API');
+  const common = commit('Initial commit');
+  writeFileSync(apiPath, 'API changed on base');
+  const base = commit('Move base forward');
+
+  git('checkout', '--quiet', '--detach', common);
+  writeFileSync(join(cwd, 'README.md'), 'Docs-only pull request');
+  const docs = commit('Update docs');
+  assert.deepEqual(detect(base, docs), { status: 0, output: 'relevant=false' });
+
+  rmSync(apiPath);
+  const removed = commit('Remove API file');
+  assert.deepEqual(detect(base, removed), { status: 0, output: 'relevant=true' });
+  const missing = detect('not-a-revision', docs);
+  assert.notEqual(missing.status, 0);
+  assert.equal(missing.output, '');
 });
