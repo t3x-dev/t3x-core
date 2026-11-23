@@ -33,6 +33,8 @@ import {
 import type { ListProjectsParams, RepositoryAddress, RepositoryNameCheck } from './types';
 import {
   type WorkspaceDeliveryInput,
+  type WorkspaceDeliveryList,
+  WorkspaceDeliveryListSchema,
   type WorkspaceDeliveryResult,
   WorkspaceDeliveryResultSchema,
   type WorkspaceDeploymentInput,
@@ -1182,6 +1184,20 @@ export class T3xClient {
       undefined,
       undefined,
       StatePresentationResultSchema
+    );
+  }
+
+  async listWorkspaceDeliveries(
+    projectId: string,
+    workspaceId: string
+  ): Promise<WorkspaceDeliveryList> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`,
+      undefined,
+      undefined,
+      undefined,
+      WorkspaceDeliveryListSchema
     );
   }
 

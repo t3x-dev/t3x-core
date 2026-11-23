@@ -74,16 +74,20 @@ async function qualifyCore(input: {
   const projectUrl = `/projects/${project_id}`;
   const agent = await input.issue(project_id);
   const otherKey = await mintDirect(input.actor, project_id, authoringScopes);
-  const [human, machine, outsider, limited, readonly] = [
+  const [human, machine, outsider, limited, readonly, delivery, deliveryReader] = [
     mcpClient(input.operatorSession),
     mcpClient(agent.key),
     mcpClient(input.outsiderSession),
     mcpClient(otherKey.key),
     mcpClient(agent.key, 'read-only'),
+    mcpClient(agent.key, 'delivery,delivery:prepare'),
+    mcpClient(input.operatorSession, 'delivery'),
   ];
   try {
     await Promise.all(
-      [human, machine, outsider, limited, readonly].map((client) => client.connect())
+      [human, machine, outsider, limited, readonly, delivery, deliveryReader].map((client) =>
+        client.connect()
+      )
     );
     expect((await readonly.list()).tools.map(({ name }) => name)).not.toContain('t3x_commit');
     await denied(readonly, 't3x_query', { target: 'workspace_activity', project_id, id: 'hidden' });
@@ -310,7 +314,7 @@ async function qualifyCore(input: {
       commit_digest: committed.commit_digest,
     });
     expect((await branch(human, ref)).head_commit_hash).toBe(committed.commit_digest);
-    const bound = await invoke(machine, 't3x_committed_state', {
+    const bound = await invoke<{ schema_hash: string }>(machine, 't3x_committed_state', {
       action: 'schema_binding',
       project_id,
       commit_digest: committed.commit_digest,
@@ -350,6 +354,53 @@ async function qualifyCore(input: {
       commit: { digest: committed.commit_digest },
       branch: { head_commit_hash: committed.commit_digest },
     });
+    const deliveryTool = 't3x_workspace_delivery';
+    const listArgs = { action: 'list', project_id, workspace_id: one.workspace_id };
+    const deliveryState = await invoke<{
+      workspace_revision: number;
+      commit_digest: string;
+      targets: { id: string }[];
+    }>(deliveryReader, deliveryTool, listArgs);
+    expect(deliveryState.commit_digest).toBe(committed.commit_digest);
+    expect(deliveryState.targets.map((t) => t.id)).toContain('t3x:portable-artifact');
+    const prepareArgs = {
+      ...listArgs,
+      action: 'prepare',
+      request_id: randomUUID(),
+      workspace_revision: deliveryState.workspace_revision,
+      commit_digest: committed.commit_digest,
+    };
+    await denied(deliveryReader, deliveryTool, prepareArgs);
+    const portable = await invoke<{
+      receipt: { id: string; artifactDigest: string; status: string };
+      artifact: {
+        sourceCommit: { digest: string };
+        schemaDigest: string;
+        content: string;
+        byteLength: number;
+        byteDigest: string;
+      };
+    }>(delivery, deliveryTool, prepareArgs);
+    expect(portable.receipt.status).toBe('prepared');
+    expect(portable.artifact.schemaDigest).toBe(bound.schema_hash);
+    expect(portable.artifact.sourceCommit.digest).toBe(committed.commit_digest);
+    expect(portable.artifact.byteLength).toBe(Buffer.byteLength(portable.artifact.content));
+    expect(portable.artifact.byteDigest).toBe(
+      'sha256:' + createHash('sha256').update(portable.artifact.content).digest('hex')
+    );
+    expect(portable.receipt.artifactDigest).toBe(portable.artifact.byteDigest);
+    expect(await invoke(deliveryReader, deliveryTool, listArgs)).toMatchObject({
+      receipts: [expect.objectContaining({ id: portable.receipt.id })],
+    });
+    await denied(delivery, deliveryTool, {
+      ...prepareArgs,
+      workspace_revision: deliveryState.workspace_revision + 1,
+    });
+    await denied(delivery, deliveryTool, {
+      ...prepareArgs,
+      workspace_id,
+      request_id: randomUUID(),
+    });
     // Two fixed Reviews observe one basis. Advancing it invalidates the loser.
     await write({
       ...valid,
@@ -370,6 +421,8 @@ async function qualifyCore(input: {
       expected_head: committed.commit_digest,
     });
     expect(advanced.commit_digest).not.toBe(committed.commit_digest);
+    expect(await invoke(delivery, deliveryTool, prepareArgs)).toEqual(portable);
+    await denied(delivery, deliveryTool, { ...prepareArgs, request_id: randomUUID() });
     await denied(machine, 'decide_transition', decideArgs(losingReview, 'accepted'));
     const historical = await invoke(machine, 't3x_commit_result', {
       project_id,
@@ -391,7 +444,9 @@ async function qualifyCore(input: {
     await input.actor('DELETE', `/api-keys/${otherKey.id}`);
   } finally {
     await Promise.allSettled(
-      [human, machine, outsider, limited, readonly].map((client) => client.close())
+      [human, machine, outsider, limited, readonly, delivery, deliveryReader].map((client) =>
+        client.close()
+      )
     );
   }
 }

@@ -138,6 +138,7 @@ capabilities:
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
 | `runs:repository:trigger` | Dispatch a project-configured evaluation for an exact CommitV2 |
+| `delivery`, `delivery:prepare` | List targets and receipts, or prepare a portable artifact in an owned Workspace |
 | `runs:repository` | List saved repository evaluation Runs and read one by Run ID |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
@@ -225,6 +226,17 @@ Use `action=read` with the project, Workspace and Run ID to recover the
 recorded status, failure reason and findings. Exact Draft Runs require
 project access and the Workspace owner recorded at creation. This applies to
 Run reads and project Checks. Legacy Runs retain their project visibility.
+
+### Workspace Delivery
+
+Call `t3x_workspace_delivery` with `action=list`, `project_id` and
+`workspace_id` to read targets, receipts, the current Workspace revision
+and its last committed digest. For `action=prepare`, pass that revision as
+`workspace_revision`, the exact `commit_digest`, and a UUID `request_id`.
+Reuse all three values to recover the same receipt after a lost response.
+A prepared receipt includes the portable bundle in `artifact.content`,
+with its UTF-8 byte length, SHA-256 digest and committed Schema digest.
+A failed preparation returns a failed receipt and a null artifact.
 
 ### Repository Runs
 

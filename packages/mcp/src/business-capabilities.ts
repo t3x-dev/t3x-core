@@ -103,6 +103,10 @@ const GROUPS = {
     operations: { t3x_workspace_validation: { parameter: 'action', values: ['run'] } },
   },
   'runs:repository:trigger': { tools: ['t3x_trigger_repository_run'] },
+  delivery: { operations: { t3x_workspace_delivery: { parameter: 'action', values: ['list'] } } },
+  'delivery:prepare': {
+    operations: { t3x_workspace_delivery: { parameter: 'action', values: ['prepare'] } },
+  },
   'runs:repository': { tools: ['t3x_repository_runs'] },
   transitions: {
     tools: ['inspect_transition', 't3x_commit_result'],
