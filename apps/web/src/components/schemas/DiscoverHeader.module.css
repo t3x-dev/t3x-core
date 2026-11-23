@@ -312,3 +312,13 @@
     transition: none;
   }
 }
+
+.browseStatus {
+  margin-inline-start: 0.375rem;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.browseStatus:empty {
+  margin: 0;
+}

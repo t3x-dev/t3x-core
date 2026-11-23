@@ -1,5 +1,10 @@
 import type { Context, Next } from 'hono';
 
+const listPaths = new Set([
+  '/api/v1/projects',
+  '/api/v1/explore/projects',
+  '/api/v1/yschema/catalog',
+]);
 const detailPath = /^\/api\/v1\/projects\/[^/]+$/;
 const pendingPath = /^\/(?:api\/)?v1\/projects\/[^/]+\/schema-studio\/pending\/[^/]+$/;
 const stages = new WeakMap<Context, Map<string, number>>();
@@ -15,7 +20,7 @@ export function isPendingSchemaRead(c: Context): boolean {
 export async function repositoryReadTimingMiddleware(c: Context, next: Next) {
   if (
     c.req.method !== 'GET' ||
-    !(c.req.path === '/api/v1/projects' || isProjectDetailRead(c) || isPendingSchemaRead(c))
+    !(listPaths.has(c.req.path) || isProjectDetailRead(c) || isPendingSchemaRead(c))
   ) {
     return next();
   }

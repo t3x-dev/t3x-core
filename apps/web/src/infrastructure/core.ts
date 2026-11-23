@@ -130,6 +130,7 @@ async function fetchOnce(
   timeoutMs = DEFAULT_TIMEOUT,
   externalSignal?: AbortSignal
 ): Promise<Response> {
+  if (externalSignal?.aborted) throw new ApiError('ABORTED', 'Request was cancelled');
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
