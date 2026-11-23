@@ -552,6 +552,15 @@ CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
 CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
 
+CREATE TABLE IF NOT EXISTS source_ingestion_receipts (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  result JSONB NOT NULL,
+  PRIMARY KEY (project_id, actor_id, request_id)
+);
+
 -- Pins (source selection for commit sources + conversation context)
 CREATE TABLE IF NOT EXISTS pins (
   id TEXT PRIMARY KEY,

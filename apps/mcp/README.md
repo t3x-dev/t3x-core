@@ -133,6 +133,7 @@ capabilities:
 | `schemas:write` | Exact Schema Draft action |
 | `sources` | Source, evidence, and pin reads, exact material and Source Thread excerpts, and available models |
 | `sources:write` | Extract a candidate, create or delete a pin |
+| `sources:ingest` | Create a Source Thread, append machine-origin text, upload an attachment, and recover the request receipt |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
 | `transitions:verify` | Run Transition verification |
@@ -156,6 +157,20 @@ UTF-16 offsets. Pass `expected_digest` to pin a later request to that text.
 For parsed materials, the import's `content_hash` identifies the imported
 source and the resource digest identifies the returned text. The `models`
 action reads the server catalog and reports available generation models.
+
+Enable `sources:ingest` with a project-bound Agent credential that has project
+edit access. Use `t3x_ingest_source` with a stable `request_id` for
+`create_thread`, `append_turn`, or `upload_material`. Appends require the
+expected parent turn hash, or `null` on an empty thread. Attachments use
+canonical base64 for up to 5 MiB of decoded bytes and return the submitted
+bytes digest and the stored material hash. The API records the ingestion
+actor and retains the material's existing creator on duplicate bytes.
+
+After an interrupted request, use the `receipt` action with the original
+request ID before retrying. An exact retry returns the stored receipt,
+including after later turns or archival. A different payload under the
+same ID returns a conflict. Agent-ingested text and newly created attachments
+carry machine origin and are excluded from original human Source evidence.
 
 ### Repository, candidate, and Schema operations
 
@@ -214,6 +229,8 @@ T3X_E2E_MCP_PHASE=schema-authoring T3X_E2E_ARTIFACT_DIR=test-results/mcp-schema-
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-schema-authoring.spec.ts
 T3X_E2E_MCP_PHASE=source-context T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-context \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-context.spec.ts
+T3X_E2E_MCP_PHASE=source-ingestion T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-ingestion \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-ingestion.spec.ts
 ```
 
 ### Resources

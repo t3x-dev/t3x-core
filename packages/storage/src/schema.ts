@@ -37,6 +37,20 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 // Core Tables
 // ============================================================
 
+export const sourceIngestionReceipts = pgTable(
+  'source_ingestion_receipts',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    actorId: text('actor_id').notNull(),
+    requestId: text('request_id').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.actorId, table.requestId] })]
+);
+
 export const namespaces = pgTable(
   'namespaces',
   {

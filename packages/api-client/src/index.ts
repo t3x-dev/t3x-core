@@ -32,6 +32,7 @@ export {
   SchemaSourceCommitSchema,
 } from './schema-provenance';
 export * from './schema-studio';
+export * from './source-ingestion.js';
 export {
   type DownloadArtifact,
   DownloadArtifactSchema,

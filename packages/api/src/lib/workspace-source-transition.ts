@@ -55,6 +55,7 @@ import {
   TransitionProtocolError,
   verifyEffect,
 } from '@t3x-dev/transition';
+import { isMachineIngestedMaterial } from './source-attachments';
 import type { TransitionNativeStatementProvider } from './transition-control-plane';
 import {
   commitTransition,
@@ -549,6 +550,12 @@ async function resolveSourceArtifact(
         {
           materialId: selector.materialId,
         }
+      );
+    }
+    if (isMachineIngestedMaterial(material)) {
+      throw new WorkspaceSourceArtifactError(
+        'Machine-ingested Material is not approved Source evidence',
+        { materialId: material.id }
       );
     }
     if (selector.claimedHash !== undefined && selector.claimedHash !== material.content_hash) {

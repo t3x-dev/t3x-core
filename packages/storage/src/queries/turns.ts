@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { conversations, type Turn, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
+import { SourceIngestionConflictError } from './source-ingestion';
 
 export interface CreateTurnInput {
   projectId: string;
@@ -18,6 +19,7 @@ export interface CreateTurnInput {
   language?: string;
   rings?: unknown;
   content_blocks?: ContentBlock[];
+  expectedParentTurnHash?: string | null;
 }
 
 export interface ListTurnsOptions {
@@ -44,6 +46,12 @@ export interface ListTurnsByProjectOptions {
  */
 export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Turn> {
   return db.transaction(async (tx) => {
+    // Serialize ordinary and guarded appends on the same conversation.
+    await tx
+      .select({ id: conversations.conversationId })
+      .from(conversations)
+      .where(eq(conversations.conversationId, input.conversationId))
+      .for('update');
     const createdAt = new Date();
 
     // Legacy conversations intentionally start untracked because their old
@@ -63,6 +71,12 @@ export async function insertTurn(db: AnyDB, input: CreateTurnInput): Promise<Tur
     // Get parent turn hash (last turn in conversation) — inside the transaction
     const lastTurn = await findLastTurnInConversation(tx as AnyDB, input.conversationId);
     const parentTurnHash = lastTurn?.turnHash ?? null;
+    if (
+      input.expectedParentTurnHash !== undefined &&
+      parentTurnHash !== input.expectedParentTurnHash
+    ) {
+      throw new SourceIngestionConflictError('Source Thread parent turn changed.');
+    }
 
     const ringsJson = input.rings ? JSON.stringify(input.rings) : null;
 

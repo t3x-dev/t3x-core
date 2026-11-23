@@ -35,6 +35,31 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('adds Source ingestion receipts to a v86 database and preserves them on repeat migration', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('source-existing', 'Existing-Source-Project', 'ns_t3x_dev', NOW());
+      DROP TABLE source_ingestion_receipts;
+      UPDATE _schema_version SET version = 86;
+    `);
+    const config = { connectionString: setup.connectionString };
+    await migratePostgresStorage(config);
+    await setup.sql`
+      INSERT INTO source_ingestion_receipts
+      (project_id, actor_id, request_id, request_digest, result)
+      VALUES ('source-existing', 'agent:api-key:test', 'request-1', 'digest', '{"action":"create_thread"}')
+    `;
+    await migratePostgresStorage(config);
+    expect(await setup.sql`SELECT version FROM _schema_version`).toEqual([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(await setup.sql`SELECT request_id FROM source_ingestion_receipts`).toEqual([
+      { request_id: 'request-1' },
+    ]);
+  });
+
   it.each([
     { version: 83, mode: 'standalone' },
     { version: 84, mode: 'bootstrap' },

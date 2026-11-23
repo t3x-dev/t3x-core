@@ -497,6 +497,7 @@ export {
   hasConversationSourceCommitReferences,
   listConversationCommitReferences,
 } from './source-evidence-references';
+export * from './source-ingestion';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,

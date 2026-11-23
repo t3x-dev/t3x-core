@@ -110,6 +110,7 @@ import {
   skillArtifactRoutes,
   sourceChatDraftReplyRoutes,
   sourceEvidenceRoutes,
+  sourceIngestionRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
@@ -296,6 +297,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', sourceChatDraftReplyRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', sourceEvidenceRoutes);
+  api.route('/', sourceIngestionRoutes);
   api.route('/', comparisonsRoutes);
   api.route('/', templatesRoutes);
   api.route('/', webhooksRoutes);

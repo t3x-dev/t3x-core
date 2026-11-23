@@ -90,6 +90,7 @@ const GROUPS = {
     tools: ['t3x_extract'],
     operations: { t3x_admin: { parameter: 'action', values: ['create_pin', 'delete_pin'] } },
   },
+  'sources:ingest': { tools: ['t3x_ingest_source'] },
   transitions: {
     tools: ['inspect_transition', 't3x_commit_result'],
     operations: { t3x_draft_review: { parameter: 'action', values: ['read'] } },

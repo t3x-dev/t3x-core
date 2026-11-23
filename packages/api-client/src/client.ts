@@ -19,6 +19,11 @@ import {
   StudioSchemaEditCandidateSaveResultSchema,
   StudioSchemaEditCandidateSchema,
 } from './schema-studio';
+import {
+  type SourceIngestionInput,
+  type SourceIngestionReceipt,
+  SourceIngestionReceiptSchema,
+} from './source-ingestion.js';
 import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
   type StatePresentationInput,
@@ -206,6 +211,10 @@ export class T3xApiError extends Error {
     super(message);
     this.name = 'T3xApiError';
   }
+}
+
+function sourceIngestionPath(projectId: string, requestId: string): string {
+  return `/v1/projects/${encodeURIComponent(projectId)}/source-ingestions/${encodeURIComponent(requestId)}`;
 }
 
 function schemaStudioPath(projectId: string): string {
@@ -851,6 +860,35 @@ export class T3xClient {
         limit: params?.limit,
         offset: params?.offset,
       }
+    );
+  }
+
+  async getSourceIngestionReceipt(
+    projectId: string,
+    requestId: string
+  ): Promise<SourceIngestionReceipt> {
+    return this.request(
+      'GET',
+      sourceIngestionPath(projectId, requestId),
+      undefined,
+      undefined,
+      undefined,
+      SourceIngestionReceiptSchema
+    );
+  }
+
+  async ingestSource(
+    projectId: string,
+    requestId: string,
+    input: SourceIngestionInput
+  ): Promise<SourceIngestionReceipt> {
+    return this.request(
+      'POST',
+      sourceIngestionPath(projectId, requestId),
+      input,
+      undefined,
+      undefined,
+      SourceIngestionReceiptSchema
     );
   }
 
