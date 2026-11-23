@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import type { ReceivedCollaborationInvitation } from '@t3x-dev/api-client';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listReceivedCollaborationInvitations = vi.fn();
 const acceptCollaborationInvitationById = vi.fn();
@@ -18,6 +18,8 @@ vi.mock('@/infrastructure/sharedApiClient', () => ({ getSharedApiClient: () => c
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { InvitationsPageContent } from '@/app/invitations/page';
+import { InvitationInboxProvider } from '@/hooks/accounts/usePendingInvitations';
+import { setSessionUser } from '@/infrastructure/session';
 
 const invitation: ReceivedCollaborationInvitation = {
   invitation: {
@@ -42,13 +44,20 @@ const invitation: ReceivedCollaborationInvitation = {
 describe('Invitations inbox page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setSessionUser({ id: 'user_b', name: null, username: null });
     listReceivedCollaborationInvitations.mockResolvedValue({ invitations: [invitation] });
     acceptCollaborationInvitationById.mockResolvedValue({});
     declineCollaborationInvitation.mockResolvedValue({});
   });
 
+  afterEach(() => localStorage.removeItem('t3x-user'));
+
   it('lists and accepts a pending project invitation', async () => {
-    render(<InvitationsPageContent />);
+    render(
+      <InvitationInboxProvider>
+        <InvitationsPageContent />
+      </InvitationInboxProvider>
+    );
 
     expect(await screen.findByText('test-a3/three-party-demo')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
@@ -57,6 +66,7 @@ describe('Invitations inbox page', () => {
       expect(acceptCollaborationInvitationById).toHaveBeenCalledWith('inv_inbox')
     );
     expect(await screen.findByText('Invitation accepted')).toBeInTheDocument();
+    expect(listReceivedCollaborationInvitations).toHaveBeenCalledOnce();
     expect(screen.getByRole('link', { name: 'Open project' })).toHaveAttribute(
       'href',
       '/test-a3/three-party-demo'
@@ -68,7 +78,11 @@ describe('Invitations inbox page', () => {
     ['Decline', declineCollaborationInvitation],
   ] as const)('keeps a failed %s action visible on its invitation', async (label, command) => {
     command.mockRejectedValueOnce(new Error('Invitation action unavailable'));
-    render(<InvitationsPageContent />);
+    render(
+      <InvitationInboxProvider>
+        <InvitationsPageContent />
+      </InvitationInboxProvider>
+    );
 
     fireEvent.click(await screen.findByRole('button', { name: label }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Invitation action unavailable');
