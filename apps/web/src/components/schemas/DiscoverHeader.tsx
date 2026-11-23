@@ -33,6 +33,7 @@ import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
+import { prefetchRepositoryDirectoryPage } from '@/hooks/projects/repositoryDirectory';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -210,7 +211,13 @@ export function DiscoverHeader({
               Browse
               <NavigationFeedback />
             </Link>
-            <Link href="/repositories" aria-current={repositoriesNavigation ? 'page' : undefined}>
+            <Link
+              href="/repositories"
+              aria-current={repositoriesNavigation ? 'page' : undefined}
+              onPointerEnter={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
+              onFocus={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
+              onPointerDown={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
+            >
               Your repositories
               <NavigationFeedback />
             </Link>

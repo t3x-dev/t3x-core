@@ -37,3 +37,20 @@ it('does not query an unpersisted Workspace', () => {
   expect(result.current.loading).toBe(false);
   expect(mocks.read).not.toHaveBeenCalled();
 });
+
+it('skips a confirmed empty revision and reads when the Workspace reports a pending task', async () => {
+  const { result, rerender } = renderHook(
+    ({ absent }) => useWorkspaceSchemaPending('p', 'workspace', 2, absent),
+    { initialProps: { absent: true } }
+  );
+  expect(result.current.loading).toBe(false);
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(mocks.read).not.toHaveBeenCalled();
+  mocks.read.mockResolvedValue({
+    status: 'pending_preparation',
+    pending: { workspaceId: 'workspace' },
+  });
+  rerender({ absent: false });
+  await waitFor(() => expect(result.current.data?.status).toBe('pending_preparation'));
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith('p', 'workspace');
+});

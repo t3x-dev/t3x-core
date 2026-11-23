@@ -475,10 +475,15 @@ export function SchemaStudioExperience({
     target && !targetCommitted
       ? listStudioDraftWorkspaces(workspaces.workspaces).find((item) => item.id === workspaceId)
       : undefined;
+  const schemaActivity =
+    persistedTarget?.revision !== undefined && !workspaces.error
+      ? persistedTarget.schemaActivity
+      : undefined;
   const schemaEdit = useStudioSchemaEditCandidate(
     projectId,
     persistedTarget?.id ?? '',
-    persistedTarget?.revision
+    persistedTarget?.revision,
+    schemaActivity?.hasEditCandidate === false
   );
   const currentBinding = persistedTarget?.schemaBindings?.[0];
   const creatingBlank = blankWorkspace === workspaceId;
@@ -515,7 +520,8 @@ export function SchemaStudioExperience({
   const pendingSchema = useWorkspaceSchemaPending(
     projectId,
     persistedTarget?.id ?? '',
-    persistedTarget?.revision
+    persistedTarget?.revision,
+    schemaActivity?.hasPendingTask === false
   );
   const recoveredSelection = useRef('');
   const [recoveredEditIdentity, setRecoveredEditIdentity] = useState('');

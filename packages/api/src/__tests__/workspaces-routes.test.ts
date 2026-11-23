@@ -718,6 +718,7 @@ describe('Workspace routes', () => {
           title: 'PRD audience handoff',
           schemaBindings: [{ schemaName: 'PRD Schema v2' }],
           sourceBundle: [],
+          schemaActivity: { hasEditCandidate: true, hasPendingTask: true },
         },
       }),
     });
@@ -727,12 +728,17 @@ describe('Workspace routes', () => {
     const listBody: ApiResponse = await listRes.json();
     expect(listBody.data.workspaces[0].id).toBe('workspace_prd_handoff');
     expect(listBody.data.workspaces[0].revision).toBe(1);
+    expect(listBody.data.workspaces[0].schemaActivity).toEqual({
+      hasEditCandidate: false,
+      hasPendingTask: false,
+    });
 
     const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
     expect(getRes.status).toBe(200);
     const getBody: ApiResponse = await getRes.json();
     expect(getBody.data.workspace.id).toBe('workspace_prd_handoff');
     expect(getBody.data.workspace.revision).toBe(1);
+    expect(getBody.data.workspace).not.toHaveProperty('schemaActivity');
   });
 
   it('rejects a pinned Schema whose definition hash does not match', async () => {
