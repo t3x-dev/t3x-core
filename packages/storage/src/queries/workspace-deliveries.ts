@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { workspaceDeliveries, workspaceDeployments } from '../schema-deliveries';
 
@@ -119,13 +119,32 @@ export async function findWorkspaceDeploymentById(
   return row ?? null;
 }
 
+export function withWorkspaceDeploymentLock<T>(
+  db: AnyDB,
+  projectId: string,
+  workspaceId: string,
+  environment: string,
+  write: (tx: AnyDB) => Promise<T>
+) {
+  return db.transaction(async (tx) => {
+    const key = JSON.stringify([projectId, workspaceId, environment]);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(5458245, hashtext(${key}))`);
+    return write(tx);
+  });
+}
+
 export async function insertWorkspaceDeployment(
   db: AnyDB,
   input: typeof workspaceDeployments.$inferInsert
 ) {
   await db
     .insert(workspaceDeployments)
-    .values(input)
+    .values({
+      ...input,
+      // Transaction start can precede the previous lock holder. Order by slot append time.
+      createdAt: sql`greatest(clock_timestamp(), (select max(created_at) + interval '1 microsecond'
+        from workspace_deployments where project_id = ${input.projectId} and workspace_id = ${input.workspaceId} and environment = ${input.environment}))`,
+    })
     .onConflictDoNothing({
       target: [
         workspaceDeployments.projectId,

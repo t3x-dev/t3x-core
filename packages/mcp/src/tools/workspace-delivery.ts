@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { T3xApiError, WorkspaceDeliveryInputSchema } from '@t3x-dev/api-client';
+import {
+  T3xApiError,
+  WorkspaceDeliveryInputSchema,
+  WorkspaceDeploymentInputSchema,
+  WorkspaceRollbackInputSchema,
+} from '@t3x-dev/api-client';
 import { isSafeBusinessIdentifier, isSafeWorkspaceIdentifier } from '../business-capabilities.js';
 import { withTransitionApi } from './transition/index.js';
 import type { ToolDef, ToolHandler } from './types.js';
@@ -7,11 +12,11 @@ import type { ToolDef, ToolHandler } from './types.js';
 export const workspaceDeliveryDef: ToolDef = {
   name: 't3x_workspace_delivery',
   description:
-    'List delivery targets and receipts for an owned Workspace or prepare its exact committed portable artifact.',
+    'List delivery targets and receipts for an owned Workspace prepare its portable artifact, assign a receipt to preview, or roll back to a recorded preview deployment.',
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['list', 'prepare'] },
+      action: { type: 'string', enum: ['list', 'prepare', 'deploy', 'rollback'] },
       project_id: { type: 'string' },
       workspace_id: { type: 'string' },
       workspace_revision: { type: 'integer', minimum: 1, description: 'Required for prepare.' },
@@ -19,10 +24,25 @@ export const workspaceDeliveryDef: ToolDef = {
         type: 'string',
         description: 'Exact last committed digest, required for prepare.',
       },
+      environment: {
+        type: 'string',
+        enum: ['preview'],
+        description: 'Deployment slot. Defaults to preview.',
+      },
+      delivery_id: {
+        type: 'string',
+        format: 'uuid',
+        description: 'Prepared portable receipt for deploy.',
+      },
+      deployment_id: {
+        type: 'string',
+        format: 'uuid',
+        description: 'Historical preview deployment for rollback.',
+      },
       request_id: {
         type: 'string',
         format: 'uuid',
-        description: 'Reuse the original UUID and inputs to replay a preparation.',
+        description: 'Reuse the original UUID and inputs to replay a write.',
       },
     },
     required: ['action', 'project_id', 'workspace_id'],
@@ -35,7 +55,7 @@ export const workspaceDeliveryHandler: ToolHandler = (args) =>
     if (!isSafeBusinessIdentifier(project_id) || !isSafeWorkspaceIdentifier(workspace_id))
       throw new T3xApiError('INVALID_ARGUMENT', 'Provide project_id and workspace_id.', 400);
     if (action === 'list') {
-      const { workspaceRevision, commitDigest, targets, receipts } =
+      const { workspaceRevision, commitDigest, targets, receipts, deployments, currentDeployment } =
         await client.listWorkspaceDeliveries(project_id, workspace_id);
       if (receipts.some((r) => r.projectId !== project_id || r.workspaceId !== workspace_id))
         throw new T3xApiError('INVALID_RESPONSE', 'Unexpected receipt scope.', 502);
@@ -44,7 +64,46 @@ export const workspaceDeliveryHandler: ToolHandler = (args) =>
         commit_digest: commitDigest,
         targets,
         receipts,
+        deployments: deployments.filter(
+          (d) =>
+            d.environment === 'preview' &&
+            d.projectId === project_id &&
+            d.workspaceId === workspace_id
+        ),
+        current_deployment: currentDeployment,
       };
+    }
+    if (action === 'deploy' || action === 'rollback') {
+      const environment = args.environment === undefined ? 'preview' : args.environment;
+      if (environment !== 'preview')
+        throw new T3xApiError('INVALID_ARGUMENT', 'Only the preview slot is supported.', 400);
+      const key = args.request_id;
+      if (action === 'deploy') {
+        const input = WorkspaceDeploymentInputSchema.safeParse({
+          deliveryId: args.delivery_id,
+          environment,
+          idempotencyKey: key,
+        });
+        if (!input.success)
+          throw new T3xApiError(
+            'INVALID_ARGUMENT',
+            'Provide delivery_id and request_id UUIDs.',
+            400
+          );
+        return client.deployWorkspaceArtifact(project_id, workspace_id, input.data);
+      }
+      const input = WorkspaceRollbackInputSchema.safeParse({
+        deploymentId: args.deployment_id,
+        environment,
+        idempotencyKey: key,
+      });
+      if (!input.success)
+        throw new T3xApiError(
+          'INVALID_ARGUMENT',
+          'Provide deployment_id and request_id UUIDs.',
+          400
+        );
+      return client.rollbackWorkspaceArtifact(project_id, workspace_id, input.data);
     }
     const input = WorkspaceDeliveryInputSchema.safeParse({
       targetId: 't3x:portable-artifact',

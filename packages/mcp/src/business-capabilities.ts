@@ -104,6 +104,12 @@ const GROUPS = {
   },
   'runs:repository:trigger': { tools: ['t3x_trigger_repository_run'] },
   delivery: { operations: { t3x_workspace_delivery: { parameter: 'action', values: ['list'] } } },
+  'delivery:deploy': {
+    operations: { t3x_workspace_delivery: { parameter: 'action', values: ['deploy'] } },
+  },
+  'delivery:rollback': {
+    operations: { t3x_workspace_delivery: { parameter: 'action', values: ['rollback'] } },
+  },
   'delivery:prepare': {
     operations: { t3x_workspace_delivery: { parameter: 'action', values: ['prepare'] } },
   },

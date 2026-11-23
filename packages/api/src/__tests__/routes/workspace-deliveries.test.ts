@@ -161,6 +161,15 @@ it('fails closed when the exact committed Schema cannot be verified', async () =
     const result = await (
       await post(input({ targetId: 't3x:portable-artifact', format: 'bundle' }))
     ).json();
+    expect(
+      (
+        await postDeployment({
+          deliveryId: result.data.receipt.id,
+          environment: 'preview',
+          idempotencyKey: randomUUID(),
+        })
+      ).status
+    ).toBe(404);
     expect(result.data.artifact).toBeNull();
     expect(result.data.receipt).toMatchObject({
       adapter: 't3x.portable/v1',
@@ -282,14 +291,33 @@ it('deploys only prepared portable artifacts and rolls back by fixed digest', as
   const secondReceipt = (
     await (await post(input({ targetId: 't3x:portable-artifact', format: 'bundle' }))).json()
   ).data.receipt;
-  const second = await (
-    await postDeployment({
+  const deploySecond = () =>
+    postDeployment({
       deliveryId: secondReceipt.id,
       environment: 'preview',
       idempotencyKey: randomUUID(),
+    }).then((r) => r.json());
+  const pair = await Promise.all([deploySecond(), deploySecond()]);
+  expect(pair.map((r) => r.data.deployment.previousArtifactDigest).sort()).toEqual(
+    [firstReceipt.artifactDigest, secondReceipt.artifactDigest].sort()
+  );
+  const other = await (
+    await postDeployment({
+      deliveryId: firstReceipt.id,
+      environment: 'other',
+      idempotencyKey: randomUUID(),
     })
   ).json();
-  expect(second.data.deployment.previousArtifactDigest).toBe(firstReceipt.artifactDigest);
+  const wrongSlot = await app.request(`${deploymentUrl()}/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deploymentId: other.data.deployment.id,
+      environment: 'preview',
+      idempotencyKey: randomUUID(),
+    }),
+  });
+  expect(wrongSlot.status).toBe(404);
 
   const rollback = await (
     await app.request(`${deploymentUrl()}/rollback`, {

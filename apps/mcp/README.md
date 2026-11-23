@@ -138,6 +138,7 @@ capabilities:
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
 | `runs:repository:trigger` | Dispatch a project-configured evaluation for an exact CommitV2 |
+| `delivery:deploy`, `delivery:rollback` | Independently enable preview assignment and rollback |
 | `delivery`, `delivery:prepare` | List targets and receipts, or prepare a portable artifact in an owned Workspace |
 | `runs:repository` | List saved repository evaluation Runs and read one by Run ID |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
@@ -237,6 +238,14 @@ Reuse all three values to recover the same receipt after a lost response.
 A prepared receipt includes the portable bundle in `artifact.content`,
 with its UTF-8 byte length, SHA-256 digest and committed Schema digest.
 A failed preparation returns a failed receipt and a null artifact.
+
+Use `action=deploy` with a prepared portable receipt's `delivery_id` and a
+UUID `request_id` to assign it to the built-in `preview` slot. To roll back,
+use `action=rollback` with the historical `deployment_id` and a fresh UUID.
+Both actions require project edit access to the owned Workspace. Replay a
+write with its original UUID. The list response includes recent preview
+deployment records and `current_deployment`. Its `actualArtifactDigest`
+identifies the artifact currently assigned to the slot.
 
 ### Repository Runs
 

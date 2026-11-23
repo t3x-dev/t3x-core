@@ -74,20 +74,40 @@ async function qualifyCore(input: {
   const projectUrl = `/projects/${project_id}`;
   const agent = await input.issue(project_id);
   const otherKey = await mintDirect(input.actor, project_id, authoringScopes);
-  const [human, machine, outsider, limited, readonly, delivery, deliveryReader] = [
+  const [
+    human,
+    machine,
+    outsider,
+    limited,
+    readonly,
+    delivery,
+    deliveryReader,
+    rollback,
+    foreignDelivery,
+  ] = [
     mcpClient(input.operatorSession),
     mcpClient(agent.key),
     mcpClient(input.outsiderSession),
     mcpClient(otherKey.key),
     mcpClient(agent.key, 'read-only'),
-    mcpClient(agent.key, 'delivery,delivery:prepare'),
+    mcpClient(agent.key, 'delivery,delivery:prepare,delivery:deploy'),
     mcpClient(input.operatorSession, 'delivery'),
+    mcpClient(agent.key, 'delivery:rollback'),
+    mcpClient(input.outsiderSession, 'delivery:deploy,delivery:rollback'),
   ];
   try {
     await Promise.all(
-      [human, machine, outsider, limited, readonly, delivery, deliveryReader].map((client) =>
-        client.connect()
-      )
+      [
+        human,
+        machine,
+        outsider,
+        limited,
+        readonly,
+        delivery,
+        deliveryReader,
+        rollback,
+        foreignDelivery,
+      ].map((client) => client.connect())
     );
     expect((await readonly.list()).tools.map(({ name }) => name)).not.toContain('t3x_commit');
     await denied(readonly, 't3x_query', { target: 'workspace_activity', project_id, id: 'hidden' });
@@ -401,6 +421,18 @@ async function qualifyCore(input: {
       workspace_id,
       request_id: randomUUID(),
     });
+    const deployArgs = {
+      ...listArgs,
+      action: 'deploy',
+      request_id: randomUUID(),
+      delivery_id: portable.receipt.id,
+    };
+    await denied(deliveryReader, deliveryTool, deployArgs);
+    await denied(rollback, deliveryTool, deployArgs);
+    await denied(foreignDelivery, deliveryTool, deployArgs);
+    await denied(delivery, deliveryTool, { ...deployArgs, environment: 'production' });
+    const first = await invoke<{ deployment: { id: string } }>(delivery, deliveryTool, deployArgs);
+    expect(await invoke(delivery, deliveryTool, deployArgs)).toEqual(first);
     // Two fixed Reviews observe one basis. Advancing it invalidates the loser.
     await write({
       ...valid,
@@ -423,6 +455,53 @@ async function qualifyCore(input: {
     expect(advanced.commit_digest).not.toBe(committed.commit_digest);
     expect(await invoke(delivery, deliveryTool, prepareArgs)).toEqual(portable);
     await denied(delivery, deliveryTool, { ...prepareArgs, request_id: randomUUID() });
+    const latest = await invoke<{ workspace_revision: number }>(
+      deliveryReader,
+      deliveryTool,
+      listArgs
+    );
+    const next = await invoke<typeof portable>(delivery, deliveryTool, {
+      ...prepareArgs,
+      commit_digest: advanced.commit_digest,
+      workspace_revision: latest.workspace_revision,
+      request_id: randomUUID(),
+    });
+    expect(next.artifact.byteDigest).not.toBe(portable.artifact.byteDigest);
+    await denied(delivery, deliveryTool, { ...deployArgs, delivery_id: next.receipt.id });
+    const second = await invoke<{ deployment: { id: string } }>(delivery, deliveryTool, {
+      ...deployArgs,
+      delivery_id: next.receipt.id,
+      request_id: randomUUID(),
+    });
+    expect(second.deployment).toMatchObject({
+      previousArtifactDigest: portable.artifact.byteDigest,
+      actualArtifactDigest: next.artifact.byteDigest,
+    });
+    const rollbackArgs = {
+      ...listArgs,
+      action: 'rollback',
+      deployment_id: first.deployment.id,
+      request_id: randomUUID(),
+    };
+    await denied(delivery, deliveryTool, rollbackArgs);
+    await denied(foreignDelivery, deliveryTool, rollbackArgs);
+    await denied(rollback, deliveryTool, { ...rollbackArgs, deployment_id: randomUUID() });
+    const restored = await invoke<{ deployment: { id: string } }>(
+      rollback,
+      deliveryTool,
+      rollbackArgs
+    );
+    expect(restored.deployment).toMatchObject({
+      kind: 'rollback',
+      previousArtifactDigest: next.artifact.byteDigest,
+      desiredArtifactDigest: portable.artifact.byteDigest,
+      actualArtifactDigest: portable.artifact.byteDigest,
+    });
+    expect(await invoke(rollback, deliveryTool, rollbackArgs)).toEqual(restored);
+    expect(await invoke(deliveryReader, deliveryTool, listArgs)).toMatchObject({
+      current_deployment: restored.deployment,
+      deployments: [restored.deployment, second.deployment, first.deployment],
+    });
     await denied(machine, 'decide_transition', decideArgs(losingReview, 'accepted'));
     const historical = await invoke(machine, 't3x_commit_result', {
       project_id,
@@ -444,9 +523,17 @@ async function qualifyCore(input: {
     await input.actor('DELETE', `/api-keys/${otherKey.id}`);
   } finally {
     await Promise.allSettled(
-      [human, machine, outsider, limited, readonly, delivery, deliveryReader].map((client) =>
-        client.close()
-      )
+      [
+        human,
+        machine,
+        outsider,
+        limited,
+        readonly,
+        delivery,
+        deliveryReader,
+        rollback,
+        foreignDelivery,
+      ].map((client) => client.close())
     );
   }
 }
