@@ -132,6 +132,9 @@ const listProjectsRoute = createRoute({
     query: PaginationQuerySchema.extend({
       cursor: z.string().optional(),
       namespace: NamespaceSlugSchema.optional(),
+      q: z.string().trim().max(200).optional(),
+      tag_query: z.string().trim().max(64).optional(),
+      editable: z.literal('true').optional(),
       status: z.enum(['active', 'deleted']).default('active'),
     }),
   },
@@ -171,7 +174,16 @@ const listProjectsRoute = createRoute({
 });
 
 projectRoutes.openapi(listProjectsRoute, async (c) => {
-  const { limit, offset, cursor, namespace: namespaceSlug, status } = c.req.valid('query');
+  const {
+    limit,
+    offset,
+    cursor,
+    namespace: namespaceSlug,
+    status,
+    q,
+    tag_query,
+    editable,
+  } = c.req.valid('query');
 
   const enrichProjects = async (
     db: Awaited<ReturnType<typeof getDB>>,
@@ -247,16 +259,22 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }
     if (status === 'active' && !namespaceSlug && !authority)
       await seedDemoWorkspaceIfEmpty(db, userId);
+    const filters = {
+      status,
+      q,
+      tag_query,
+      authority,
+      namespace_id: namespace?.namespaceId,
+      ...(editable && status === 'active' ? { required_action: 'project:edit' as const } : {}),
+    };
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await timeRepositoryRead(c, 'list_page', () =>
         findProjects(db, {
-          status,
+          ...filters,
           cursor,
           limit,
-          authority,
-          namespace_id: namespace?.namespaceId,
         })
       );
       const apiProjects = await enrichProjects(db, result.items);
@@ -277,11 +295,9 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     // Legacy offset/limit mode
     const projects = await timeRepositoryRead(c, 'list_page', () =>
       findProjects(db, {
-        status,
+        ...filters,
         limit,
         offset,
-        authority,
-        namespace_id: namespace?.namespaceId,
       })
     );
 

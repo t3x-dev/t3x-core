@@ -243,7 +243,16 @@ it('loads existing tags for the chosen owner only when requested and retains unf
     target: { value: 'unfinished' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Choose existing tags' }));
-  expect(useProjects).toHaveBeenCalledWith(100, 'another-team', true);
+  expect(useProjects).toHaveBeenCalledWith(20, 'another-team', 'on-demand', { tagSearch: '' });
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search tags' }), {
+    target: { value: '中文' },
+  });
+  expect(useProjects).toHaveBeenLastCalledWith(20, 'another-team', 'on-demand', {
+    tagSearch: '中文',
+  });
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Search tags' }), {
+    target: { value: '' },
+  });
   fireEvent.click(screen.getByRole('checkbox', { name: '#中文', exact: true }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Dev', exact: true }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'dev', exact: true }));

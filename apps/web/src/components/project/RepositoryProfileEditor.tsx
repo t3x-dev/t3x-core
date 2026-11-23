@@ -98,6 +98,7 @@ export function RepositoryProfileEditor({
                   type="search"
                   aria-label="Search existing tags"
                   placeholder="Search existing tags…"
+                  maxLength={64}
                   value={query}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') e.preventDefault();
