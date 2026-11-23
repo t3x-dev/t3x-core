@@ -286,6 +286,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/authoring`;
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       authoring: Object.freeze({
+        restoreContent: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/content-restores`, input),
         reconcile: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reconciliation`, input),
         prepareReconciliation: (projectId, workspaceId, input) =>

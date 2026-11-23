@@ -90,10 +90,15 @@ async function qualifyCore(input: {
     mcpClient(input.outsiderSession),
     mcpClient(otherKey.key),
     mcpClient(agent.key, 'read-only'),
-    mcpClient(agent.key, 'delivery,delivery:prepare,delivery:deploy'),
+    mcpClient(
+      agent.key,
+      qualificationPhase === 'restore'
+        ? 'state:restore'
+        : 'delivery,delivery:prepare,delivery:deploy'
+    ),
     mcpClient(input.operatorSession, 'delivery'),
     mcpClient(agent.key, 'delivery:rollback'),
-    mcpClient(input.outsiderSession, 'delivery:deploy,delivery:rollback'),
+    mcpClient(input.outsiderSession, 'delivery:deploy,delivery:rollback,state:restore'),
   ];
   try {
     await Promise.all(
@@ -374,6 +379,133 @@ async function qualifyCore(input: {
       commit: { digest: committed.commit_digest },
       branch: { head_commit_hash: committed.commit_digest },
     });
+    if (qualificationPhase === 'restore') {
+      await write({
+        ...valid,
+        summary: { ...valid.summary, outcome: 'A later committed version' },
+      });
+      const later = await prepare(one.workspace_id);
+      const laterDecision = await invoke<{ decision_digest: string }>(
+        machine,
+        'decide_transition',
+        decideArgs(later, 'accepted')
+      );
+      const advanced = await invoke<{ commit_digest: string }>(machine, 'commit_transition', {
+        project_id,
+        transition_id: later.view.transition_id,
+        request_id: randomUUID(),
+        decision_digest: laterDecision.decision_digest,
+        expected_head: committed.commit_digest,
+      });
+      const restoreTool = 't3x_restore_content';
+      const restoreArgs = {
+        project_id,
+        workspace_id: one.workspace_id,
+        expected_workspace_revision: (await activity(one.workspace_id)).workspaceRevision,
+        expected_ref_head: advanced.commit_digest,
+        request_id: randomUUID(),
+        source_commit_digest: committed.commit_digest,
+      };
+      await denied(readonly, restoreTool, restoreArgs);
+      await denied(foreignDelivery, restoreTool, restoreArgs);
+      await denied(delivery, restoreTool, {
+        ...restoreArgs,
+        expected_workspace_revision: restoreArgs.expected_workspace_revision + 1,
+      });
+      await denied(delivery, restoreTool, {
+        ...restoreArgs,
+        expected_ref_head: committed.commit_digest,
+      });
+      await denied(delivery, restoreTool, {
+        ...restoreArgs,
+        source_commit_digest: 'sha256:' + '0'.repeat(64),
+      });
+      const recovered = await invoke<{ schemaHash: string; issues: unknown[]; kind: string }>(
+        delivery,
+        restoreTool,
+        restoreArgs
+      );
+      expect(recovered).toMatchObject({
+        kind: 'published',
+        sourceCommitDigest: committed.commit_digest,
+        sourceStateDigest: state.sourceState.digest,
+        schemaHash: bound.schema_hash,
+      });
+      expect(await invoke(delivery, restoreTool, restoreArgs)).toMatchObject({ kind: 'reused' });
+      const afterRestore = await activity(one.workspace_id);
+      await denied(delivery, restoreTool, {
+        ...restoreArgs,
+        source_commit_digest: initialCommit,
+        expected_workspace_revision: afterRestore.workspaceRevision,
+        request_id: randomUUID(),
+      });
+      expect(await activity(one.workspace_id)).toMatchObject({
+        workspaceRevision: afterRestore.workspaceRevision,
+        current: state.value,
+      });
+      const restoreReview = await prepare(one.workspace_id);
+      const acceptedRestore = await invoke<{ decision_digest: string }>(
+        machine,
+        'decide_transition',
+        decideArgs(restoreReview, 'accepted')
+      );
+      expect((await branch(machine, ref)).head_commit_hash).toBe(advanced.commit_digest);
+      const finalCommit = await invoke<{ commit_digest: string }>(machine, 'commit_transition', {
+        project_id,
+        transition_id: restoreReview.view.transition_id,
+        request_id: randomUUID(),
+        decision_digest: acceptedRestore.decision_digest,
+        expected_head: advanced.commit_digest,
+      });
+      expect(finalCommit.commit_digest).not.toBe(committed.commit_digest);
+      for (const commit_digest of [committed.commit_digest, finalCommit.commit_digest]) {
+        expect(
+          await invoke(machine, 't3x_committed_state', {
+            action: 'read',
+            project_id,
+            commit_digest,
+          })
+        ).toMatchObject({ value: state.value, sourceState: state.sourceState });
+      }
+      const schemaChange = await invoke<{ status: string }>(human, 't3x_edit', {
+        mode: 'schema',
+        project_id,
+        workspace_id: one.workspace_id,
+        request_id: randomUUID(),
+        ...exactDraft(await activity(one.workspace_id)),
+        schema_settings: {
+          action: 'add_slot',
+          nodePath: 'summary',
+          name: 'recovery_owner',
+          definition: { type: 'string', gapQuestion: 'Who owns the recovery?' },
+          required: true,
+          intent: 'Require a recovery owner',
+        },
+      });
+      expect(schemaChange.status).toBe('applied');
+      const incompatibleRestore = {
+        ...restoreArgs,
+        source_commit_digest: advanced.commit_digest,
+        expected_ref_head: finalCommit.commit_digest,
+        expected_workspace_revision: (await activity(one.workspace_id)).workspaceRevision,
+        request_id: randomUUID(),
+      };
+      const incomplete = await invoke<{ issues: unknown[]; schemaHash: string }>(
+        delivery,
+        restoreTool,
+        incompatibleRestore
+      );
+      expect(incomplete.schemaHash).toMatch(/^sha256:/);
+      expect(incomplete.schemaHash).not.toBe(bound.schema_hash);
+      expect(incomplete.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: expect.stringContaining('recovery_owner') }),
+        ])
+      );
+      expect((await branch(machine, ref)).head_commit_hash).toBe(finalCommit.commit_digest);
+      expect(await activity(one.workspace_id)).toMatchObject({ compositionRevision: 1 });
+      return;
+    }
     const deliveryTool = 't3x_workspace_delivery';
     const listArgs = { action: 'list', project_id, workspace_id: one.workspace_id };
     const deliveryState = await invoke<{
@@ -545,7 +677,10 @@ test.describe('MCP core qualification', () => {
   test.skip(!authEnabled, 'Requires the isolated authentication-enabled stack.');
 
   test('isolated API credentials and real stdio', async ({ request }) => {
-    test.skip(qualificationPhase !== 'api', 'Run the API phase on a fresh qualification stack.');
+    test.skip(
+      qualificationPhase !== 'api' && qualificationPhase !== 'restore',
+      'Run the API or Content restore phase on a fresh qualification stack.'
+    );
     test.setTimeout(120000);
     const owner = account('direct');
     const [person, outsider] = await Promise.all([

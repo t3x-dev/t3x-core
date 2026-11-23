@@ -110,6 +110,7 @@ const GROUPS = {
   'delivery:rollback': {
     operations: { t3x_workspace_delivery: { parameter: 'action', values: ['rollback'] } },
   },
+  'state:restore': { tools: ['t3x_restore_content'] },
   'delivery:prepare': {
     operations: { t3x_workspace_delivery: { parameter: 'action', values: ['prepare'] } },
   },

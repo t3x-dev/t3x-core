@@ -2558,6 +2558,14 @@
     {
       "source": "workspace-authoring.openapi.ts",
       "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/content-restores",
+      "policy": "project",
+      "action": "project:edit",
+      "rationale": "Restore verified historical Content into an owned clean Draft with proposal authority."
+    },
+    {
+      "source": "workspace-authoring.openapi.ts",
+      "method": "POST",
       "path": "/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/actions/{actionId}/deletion-confirmation",
       "policy": "project",
       "rationale": "Project edit authority and human-only Transition propose principal; exact action/version-bound deletion authorization without content mutation.",

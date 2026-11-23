@@ -138,6 +138,7 @@ capabilities:
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
 | `runs:repository:trigger` | Dispatch a project-configured evaluation for an exact CommitV2 |
+| `state:restore` | Restore historical structured Content to a fresh owned Draft |
 | `delivery:deploy`, `delivery:rollback` | Independently enable preview assignment and rollback |
 | `delivery`, `delivery:prepare` | List targets and receipts, or prepare a portable artifact in an owned Workspace |
 | `runs:repository` | List saved repository evaluation Runs and read one by Run ID |
@@ -227,6 +228,21 @@ Use `action=read` with the project, Workspace and Run ID to recover the
 recorded status, failure reason and findings. Exact Draft Runs require
 project access and the Workspace owner recorded at creation. This applies to
 Run reads and project Checks. Legacy Runs retain their project visibility.
+
+### Restore historical Content
+
+Enable `state:restore` and call `t3x_restore_content` with the project,
+Workspace, source Commit digest, request ID, expected Workspace revision and
+expected ref head. Open and initialize an owned authoring Workspace at the
+target head first. Its composition revision must be zero for a new restore.
+A successful Commit also renews the Workspace with a fresh Draft.
+The source must be a verified Commit in the same project with a supported
+YOps mapping document. The API requires project edit and proposal authority.
+
+The result includes the source Commit and State digests, the effective Schema
+hash and validation issues. Inspect the Draft diff, resolve issues in the
+Draft, then prepare a fixed Review, decide and commit using the normal tools.
+An identical request recovers the original action within the same Draft.
 
 ### Workspace Delivery
 
