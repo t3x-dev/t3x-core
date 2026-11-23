@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, type SQLWrapper, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type ValidationFindingRecord,
@@ -9,6 +9,21 @@ import {
   validationRuns,
   validationStepRuns,
 } from '../schema';
+import type { WorkspaceOwner } from './drafts';
+
+const PRIVATE_WORKSPACE_OWNER = 'private_workspace_owner';
+
+/** Only explicitly owner-bound Runs are private. Legacy results stay project-readable. */
+export function validationRunVisibility(result: SQLWrapper, owner?: WorkspaceOwner | null) {
+  return sql`(
+    NOT (${result} ? ${PRIVATE_WORKSPACE_OWNER}::text)
+    OR ${result}->${PRIVATE_WORKSPACE_OWNER}::text = ${owner ? JSON.stringify(owner) : null}::jsonb
+  )`;
+}
+
+export function publicValidationRunResult(result: SQLWrapper) {
+  return sql`${result} - ${PRIVATE_WORKSPACE_OWNER}::text`;
+}
 
 export type ValidationRunStatus =
   | 'pending'
@@ -45,6 +60,7 @@ export interface CreateValidationRunInput {
   environment_hash?: string | null;
   summary?: string | null;
   result_json?: Record<string, unknown>;
+  workspace_owner?: WorkspaceOwner;
   started_at?: Date | null;
   finished_at?: Date | null;
 }
@@ -163,7 +179,10 @@ export async function createValidationRun(
       status: input.status,
       gateStatus: input.gate_status,
       summary: input.summary ?? null,
-      resultJson: input.result_json ?? {},
+      resultJson: {
+        ...input.result_json,
+        ...(input.workspace_owner ? { [PRIVATE_WORKSPACE_OWNER]: input.workspace_owner } : {}),
+      },
       startedAt: input.started_at ?? null,
       finishedAt: input.finished_at ?? null,
     })
@@ -227,9 +246,16 @@ export async function createValidationFinding(
 
 export async function findValidationRunDetailsById(
   db: AnyDB,
-  id: string
+  id: string,
+  owner?: WorkspaceOwner | null
 ): Promise<ValidationRunDetailsOutput | null> {
-  const [runRow] = await db.select().from(validationRuns).where(eq(validationRuns.id, id)).limit(1);
+  const [runRow] = await db
+    .select()
+    .from(validationRuns)
+    .where(
+      and(eq(validationRuns.id, id), validationRunVisibility(validationRuns.resultJson, owner))
+    )
+    .limit(1);
   if (!runRow) return null;
 
   const [stepRows, findingRows] = await Promise.all([
@@ -258,11 +284,13 @@ export async function findLatestValidationRunByWorkspace(
     project_id: string;
     workspace_id: string;
     workflow_name?: string;
+    owner?: WorkspaceOwner | null;
   }
 ): Promise<ValidationRunOutput | null> {
   const conditions = [
     eq(validationRuns.projectId, input.project_id),
     eq(validationRuns.workspaceId, input.workspace_id),
+    validationRunVisibility(validationRuns.resultJson, input.owner),
   ];
   if (input.workflow_name) {
     conditions.push(eq(validationRuns.workflowName, input.workflow_name));
@@ -283,6 +311,7 @@ function shortId(): string {
 }
 
 function runToOutput(row: ValidationRunRecord): ValidationRunOutput {
+  const { [PRIVATE_WORKSPACE_OWNER]: _owner, ...result } = row.resultJson;
   return {
     id: row.id,
     project_id: row.projectId,
@@ -298,7 +327,7 @@ function runToOutput(row: ValidationRunRecord): ValidationRunOutput {
     status: row.status as ValidationRunStatus,
     gate_status: row.gateStatus as ValidationGateStatus,
     summary: row.summary,
-    result_json: row.resultJson,
+    result_json: result,
     created_at: row.createdAt.toISOString(),
     started_at: row.startedAt?.toISOString() ?? null,
     finished_at: row.finishedAt?.toISOString() ?? null,

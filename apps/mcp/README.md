@@ -136,6 +136,7 @@ capabilities:
 | `sources:ingest` | Create a Source Thread, append machine-origin text, upload an attachment, and recover the request receipt |
 | `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
+| `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
 | `transitions:verify` | Run Transition verification |
@@ -208,6 +209,20 @@ Use `action=read` with the same project ID and returned `run_id` to retrieve
 the saved result after newer Commits or Runs exist. Each successful trigger
 creates a new Run. The API requires project edit access to trigger and
 project read access to retrieve a saved result.
+
+### Workspace validation
+
+Use `t3x_workspace_validation` with `action=run` and the exact saved
+`expected_workspace_revision`. For an authoring-managed Draft, also send
+`expected_composition_revision` from `workspace_activity`. This workflow
+validates the saved ESPHome `device` input. The API returns a conflict if
+the input revisions differ at capture. A later edit leaves the result bound to
+the captured revisions, subject digest, and input digest.
+
+Use `action=read` with the project, Workspace and Run ID to recover the
+recorded status, failure reason and findings. Exact Draft Runs require
+project access and the Workspace owner recorded at creation. This applies to
+Run reads and project Checks. Legacy Runs retain their project visibility.
 
 ### Repository, candidate, and Schema operations
 
@@ -295,6 +310,22 @@ references, and separate read and trigger permissions:
 ```bash
 T3X_E2E_MCP_PHASE=commit-validation T3X_E2E_ARTIFACT_DIR=test-results/mcp-commit-validation \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-commit-validation.spec.ts
+```
+
+For exact Draft validation, simulate a missing OCI runtime with temporary
+executables to check the persisted failure reason without launching a container:
+
+```bash
+(
+  fixture_bin=$(mktemp -d)
+  trap 'rm -f "$fixture_bin/docker" "$fixture_bin/podman"; rmdir "$fixture_bin"' EXIT
+  printf '#!/bin/sh\nexit 127\n' > "$fixture_bin/docker"
+  cp "$fixture_bin/docker" "$fixture_bin/podman"
+  chmod +x "$fixture_bin/docker" "$fixture_bin/podman"
+  PATH="$fixture_bin:$PATH" T3X_E2E_MCP_PHASE=workspace-validation \
+    T3X_E2E_ARTIFACT_DIR=test-results/mcp-workspace-validation \
+    node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-workspace-validation.spec.ts
+)
 ```
 
 ### Resources

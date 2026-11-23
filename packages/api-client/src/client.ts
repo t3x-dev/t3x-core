@@ -40,6 +40,11 @@ import {
   WorkspaceDeploymentResultSchema,
   type WorkspaceRollbackInput,
 } from './workspace-delivery.js';
+import {
+  type RunWorkspaceValidationInput,
+  type WorkspaceValidationDetails,
+  WorkspaceValidationDetailsSchema,
+} from './workspace-validation.js';
 /**
  * T3X API Client
  *
@@ -1518,6 +1523,32 @@ export class T3xClient {
     return this.request<RepositoryWorkspaceEnvelope>(
       'GET',
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`
+    );
+  }
+
+  async runWorkspaceValidation(
+    projectId: string,
+    workspaceId: string,
+    input: RunWorkspaceValidationInput
+  ): Promise<WorkspaceValidationDetails> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/validation-runs`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceValidationDetailsSchema
+    );
+  }
+
+  async getWorkspaceValidationRun(runId: string): Promise<WorkspaceValidationDetails> {
+    return this.request(
+      'GET',
+      `/v1/workspace-validation-runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      WorkspaceValidationDetailsSchema
     );
   }
 

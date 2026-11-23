@@ -96,6 +96,12 @@ const GROUPS = {
   'runs:trigger': {
     operations: { t3x_commit_validation: { parameter: 'action', values: ['run'] } },
   },
+  'runs:workspace': {
+    operations: { t3x_workspace_validation: { parameter: 'action', values: ['read'] } },
+  },
+  'runs:workspace:trigger': {
+    operations: { t3x_workspace_validation: { parameter: 'action', values: ['run'] } },
+  },
   transitions: {
     tools: ['inspect_transition', 't3x_commit_result'],
     operations: { t3x_draft_review: { parameter: 'action', values: ['read'] } },

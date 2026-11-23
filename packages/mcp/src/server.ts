@@ -66,6 +66,10 @@ import { sourceIngestionDef, sourceIngestionHandler } from './tools/source-inges
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
 import { workspaceCandidateDef, workspaceCandidateHandler } from './tools/workspace-candidate.js';
+import {
+  workspaceValidationDef,
+  workspaceValidationHandler,
+} from './tools/workspace-validation.js';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json') as { version?: string };
@@ -105,6 +109,7 @@ const BUSINESS_TOOLS: ToolEntry[] = [
   { def: sourceContextDef, handler: sourceContextHandler },
   { def: sourceIngestionDef, handler: sourceIngestionHandler },
   { def: workspaceCandidateDef, handler: workspaceCandidateHandler },
+  { def: workspaceValidationDef, handler: workspaceValidationHandler },
 ];
 
 export type McpToolset = 'core' | 'advanced' | 'transition';

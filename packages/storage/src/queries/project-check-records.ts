@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
+import type { WorkspaceOwner } from './drafts';
+import { publicValidationRunResult, validationRunVisibility } from './validation-runs';
 
 export type ProjectCheckRecordKind = 'review' | 'validation' | 'schema' | 'pull-request';
 export interface ProjectCheckRecord extends Record<string, unknown> {
@@ -11,6 +13,7 @@ export interface ProjectCheckRecord extends Record<string, unknown> {
 }
 export interface ProjectCheckRecordQuery {
   projectId: string;
+  validationOwner?: WorkspaceOwner | null;
   id?: string;
   kind?: ProjectCheckRecordKind;
   workspace?: string;
@@ -39,8 +42,10 @@ export async function listProjectCheckRecords(
       WHERE s.project_id = ${input.projectId}
       UNION ALL
       SELECT 'validation:' || v.id, 'validation', v.created_at,
-        v.workspace_id, NULL::integer, NULL::text, to_jsonb(v)
+        v.workspace_id, NULL::integer, NULL::text,
+        to_jsonb(v) || jsonb_build_object('result_json', ${publicValidationRunResult(sql`v.result_json`)})
       FROM validation_runs v WHERE v.project_id = ${input.projectId}
+        AND ${validationRunVisibility(sql`v.result_json`, input.validationOwner)}
       UNION ALL
       SELECT 'schema:' || y.id, 'schema', y.created_at,
         NULL::text, NULL::integer, y.commit_hash, to_jsonb(y)

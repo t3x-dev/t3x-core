@@ -47,3 +47,7 @@ export * from './state-presentation.js';
 export type * from './types.js';
 export type * from './workspace-authoring';
 export * from './workspace-delivery.js';
+export type {
+  RunWorkspaceValidationInput,
+  WorkspaceValidationDetails,
+} from './workspace-validation.js';
