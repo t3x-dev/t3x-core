@@ -53,6 +53,7 @@ import { draftReviewDef, draftReviewHandler } from './tools/draft-review.js';
 import { openWorkspaceDef, openWorkspaceHandler } from './tools/open-workspace.js';
 import { proposalGenerationDef, proposalGenerationHandler } from './tools/proposal-generation.js';
 import { repositoryLocationDef, repositoryLocationHandler } from './tools/repository-location.js';
+import { repositoryRunsDef, repositoryRunsHandler } from './tools/repository-runs.js';
 import {
   schemaCandidateDef,
   schemaCandidateHandler,
@@ -102,6 +103,7 @@ const BUSINESS_TOOLS: ToolEntry[] = [
   { def: commitValidationDef, handler: commitValidationHandler },
   { def: contextDef, handler: contextHandler },
   { def: proposalGenerationDef, handler: proposalGenerationHandler },
+  { def: repositoryRunsDef, handler: repositoryRunsHandler },
   { def: schemaCandidateDef, handler: schemaCandidateHandler },
   { def: schemaPreparationDef, handler: schemaPreparationHandler },
   { def: schemaRegistryDef, handler: schemaRegistryHandler },

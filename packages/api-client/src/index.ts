@@ -25,6 +25,12 @@ export * from './explore.js';
 export * from './merge-workspace';
 export * from './recipe-triggers.js';
 export * from './repository-profile.js';
+export type {
+  ListRepositoryRunsInput,
+  RepositoryRunDetails,
+  RepositoryRunSummary,
+  RepositoryRunsPage,
+} from './repository-runs.js';
 export * from './schema-catalog.js';
 export {
   type SchemaNodeProvenance,

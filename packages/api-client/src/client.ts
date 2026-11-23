@@ -97,6 +97,13 @@ import {
   type DeploymentCapabilities,
   DeploymentCapabilitiesSchema,
 } from './deployment-capabilities.js';
+import {
+  type ListRepositoryRunsInput,
+  type RepositoryRunDetails,
+  RepositoryRunDetailsSchema,
+  type RepositoryRunsPage,
+  RepositoryRunsPageSchema,
+} from './repository-runs.js';
 import { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
@@ -1079,6 +1086,28 @@ export class T3xClient {
       undefined,
       undefined,
       CommitYSchemaRunSchema
+    );
+  }
+
+  async listRepositoryRuns(input: ListRepositoryRunsInput): Promise<RepositoryRunsPage> {
+    return this.request(
+      'GET',
+      '/v1/runs',
+      undefined,
+      { ...input },
+      undefined,
+      RepositoryRunsPageSchema
+    );
+  }
+
+  async getRepositoryRun(runId: string): Promise<RepositoryRunDetails> {
+    return this.request(
+      'GET',
+      `/v1/runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      RepositoryRunDetailsSchema
     );
   }
 

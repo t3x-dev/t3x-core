@@ -137,6 +137,7 @@ capabilities:
 | `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
+| `runs:repository` | List saved repository evaluation Runs and read one by Run ID |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
 | `transitions:verify` | Run Transition verification |
@@ -223,6 +224,15 @@ Use `action=read` with the project, Workspace and Run ID to recover the
 recorded status, failure reason and findings. Exact Draft Runs require
 project access and the Workspace owner recorded at creation. This applies to
 Run reads and project Checks. Legacy Runs retain their project visibility.
+
+### Repository Runs
+
+Use `t3x_repository_runs` with `action=list` and `project_id`, optionally
+filtering by status. Use the returned `next_offset` to page through the
+saved records, or supply a `run_id` with `action=read` to retrieve the
+stored result. A reported Commit reference is the one stored on the Run.
+The API authorizes project reads. Review evidence remains subject to its
+issuer and subject rules.
 
 ### Repository, candidate, and Schema operations
 
@@ -326,6 +336,14 @@ executables to check the persisted failure reason without launching a container:
     T3X_E2E_ARTIFACT_DIR=test-results/mcp-workspace-validation \
     node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-workspace-validation.spec.ts
 )
+```
+
+The repository Runs phase reads seeded queued, running, completed, and failed
+records from the auth-enabled fixture:
+
+```bash
+T3X_E2E_MCP_PHASE=repository-runs T3X_E2E_ARTIFACT_DIR=test-results/mcp-repository-runs \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-repository-runs.spec.ts
 ```
 
 ### Resources
