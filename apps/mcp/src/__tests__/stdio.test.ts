@@ -147,6 +147,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
           't3x_context',
           't3x_diff',
           't3x_query',
+          't3x_read_state_presentation',
           't3x_resolve_repository',
         ]);
         expect(

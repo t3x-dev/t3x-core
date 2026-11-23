@@ -81,6 +81,12 @@ const require = createRequire(import.meta.url);
 const packageJson = require('../package.json') as { version?: string };
 
 import { restoreContentDef, restoreContentHandler } from './tools/restore-content.js';
+import {
+  readPresentationDef,
+  readPresentationHandler,
+  revisePresentationDef,
+  revisePresentationHandler,
+} from './tools/state-presentation.js';
 import { workspaceDeliveryDef, workspaceDeliveryHandler } from './tools/workspace-delivery.js';
 
 // ── Toolset registry ──
@@ -120,6 +126,8 @@ const BUSINESS_TOOLS: ToolEntry[] = [
   { def: sourceContextDef, handler: sourceContextHandler },
   { def: sourceIngestionDef, handler: sourceIngestionHandler },
   { def: workspaceCandidateDef, handler: workspaceCandidateHandler },
+  { def: readPresentationDef, handler: readPresentationHandler },
+  { def: revisePresentationDef, handler: revisePresentationHandler },
   { def: restoreContentDef, handler: restoreContentHandler },
   { def: workspaceDeliveryDef, handler: workspaceDeliveryHandler },
   { def: workspaceValidationDef, handler: workspaceValidationHandler },

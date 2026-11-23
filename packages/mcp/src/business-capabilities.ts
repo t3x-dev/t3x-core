@@ -30,7 +30,7 @@ const GROUPS = {
     operations: { t3x_admin: { parameter: 'action', values: ['create_branch'] } },
   },
   state: {
-    tools: ['t3x_committed_state', 't3x_diff'],
+    tools: ['t3x_committed_state', 't3x_diff', 't3x_read_state_presentation'],
     operations: { t3x_query: { parameter: 'target', values: ['commit', 'commits'] } },
     resources: ['commit'],
   },
@@ -110,6 +110,7 @@ const GROUPS = {
   'delivery:rollback': {
     operations: { t3x_workspace_delivery: { parameter: 'action', values: ['rollback'] } },
   },
+  'state:presentation:revise': { tools: ['t3x_revise_state_presentation'] },
   'state:restore': { tools: ['t3x_restore_content'] },
   'delivery:prepare': {
     operations: { t3x_workspace_delivery: { parameter: 'action', values: ['prepare'] } },

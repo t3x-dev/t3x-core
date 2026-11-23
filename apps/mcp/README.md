@@ -138,6 +138,7 @@ capabilities:
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
 | `runs:repository:trigger` | Dispatch a project-configured evaluation for an exact CommitV2 |
+| `state:presentation:revise` | Commit a complete author presentation on a ref at an expected head |
 | `state:restore` | Restore historical structured Content to a fresh owned Draft |
 | `delivery:deploy`, `delivery:rollback` | Independently enable preview assignment and rollback |
 | `delivery`, `delivery:prepare` | List targets and receipts, or prepare a portable artifact in an owned Workspace |
@@ -243,6 +244,19 @@ The result includes the source Commit and State digests, the effective Schema
 hash and validation issues. Inspect the Draft diff, resolve issues in the
 Draft, then prepare a fixed Review, decide and commit using the normal tools.
 An identical request recovers the original action within the same Draft.
+
+### State presentations
+
+Use `t3x_read_state_presentation` under `state` or `read-only` with
+`project_id`, `commit_digest` and `state_digest`. An optional
+`presentation_digest` pins the author document. A Commit without an author
+document returns `presentation: null`.
+
+Enable `state:presentation:revise` for `t3x_revise_state_presentation`. Supply
+`project_id`, `ref`, `expected_head` and the full `presentation` document.
+The API checks project edit access and ref authority. Success advances the
+ref to a new Commit with the same State digest. After a lost response, read
+the ref and its presentation before deciding whether to submit another revision.
 
 ### Workspace Delivery
 

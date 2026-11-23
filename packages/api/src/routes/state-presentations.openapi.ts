@@ -307,7 +307,7 @@ statePresentationRoutes.openapi(revisePresentationRoute, async (c) => {
         refName,
         expectedHead: body.expectedHead,
         target: graph.state,
-        actor: authority.principal.actor,
+        actor: { kind: authority.principal.actor.kind, id: authority.principal.actor.id },
         policyBindingSource: 'server-selected',
         ...(authority.policyBinding === null ? {} : { policyBinding: authority.policyBinding }),
         intent: 'Update project introduction',

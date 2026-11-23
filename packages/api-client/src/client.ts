@@ -26,6 +26,7 @@ import {
 } from './source-ingestion.js';
 import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
+  StateAuthorRevisionSchema,
   type StatePresentationInput,
   type StatePresentationResult,
   StatePresentationResultSchema,
@@ -1174,6 +1175,22 @@ export class T3xClient {
       StatePresentationResultSchema
     );
   }
+  async reviseStatePresentation(
+    projectId: string,
+    refName: string,
+    expectedHead: string,
+    presentation: StatePresentationInput
+  ) {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/refs/${encodeURIComponent(refName)}/presentation-revisions`,
+      { expectedHead, presentation },
+      undefined,
+      undefined,
+      StateAuthorRevisionSchema
+    );
+  }
+
   async publishStatePresentation(
     projectId: string,
     commitDigest: string,

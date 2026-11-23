@@ -379,6 +379,80 @@ async function qualifyCore(input: {
       commit: { digest: committed.commit_digest },
       branch: { head_commit_hash: committed.commit_digest },
     });
+    if (qualificationPhase === 'presentation') {
+      const presentationRef = 'presentation-history';
+      await input.actor('POST', '/branches', {
+        project_id,
+        name: presentationRef,
+        parent_branch: ref,
+        head_commit_hash: committed.commit_digest,
+      });
+      const writeCapability = 'state:presentation:revise';
+      const owner = mcpClient(input.operatorSession, writeCapability);
+      const foreign = mcpClient(input.outsiderSession, `state,${writeCapability}`);
+      const agentWriter = mcpClient(agent.key, writeCapability);
+      const clients = [owner, foreign, agentWriter];
+      try {
+        await Promise.all(clients.map((client) => client.connect()));
+        const readTool = 't3x_read_state_presentation';
+        const reviseTool = 't3x_revise_state_presentation';
+        expect((await owner.list()).tools.map(({ name }) => name)).toEqual([reviseTool]);
+        const exact = {
+          project_id,
+          commit_digest: committed.commit_digest,
+          state_digest: state.sourceState.digest,
+        };
+        const revision = {
+          project_id,
+          ref: presentationRef,
+          expected_head: committed.commit_digest,
+          presentation: { description: 'Published introduction', tags: ['release'] },
+        };
+        const historical = await invoke(readonly, readTool, exact);
+        expect(historical).toMatchObject({ presentation: null });
+        await denied(foreign, readTool, exact);
+        await denied(readonly, reviseTool, revision);
+        await denied(foreign, reviseTool, revision);
+        await denied(agentWriter, reviseTool, revision);
+        expect((await branch(human, presentationRef)).head_commit_hash).toBe(
+          revision.expected_head
+        );
+        await denied(owner, reviseTool, revision);
+        const policy = policyFor(agent);
+        policy.authorization.allowSelfApproval = true;
+        await input.actor('PUT', `${projectUrl}/transition-policy-binding`, {
+          ref_name: presentationRef,
+          uri: 't3x://policies/presentation-fixture/v1',
+          policy,
+        });
+        const updated = await invoke<{
+          commitDigest: string;
+          presentationDigest: string;
+          stateDigest: string;
+        }>(agentWriter, reviseTool, revision);
+        expect(updated.commitDigest).not.toBe(revision.expected_head);
+        expect(updated.stateDigest).toBe(exact.state_digest);
+        const target = {
+          ...exact,
+          commit_digest: updated.commitDigest,
+          presentation_digest: updated.presentationDigest,
+        };
+        expect(await invoke(readonly, readTool, target)).toMatchObject({
+          presentation: { digest: updated.presentationDigest, document: revision.presentation },
+        });
+        await denied(readonly, readTool, { ...target, state_digest: revision.expected_head });
+        await denied(readonly, readTool, {
+          ...target,
+          presentation_digest: revision.expected_head,
+        });
+        await denied(agentWriter, reviseTool, revision);
+        expect((await branch(human, presentationRef)).head_commit_hash).toBe(updated.commitDigest);
+        expect(await invoke(readonly, readTool, exact)).toEqual(historical);
+      } finally {
+        await Promise.all(clients.map((client) => client.close()));
+      }
+      return;
+    }
     if (qualificationPhase === 'restore') {
       await write({
         ...valid,
@@ -678,8 +752,8 @@ test.describe('MCP core qualification', () => {
 
   test('isolated API credentials and real stdio', async ({ request }) => {
     test.skip(
-      qualificationPhase !== 'api' && qualificationPhase !== 'restore',
-      'Run the API or Content restore phase on a fresh qualification stack.'
+      !['api', 'restore', 'presentation'].includes(qualificationPhase ?? ''),
+      'Run the selected API qualification phase on a fresh qualification stack.'
     );
     test.setTimeout(120000);
     const owner = account('direct');
