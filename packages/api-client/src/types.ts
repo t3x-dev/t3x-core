@@ -795,9 +795,24 @@ export interface ListWorkspaceTransitionReviewSnapshotsResponse {
   snapshots: WorkspaceTransitionReviewSnapshotEnvelope[];
 }
 
+export interface OpenWorkspaceInput {
+  ref: string;
+  expected_head: string | null;
+  request_id: string;
+}
+
+export interface OpenWorkspaceResult {
+  workspace_id: string;
+  workspace_revision: number;
+  basis_ref_head: string | null;
+  head_commit_hash: string | null;
+  created: boolean;
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   authoring: WorkspaceAuthoringCapability;
+  open(projectId: string, input: OpenWorkspaceInput): Promise<OpenWorkspaceResult>;
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
   createExtractionProposal(

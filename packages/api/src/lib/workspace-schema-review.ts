@@ -12,10 +12,12 @@ import {
   DraftAuthoringConflictError,
   findTransitionCommitReceipt,
   findYSchemaCompositionSnapshot,
+  getRepositoryDecisionAuditByDigest,
   getTransitionViewForCommit,
   getVerifiedTransitionCommitGraph,
   type ResolvedTransitionProposalGraph,
   resolveTransitionProposalGraph,
+  TransitionProjectionAuthorizationInvalidError,
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, type ProposalStatement, type State } from '@t3x-dev/transition';
 import { diffYSchemas, normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
@@ -202,6 +204,76 @@ export async function committedWorkspaceSchemaAtHead(
       'The exact Schema bound to the branch Commit failed verification.'
     );
   return WorkspaceSchemaDefinitionSnapshotSchema.parse(snapshot);
+}
+
+/**
+ * Read the binding represented by a historical Commit. Unknown means that the
+ * immutable records do not establish a binding or its explicit absence.
+ */
+export async function readCommittedSchemaBinding(
+  db: AnyDB,
+  projectId: string,
+  commitDigest: string
+) {
+  const committed = await getVerifiedTransitionCommitGraph(db, projectId, commitDigest);
+  if (!committed) return null;
+  const unknown = { ...unboundWorkspaceSchema(), status: 'unknown' as const };
+  const receipt = await findTransitionCommitReceipt(db, projectId, commitDigest);
+  const audit = await getRepositoryDecisionAuditByDigest(
+    db,
+    projectId,
+    committed.commit.decision.digest
+  );
+  if (!audit) return unknown;
+  try {
+    const view = await getTransitionViewForCommit(db, {
+      projectId,
+      refName: audit.refName,
+      commitId: commitDigest,
+    });
+    if (view?.mode !== 'transition') return unknown;
+    const graph = receipt
+      ? await resolveTransitionProposalGraph(db, projectId, receipt.transitionId)
+      : null;
+    if (
+      graph &&
+      (graph.membership.proposalDigest !== describeTransitionObject(committed.proposal).digest ||
+        graph.membership.effectDigest !== describeTransitionObject(committed.effect).digest)
+    )
+      return unknown;
+    const review = graph ? frozenWorkspaceSchemaReview(graph) : null;
+    const hashes = new Set(
+      view.checks.validation.runs.map((run) => run.predicate.schemaResource.digest)
+    );
+    if (review?.draft.status === 'unbound') {
+      return hashes.size === 0 ? review.draft : unknown;
+    }
+    if (review?.draft.status === 'bound') {
+      const { definition, schemaHash } = review.draft;
+      const schemaOnly =
+        isSchemaOnlyWorkspaceReview(review) &&
+        (await hasSchemaReviewEvidence(committed.proposal, review));
+      if (
+        !definition ||
+        (await sha256CompositionValue(normalizeYSchemaObject(definition))) !== schemaHash ||
+        (!schemaOnly && (hashes.size !== 1 || !hashes.has(schemaHash as `sha256:${string}`)))
+      )
+        return unknown;
+      return review.draft;
+    }
+    return (
+      (await recoverCommittedSchema(db, projectId, audit.refName, commitDigest, unknown, view)) ??
+      unknown
+    );
+  } catch (error) {
+    if (
+      error instanceof TransitionProjectionAuthorizationInvalidError ||
+      error instanceof SyntaxError ||
+      (error instanceof Error && error.name === 'ZodError')
+    )
+      return unknown;
+    throw error;
+  }
 }
 
 export const unboundWorkspaceSchema = (): WorkspaceSchemaDefinitionSnapshot => ({

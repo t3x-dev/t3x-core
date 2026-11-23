@@ -370,6 +370,41 @@ describe('principal-private Workspace boundary', () => {
     });
   });
 
+  it('opens once per ref and owner across concurrent Web and MCP credentials', async () => {
+    const ref = 'open-workspace-fixture';
+    await insertBranch(testDb, { projectId, name: ref });
+    const open = (token: string, requestId: string, head: string | null = null) =>
+      request(`/api/v1/projects/${projectId}/workspaces`, token, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref, expected_head: head, request_id: requestId }),
+      });
+    const responses = await Promise.all([open(keyA, 'web-open'), open(keyAMcp, 'mcp-open')]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const results = await Promise.all(
+      responses.map(async (response) => (await response.json()).data)
+    );
+    const [first, second] = results;
+    expect(first.workspace_id).toBe(second.workspace_id);
+    expect(results.map((result) => result.created).sort()).toEqual([false, true]);
+    expect(first.basis_ref_head).toBeNull();
+    const stored = await findWorkspaceDraft(testDb, projectId, first.workspace_id);
+    expect(stored).toMatchObject({
+      owner_principal_id: testAId,
+      revision: first.workspace_revision,
+    });
+
+    expect((await open(keyA, 'stale-open', `sha256:${'a'.repeat(64)}`)).status).toBe(409);
+    expect(await findWorkspaceDraft(testDb, projectId, first.workspace_id)).toEqual(stored);
+    expect(
+      (await request(`/api/v1/projects/${projectId}/workspaces/${first.workspace_id}`, keyB)).status
+    ).toBe(404);
+
+    const other = await open(keyB, 'other-owner-open');
+    expect(other.status).toBe(200);
+    expect((await other.json()).data.workspace_id).not.toBe(first.workspace_id);
+  });
+
   it('observes MCP credential revocation at the next request boundary', async () => {
     await expect(mcpApiClient().workspaces.get(projectId, 'workspace-a')).resolves.toBeTruthy();
     await revokeApiKey(testDb, mcpKeyId);

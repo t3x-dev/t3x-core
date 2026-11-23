@@ -90,3 +90,14 @@ it('denies exports when authentication is enabled and no principal is provided',
     else process.env.AUTH_DISABLED = previous;
   }
 });
+
+it('reports insufficient historical evidence separately from a missing Commit', async () => {
+  const base = `/v1/projects/${projectId}/commits`;
+  const response = await app.request(`${base}/${encodeURIComponent(digest)}/schema-binding`);
+  expect(response.status).toBe(200);
+  expect((await response.json()).data).toEqual({ commit_digest: digest, status: 'unknown' });
+  const missing = await app.request(
+    `${base}/${encodeURIComponent(`sha256:${'e'.repeat(64)}`)}/schema-binding`
+  );
+  expect(missing.status).toBe(404);
+});

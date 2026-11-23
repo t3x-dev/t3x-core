@@ -1,4 +1,4 @@
-import { T3xApiError } from '@t3x-dev/api-client';
+import { T3xApiError, type T3xClient } from '@t3x-dev/api-client';
 import { getApiClient, isApiBackend } from '../backend.js';
 import { fail, ok, type ToolDef, type ToolHandler } from './types.js';
 
@@ -35,21 +35,14 @@ export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }
 
   try {
     const address = await client.resolveRepository(owner, name);
-    for (let offset = 0; ; offset += BRANCH_PAGE_SIZE) {
-      const { branches } = await client.listBranches(address.project_id, {
-        limit: BRANCH_PAGE_SIZE,
-        offset,
+    const branch = await findApiBranch(client, address.project_id, ref);
+    if (branch) {
+      return ok({
+        project_id: address.project_id,
+        canonical_path: address.canonical_path,
+        ref: branch.name,
+        head_commit_hash: branch.head_commit_hash,
       });
-      const branch = branches.find((entry) => entry.name === ref);
-      if (branch) {
-        return ok({
-          project_id: address.project_id,
-          canonical_path: address.canonical_path,
-          ref: branch.name,
-          head_commit_hash: branch.head_commit_hash,
-        });
-      }
-      if (branches.length < BRANCH_PAGE_SIZE) break;
     }
     return fail(
       JSON.stringify({
@@ -65,3 +58,12 @@ export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }
     );
   }
 };
+
+export async function findApiBranch(client: T3xClient, projectId: string, ref: string) {
+  for (let offset = 0; ; offset += BRANCH_PAGE_SIZE) {
+    const { branches } = await client.listBranches(projectId, { limit: BRANCH_PAGE_SIZE, offset });
+    const branch = branches.find((entry) => entry.name === ref);
+    if (branch) return branch;
+    if (branches.length < BRANCH_PAGE_SIZE) return null;
+  }
+}

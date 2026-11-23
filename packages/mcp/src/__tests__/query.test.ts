@@ -418,6 +418,26 @@ describe('t3x_query handler', () => {
 });
 
 describe('authoring query', () => {
+  it('reads an exact relation path and distinguishes null from a missing value', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.workspaces.authoring.read.mockResolvedValue({
+      current: { content: { relations: [{ 'key/part': null }] } },
+      workspaceRevision: 5,
+      compositionRevision: 2,
+      basis: { refName: 'main', refHead: null, baseDigest: 'base' },
+    });
+    const current = { target: 'workspace_activity', project_id: 'proj_1', id: 'ws' };
+    const read = await queryHandler({ ...current, path: '/content/relations/0/key~1part' });
+    expect(JSON.parse(read.content[0].text)).toMatchObject({
+      found: true,
+      value: null,
+      workspaceRevision: 5,
+    });
+    const absent = await queryHandler({ ...current, path: '/content/relations/0/other' });
+    expect(JSON.parse(absent.content[0].text)).toMatchObject({ found: false });
+    expect((await queryHandler({ ...current, path: '/content/~2' })).isError).toBe(true);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     if (originalBackend === undefined) delete process.env.T3X_MCP_BACKEND;

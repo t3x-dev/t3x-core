@@ -396,6 +396,14 @@
     {
       "source": "commits.openapi.ts",
       "method": "GET",
+      "path": "/v1/projects/{projectId}/commits/{hash}/schema-binding",
+      "policy": "project",
+      "rationale": "Read only the verified, project-scoped historical Commit Schema identity.",
+      "action": "project:read"
+    },
+    {
+      "source": "commits.openapi.ts",
+      "method": "GET",
       "path": "/v1/commits/{hash}/operations",
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary.",
@@ -2068,6 +2076,14 @@
       "policy": "project",
       "rationale": "Project ownership or project-scoped resource boundary.",
       "action": "project:read"
+    },
+    {
+      "source": "workspaces.openapi.ts",
+      "method": "POST",
+      "path": "/v1/projects/{projectId}/workspaces",
+      "policy": "project",
+      "rationale": "Opening an owned Workspace requires project edit and transition:propose; the server checks the pinned ref and derives the owner.",
+      "action": "project:edit"
     },
     {
       "source": "workspaces.openapi.ts",

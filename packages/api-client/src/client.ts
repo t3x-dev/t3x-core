@@ -1,3 +1,4 @@
+import { type CommittedSchemaBinding, CommittedSchemaBindingSchema } from './schema-studio';
 import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
   type StatePresentationInput,
@@ -269,6 +270,8 @@ export class T3xClient {
             input
           ),
       } satisfies import('./workspace-authoring').WorkspaceAuthoringCapability),
+      open: (projectId, input) =>
+        this.request('POST', `/v1/projects/${encodeURIComponent(projectId)}/workspaces`, input),
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
       createExtractionProposal: (projectId, workspaceId, input) =>
@@ -938,6 +941,34 @@ export class T3xClient {
       `/v1/commits/${encodeURIComponent(digest)}`,
       undefined,
       { project_id: projectId }
+    );
+  }
+
+  async getCommitForTransition(
+    projectId: string,
+    digest: string,
+    transitionId: string
+  ): Promise<StoredRepositoryCommit> {
+    const { commit } = await this.request<{ commit: StoredRepositoryCommit }>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}`,
+      undefined,
+      { project_id: projectId, transition_id: transitionId }
+    );
+    return commit;
+  }
+
+  async getCommittedSchemaBinding(
+    projectId: string,
+    commitDigest: string
+  ): Promise<CommittedSchemaBinding> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/schema-binding`,
+      undefined,
+      undefined,
+      undefined,
+      CommittedSchemaBindingSchema
     );
   }
 

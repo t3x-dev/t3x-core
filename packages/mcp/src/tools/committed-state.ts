@@ -8,11 +8,11 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
 export const committedStateDef: ToolDef = {
   name: 't3x_committed_state',
   description:
-    'Read the complete committed State value or export its exact YAML or JSON bytes for a selected Commit. Requires the API backend. Use t3x_query for history and t3x_diff to compare commits.',
+    'Read the complete committed State value, inspect its historical Schema binding, or export its exact YAML or JSON bytes for a selected Commit. Requires the API backend. Use t3x_query for history and t3x_diff to compare commits.',
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['read', 'export'] },
+      action: { type: 'string', enum: ['read', 'export', 'schema_binding'] },
       project_id: { type: 'string', description: 'Project that owns the selected Commit.' },
       commit_digest: {
         type: 'string',
@@ -46,21 +46,33 @@ export const committedStateHandler: ToolHandler = async ({
     return errorResult('API_BACKEND_REQUIRED', 'Committed State requires T3X_MCP_BACKEND=api.');
   }
   if (
-    (action !== 'read' && action !== 'export') ||
+    (action !== 'read' && action !== 'export' && action !== 'schema_binding') ||
     typeof projectId !== 'string' ||
     !projectId.trim() ||
     typeof commitDigest !== 'string' ||
     !DIGEST.test(commitDigest) ||
-    (stateDigest !== undefined && (typeof stateDigest !== 'string' || !DIGEST.test(stateDigest)))
+    (stateDigest !== undefined &&
+      (action === 'schema_binding' || typeof stateDigest !== 'string' || !DIGEST.test(stateDigest)))
   ) {
     return errorResult(
       'INVALID_ARGUMENT',
-      'Provide action read or export, project_id, an exact commit_digest and optionally an exact state_digest.',
+      'Provide action read, export or schema_binding, project_id, an exact commit_digest and optionally an exact state_digest.',
       400
     );
   }
 
   try {
+    if (action === 'schema_binding') {
+      const binding = await getApiClient().getCommittedSchemaBinding(projectId, commitDigest);
+      if (binding.commit_digest !== commitDigest) {
+        return errorResult(
+          'HASH_CONFLICT',
+          'Schema binding does not match the requested Commit.',
+          409
+        );
+      }
+      return ok(binding);
+    }
     if (action === 'read') {
       const overview = await getApiClient().getStateOverview(projectId, commitDigest, {
         stateDigest,

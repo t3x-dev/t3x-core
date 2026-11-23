@@ -32,12 +32,20 @@ Core:
 - `t3x_generate`
 - `t3x_resolve_repository` (API backend)
 - `t3x_committed_state` (API backend)
+- `t3x_open_workspace` (authenticated API backend)
 
 Use `t3x_resolve_repository` with an `owner/repo` address and explicit branch
 name. It returns the canonical path, project ID, ref, and a `null` head for an
 empty branch. Pass a non-null head to `t3x_committed_state` to read the full
-value or export exact YAML or JSON. Use `t3x_query` for history and the advanced
-`t3x_diff` tool for comparisons.
+value or export exact YAML or JSON. Its `schema_binding` action reports
+`bound`, `unbound`, or `unknown` from historical Commit evidence.
+Use `t3x_query` for history and the advanced `t3x_diff` tool for comparisons.
+
+Use `t3x_open_workspace` with the project, explicit branch, expected head and
+request ID. It opens the caller's private Workspace and reports its basis
+separately from the current branch head. Use `t3x_query` with
+`target=workspace_activity` and an optional JSON Pointer `path` to inspect
+the saved Draft before using `t3x_edit mode=draft` or its reconciliation modes.
 
 Advanced:
 
@@ -54,6 +62,7 @@ Transition (opt-in, API backend only):
 - `decide_transition`
 - `commit_transition`
 - `t3x_draft_review`
+- `t3x_commit_result`
 
 The Transition toolset exposes task-oriented transition views. It does not
 accept caller-written actors, policy facts, workspace projection facts, or other
@@ -75,6 +84,7 @@ turning protocol nouns into separate product models:
 | Add external evidence | `attach_statement` | `attachTransitionStatement` | caller sends predicate content and subject roles only |
 | Decide | `decide_transition` | `decideTransition` | caller copies the latest immutable review precondition |
 | Commit | `commit_transition` | `commitTransition` | caller supplies `decision_digest` and exact `expected_head` |
+| Read committed result | `t3x_commit_result` | `getCommitForTransition`, `inspectTransition`, branch and Workspace reads | fixed Commit plus separately read current branch and authorized Workspace |
 
 `propose_transition` accepts the same closed request kinds as the API:
 

@@ -29,6 +29,7 @@ import {
   listTransitionReviewSnapshots,
   listWorkspaceDrafts,
   listWorkspaceDraftsForOwner,
+  NotFoundError,
   type StoredTransitionReviewSnapshot,
   TransitionHeadConflictError,
   TransitionRefHeadIntegrityError,
@@ -38,12 +39,15 @@ import {
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { openWorkspace } from '../lib/open-workspace';
 import { assertProjectAccess } from '../lib/project-access';
 import { getRequestPrincipal } from '../lib/request-principal';
 import {
+  requireTransitionAuthority,
   TransitionPolicyBindingRequiredError,
   TransitionProjectScopeDeniedError,
   TransitionScopeDeniedError,
+  transitionApiKey,
 } from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import { decideWorkspaceChange } from '../lib/workspace-change-decision';
@@ -778,6 +782,91 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
     success: true as const,
     data: { workspaces },
   });
+});
+
+const openWorkspaceRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces',
+  tags: ['Workspaces'],
+  request: {
+    params: z.object({ projectId: z.string().min(1) }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              ref: z.string().trim().min(1),
+              expected_head: TransitionDigestSchema.nullable(),
+              request_id: z.string().trim().min(1).max(200),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Opened Workspace',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              workspace_id: z.string(),
+              workspace_revision: z.number().int(),
+              basis_ref_head: TransitionDigestSchema.nullable(),
+              head_commit_hash: TransitionDigestSchema.nullable(),
+              created: z.boolean(),
+            })
+          ),
+        },
+      },
+    },
+    403: { description: 'Workspace write denied' },
+    404: { description: 'Ref unavailable' },
+    409: { description: 'Workspace or ref changed' },
+  },
+});
+
+workspaceRoutes.openapi(openWorkspaceRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const body = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const owner = workspaceOwnerFromContext(c);
+  if (!owner)
+    return errorResponse(c, 'FORBIDDEN', 'Opening a private Workspace requires authentication.');
+  try {
+    const { actor } = requireTransitionAuthority({
+      apiKey: transitionApiKey(c),
+      projectId,
+      scope: 'transition:propose',
+    });
+    const data = await openWorkspace(db, {
+      projectId,
+      ref: body.ref,
+      expectedHead: body.expected_head,
+      requestId: body.request_id,
+      owner,
+      actor,
+    });
+    return c.json({ success: true as const, data }, 200);
+  } catch (error) {
+    if (
+      error instanceof TransitionScopeDeniedError ||
+      error instanceof TransitionProjectScopeDeniedError
+    )
+      return errorResponse(c, 'FORBIDDEN', error.message);
+    if (error instanceof NotFoundError || error instanceof TransitionRefNotFoundError)
+      return errorResponse(c, 'NOT_FOUND', 'Ref or its committed State is unavailable.');
+    if (
+      error instanceof TransitionHeadConflictError ||
+      error instanceof DraftAuthoringConflictError ||
+      error instanceof ConflictError
+    )
+      return errorResponse(c, 'CONFLICT', error.message);
+    throw error;
+  }
 });
 
 // @ts-expect-error - OpenAPI handler return type

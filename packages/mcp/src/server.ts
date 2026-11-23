@@ -4,14 +4,14 @@
  *
  * Core toolset:
  *   t3x_query, t3x_commit, t3x_edit, t3x_extract, t3x_generate,
- *   t3x_resolve_repository, t3x_committed_state
+ *   t3x_resolve_repository, t3x_committed_state, t3x_open_workspace
  *
  * Advanced toolset (3 additional tools):
  *   t3x_diff, t3x_merge, t3x_admin
  *
  * Transition toolset (opt-in, API-only):
  *   propose_transition, inspect_transition, verify_transition, attach_statement,
- *   decide_transition, commit_transition, t3x_draft_review
+ *   decide_transition, commit_transition, t3x_draft_review, t3x_commit_result
  */
 
 import { createRequire } from 'node:module';
@@ -31,6 +31,7 @@ import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 import { adminDef, adminHandler } from './tools/advanced/admin.js';
 import { diffDef, diffHandler } from './tools/advanced/diff.js';
 import { mergeDef, mergeHandler } from './tools/advanced/merge.js';
+import { commitResultDef, commitResultHandler } from './tools/commit-result.js';
 import { committedStateDef, committedStateHandler } from './tools/committed-state.js';
 // Core tools
 import { commitDef, commitHandler } from './tools/core/commit.js';
@@ -39,6 +40,7 @@ import { extractDef, extractHandler } from './tools/core/extract.js';
 import { generateDef, generateHandler } from './tools/core/generate.js';
 import { queryDef, queryHandler } from './tools/core/query.js';
 import { draftReviewDef, draftReviewHandler } from './tools/draft-review.js';
+import { openWorkspaceDef, openWorkspaceHandler } from './tools/open-workspace.js';
 import { repositoryLocationDef, repositoryLocationHandler } from './tools/repository-location.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
@@ -61,6 +63,7 @@ const CORE_TOOLS: ToolEntry[] = [
   { def: generateDef, handler: generateHandler },
   { def: repositoryLocationDef, handler: repositoryLocationHandler },
   { def: committedStateDef, handler: committedStateHandler },
+  { def: openWorkspaceDef, handler: openWorkspaceHandler },
 ];
 
 const ADVANCED_TOOLS: ToolEntry[] = [
@@ -74,7 +77,11 @@ export type McpToolset = 'core' | 'advanced' | 'transition';
 const TOOLSET_MAP: Record<McpToolset, readonly ToolEntry[]> = {
   core: CORE_TOOLS,
   advanced: ADVANCED_TOOLS,
-  transition: [...TRANSITION_TOOLS, { def: draftReviewDef, handler: draftReviewHandler }],
+  transition: [
+    ...TRANSITION_TOOLS,
+    { def: draftReviewDef, handler: draftReviewHandler },
+    { def: commitResultDef, handler: commitResultHandler },
+  ],
 };
 
 // ── Server instructions ──
@@ -84,7 +91,8 @@ schema-backed YAML changed through deterministic YOps.
 
 Repository Workspace workflow (API backend):
 - t3x_resolve_repository — resolve a repository address and explicit branch head
-- t3x_committed_state — read or export the value at an exact Commit
+- t3x_committed_state — read or export the value, or inspect the Schema binding, at an exact Commit
+- t3x_open_workspace — open a private Workspace for an explicit branch and expected head
 1. t3x_query source_evidence — select immutable Source turn hashes
 2. t3x_extract — create a v2 SourcedYOps proposal in an existing Workspace
 3. t3x_query workspace — inspect the persisted proposal
@@ -107,6 +115,7 @@ Transition lifecycle (only if the opt-in transition toolset and API backend are 
 10. attach_statement — attach an allowlisted claim through authenticated API authority
 11. decide_transition — record an accepted, rejected, or overridden Decision from the latest review precondition
 12. commit_transition — create CommitV2 and advance the ref by exact expected-head CAS
+- t3x_commit_result — read back the fixed Commit and current ref and authorized Workspace
 
 t3x_generate creates validated outputs from committed state.`;
 
