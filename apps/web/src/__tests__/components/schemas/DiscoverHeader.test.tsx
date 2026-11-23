@@ -1,15 +1,35 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const listReceivedCollaborationInvitations = vi.hoisted(() => vi.fn());
+const { listReceivedCollaborationInvitations, declineCollaborationInvitation, linkStatus } =
+  vi.hoisted(() => ({
+    listReceivedCollaborationInvitations: vi.fn(),
+    declineCollaborationInvitation: vi.fn(),
+    linkStatus: { pending: false },
+  }));
+vi.mock('next/link', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/link')>()),
+  useLinkStatus: () => linkStatus,
+}));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
-  getSharedApiClient: () => ({ listReceivedCollaborationInvitations }),
+  getSharedApiClient: () => ({
+    listReceivedCollaborationInvitations,
+    declineCollaborationInvitation,
+  }),
 }));
 
+import { InvitationsPageContent } from '@/app/invitations/page';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
+import { InvitationInboxProvider } from '@/hooks/accounts/usePendingInvitations';
+import { setSessionUser } from '@/infrastructure/session';
+
+const invitation = {
+  invitation: { invitation_id: 'invite-1', role: 'viewer', expires_at: '2026-12-01T00:00:00Z' },
+  namespace: { slug: 'orbit', display_name: 'Orbit' },
+};
 
 describe('DiscoverHeader navigation', () => {
   beforeEach(() => {
@@ -18,30 +38,91 @@ describe('DiscoverHeader navigation', () => {
     listReceivedCollaborationInvitations.mockResolvedValue({ invitations: [] });
   });
 
-  it('marks pending invitations and clears the dot after they are handled', async () => {
-    render(<DiscoverHeader />);
-    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute(
+  afterEach(() => {
+    localStorage.removeItem('t3x-user');
+    linkStatus.pending = false;
+  });
+
+  it('shares one invitation read across navigation and removes the badge after decline', async () => {
+    setSessionUser({ id: 'recipient', name: null, username: null });
+    listReceivedCollaborationInvitations.mockResolvedValue({ invitations: [invitation] });
+    declineCollaborationInvitation.mockResolvedValue(undefined);
+    const view = render(
+      <InvitationInboxProvider>
+        <DiscoverHeader key="repositories" />
+      </InvitationInboxProvider>
+    );
+    expect(await screen.findByRole('link', { name: 'Invitations, pending' })).toHaveAttribute(
       'href',
       '/invitations'
     );
 
-    listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [{}] });
-    fireEvent.focus(window);
-    expect(await screen.findByRole('link', { name: 'Invitations, pending' })).toBeInTheDocument();
-
-    listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [] });
-    fireEvent.focus(window);
-    await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Invitations' })).toBeInTheDocument()
+    view.rerender(
+      <InvitationInboxProvider>
+        <DiscoverHeader key="browse" />
+        <InvitationsPageContent />
+      </InvitationInboxProvider>
     );
+    expect(screen.getByRole('heading', { name: 'Orbit' })).toBeInTheDocument();
+    expect(listReceivedCollaborationInvitations).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(
+      await screen.findByRole('heading', { name: 'No pending invitations' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Invitations' })).toBeInTheDocument();
+    expect(declineCollaborationInvitation).toHaveBeenCalledExactlyOnceWith('invite-1');
+    expect(listReceivedCollaborationInvitations).toHaveBeenCalledOnce();
+  });
+
+  it('exposes a loading status while a navigation link is pending', () => {
+    linkStatus.pending = true;
+    const view = render(<DiscoverHeader />);
+    const browse = screen.getByRole('link', { name: /^Browse/ });
+    expect(within(browse).getByRole('status')).toHaveTextContent('Opening page');
+    linkStatus.pending = false;
+    view.rerender(<DiscoverHeader />);
+    expect(within(browse).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('ignores an invitation read that finishes after the account changes', async () => {
+    setSessionUser({ id: 'first', name: null, username: null });
+    let completeFirst!: (value: { invitations: (typeof invitation)[] }) => void;
+    listReceivedCollaborationInvitations.mockReturnValueOnce(
+      new Promise((resolve) => {
+        completeFirst = resolve;
+      })
+    );
+    render(
+      <InvitationInboxProvider>
+        <DiscoverHeader />
+        <InvitationsPageContent />
+      </InvitationInboxProvider>
+    );
+    expect(listReceivedCollaborationInvitations).toHaveBeenCalledOnce();
+
+    act(() => setSessionUser({ id: 'second', name: null, username: null }));
+    expect(
+      await screen.findByRole('heading', { name: 'No pending invitations' })
+    ).toBeInTheDocument();
+    await act(async () => completeFirst({ invitations: [invitation] }));
+
+    expect(screen.getByRole('heading', { name: 'No pending invitations' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Invitations' })).toBeInTheDocument();
+    expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(2);
   });
 
   it('finds a new invitation while the recipient keeps the page open', async () => {
+    setSessionUser({ id: 'recipient', name: null, username: null });
     vi.useFakeTimers();
-    const { unmount } = render(<DiscoverHeader />);
+    const { unmount } = render(
+      <InvitationInboxProvider>
+        <DiscoverHeader />
+      </InvitationInboxProvider>
+    );
     try {
       expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(1);
-      listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [{}] });
+      listReceivedCollaborationInvitations.mockResolvedValueOnce({ invitations: [invitation] });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000);
       });

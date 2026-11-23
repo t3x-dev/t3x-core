@@ -7,6 +7,7 @@ import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
+import { useRepositoryProjectDetail } from '@/components/project/ProjectDetailContext';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectShell } from '@/components/project/ProjectShell';
@@ -35,10 +36,9 @@ import {
 } from '@/hooks/commits/commitEvents';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -118,9 +118,12 @@ export function ProjectDetailPageContent({
   const projectFromStore = useProjectStore(
     (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
   );
-  const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
-  const [projectLookupLoading, setProjectLookupLoading] = useState(false);
-  const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
+  const {
+    project: fetchedProject,
+    loading: projectLookupLoading,
+    error: projectLookupError,
+    retry: retryProjectDetail,
+  } = useRepositoryProjectDetail(projectId || null);
   const [yschemaValidation, setYschemaValidation] = useState(() =>
     toYSchemaValidationSummary(null)
   );
@@ -167,33 +170,6 @@ export function ProjectDetailPageContent({
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
-
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    setProjectLookupLoading(true);
-    setProjectLookupError(null);
-
-    fetchProject(projectId)
-      .then((detail) => {
-        if (cancelled) return;
-        const summary = apiProjectToSummary(detail);
-        setFetchedProject(summary);
-        useProjectStore.getState().cacheProject(summary);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setFetchedProject(null);
-        setProjectLookupError(err instanceof Error ? err : new Error(String(err)));
-      })
-      .finally(() => {
-        if (!cancelled) setProjectLookupLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
 
   useEffect(() => {
     if (isCanvasSurface || !projectBase?.id) {
@@ -330,24 +306,7 @@ export function ProjectDetailPageContent({
   if (projectLookupError && !isNotFoundError(projectLookupError)) {
     return (
       <div className="flex h-full flex-col">
-        <ErrorMessage
-          error={projectLookupError}
-          onRetry={() => {
-            setProjectLookupLoading(true);
-            setProjectLookupError(null);
-            setFetchedProject(null);
-            void fetchProject(projectId)
-              .then((detail) => {
-                const summary = apiProjectToSummary(detail);
-                setFetchedProject(summary);
-                useProjectStore.getState().cacheProject(summary);
-              })
-              .catch((err) =>
-                setProjectLookupError(err instanceof Error ? err : new Error(String(err)))
-              )
-              .finally(() => setProjectLookupLoading(false));
-          }}
-        />
+        <ErrorMessage error={projectLookupError} onRetry={retryProjectDetail} />
       </div>
     );
   }

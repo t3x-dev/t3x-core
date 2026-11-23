@@ -22,8 +22,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
-vi.mock('@/hooks/projects/useProjectDetail', () => ({
-  useProjectDetail: () => ({ loadProject: navigation.load }),
+vi.mock('@/queries/project', () => ({
+  fetchProject: navigation.load,
 }));
 
 const project = {

@@ -1,7 +1,7 @@
 'use client';
 
 import { notFound, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import {
   getProjectIdRepoPath,
   repositoryBranch,
@@ -12,9 +12,9 @@ import {
   isSupportedRepositorySuffix,
   repositoryLocation,
 } from '@/domain/project/repositoryLocation';
-import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
-import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
+import { useRepositoryProjectDetail } from './ProjectDetailContext';
 import { ProjectShell } from './ProjectShell';
 import { resolveProjectRouteTab } from './projectTabModel';
 
@@ -42,35 +42,10 @@ export function ProjectRouteShell({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loadProject } = useProjectDetail();
+  const { project: fetchedProject } = useRepositoryProjectDetail(projectId);
   const storedProject = useProjectStore(
     (state) => state.details?.[projectId] ?? state.projects.find((item) => item.id === projectId)
   );
-  const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
-
-  useEffect(() => {
-    if (!projectId) {
-      setFetchedProject(null);
-      return;
-    }
-
-    let cancelled = false;
-    void loadProject(projectId)
-      .then((project) => {
-        if (!cancelled) {
-          const summary = apiProjectToSummary(project);
-          setFetchedProject(summary);
-          useProjectStore.getState().cacheProject(summary);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setFetchedProject(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadProject, projectId]);
-
   const resolvedProject =
     fetchedProject?.id === projectId ? (storedProject ?? fetchedProject) : null;
   const query = searchParams.toString();
