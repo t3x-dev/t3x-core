@@ -83,6 +83,9 @@ describe('apps/mcp stdio subprocess smoke', () => {
           't3x_diff',
           't3x_merge',
           't3x_admin',
+          't3x_resolve_repository',
+          't3x_committed_state',
+          't3x_draft_review',
         ])
       );
       expect(names).not.toContain('t3x_create_leaf');
@@ -211,6 +214,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
         'attach_statement',
         'decide_transition',
         'commit_transition',
+        't3x_draft_review',
       ]);
 
       const result = await client.callTool({

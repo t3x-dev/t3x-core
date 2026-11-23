@@ -106,10 +106,10 @@ describe('createMcpServer', () => {
     expect(Array.isArray(tools)).toBe(true);
   });
 
-  it('core toolset provides exactly 5 tools', () => {
+  it('core toolset provides exactly 7 tools', () => {
     const { tools } = createMcpServer({ toolsets: ['core'] });
 
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(7);
   });
 
   it('core toolset includes the correct tool names', () => {
@@ -117,6 +117,8 @@ describe('createMcpServer', () => {
     const names = tools.map((t) => t.name);
 
     expect(names).toContain('t3x_query');
+    expect(names).toContain('t3x_resolve_repository');
+    expect(names).toContain('t3x_committed_state');
     expect(names).toContain('t3x_commit');
     expect(names).toContain('t3x_edit');
     expect(names).toContain('t3x_extract');
@@ -132,10 +134,10 @@ describe('createMcpServer', () => {
     expect(names).not.toContain('t3x_admin');
   });
 
-  it('core + advanced toolsets provide exactly 8 tools', () => {
+  it('core + advanced toolsets provide exactly 10 tools', () => {
     const { tools } = createMcpServer({ toolsets: ['core', 'advanced'] });
 
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(10);
   });
 
   it('core + advanced toolsets include all tool names', () => {
@@ -163,7 +165,7 @@ describe('createMcpServer', () => {
     expect(names).toContain('t3x_admin');
   });
 
-  it('transition-only toolset provides exactly six opt-in lifecycle tools', () => {
+  it('transition-only toolset provides exactly seven opt-in lifecycle tools', () => {
     const { tools } = createMcpServer({ toolsets: ['transition'] });
 
     expect(tools.map((tool) => tool.name)).toEqual([
@@ -173,36 +175,38 @@ describe('createMcpServer', () => {
       'attach_statement',
       'decide_transition',
       'commit_transition',
+      't3x_draft_review',
     ]);
   });
 
-  it('does not alter the existing eight-tool core and advanced surface', () => {
+  it('keeps opt-in Transition tools out of core and advanced', () => {
     const { tools } = createMcpServer({ toolsets: ['core', 'advanced'] });
     const names = tools.map((tool) => tool.name);
 
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(10);
     expect(names).not.toContain('propose_transition');
     expect(names).not.toContain('inspect_transition');
     expect(names).not.toContain('verify_transition');
     expect(names).not.toContain('attach_statement');
     expect(names).not.toContain('decide_transition');
     expect(names).not.toContain('commit_transition');
+    expect(names).not.toContain('t3x_draft_review');
   });
 
   it('composes all toolsets without duplicate registrations', () => {
     const { tools } = createMcpServer({ toolsets: ['core', 'advanced', 'transition'] });
 
-    expect(tools).toHaveLength(14);
-    expect(new Set(tools.map((tool) => tool.name)).size).toBe(14);
+    expect(tools).toHaveLength(17);
+    expect(new Set(tools.map((tool) => tool.name)).size).toBe(17);
   });
 
   it('duplicate toolsets do not produce duplicate tools', () => {
     const { tools } = createMcpServer({ toolsets: ['core', 'core', 'advanced'] });
 
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(10);
     const names = tools.map((t) => t.name);
     const uniqueNames = new Set(names);
-    expect(uniqueNames.size).toBe(8);
+    expect(uniqueNames.size).toBe(10);
   });
 
   it('every tool has a name, description, and inputSchema', () => {

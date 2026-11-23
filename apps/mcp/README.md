@@ -21,7 +21,7 @@ The current MCP server exposes three protocol surfaces:
 
 ### Tools
 
-The default tool surface is `tools-first` and uses 8 umbrella tools.
+The default toolset is `core`. Enable `advanced` and `transition` through `T3X_TOOLSETS`.
 
 Core:
 
@@ -30,6 +30,14 @@ Core:
 - `t3x_edit`
 - `t3x_commit`
 - `t3x_generate`
+- `t3x_resolve_repository` (API backend)
+- `t3x_committed_state` (API backend)
+
+Use `t3x_resolve_repository` with an `owner/repo` address and explicit branch
+name. It returns the canonical path, project ID, ref, and a `null` head for an
+empty branch. Pass a non-null head to `t3x_committed_state` to read the full
+value or export exact YAML or JSON. Use `t3x_query` for history and the advanced
+`t3x_diff` tool for comparisons.
 
 Advanced:
 
@@ -45,6 +53,7 @@ Transition (opt-in, API backend only):
 - `attach_statement`
 - `decide_transition`
 - `commit_transition`
+- `t3x_draft_review`
 
 The Transition toolset exposes task-oriented transition views. It does not
 accept caller-written actors, policy facts, workspace projection facts, or other
@@ -58,6 +67,8 @@ turning protocol nouns into separate product models:
 
 | Lifecycle step | MCP tool | API client method | Boundary rule |
 | --- | --- | --- | --- |
+| Prepare saved Draft Review | `t3x_draft_review` | `workspaces.authoring.prepareReview` | exact Draft revisions and base ref head |
+| Read fixed Review | `t3x_draft_review` | `workspaces.getReviewSnapshot` | project, owned Workspace and snapshot ID |
 | Prepare Proposal | `propose_transition` | `proposeTransition` | caller sends only a closed task request |
 | Inspect review state | `inspect_transition` | `inspectTransition` | read-only, project-scoped Transition view |
 | Verify | `verify_transition` | `verifyTransition` | Replay and external checks stay server-owned |

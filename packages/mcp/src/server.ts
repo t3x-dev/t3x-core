@@ -2,15 +2,16 @@
  * createMcpServer — factory that builds a configured MCP server
  * with tools filtered by the requested toolset(s).
  *
- * Core toolset (5 tools):
- *   t3x_query, t3x_commit, t3x_edit, t3x_extract, t3x_generate
+ * Core toolset:
+ *   t3x_query, t3x_commit, t3x_edit, t3x_extract, t3x_generate,
+ *   t3x_resolve_repository, t3x_committed_state
  *
  * Advanced toolset (3 additional tools):
  *   t3x_diff, t3x_merge, t3x_admin
  *
- * Transition toolset (6 opt-in, API-only tools):
+ * Transition toolset (opt-in, API-only):
  *   propose_transition, inspect_transition, verify_transition, attach_statement,
- *   decide_transition, commit_transition
+ *   decide_transition, commit_transition, t3x_draft_review
  */
 
 import { createRequire } from 'node:module';
@@ -30,12 +31,15 @@ import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 import { adminDef, adminHandler } from './tools/advanced/admin.js';
 import { diffDef, diffHandler } from './tools/advanced/diff.js';
 import { mergeDef, mergeHandler } from './tools/advanced/merge.js';
+import { committedStateDef, committedStateHandler } from './tools/committed-state.js';
 // Core tools
 import { commitDef, commitHandler } from './tools/core/commit.js';
 import { editDef, editHandler } from './tools/core/edit.js';
 import { extractDef, extractHandler } from './tools/core/extract.js';
 import { generateDef, generateHandler } from './tools/core/generate.js';
 import { queryDef, queryHandler } from './tools/core/query.js';
+import { draftReviewDef, draftReviewHandler } from './tools/draft-review.js';
+import { repositoryLocationDef, repositoryLocationHandler } from './tools/repository-location.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
 
@@ -55,6 +59,8 @@ const CORE_TOOLS: ToolEntry[] = [
   { def: editDef, handler: editHandler },
   { def: extractDef, handler: extractHandler },
   { def: generateDef, handler: generateHandler },
+  { def: repositoryLocationDef, handler: repositoryLocationHandler },
+  { def: committedStateDef, handler: committedStateHandler },
 ];
 
 const ADVANCED_TOOLS: ToolEntry[] = [
@@ -68,7 +74,7 @@ export type McpToolset = 'core' | 'advanced' | 'transition';
 const TOOLSET_MAP: Record<McpToolset, readonly ToolEntry[]> = {
   core: CORE_TOOLS,
   advanced: ADVANCED_TOOLS,
-  transition: TRANSITION_TOOLS,
+  transition: [...TRANSITION_TOOLS, { def: draftReviewDef, handler: draftReviewHandler }],
 };
 
 // ── Server instructions ──
@@ -77,6 +83,8 @@ const SERVER_INSTRUCTIONS = `T3X is version control for structured state — lik
 schema-backed YAML changed through deterministic YOps.
 
 Repository Workspace workflow (API backend):
+- t3x_resolve_repository — resolve a repository address and explicit branch head
+- t3x_committed_state — read or export the value at an exact Commit
 1. t3x_query source_evidence — select immutable Source turn hashes
 2. t3x_extract — create a v2 SourcedYOps proposal in an existing Workspace
 3. t3x_query workspace — inspect the persisted proposal
@@ -92,6 +100,7 @@ Additional capabilities (if advanced toolset enabled):
 6. t3x_admin — manage projects, branches, pins
 
 Transition lifecycle (only if the opt-in transition toolset and API backend are enabled):
+- t3x_draft_review — prepare Review from the complete saved Draft or read a fixed snapshot by ID
 7. propose_transition — prepare a replayable change without deciding or committing; pass the extraction_candidate_id returned by t3x_extract to load canonical Workspace SourcedYOps on the server
 8. inspect_transition — inspect task state, assurance, and immutable preconditions
 9. verify_transition — run mandatory Replay plus configured external checks
