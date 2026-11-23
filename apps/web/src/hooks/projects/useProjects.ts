@@ -40,7 +40,18 @@ export interface UseProjectsResult {
 export function useProjects(
   limit = 50,
   namespaceSlug?: string,
-  mode: boolean | 'on-demand' = false
+  mode: boolean | 'on-demand' = false,
+  {
+    search,
+    tagSearch,
+    editableOnly = false,
+    enabled = true,
+  }: {
+    search?: string;
+    tagSearch?: string;
+    editableOnly?: boolean;
+    enabled?: boolean;
+  } = {}
 ): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,13 +59,27 @@ export function useProjects(
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const nextPageRequest = useRef<number | null>(null);
+  const q = search?.trim() || undefined;
+  const tag_query = tagSearch?.trim() || undefined;
+  const fetchPage = useCallback(
+    (cursor: string) =>
+      q || tag_query || editableOnly
+        ? listProjectPage(limit, cursor, namespaceSlug, {
+            q,
+            tag_query,
+            editable: editableOnly || undefined,
+          })
+        : listProjectPage(limit, cursor, namespaceSlug),
+    [limit, namespaceSlug, q, tag_query, editableOnly]
+  );
 
   const refresh = useCallback(async () => {
+    if (!enabled) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       if (mode === 'on-demand') {
-        const data = await listProjectPage(limit, '', namespaceSlug);
+        const data = await fetchPage('');
         if (requestId !== requestIdRef.current) return;
         setProjects(data.items);
         setNextCursor(data.next_cursor);
@@ -82,15 +107,15 @@ export function useProjects(
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, namespaceSlug, mode]);
+  }, [limit, namespaceSlug, mode, enabled, fetchPage]);
 
   const loadMore = useCallback(async () => {
     const requestId = requestIdRef.current;
-    if (!nextCursor || loading || nextPageRequest.current === requestId) return false;
+    if (!enabled || !nextCursor || loading || nextPageRequest.current === requestId) return false;
     nextPageRequest.current = requestId;
     setLoading(true);
     try {
-      const data = await listProjectPage(limit, nextCursor, namespaceSlug);
+      const data = await fetchPage(nextCursor);
       if (requestId !== requestIdRef.current) return false;
       if (data.next_cursor === nextCursor)
         throw new Error('Repository pagination did not advance. Please refresh.');
@@ -112,16 +137,21 @@ export function useProjects(
         setLoading(false);
       }
     }
-  }, [limit, namespaceSlug, nextCursor, loading]);
+  }, [enabled, fetchPage, nextCursor, loading]);
 
   useEffect(() => {
     setProjects([]);
     setNextCursor(null);
-    void refresh();
+    setError(null);
+    setLoading(enabled);
+    let searchTimer: ReturnType<typeof setTimeout> | undefined;
+    if (q || tag_query) searchTimer = setTimeout(() => void refresh(), 250);
+    else void refresh();
     return () => {
+      clearTimeout(searchTimer);
       requestIdRef.current += 1;
     };
-  }, [refresh]);
+  }, [enabled, q, tag_query, refresh]);
 
   useEffect(() => {
     const restored = () => {

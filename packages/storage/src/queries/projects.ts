@@ -65,6 +65,7 @@ export interface ListProjectsOptions {
   visibility?: 'public';
   q?: string;
   tag?: string;
+  tag_query?: string;
   /** Server-selected capability, applied before pagination. */
   required_action?: 'project:edit';
   limit?: number;
@@ -249,6 +250,7 @@ export async function findProjects(
     : undefined;
 
   const escapedSearch = options.q?.replace(/[\\%_]/g, '\\$&');
+  const escapedTagSearch = options.tag_query?.replace(/[\\%_]/g, '\\$&');
   const discoveryConditions = [
     options.visibility ? eq(projects.visibility, options.visibility) : undefined,
     escapedSearch
@@ -259,6 +261,14 @@ export async function findProjects(
       : undefined,
     options.tag
       ? sql<boolean>`coalesce(${projects.metadataJson}::jsonb->'repository_profile'->'tags', '[]'::jsonb) @> ${JSON.stringify([options.tag])}::jsonb`
+      : undefined,
+    escapedTagSearch
+      ? sql<boolean>`exists (
+          select 1 from jsonb_array_elements_text(case
+            when jsonb_typeof(${projects.metadataJson}::jsonb#>'{repository_profile,tags}') = 'array'
+            then ${projects.metadataJson}::jsonb#>'{repository_profile,tags}' else '[]'::jsonb end
+          ) as tags(name) where tags.name ilike ${`%${escapedTagSearch}%`}
+        )`
       : undefined,
   ].filter((condition): condition is SQL => !!condition);
 

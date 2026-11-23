@@ -36,7 +36,8 @@ function TagChoices({
   onChange,
   query,
   maxSelected,
-}: ChoicesProps & { options: TagOption[] }) {
+  partial = false,
+}: ChoicesProps & { options: TagOption[]; partial?: boolean }) {
   const visible = options.filter((option) =>
     option.name.toLowerCase().includes(query.trim().toLowerCase())
   );
@@ -68,7 +69,9 @@ function TagChoices({
             }
           />
           <RepositoryTag name={name} />
-          <span title={`${count} repositories`}>{count}</span>
+          <span title={`${count} ${partial ? 'loaded repositories' : 'repositories'}`}>
+            {count}
+          </span>
         </label>
       ))}
     </fieldset>
@@ -76,18 +79,43 @@ function TagChoices({
 }
 
 export function NamespaceTagChoices({ namespace, ...props }: ChoicesProps & { namespace: string }) {
-  const { projects, loading, error, refresh } = useProjects(100, namespace, true);
-  if (loading) return <output className={styles.panelEmpty}>Loading tags…</output>;
-  if (error)
-    return (
-      <div role="alert" className={styles.panelError}>
-        Couldn&apos;t load tags.{' '}
-        <Button variant="outline" onClick={() => void refresh()}>
-          Retry
+  const { projects, loading, error, refresh, hasMore, loadMore } = useProjects(
+    20,
+    namespace,
+    'on-demand',
+    { tagSearch: props.query }
+  );
+  return (
+    <>
+      {(projects.length > 0 || (!loading && !error)) && (
+        <TagChoices {...props} options={repositoryTagOptions(projects)} partial={hasMore} />
+      )}
+      {loading && <output className={styles.panelEmpty}>Loading tags…</output>}
+      {error && (
+        <div role="alert" className={styles.panelError}>
+          Couldn&apos;t load tags.{' '}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void (hasMore ? loadMore() : refresh())}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+      {hasMore && !error && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={loading}
+          onClick={() => void loadMore()}
+        >
+          Load more repositories
         </Button>
-      </div>
-    );
-  return <TagChoices {...props} options={repositoryTagOptions(projects)} />;
+      )}
+    </>
+  );
 }
 
 export function RepositoryTagPicker({
@@ -151,6 +179,7 @@ export function RepositoryTagPicker({
             type="search"
             aria-label="Search tags"
             placeholder="Search tags…"
+            maxLength={64}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

@@ -11,6 +11,7 @@ const createRecipe = vi.fn();
 const updateRecipe = vi.fn();
 const deleteRecipe = vi.fn();
 const refreshProjects = vi.fn();
+const loadMoreProjects = vi.fn();
 let searchParams = new URLSearchParams('project=proj_test');
 
 const projects = [
@@ -28,6 +29,7 @@ const projects = [
   },
 ];
 projects.push({ ...projects[0], project_id: 'proj_second', name: 'second-project' });
+let loadedProjects = projects;
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams,
@@ -40,7 +42,18 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: () => ({ projects, loading: false, error: null, refresh: refreshProjects }),
+  useProjects: () => ({
+    projects: loadedProjects,
+    loading: false,
+    error: null,
+    refresh: refreshProjects,
+    loadMore: loadMoreProjects,
+    hasMore: loadedProjects.length < projects.length,
+  }),
+}));
+
+vi.mock('@/hooks/projects/useProjectDetail', () => ({
+  useProjectDetail: (id: string | null) => ({ project: id ? { id, name: 'test-bug' } : null }),
 }));
 
 vi.mock('@/hooks/recipes/useRecipeCommands', () => ({
@@ -56,6 +69,7 @@ describe('RecipesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchParams = new URLSearchParams('project=proj_test');
+    loadedProjects = projects;
     listRecipes.mockImplementation(async (projectId: string) =>
       projectId === 'proj_test'
         ? [
@@ -106,6 +120,22 @@ describe('RecipesPage', () => {
     expect(
       await screen.findByText('No recipes configured in the loaded projects.')
     ).toBeInTheDocument();
+  });
+
+  it('loads recipes only for newly requested repository pages', async () => {
+    searchParams = new URLSearchParams();
+    loadedProjects = projects.slice(0, 1);
+    const view = render(<RecipesPage />);
+    await screen.findByText('After commit created');
+    expect(listRecipes).toHaveBeenCalledExactlyOnceWith('proj_test');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more repositories' }));
+    expect(loadMoreProjects).toHaveBeenCalledOnce();
+    loadedProjects = projects;
+    view.rerender(<RecipesPage />);
+    await waitFor(() => expect(listRecipes).toHaveBeenLastCalledWith('proj_second'));
+    expect(listRecipes).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('After commit created')).toBeInTheDocument();
   });
 
   it('moves focus into the recipe dialog, traps Tab, and returns focus after Escape', async () => {

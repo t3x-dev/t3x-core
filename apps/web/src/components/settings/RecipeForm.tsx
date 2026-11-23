@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { RepositoryProjectPicker } from '@/components/project/RepositoryProjectPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,8 +65,7 @@ interface RecipeFormProps {
   projectName?: string;
   projectSelection?: {
     value: string;
-    onChange: (id: string) => void;
-    options: { id: string; label: string }[];
+    onChange: (id: string, label: string) => void;
   };
   error?: string | null;
   variant?: 'default' | 'drawer';
@@ -130,8 +130,7 @@ export function RecipeForm({
   const isValid =
     name.trim() !== '' &&
     triggerEvent !== '' &&
-    (!projectSelection ||
-      projectSelection.options.some(({ id }) => id === projectSelection.value)) &&
+    (!projectSelection || Boolean(projectSelection.value)) &&
     steps.length > 0 &&
     steps.every((step, index) => step.action !== 'send_webhook' || webhookDestinations[index]);
 
@@ -189,27 +188,21 @@ export function RecipeForm({
       <form onSubmit={handleSubmit} className={styles.drawerForm}>
         <div className={styles.drawerBody}>
           <div className={styles.field}>
-            <Label htmlFor="recipe-target-project">Target project</Label>
             {projectSelection ? (
-              <select
+              <RepositoryProjectPicker
                 id="recipe-target-project"
-                className={styles.projectSelect}
-                required
+                label="Target project"
+                selectClassName={styles.projectSelect}
                 value={projectSelection.value}
-                onChange={(event) => projectSelection.onChange(event.target.value)}
+                onChange={projectSelection.onChange}
                 disabled={loading}
-              >
-                <option value="" disabled>
-                  Choose a project
-                </option>
-                {projectSelection.options.map(({ id, label }) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                editableOnly
+              />
             ) : (
-              <Input id="recipe-target-project" value={projectName} readOnly tabIndex={-1} />
+              <>
+                <Label htmlFor="recipe-target-project">Target project</Label>
+                <Input id="recipe-target-project" value={projectName} readOnly tabIndex={-1} />
+              </>
             )}
           </div>
           <div className={styles.field}>
