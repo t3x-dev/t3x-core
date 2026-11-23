@@ -25,6 +25,13 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { T3xApiError } from '@t3x-dev/api-client';
+import { getApiClient, isApiBackend } from './backend.js';
+import {
+  getBusinessExposure,
+  isSafeBusinessIdentifier,
+  type McpCapability,
+} from './business-capabilities.js';
 import { getPrompt, PROMPT_DEFS } from './prompts/index.js';
 import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 // Advanced tools
@@ -33,6 +40,7 @@ import { diffDef, diffHandler } from './tools/advanced/diff.js';
 import { mergeDef, mergeHandler } from './tools/advanced/merge.js';
 import { commitResultDef, commitResultHandler } from './tools/commit-result.js';
 import { committedStateDef, committedStateHandler } from './tools/committed-state.js';
+import { contextDef, contextHandler } from './tools/context.js';
 // Core tools
 import { commitDef, commitHandler } from './tools/core/commit.js';
 import { editDef, editHandler } from './tools/core/edit.js';
@@ -123,22 +131,38 @@ t3x_generate creates validated outputs from committed state.`;
 
 export interface McpServerOptions {
   toolsets: McpToolset[];
+  capabilities?: readonly McpCapability[];
 }
 
 export function createMcpServer(options: McpServerOptions) {
+  const exposure =
+    options.capabilities === undefined ? undefined : getBusinessExposure(options.capabilities);
+  if (exposure && !isApiBackend()) {
+    throw new Error('T3X_MCP_CAPABILITIES requires T3X_MCP_BACKEND=api.');
+  }
+  const authenticatedApi = async () => {
+    if (!isApiBackend()) throw new Error('T3X_MCP_CAPABILITIES requires T3X_MCP_BACKEND=api.');
+    await getApiClient().getCredentialContext();
+  };
+
   // 1. Collect active tools based on requested toolsets
   const activeEntries: ToolEntry[] = [];
   const seen = new Set<string>();
 
-  for (const toolset of options.toolsets) {
+  for (const toolset of exposure ? (Object.keys(TOOLSET_MAP) as McpToolset[]) : options.toolsets) {
     const entries = TOOLSET_MAP[toolset];
     if (!entries) continue;
     for (const entry of entries) {
       if (!seen.has(entry.def.name)) {
         seen.add(entry.def.name);
-        activeEntries.push(entry);
+        const def = exposure ? exposure.definition(entry.def) : entry.def;
+        if (def) activeEntries.push({ def, handler: entry.handler });
       }
     }
+  }
+
+  if (exposure?.allows(contextDef.name, {})) {
+    activeEntries.push({ def: contextDef, handler: contextHandler });
   }
 
   // 2. Build tool definitions array and handlers map
@@ -153,7 +177,9 @@ export function createMcpServer(options: McpServerOptions) {
     { name: 't3x-mcp', version: packageJson.version ?? '0.0.0' },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions: exposure
+        ? 'Use the advertised T3X tools and their enabled actions. The API authorizes each request.'
+        : SERVER_INSTRUCTIONS,
     }
   );
 
@@ -168,21 +194,42 @@ export function createMcpServer(options: McpServerOptions) {
   }));
 
   server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-    resourceTemplates: [...RESOURCE_TEMPLATES],
+    resourceTemplates: RESOURCE_TEMPLATES.filter(
+      (template) =>
+        !exposure ||
+        exposure.resources.has(
+          template.name === 'conversation_compatibility' ? 'source_thread' : template.name
+        )
+    ),
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) =>
-    readResource(request.params.uri)
+    readResource(
+      request.params.uri,
+      exposure &&
+        (async ({ kind, id, projectId }) => {
+          if (
+            !exposure.resources.has(kind) ||
+            !isSafeBusinessIdentifier(id) ||
+            (projectId !== undefined && !isSafeBusinessIdentifier(projectId))
+          ) {
+            throw new Error('Resource is unavailable in T3X_MCP_CAPABILITIES.');
+          }
+          await authenticatedApi();
+        })
+    )
   );
 
   // 6. Register prompts handlers
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: [...PROMPT_DEFS],
+    prompts: exposure ? [] : [...PROMPT_DEFS],
   }));
 
-  server.setRequestHandler(GetPromptRequestSchema, async (request) =>
-    getPrompt(request.params.name, request.params.arguments ?? {})
-  );
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    if (exposure)
+      throw new Error('Legacy workflow prompts are unavailable in T3X_MCP_CAPABILITIES.');
+    return getPrompt(request.params.name, request.params.arguments ?? {});
+  });
 
   // 7. Register CallTool handler
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -200,8 +247,43 @@ export function createMcpServer(options: McpServerOptions) {
     }
 
     try {
-      return (await handler(args ?? {})) as unknown as Record<string, unknown>;
+      const input = args ?? {};
+      if (exposure) {
+        if (!exposure.allows(name, input)) {
+          return errorResult('Action is unavailable in T3X_MCP_CAPABILITIES.');
+        }
+        const identifiers = [
+          'id',
+          'project_id',
+          'workspace_id',
+          'pin_id',
+          'transition_id',
+          'source_thread_id',
+          'snapshot_id',
+        ];
+        if (
+          identifiers.some(
+            (key) => Object.hasOwn(input, key) && !isSafeBusinessIdentifier(input[key])
+          )
+        ) {
+          return errorResult('Invalid identifier in business tool arguments.');
+        }
+        if (name !== contextDef.name) await authenticatedApi();
+      }
+      return (await handler(
+        input,
+        exposure && {
+          skipMainBranchInitialization: true,
+        }
+      )) as unknown as Record<string, unknown>;
     } catch (error: unknown) {
+      if (exposure && error instanceof T3xApiError) {
+        return errorResult(
+          JSON.stringify({
+            error: { code: error.code, status: error.status, message: error.message },
+          })
+        );
+      }
       const message = formatErrorMessage(error);
       return errorResult(`Error: ${message}`);
     }

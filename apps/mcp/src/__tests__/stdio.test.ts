@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -91,6 +93,175 @@ describe('apps/mcp stdio subprocess smoke', () => {
         ])
       );
       expect(names).not.toContain('t3x_create_leaf');
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
+    'enforces a read-only business profile for direct calls, resources, and prompts',
+    async () => {
+      const requested: string[] = [];
+      const api = createServer((request, response) => {
+        const url = new URL(request.url ?? '/', 'http://fixture.test');
+        requested.push(url.pathname + url.search);
+        response.setHeader('Content-Type', 'application/json');
+        if (request.headers.authorization !== 'Bearer fixture-valid') {
+          response.statusCode = 401;
+          response.end(
+            JSON.stringify({
+              success: false,
+              error: { code: 'UNAUTHORIZED', message: 'Invalid API key' },
+            })
+          );
+          return;
+        }
+        if (url.pathname === '/api/v1/auth/me/credential') {
+          response.end(
+            JSON.stringify({
+              success: true,
+              data: {
+                actor_kind: 'human',
+                credential_kind: 'api_key',
+                project_id: null,
+                namespace_id: null,
+                transition_scopes: [],
+              },
+            })
+          );
+          return;
+        }
+        response.end(JSON.stringify({ success: true, data: { branches: [] } }));
+      });
+      await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
+      const base = {
+        T3X_MCP_BACKEND: 'api',
+        T3X_MCP_CAPABILITIES: 'read-only',
+        T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
+      };
+      try {
+        const { client } = await connectConfiguredClient({ ...base, T3X_API_KEY: 'fixture-valid' });
+        openClients.push(client);
+        const { tools } = await client.listTools();
+        expect(tools.map((tool) => tool.name).sort()).toEqual([
+          't3x_committed_state',
+          't3x_context',
+          't3x_diff',
+          't3x_query',
+          't3x_resolve_repository',
+        ]);
+        expect(
+          tools.find((tool) => tool.name === 't3x_query')?.inputSchema.properties?.target
+        ).toMatchObject({ enum: ['project', 'projects', 'branches', 'commit', 'commits'] });
+        expect(
+          (await client.listResourceTemplates()).resourceTemplates.map((item) => item.name)
+        ).toEqual(['project', 'commit']);
+        expect((await client.listPrompts()).prompts).toEqual([]);
+
+        expect(
+          (
+            await client.callTool({
+              name: 't3x_query',
+              arguments: { target: 'workspace', id: 'ws' },
+            })
+          ).isError
+        ).toBe(true);
+        expect((await client.callTool({ name: 't3x_commit', arguments: {} })).isError).toBe(true);
+        await expect(
+          client.readResource({ uri: 't3x://conversations/conv_fixture' })
+        ).rejects.toThrow('unavailable');
+        await expect(
+          client.getPrompt({
+            name: 'extract_review_commit',
+            arguments: { project_id: 'proj_fixture' },
+          })
+        ).rejects.toThrow('unavailable');
+        expect(requested).toEqual([]);
+
+        const branches = await client.callTool({
+          name: 't3x_query',
+          arguments: { target: 'branches', project_id: 'proj_fixture' },
+        });
+        expect(branches.isError).not.toBe(true);
+        expect(requested).toHaveLength(2);
+        expect(requested[0]).toBe('/api/v1/auth/me/credential');
+        expect(requested[1]).toContain('initialize_main=0');
+        const resource = await client.readResource({ uri: 't3x://projects/proj_fixture' });
+        expect(resource.contents).toHaveLength(1);
+        expect(requested.slice(2)).toEqual([
+          '/api/v1/auth/me/credential',
+          '/api/v1/projects/proj_fixture',
+        ]);
+
+        const { client: invalid } = await connectConfiguredClient({
+          ...base,
+          T3X_API_KEY: 'fixture-invalid',
+        });
+        openClients.push(invalid);
+        const denied = await invalid.callTool({
+          name: 't3x_query',
+          arguments: { target: 'branches', project_id: 'proj_fixture' },
+        });
+        expect(denied.isError).toBe(true);
+        expect(parseTextResult(denied as Parameters<typeof parseTextResult>[0])).toMatchObject({
+          error: { status: 401 },
+        });
+        expect(requested).toHaveLength(5);
+      } finally {
+        api.closeAllConnections();
+        await new Promise<void>((resolve) => api.close(() => resolve()));
+      }
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
+    'selects individual Decision outcomes and limits aliased multi-action tools',
+    async () => {
+      const { client } = await connectConfiguredClient({
+        T3X_MCP_BACKEND: 'api',
+        T3X_MCP_CAPABILITIES: 'workspace:write,transitions,decision:accept',
+      });
+      openClients.push(client);
+      const { tools } = await client.listTools();
+      expect(
+        tools.find((tool) => tool.name === 'decide_transition')?.inputSchema.properties?.outcome
+      ).toMatchObject({ enum: ['accepted'] });
+      expect(
+        tools.find((tool) => tool.name === 't3x_draft_review')?.inputSchema.properties?.action
+      ).toMatchObject({ enum: ['read'] });
+      expect(tools.map((tool) => tool.name)).not.toContain('commit_transition');
+      for (const [name, args] of [
+        ['decide_transition', { outcome: 'rejected' }],
+        ['t3x_draft_review', { action: 'prepare' }],
+        ['t3x_edit', {}],
+      ] as const) {
+        const result = await client.callTool({ name, arguments: args });
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('Action is unavailable');
+      }
+
+      const { client: commitOnly } = await connectConfiguredClient({
+        T3X_MCP_BACKEND: 'api',
+        T3X_MCP_CAPABILITIES: 'commit',
+      });
+      openClients.push(commitOnly);
+      expect((await commitOnly.listTools()).tools.map((tool) => tool.name)).toEqual([
+        't3x_commit',
+        'commit_transition',
+      ]);
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
+    'rejects a business profile for direct storage',
+    async () => {
+      await expect(
+        connectConfiguredClient({
+          T3X_MCP_BACKEND: 'storage',
+          T3X_MCP_CAPABILITIES: 'read-only',
+        })
+      ).rejects.toThrow();
     },
     stdioSmokeTimeoutMs
   );

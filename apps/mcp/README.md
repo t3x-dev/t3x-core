@@ -102,6 +102,68 @@ Anything that would assert trust-chain facts locally is intentionally absent
 from the MCP schema: actor, policy, issuer, workspace projection, observed
 Statement set, and ref head are all resolved or checked at the API boundary.
 
+### Business capability configuration
+
+Set `T3X_MCP_CAPABILITIES` to opt into an allowlist on the authenticated API
+backend. When set, it takes precedence over `T3X_TOOLSETS`. The legacy
+toolsets, resource aliases, and prompts remain available through the existing
+configuration when the capability variable is unset.
+
+Set `T3X_MCP_BACKEND=api` and supply an API URL and credential for the target
+deployment. Each business tool or resource read checks the current credential
+through the API. The API authorizes the selected project, Workspace, operation,
+and ref policy separately. A deployment capability never grants API authority.
+An API running with local authentication disabled cannot serve this profile.
+
+`read-only` is a shorthand for `context,repositories,state`. Use it alone for
+a read-only profile. An explicit comma-separated list can enable additional
+capabilities:
+
+| Capability | Exposed operations |
+| --- | --- |
+| `context` | Current credential context |
+| `repositories` | Repository and branch lookup, project resource |
+| `repositories:write` | Create a repository or branch |
+| `state` | Commit history, exact State read, Schema binding, export, diff, Commit resource |
+| `workspace` | Workspace and Draft reads, Workspace resource |
+| `workspace:write` | Open, edit, initialize, and reconcile a Workspace |
+| `schemas:write` | Exact Schema Draft action |
+| `sources` | Source, evidence, and pin reads, including Source resource aliases |
+| `sources:write` | Extract a candidate, create or delete a pin |
+| `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
+| `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
+| `transitions:verify` | Run Transition verification |
+| `transitions:attach` | Attach Transition evidence |
+| `decision:accept`, `decision:reject`, `decision:override` | Enable each Decision outcome independently |
+| `commit` | Commit through `commit_transition` or `t3x_commit` |
+
+Discovery shows the enabled values for multi-action tools. Calls and resource
+URIs are checked against the same allowlist. Branch reads in this profile skip
+legacy initialization of missing branches. Legacy workflow prompts are
+available only through the legacy toolset configuration.
+
+### Authenticated core qualification
+
+Issue an Agent credential in Web Settings → API Tokens for an explicit
+project. The form defaults to seven days and lets you select Decision and
+Commit scopes independently. For human confirmation, sign in to Web and open
+the exact Review snapshot; the Agent keeps its own credential.
+
+Build both MCP packages, then run each phase with a fresh isolated API and
+database so the phases have independent rate-limit counters:
+
+```bash
+T3X_E2E_MCP_PHASE=api T3X_E2E_ARTIFACT_DIR=test-results/mcp-core-api \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-core-loop.spec.ts
+T3X_E2E_MCP_PHASE=web T3X_E2E_ARTIFACT_DIR=test-results/mcp-core-web \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-core-loop.spec.ts
+```
+
+The first phase runs the stdio loop with API-issued fixture credentials. The
+second issues and revokes the Agent credential through Web and confirms a fixed
+Review in the signed-in Web session. Machine Decision runs only on a fixture
+ref with an explicit test policy.
+
 ### Resources
 
 The server currently exposes these resource templates:
@@ -192,6 +254,7 @@ see the same data without each process trying to own embedded Postgres.
 | Variable | Description | Default |
 | --- | --- | --- |
 | `T3X_TOOLSETS` | Comma-separated toolsets to enable: `core`, `advanced`, `transition` | `core` |
+| `T3X_MCP_CAPABILITIES` | Explicit comma-separated business capabilities for the authenticated API backend | Unset |
 | `T3X_TRANSPORT` | MCP transport | `stdio` |
 | `T3X_MCP_BACKEND` | Backend mode: `storage` or `api` | `storage` |
 | `T3X_API_URL` | Base API URL for `api` backend | `http://localhost:8000/api` |

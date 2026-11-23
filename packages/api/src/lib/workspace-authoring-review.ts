@@ -102,7 +102,11 @@ export async function prepareWorkspaceAuthoringReview(input: {
       ],
     };
   }
-  const compiled = compileProposalDraft({ draft, effect: built.effect, actor: input.actor });
+  const compiled = compileProposalDraft({
+    draft,
+    effect: built.effect,
+    actor: { kind: input.actor.kind, id: input.actor.id },
+  });
   if (!compiled.ok) throw new TypeError('Cannot compile complete Draft Review');
   const frozen = { ...buildAuthoringPreparation(context.workspace), schemaReview };
   const membership = await materializeTransitionProposal({

@@ -332,7 +332,8 @@ export async function decideTransition(input: {
                 authority: {
                   async resolve() {
                     return {
-                      actorContext: { actor: input.actor },
+                      // Delegation belongs to the request principal. The signed Decision actor is a protocol ActorRef.
+                      actorContext: { actor: { kind: input.actor.kind, id: input.actor.id } },
                       observationScope: REPOSITORY_SCOPE,
                       policy: applicablePolicy.policy,
                       policyResource: applicablePolicy.resource,

@@ -68,6 +68,13 @@
     {
       "source": "auth-me.openapi.ts",
       "method": "GET",
+      "path": "/v1/auth/me/credential",
+      "policy": "authenticated",
+      "rationale": "Projects only the current authenticated credential type, binding and Transition scopes, without secrets or personal identifiers."
+    },
+    {
+      "source": "auth-me.openapi.ts",
+      "method": "GET",
       "path": "/v1/auth/me",
       "policy": "authenticated",
       "rationale": "Authenticated user surface without a cross-project resource."

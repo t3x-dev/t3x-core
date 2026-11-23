@@ -22,7 +22,10 @@ export interface ToolResult {
   isError?: boolean;
 }
 
-export type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
+export type ToolHandler = (
+  args: Record<string, unknown>,
+  options?: { skipMainBranchInitialization?: true }
+) => Promise<ToolResult>;
 
 /** Return a successful JSON result. */
 export function ok(data: unknown): ToolResult {

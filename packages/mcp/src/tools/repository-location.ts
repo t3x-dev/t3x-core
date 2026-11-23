@@ -19,7 +19,7 @@ export const repositoryLocationDef: ToolDef = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }) => {
+export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }, options) => {
   if (!isApiBackend()) return fail('t3x_resolve_repository requires T3X_MCP_BACKEND=api.');
 
   const parts =
@@ -35,7 +35,12 @@ export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }
 
   try {
     const address = await client.resolveRepository(owner, name);
-    const branch = await findApiBranch(client, address.project_id, ref);
+    const branch = await findApiBranch(
+      client,
+      address.project_id,
+      ref,
+      options?.skipMainBranchInitialization
+    );
     if (branch) {
       return ok({
         project_id: address.project_id,
@@ -59,9 +64,18 @@ export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }
   }
 };
 
-export async function findApiBranch(client: T3xClient, projectId: string, ref: string) {
+export async function findApiBranch(
+  client: T3xClient,
+  projectId: string,
+  ref: string,
+  skipMainBranchInitialization?: true
+) {
   for (let offset = 0; ; offset += BRANCH_PAGE_SIZE) {
-    const { branches } = await client.listBranches(projectId, { limit: BRANCH_PAGE_SIZE, offset });
+    const { branches } = await client.listBranches(projectId, {
+      limit: BRANCH_PAGE_SIZE,
+      offset,
+      ...(skipMainBranchInitialization ? { initialize_main: '0' } : {}),
+    });
     const branch = branches.find((entry) => entry.name === ref);
     if (branch) return branch;
     if (branches.length < BRANCH_PAGE_SIZE) return null;

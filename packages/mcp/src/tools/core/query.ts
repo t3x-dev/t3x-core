@@ -136,7 +136,7 @@ function readDraftPath(current: unknown, path: string): unknown {
 
 // ── Handler ──
 
-export const queryHandler: ToolHandler = async (args) => {
+export const queryHandler: ToolHandler = async (args, options) => {
   const target = args.target as Target | undefined;
 
   if (!target || !ALL_TARGETS.includes(target as Target)) {
@@ -240,7 +240,14 @@ export const queryHandler: ToolHandler = async (args) => {
         return ok(unwrapListPayload(await client.listPins(projectId!), 'pins'));
       case 'branches':
         return ok(
-          unwrapListPayload(await client.listBranches(projectId!, { limit, offset }), 'branches')
+          unwrapListPayload(
+            await client.listBranches(projectId!, {
+              limit,
+              offset,
+              ...(options?.skipMainBranchInitialization ? { initialize_main: '0' as const } : {}),
+            }),
+            'branches'
+          )
         );
       case 'source_threads':
       case 'conversations':

@@ -44,8 +44,9 @@ vi.mock('@t3x-dev/storage', () => ({
   updateLeafOutput: vi.fn(),
 }));
 
-// Mock @t3x-dev/core to avoid loading heavy modules
-vi.mock('@t3x-dev/core', () => ({
+// Stub Core operations the compatibility tools could invoke.
+vi.mock('@t3x-dev/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@t3x-dev/core')>()),
   ALL_LEAF_TYPES: [
     'tweet',
     'linkedin',

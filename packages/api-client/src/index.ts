@@ -8,6 +8,7 @@ export * from './assistant-schema-settings';
 export type { T3xClientConfig, T3xRequestOptions } from './client.js';
 export { createClient, T3xApiError, T3xClient } from './client.js';
 export * from './collaboration.js';
+export * from './credential-context.js';
 export {
   type AccountOperation,
   AccountOperationSchema,

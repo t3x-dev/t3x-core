@@ -57,6 +57,7 @@ import {
   type UpsertProjectGuestResponse,
   UpsertProjectGuestResponseSchema,
 } from './collaboration.js';
+import { type CredentialContext, CredentialContextSchema } from './credential-context.js';
 import {
   type DeploymentCapabilities,
   DeploymentCapabilitiesSchema,
@@ -381,6 +382,18 @@ export class T3xClient {
 
   async status(): Promise<StatusResponse> {
     return this.request<StatusResponse>('GET', '/v1/status');
+  }
+
+  /** Current credential binding and scopes; capability checks remain per operation. */
+  async getCredentialContext(): Promise<CredentialContext> {
+    return this.request<CredentialContext>(
+      'GET',
+      '/v1/auth/me/credential',
+      undefined,
+      undefined,
+      undefined,
+      CredentialContextSchema
+    );
   }
 
   /** Public deployment-scoped capabilities; never actor entitlements. */
@@ -1089,7 +1102,10 @@ export class T3xClient {
   // Branches
   // ============================================
 
-  async listBranches(projectId: string, params?: PaginationParams): Promise<ListBranchesResponse> {
+  async listBranches(
+    projectId: string,
+    params?: PaginationParams & { initialize_main?: '0' }
+  ): Promise<ListBranchesResponse> {
     return this.request<ListBranchesResponse>('GET', '/v1/branches', undefined, {
       project_id: projectId,
       ...params,

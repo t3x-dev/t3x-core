@@ -21,7 +21,7 @@ export const commitResultDef: ToolDef = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export const commitResultHandler: ToolHandler = async (args) =>
+export const commitResultHandler: ToolHandler = async (args, options) =>
   withTransitionApi(async (client) => {
     const { project_id, transition_id, commit_digest } = args;
     if (
@@ -49,7 +49,12 @@ export const commitResultHandler: ToolHandler = async (args) =>
     }
     const { view } = await client.inspectTransition(project_id, transition_id);
     const [branch, workspace] = await Promise.all([
-      findApiBranch(client, project_id, view.precondition.ref_name),
+      findApiBranch(
+        client,
+        project_id,
+        view.precondition.ref_name,
+        options?.skipMainBranchInitialization
+      ),
       client.workspaces.get(project_id, view.workspace_id).catch((error: unknown) => {
         if (error instanceof T3xApiError && (error.status === 403 || error.status === 404))
           return null;
