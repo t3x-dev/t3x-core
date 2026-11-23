@@ -569,6 +569,34 @@ export interface GenerationProviderCatalog {
   default: string;
 }
 
+export interface GenerationModelCatalog {
+  default_provider: string | null;
+  generation_provider_order: string[];
+  providers: Array<{
+    name: string;
+    label: string;
+    available: boolean;
+    default_model?: string | null;
+    models: Array<{
+      id: string;
+      label: string;
+      capabilities: string[];
+      max_output_tokens: number;
+    }>;
+  }>;
+}
+
+export interface ProjectSourceMaterial {
+  id: string;
+  project_id: string;
+  source_type: 'document' | 'url' | 'platform' | 'image';
+  title: string;
+  mime_type: string | null;
+  content_hash: string;
+  content_excerpt: string;
+  archived_at: string | null;
+}
+
 export interface SourceThreadMemory {
   text: string;
   token_estimate: number;

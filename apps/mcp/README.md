@@ -131,7 +131,7 @@ capabilities:
 | `schemas` | List, read, and validate against releases; read and preview saved Schema candidates; preview Content preparation |
 | `schemas:candidates:write` | Save a Schema definition candidate in its Workspace |
 | `schemas:write` | Exact Schema Draft action |
-| `sources` | Source, evidence, and pin reads, including Source resource aliases |
+| `sources` | Source, evidence, and pin reads, exact material and Source Thread excerpts, and available models |
 | `sources:write` | Extract a candidate, create or delete a pin |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
@@ -144,6 +144,18 @@ Discovery shows the enabled values for multi-action tools. Calls and resource
 URIs are checked against the same allowlist. Branch reads in this profile skip
 legacy initialization of missing branches. Legacy workflow prompts are
 available only through the legacy toolset configuration.
+
+### Source Context
+
+Use `t3x_source_context` to page the existing project material list with
+`materials`, then read one exact text range with `material_excerpt`. Use
+`t3x_query` with `source_evidence` to find immutable turn hashes, and
+`turn_excerpt` to quote an original user turn. Excerpts return the source
+URI, SHA-256 digest of its exact text, and inclusive start and exclusive end
+UTF-16 offsets. Pass `expected_digest` to pin a later request to that text.
+For parsed materials, the import's `content_hash` identifies the imported
+source and the resource digest identifies the returned text. The `models`
+action reads the server catalog and reports available generation models.
 
 ### Repository, candidate, and Schema operations
 
@@ -200,6 +212,8 @@ T3X_E2E_MCP_PHASE=workspace-candidate T3X_E2E_ARTIFACT_DIR=test-results/mcp-cand
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-candidate-publication.spec.ts
 T3X_E2E_MCP_PHASE=schema-authoring T3X_E2E_ARTIFACT_DIR=test-results/mcp-schema-authoring \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-schema-authoring.spec.ts
+T3X_E2E_MCP_PHASE=source-context T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-context \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-context.spec.ts
 ```
 
 ### Resources

@@ -121,6 +121,7 @@ import type {
   ExportLedgerInput,
   GenerateLeafInput,
   GenerationCapability,
+  GenerationModelCatalog,
   GenerationProviderCatalog,
   GenerationRequest,
   GenerationResponse,
@@ -150,6 +151,7 @@ import type {
   Pin,
   PlatformImportResult,
   Project,
+  ProjectSourceMaterial,
   ProjectWithStats,
   ProjectYSchemaVersionHistory,
   ProposeTransitionInput,
@@ -852,6 +854,17 @@ export class T3xClient {
     );
   }
 
+  async listProjectSourceMaterials(projectId: string): Promise<ProjectSourceMaterial[]> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(projectId)}/materials`);
+  }
+
+  async getProjectSourceMaterial(projectId: string, materialId: string) {
+    return this.request<ProjectSourceMaterial & { content_text: string }>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+    );
+  }
+
   async getLegacyYOpsEvidence(
     projectId: string,
     conversationId: string,
@@ -1264,6 +1277,10 @@ export class T3xClient {
 
   async listGenerationProviders(): Promise<GenerationProviderCatalog> {
     return this.request<GenerationProviderCatalog>('GET', '/v1/chat/providers');
+  }
+
+  async listGenerationModels(): Promise<GenerationModelCatalog> {
+    return this.request('GET', '/v1/llm/models');
   }
 
   /** @deprecated Use generation.complete() or generate(). */

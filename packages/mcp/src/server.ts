@@ -58,6 +58,7 @@ import {
   schemaPreparationHandler,
 } from './tools/schema-authoring.js';
 import { schemaRegistryDef, schemaRegistryHandler } from './tools/schema-registry.js';
+import { sourceContextDef, sourceContextHandler } from './tools/source-context.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
 import { workspaceCandidateDef, workspaceCandidateHandler } from './tools/workspace-candidate.js';
@@ -94,6 +95,7 @@ const BUSINESS_TOOLS: ToolEntry[] = [
   { def: schemaCandidateDef, handler: schemaCandidateHandler },
   { def: schemaPreparationDef, handler: schemaPreparationHandler },
   { def: schemaRegistryDef, handler: schemaRegistryHandler },
+  { def: sourceContextDef, handler: sourceContextHandler },
   { def: workspaceCandidateDef, handler: workspaceCandidateHandler },
 ];
 
