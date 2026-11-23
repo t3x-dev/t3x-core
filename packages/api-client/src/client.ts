@@ -82,6 +82,11 @@ import {
   type UpsertProjectGuestResponse,
   UpsertProjectGuestResponseSchema,
 } from './collaboration.js';
+import {
+  type CommitYSchemaRun,
+  CommitYSchemaRunSchema,
+  type CreateCommitYSchemaRunInput,
+} from './commit-yschema-run.js';
 import { type CredentialContext, CredentialContextSchema } from './credential-context.js';
 import {
   type DeploymentCapabilities,
@@ -1045,6 +1050,31 @@ export class T3xClient {
       { project_id: projectId, transition_id: transitionId }
     );
     return commit;
+  }
+
+  async createCommitYSchemaRun(
+    projectId: string,
+    input: CreateCommitYSchemaRunInput
+  ): Promise<CommitYSchemaRun> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/yschema-validation/runs`,
+      input,
+      undefined,
+      undefined,
+      CommitYSchemaRunSchema
+    );
+  }
+
+  async getCommitYSchemaRun(runId: string): Promise<CommitYSchemaRun> {
+    return this.request(
+      'GET',
+      `/v1/yschema-validation-runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      CommitYSchemaRunSchema
+    );
   }
 
   async getCommittedSchemaBinding(

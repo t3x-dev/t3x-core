@@ -135,6 +135,7 @@ capabilities:
 | `sources:write` | Extract a candidate, create or delete a pin |
 | `sources:ingest` | Create a Source Thread, append machine-origin text, upload an attachment, and recover the request receipt |
 | `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
+| `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
 | `transitions:verify` | Run Transition verification |
@@ -195,6 +196,18 @@ from input bytes to verify preservation against the original file. The
 tool rejects duplicate paths, mismatched digests, and text whose digest
 differs from the material hash. For parsed attachments such as CSV, use
 `t3x_source_context` to read the stored representation and its text digest.
+
+### Commit validation
+
+Use `t3x_commit_validation` with `action=run`, a project ID, an exact
+CommitV2 `commit_hash`, and the canonical `schema_name` and `schema_version`
+of a Schema supported by the Commit YSchema API. The response records the
+validated Commit, Schema digest, status, findings, and source provenance
+when available. The digest identifies the definition used for this Run.
+Use `action=read` with the same project ID and returned `run_id` to retrieve
+the saved result after newer Commits or Runs exist. Each successful trigger
+creates a new Run. The API requires project edit access to trigger and
+project read access to retrieve a saved result.
 
 ### Repository, candidate, and Schema operations
 
@@ -274,6 +287,14 @@ State against UTF-8 fixture bytes and reads the parsed form of a CSV attachment:
 ```bash
 T3X_E2E_MCP_PHASE=source-artifact T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-artifact \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-artifact.spec.ts
+```
+
+The Commit validation phase verifies persisted findings, historical Source
+references, and separate read and trigger permissions:
+
+```bash
+T3X_E2E_MCP_PHASE=commit-validation T3X_E2E_ARTIFACT_DIR=test-results/mcp-commit-validation \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-commit-validation.spec.ts
 ```
 
 ### Resources

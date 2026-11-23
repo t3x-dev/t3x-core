@@ -40,6 +40,7 @@ import { adminDef, adminHandler } from './tools/advanced/admin.js';
 import { diffDef, diffHandler } from './tools/advanced/diff.js';
 import { mergeDef, mergeHandler } from './tools/advanced/merge.js';
 import { commitResultDef, commitResultHandler } from './tools/commit-result.js';
+import { commitValidationDef, commitValidationHandler } from './tools/commit-validation.js';
 import { committedStateDef, committedStateHandler } from './tools/committed-state.js';
 import { contextDef, contextHandler } from './tools/context.js';
 // Core tools
@@ -94,6 +95,7 @@ const ADVANCED_TOOLS: ToolEntry[] = [
 ];
 
 const BUSINESS_TOOLS: ToolEntry[] = [
+  { def: commitValidationDef, handler: commitValidationHandler },
   { def: contextDef, handler: contextHandler },
   { def: proposalGenerationDef, handler: proposalGenerationHandler },
   { def: schemaCandidateDef, handler: schemaCandidateHandler },

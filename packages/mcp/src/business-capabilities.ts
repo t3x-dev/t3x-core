@@ -92,6 +92,10 @@ const GROUPS = {
   },
   'sources:ingest': { tools: ['t3x_ingest_source'] },
   'sources:generate': { tools: ['t3x_generate_proposal'] },
+  runs: { operations: { t3x_commit_validation: { parameter: 'action', values: ['read'] } } },
+  'runs:trigger': {
+    operations: { t3x_commit_validation: { parameter: 'action', values: ['run'] } },
+  },
   transitions: {
     tools: ['inspect_transition', 't3x_commit_result'],
     operations: { t3x_draft_review: { parameter: 'action', values: ['read'] } },
