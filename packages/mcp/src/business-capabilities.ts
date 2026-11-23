@@ -69,7 +69,7 @@ const GROUPS = {
     operations: { t3x_edit: { parameter: 'mode', values: ['schema'] } },
   },
   sources: {
-    tools: ['t3x_source_context'],
+    tools: ['t3x_source_context', 't3x_source_artifact'],
     operations: {
       t3x_query: {
         parameter: 'target',

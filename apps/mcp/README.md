@@ -131,7 +131,7 @@ capabilities:
 | `schemas` | List, read, and validate against releases; read and preview saved Schema candidates; preview Content preparation |
 | `schemas:candidates:write` | Save a Schema definition candidate in its Workspace |
 | `schemas:write` | Exact Schema Draft action |
-| `sources` | Source, evidence, and pin reads, exact material and Source Thread excerpts, and available models |
+| `sources` | Source, evidence, and pin reads, exact excerpts, exact-source artifact selectors, and available models |
 | `sources:write` | Extract a candidate, create or delete a pin |
 | `sources:ingest` | Create a Source Thread, append machine-origin text, upload an attachment, and recover the request receipt |
 | `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
@@ -178,6 +178,23 @@ Use `t3x_generate_proposal` with the saved Workspace revision, a stable
 server resolves the selected provider and model. Keep the returned
 `transition_id` for the separate `t3x_publish_candidate` action, then
 prepare and read a fixed Review through `t3x_draft_review`.
+
+Use `t3x_source_artifact` before an exact-source Proposal. For import, select
+the root path, root material ID, and any resource paths and material IDs.
+For scalar edit, the tool reads the saved artifact selector, and the caller
+provides `replace_scalar` operations for supported plain string scalars.
+For revert, the tool reads the exact branch head of the Workspace, and the
+API derives the reverse Effect.
+Pass the returned `proposal` plus a stable `request_id` to
+`propose_transition`. The API checks the saved revision, Source eligibility,
+and the ref when proposing.
+
+File entries report the Material `content_hash` and the SHA-256 digest of
+the stored UTF-8 text. During import, supply an `expected_digest` computed
+from input bytes to verify preservation against the original file. The
+tool rejects duplicate paths, mismatched digests, and text whose digest
+differs from the material hash. For parsed attachments such as CSV, use
+`t3x_source_context` to read the stored representation and its text digest.
 
 ### Repository, candidate, and Schema operations
 
@@ -249,6 +266,14 @@ T3X_E2E_MCP_PHASE=proposal-generation T3X_E2E_F3_MODEL_PORT=8373 T3X_E2E_ALLOW_E
   ANTHROPIC_API_KEY='' GOOGLE_AI_STUDIO_KEY='' GOOGLE_API_KEY='' N8N_API_KEY='' \
   T3X_E2E_ARTIFACT_DIR=test-results/mcp-proposal-generation \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-proposal-generation.spec.ts
+```
+
+The exact-source qualification checks the imported, edited, and reverted
+State against UTF-8 fixture bytes and reads the parsed form of a CSV attachment:
+
+```bash
+T3X_E2E_MCP_PHASE=source-artifact T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-artifact \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-artifact.spec.ts
 ```
 
 ### Resources
