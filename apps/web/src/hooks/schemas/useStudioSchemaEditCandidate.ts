@@ -16,7 +16,8 @@ import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
 export function useStudioSchemaEditCandidate(
   projectId: string,
   workspaceId: string,
-  workspaceRevision?: number
+  workspaceRevision?: number,
+  confirmedEmpty = false
 ) {
   const sessionId = useRef(getSessionUser()?.id ?? null);
   const sameSession = () => (getSessionUser()?.id ?? null) === sessionId.current;
@@ -87,13 +88,13 @@ export function useStudioSchemaEditCandidate(
     ++epoch.current;
     setResult(undefined);
     setPendingKey(null);
-    void refresh();
+    if (!confirmedEmpty) void refresh();
     return () => {
       mounted.current = false;
       ++epoch.current;
       ++readRequest.current;
     };
-  }, [refresh]);
+  }, [refresh, confirmedEmpty]);
 
   useEffect(() => {
     const updated = (event: Event) => {
@@ -114,7 +115,9 @@ export function useStudioSchemaEditCandidate(
         /* Ignore unrelated malformed notifications. */
       }
     };
-    const focus = () => void refresh();
+    const focus = () => {
+      if (!confirmedEmpty) void refresh();
+    };
     window.addEventListener('focus', focus);
     window.addEventListener('t3x-schema-candidate-updated', updated);
     window.addEventListener('storage', storage);
@@ -125,13 +128,13 @@ export function useStudioSchemaEditCandidate(
       window.removeEventListener('storage', storage);
       window.removeEventListener('t3x:session-changed', focus);
     };
-  }, [projectId, workspaceId, refresh]);
+  }, [projectId, workspaceId, refresh, confirmedEmpty]);
 
   const current = result?.key === key ? result : undefined;
   return {
     candidate: current?.candidate ?? null,
     error: current?.error,
-    loading: Boolean(projectId && workspaceId) && !current,
+    loading: Boolean(projectId && workspaceId) && !confirmedEmpty && !current,
     pending: pendingKey === key,
     refresh,
     save: (input: SaveStudioSchemaEditCandidateInput) => {

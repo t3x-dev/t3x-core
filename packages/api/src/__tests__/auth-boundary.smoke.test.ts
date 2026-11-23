@@ -213,6 +213,27 @@ describe('authenticated application boundary smoke', () => {
     );
   });
 
+  it('applies search and edit authority before paging project results', async () => {
+    const base = '/api/v1/projects?cursor=&limit=1&q=Owner';
+    const owner = await authorizedRequest(`${base}&editable=true`, ownerKeyValue);
+    expect(owner.status).toBe(200);
+    expect((await owner.json()).data).toMatchObject({
+      items: [{ project_id: ownerProjectId }],
+      has_more: false,
+    });
+
+    for (const key of [schemaViewerKeyValue, otherKeyValue]) {
+      const response = await authorizedRequest(`${base}&editable=true`, key);
+      expect(response.status).toBe(200);
+      expect((await response.json()).data.items).toEqual([]);
+    }
+    const viewer = await authorizedRequest(base, schemaViewerKeyValue);
+    expect(viewer.status).toBe(200);
+    expect((await viewer.json()).data.items).toEqual([
+      expect.objectContaining({ project_id: ownerProjectId }),
+    ]);
+  });
+
   it('derives project ownership from the authenticated principal, not request data', async () => {
     const response = await authorizedRequest('/api/v1/projects', ownerKeyValue, {
       method: 'POST',

@@ -95,6 +95,7 @@ export interface WorkspaceCandidate {
   targetBranch: string;
   sourceBundle: SourceBundleItem[];
   schemaBindings: WorkspaceSchemaBinding[];
+  schemaActivity?: { hasEditCandidate: boolean; hasPendingTask: boolean };
   schemaComposition?: SchemaCompositionDraft;
   schemaCandidate: WorkspaceSchemaCandidate;
   schemaReview: WorkspaceSchemaReview;

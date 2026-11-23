@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { cleanupExpiredRateLimitBuckets, consumeRateLimit } from '../queries/rate-limits';
@@ -92,6 +93,21 @@ describe('persistent rate limits', () => {
     expect(first.count).toBe(1);
     expect(otherPolicy.count).toBe(1);
     expect(nextWindow.count).toBe(1);
+  });
+
+  it('shares the existing bucket and counts only requests passing the database predicate', async () => {
+    const input = { scope: 'api-key', keyHash: 'guarded', limit: 3, windowMs: 60_000, now: 0 };
+    await expect(consumeRateLimit(db, input)).resolves.toMatchObject({ count: 1 });
+
+    const results = await Promise.all(
+      [true, false, true, false, true].map((authorized) =>
+        consumeRateLimit(db, input, sql`${authorized}::boolean`)
+      )
+    );
+    expect(results.filter((value) => value === null)).toHaveLength(2);
+    expect(results.filter((value) => value?.allowed)).toHaveLength(2);
+    expect(results.flatMap((value) => (value ? [value.count] : [])).sort()).toEqual([2, 3, 4]);
+    await expect(consumeRateLimit(db, input)).resolves.toMatchObject({ count: 5 });
   });
 
   it('removes expired buckets without touching active windows', async () => {

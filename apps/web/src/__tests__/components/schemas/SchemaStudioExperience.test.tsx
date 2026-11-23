@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   draftRefresh: vi.fn(),
   schemaEditLoading: false,
   schemaEditError: undefined as string | undefined,
+  readReviewStatus: vi.fn(),
   reviewStatus: { latest: null, loading: false, error: undefined } as {
     latest: unknown;
     loading: boolean;
@@ -92,7 +93,10 @@ vi.mock('@/hooks/schemas/useSchemaDraftStatus', () => ({
   }),
 }));
 vi.mock('@/hooks/schemas/useSchemaReviewStatus', () => ({
-  useSchemaReviewStatus: () => ({ ...mocks.reviewStatus, refresh: vi.fn() }),
+  useSchemaReviewStatus: (...args: unknown[]) => {
+    mocks.readReviewStatus(...args);
+    return { ...mocks.reviewStatus, refresh: vi.fn() };
+  },
 }));
 vi.mock('@/hooks/schemas/useSchemaReviewFlow', () => ({
   useSchemaReviewFlow: () => ({
@@ -269,6 +273,7 @@ beforeEach(() => {
   mocks.pendingSchema = { status: 'none', pending: null };
   mocks.pendingSchemaLoading = false;
   mocks.readPendingSchema.mockReset();
+  mocks.readReviewStatus.mockReset();
   mocks.previewInputs = [];
   mocks.saveDraft.mockResolvedValue({});
   mocks.saveSchemaEdit.mockImplementation(async (input) => ({
@@ -321,6 +326,32 @@ beforeEach(() => {
     workspace: { id: 'target', revision: 2, changes: [] },
   };
 });
+it('checks Review status only once a ready definition has Draft changes', async () => {
+  mocks.query = 'workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  mocks.workspaces = [workspace];
+  const preview = mocks.data;
+  const draft = mocks.draftView as object;
+  mocks.data = undefined;
+  const view = render(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.readReviewStatus).not.toHaveBeenCalledWith('p', workspace.id, workspace.revision);
+
+  mocks.data = preview;
+  mocks.draftView = {
+    ...draft,
+    hasChanges: false,
+    currentSchema: { status: 'bound', schemaHash: 'definition-hash' },
+  };
+  view.rerender(<SchemaStudioExperience projectId="p" />);
+  expect(mocks.readReviewStatus).not.toHaveBeenCalledWith('p', workspace.id, workspace.revision);
+
+  mocks.draftView = draft;
+  view.rerender(<SchemaStudioExperience projectId="p" />);
+  await waitFor(() =>
+    expect(mocks.readReviewStatus).toHaveBeenCalledWith('p', workspace.id, workspace.revision)
+  );
+});
+
 it('keeps the selected branch when opening source management', () => {
   mocks.query = 'workspace=saved&candidate=provider&branch=feature%2Frelease';
   mocks.workspaces = [
@@ -1387,7 +1418,7 @@ it('starts the default saved Workspace read while a known branch list is refresh
   mocks.pendingSchemaLoading = true;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
 
-  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision);
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision, false);
   expect(screen.getByText('Loading Schema definition…')).toBeVisible();
 
   mocks.pendingSchemaLoading = false;
@@ -1400,7 +1431,12 @@ it('starts the default saved Workspace read while a known branch list is refresh
   mocks.branchesLoading = false;
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
-  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith('p', 'feature-draft', main.revision);
+  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith(
+    'p',
+    'feature-draft',
+    main.revision,
+    false
+  );
 });
 
 it.each([
@@ -1416,7 +1452,7 @@ it.each([
   mocks.workspaces = state === 'missing saved default' ? [feature] : [boundWorkspace(), feature];
   render(<SchemaStudioExperience projectId="p" />);
 
-  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined);
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined, false);
   expect(mocks.readPendingSchema.mock.calls.every(([, workspaceId]) => workspaceId === '')).toBe(
     true
   );

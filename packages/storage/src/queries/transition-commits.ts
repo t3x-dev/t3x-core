@@ -825,8 +825,21 @@ export async function getTransitionRefHead(
   input: { projectId: string; refName: string }
 ): Promise<TransitionRefHead> {
   const [ref] = await db
-    .select({ head: branches.headCommitHash })
+    .select({
+      head: branches.headCommitHash,
+      canonicalJson: transitionObjects.canonicalJson,
+      mediaType: transitionCommits.mediaType,
+      createdAt: transitionCommits.createdAt,
+    })
     .from(branches)
+    .leftJoin(
+      transitionCommits,
+      and(
+        eq(transitionCommits.projectId, branches.projectId),
+        eq(transitionCommits.digest, branches.headCommitHash)
+      )
+    )
+    .leftJoin(transitionObjects, eq(transitionObjects.digest, transitionCommits.digest))
     .where(and(eq(branches.projectId, input.projectId), eq(branches.name, input.refName)))
     .limit(1);
   if (ref === undefined) {
@@ -836,10 +849,15 @@ export async function getTransitionRefHead(
     return { format: 'empty', refName: input.refName, head: null };
   }
 
-  const transition = await getTransitionCommit(db, input.projectId, ref.head);
-  if (transition === null) {
+  if (ref.canonicalJson === null || ref.mediaType === null || ref.createdAt === null) {
     throw new TransitionRefHeadIntegrityError(input.projectId, input.refName, ref.head);
   }
+  const transition = decodeTransitionCommit(
+    ref.head,
+    ref.mediaType,
+    ref.canonicalJson,
+    ref.createdAt
+  );
 
   const resolver = new DatabaseTransitionObjectResolver(db, input.projectId);
   const verified = await verifyCommitV2(transition.commit, resolver);
@@ -1040,17 +1058,26 @@ export async function getTransitionCommit(
     .where(and(eq(transitionCommits.projectId, projectId), eq(transitionCommits.digest, digest)))
     .limit(1);
   if (row === undefined) return null;
-  if (row.mediaType !== COMMIT_V2_MEDIA_TYPE) {
-    throw new TypeError(`Unsupported CommitV2 media type ${row.mediaType}`);
+  return decodeTransitionCommit(digest, row.mediaType, row.canonicalJson, row.createdAt);
+}
+
+function decodeTransitionCommit(
+  digest: string,
+  mediaType: string,
+  canonicalJson: string,
+  createdAt: Date
+) {
+  if (mediaType !== COMMIT_V2_MEDIA_TYPE) {
+    throw new TypeError(`Unsupported CommitV2 media type ${mediaType}`);
   }
-  const object = parseSerializedTransitionObject(row.canonicalJson);
+  const object = parseSerializedTransitionObject(canonicalJson);
   if (object.schema !== 't3x/commit/v2') {
     throw new TypeError(`Stored Transition commit ${digest} is not CommitV2`);
   }
   if (describeCommitV2(object).digest !== digest) {
     throw new TypeError(`Stored Transition commit ${digest} failed identity verification`);
   }
-  return { commit: object, recordedAt: row.createdAt.toISOString() };
+  return { commit: object, recordedAt: createdAt.toISOString() };
 }
 
 export async function listTransitionCommitProjectIds(db: AnyDB, digest: string): Promise<string[]> {

@@ -256,7 +256,9 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage scope="accessible" />);
 
-    expect(useProjectsArgs).toHaveBeenLastCalledWith(20, undefined, 'on-demand');
+    expect(useProjectsArgs).toHaveBeenLastCalledWith(20, undefined, 'on-demand', {
+      directoryUserId: undefined,
+    });
     expect(screen.getByRole('heading', { name: /^Your repositories/ })).toBeInTheDocument();
     expect(screen.getByText('Owner: test-a3')).toBeInTheDocument();
     expect(screen.getByText('Editor access')).toBeInTheDocument();

@@ -217,6 +217,32 @@ describe('project-scoped repository information', () => {
     expect((await read(id)).repository_profile).toEqual({ ...p.repository_profile, icon: null });
   });
 
+  it('searches saved tags in the namespace before paginating', async () => {
+    const first = await create({
+      name: 'Tag-first',
+      tags: ['Release-中文'],
+    });
+    const second = await create({
+      name: 'Tag-second',
+      tags: ['Release-notes'],
+    });
+    await create({ name: 'Tag-unrelated', tags: ['different'] });
+
+    const path = '/v1/projects?namespace=profile-tests&limit=1&tag_query=release&cursor=';
+    const response = await appFor().request(path);
+    expect(response.status).toBe(200);
+    const page = (await response.json()).data;
+    expect(page.items).toHaveLength(1);
+    expect(page.has_more).toBe(true);
+    const next = await appFor().request(`${path}${encodeURIComponent(page.next_cursor)}`);
+    expect(next.status).toBe(200);
+    const nextPage = (await next.json()).data;
+    expect(nextPage.has_more).toBe(false);
+    expect(new Set([...page.items, ...nextPage.items].map((item) => item.project_id))).toEqual(
+      new Set([first.project_id, second.project_id])
+    );
+  });
+
   it('enforces existing read/edit permissions on direct requests', async () => {
     const p = await create({ name: 'Permissions' });
     for (const role of ['viewer', 'editor'])

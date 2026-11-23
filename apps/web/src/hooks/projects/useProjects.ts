@@ -22,7 +22,15 @@ import {
   PROJECT_RESTORED_EVENT,
   type ProjectDeletedDetail,
 } from '@/hooks/shared/deleteEvents';
-import { deleteProject, listProjectPage, listProjects } from '@/infrastructure/projects';
+import { ApiError } from '@/infrastructure/core';
+import {
+  deleteProject,
+  listProjectPage,
+  listProjects,
+  loadRepositoryDirectoryPage,
+  readCachedRepositoryDirectoryPage,
+} from '@/infrastructure/projects';
+import { getSessionUserId } from '@/infrastructure/session';
 import type { Project } from '@/infrastructure/types';
 
 export interface UseProjectsResult {
@@ -40,57 +48,105 @@ export interface UseProjectsResult {
 export function useProjects(
   limit = 50,
   namespaceSlug?: string,
-  mode: boolean | 'on-demand' = false
+  mode: boolean | 'on-demand' = false,
+  {
+    search,
+    tagSearch,
+    editableOnly = false,
+    enabled = true,
+    directoryUserId,
+  }: {
+    search?: string;
+    tagSearch?: string;
+    editableOnly?: boolean;
+    enabled?: boolean;
+    directoryUserId?: string;
+  } = {}
 ): UseProjectsResult {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [initialPage] = useState(() =>
+    directoryUserId ? readCachedRepositoryDirectoryPage(directoryUserId) : undefined
+  );
+  const [projects, setProjects] = useState<Project[]>(initialPage?.items ?? []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialPage?.next_cursor ?? null);
   const requestIdRef = useRef(0);
   const nextPageRequest = useRef<number | null>(null);
+  const q = search?.trim() || undefined;
+  const tag_query = tagSearch?.trim() || undefined;
+  const fetchPage = useCallback(
+    (cursor: string) =>
+      q || tag_query || editableOnly
+        ? listProjectPage(limit, cursor, namespaceSlug, {
+            q,
+            tag_query,
+            editable: editableOnly || undefined,
+          })
+        : listProjectPage(limit, cursor, namespaceSlug),
+    [limit, namespaceSlug, q, tag_query, editableOnly]
+  );
 
-  const refresh = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      if (mode === 'on-demand') {
-        const data = await listProjectPage(limit, '', namespaceSlug);
-        if (requestId !== requestIdRef.current) return;
-        setProjects(data.items);
-        setNextCursor(data.next_cursor);
+  const refreshFirstPage = useCallback(
+    async (force: boolean) => {
+      if (!enabled) return;
+      const requestId = ++requestIdRef.current;
+      setLoading(true);
+      try {
+        if (mode === 'on-demand') {
+          const data = directoryUserId
+            ? await loadRepositoryDirectoryPage(directoryUserId, force)
+            : await fetchPage('');
+          if (
+            requestId !== requestIdRef.current ||
+            (directoryUserId && getSessionUserId() !== directoryUserId)
+          )
+            return;
+          setProjects(data.items);
+          setNextCursor(data.next_cursor);
+          setError(null);
+          return;
+        }
+        const collected = new Map<string, Project>();
+        let offset = 0;
+        for (;;) {
+          const data = await listProjects(limit, offset, namespaceSlug);
+          if (requestId !== requestIdRef.current) return;
+          const rows = data.projects ?? [];
+          const previousSize = collected.size;
+          for (const project of rows) collected.set(project.project_id, project);
+          if (!mode || rows.length < limit) break;
+          if (collected.size === previousSize)
+            throw new Error('Repository pagination did not advance. Please refresh.');
+          offset += rows.length;
+        }
+        setProjects([...collected.values()]);
         setError(null);
-        return;
-      }
-      const collected = new Map<string, Project>();
-      let offset = 0;
-      for (;;) {
-        const data = await listProjects(limit, offset, namespaceSlug);
+      } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        const rows = data.projects ?? [];
-        const previousSize = collected.size;
-        for (const project of rows) collected.set(project.project_id, project);
-        if (!mode || rows.length < limit) break;
-        if (collected.size === previousSize)
-          throw new Error('Repository pagination did not advance. Please refresh.');
-        offset += rows.length;
+        if (
+          directoryUserId &&
+          err instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'SESSION_NOT_CURRENT'].includes(err.code)
+        ) {
+          setProjects([]);
+          setNextCursor(null);
+        }
+        setError(formatUserFacingError(err, 'Failed to load projects.'));
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false);
       }
-      setProjects([...collected.values()]);
-      setError(null);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      setError(formatUserFacingError(err, 'Failed to load projects.'));
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [limit, namespaceSlug, mode]);
+    },
+    [limit, namespaceSlug, mode, enabled, fetchPage, directoryUserId]
+  );
+  const refresh = useCallback(() => refreshFirstPage(true), [refreshFirstPage]);
 
   const loadMore = useCallback(async () => {
     const requestId = requestIdRef.current;
-    if (!nextCursor || loading || nextPageRequest.current === requestId) return false;
+    if (!enabled || !nextCursor || loading || nextPageRequest.current === requestId) return false;
     nextPageRequest.current = requestId;
     setLoading(true);
     try {
-      const data = await listProjectPage(limit, nextCursor, namespaceSlug);
+      const data = await fetchPage(nextCursor);
       if (requestId !== requestIdRef.current) return false;
       if (data.next_cursor === nextCursor)
         throw new Error('Repository pagination did not advance. Please refresh.');
@@ -112,16 +168,23 @@ export function useProjects(
         setLoading(false);
       }
     }
-  }, [limit, namespaceSlug, nextCursor, loading]);
+  }, [enabled, fetchPage, nextCursor, loading]);
 
   useEffect(() => {
-    setProjects([]);
-    setNextCursor(null);
-    void refresh();
+    if (!directoryUserId) {
+      setProjects([]);
+      setNextCursor(null);
+    }
+    setError(null);
+    setLoading(enabled);
+    let searchTimer: ReturnType<typeof setTimeout> | undefined;
+    if (q || tag_query) searchTimer = setTimeout(() => void refreshFirstPage(false), 250);
+    else void refreshFirstPage(false);
     return () => {
+      clearTimeout(searchTimer);
       requestIdRef.current += 1;
     };
-  }, [refresh]);
+  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId]);
 
   useEffect(() => {
     const restored = () => {

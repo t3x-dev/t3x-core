@@ -10,6 +10,7 @@ import type {
   RepositoryProfilePatch,
 } from '@t3x-dev/api-client';
 import { API_V1, ApiError, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+import { getSessionUserId, subscribeSessionUser } from './session';
 import { getSharedApiClient } from './sharedApiClient';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
@@ -47,10 +48,78 @@ export async function listProjects(
   return data;
 }
 
-export async function listProjectPage(limit: number, cursor: string, namespace?: string) {
-  const query = buildQueryString({ limit, cursor, namespace });
+export async function listProjectPage(
+  limit: number,
+  cursor: string,
+  namespace?: string,
+  filters?: { q?: string; tag_query?: string; editable?: true }
+) {
+  const query = buildQueryString({ limit, cursor, namespace, ...filters });
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
   return handleResponse<{ items: Project[]; next_cursor: string | null; has_more: boolean }>(res);
+}
+
+export const REPOSITORY_DIRECTORY_PAGE_SIZE = 20;
+const DIRECTORY_PAGE_MAX_AGE_MS = 30_000;
+const DIRECTORY_PAGE_PREFETCH_FRESH_MS = 5_000;
+
+type DirectoryPage = Awaited<ReturnType<typeof listProjectPage>>;
+let directoryPage:
+  | {
+      userId: string;
+      snapshot?: { page: DirectoryPage; loadedAt: number };
+      request?: Promise<DirectoryPage>;
+    }
+  | undefined;
+let watchingDirectorySession = false;
+
+export function readCachedRepositoryDirectoryPage(userId: string) {
+  const cached = directoryPage?.userId === userId ? directoryPage.snapshot : undefined;
+  return cached && Date.now() - cached.loadedAt < DIRECTORY_PAGE_MAX_AGE_MS
+    ? cached.page
+    : undefined;
+}
+
+export function loadRepositoryDirectoryPage(userId: string, force = false): Promise<DirectoryPage> {
+  if (!watchingDirectorySession) {
+    watchingDirectorySession = true;
+    subscribeSessionUser(() => {
+      if (getSessionUserId() !== directoryPage?.userId) directoryPage = undefined;
+    });
+  }
+  if (directoryPage?.userId !== userId) directoryPage = { userId };
+  const entry = directoryPage;
+  if (entry.request) return entry.request;
+  if (
+    !force &&
+    entry.snapshot &&
+    Date.now() - entry.snapshot.loadedAt < DIRECTORY_PAGE_PREFETCH_FRESH_MS
+  )
+    return Promise.resolve(entry.snapshot.page);
+
+  const request = listProjectPage(REPOSITORY_DIRECTORY_PAGE_SIZE, '')
+    .then((page) => {
+      if (getSessionUserId() !== userId)
+        throw new ApiError('ABORTED', 'The active account changed.');
+      if (entry !== directoryPage) return loadRepositoryDirectoryPage(userId);
+      entry.snapshot = { page, loadedAt: Date.now() };
+      return page;
+    })
+    .catch((error: unknown) => {
+      if (entry === directoryPage) entry.snapshot = undefined;
+      throw error;
+    })
+    .finally(() => {
+      entry.request = undefined;
+    });
+  entry.request = request;
+  return request;
+}
+
+async function afterRepositoryWrite<T>(write: Promise<T>): Promise<T> {
+  const result = await write;
+  directoryPage = undefined;
+  return result;
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
@@ -70,14 +139,14 @@ export async function createProject(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, metadata, namespace, starter, ...profile }),
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export async function ensureDemoProject(): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects/demo-workspace`, {
     method: 'POST',
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export interface DeleteProjectResponse {
@@ -98,7 +167,7 @@ export async function deleteProject(
       method: 'DELETE',
     }
   );
-  return handleResponse<DeleteProjectResponse>(res);
+  return afterRepositoryWrite(handleResponse<DeleteProjectResponse>(res));
 }
 
 export async function restoreProject(projectId: string): Promise<Project> {
@@ -108,7 +177,7 @@ export async function restoreProject(projectId: string): Promise<Project> {
       method: 'POST',
     }
   );
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export interface UpdateProjectPayload {
@@ -129,7 +198,7 @@ export async function updateProject(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export type ChangeProjectVisibilityPayload = ChangeProjectVisibilityInput;
@@ -139,7 +208,7 @@ export async function changeProjectVisibility(
   projectId: string,
   payload: ChangeProjectVisibilityPayload
 ): Promise<ChangeProjectVisibilityResponse> {
-  return getSharedApiClient().changeProjectVisibility(projectId, payload);
+  return afterRepositoryWrite(getSharedApiClient().changeProjectVisibility(projectId, payload));
 }
 
 // ============================================================================

@@ -30,8 +30,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
 import palette from '@/styles/management-palette.module.css';
@@ -85,15 +87,21 @@ export default function RecipesPage() {
 }
 
 function RecipeSettings({ projectId }: { projectId: string }) {
+  const [search, setSearch] = useState('');
   const {
     projects,
     loading: projectsLoading,
     error: projectsError,
     refresh: refreshProjects,
-  } = useProjects(100, undefined, true);
+    hasMore,
+    loadMore,
+  } = useProjects(20, undefined, 'on-demand', { search, enabled: !projectId });
+  const { project: scopedProject, error: scopedProjectError } = useProjectDetail(projectId || null);
   const { listRecipes, createRecipe, updateRecipe, deleteRecipe } = useRecipeCommands();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const recipeReads = useRef(new Map<string, Promise<Recipe[]>>());
+  const recipeRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -102,6 +110,7 @@ function RecipeSettings({ projectId }: { projectId: string }) {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [chosenLabels, setChosenLabels] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -109,25 +118,38 @@ function RecipeSettings({ projectId }: { projectId: string }) {
     () => (projectId ? [projectId] : projects.map((project) => project.project_id)),
     [projectId, projects]
   );
-  const projectLabels = new Map(
-    projects.map((project) => [
-      project.project_id,
-      project.namespace ? `${project.namespace}/${project.name}` : project.name,
-    ])
-  );
-  const editableProjects = projects.filter((project) => project.can_edit !== false);
+  const projectLabels = new Map([
+    ...Object.entries(chosenLabels),
+    ...projects.map(
+      (project) =>
+        [
+          project.project_id,
+          project.namespace ? `${project.namespace}/${project.name}` : project.name,
+        ] as const
+    ),
+  ]);
+  if (scopedProject)
+    projectLabels.set(
+      scopedProject.id,
+      scopedProject.namespace
+        ? `${scopedProject.namespace}/${scopedProject.name}`
+        : scopedProject.name
+    );
   const canCreate = projectId
-    ? !projects.some((project) => project.project_id === projectId && project.can_edit === false)
-    : !projectsLoading && !projectsError && !loading && editableProjects.length > 0;
+    ? Boolean(scopedProject && !scopedProjectError && scopedProject.canEdit !== false)
+    : !projectsLoading &&
+      (hasMore || Boolean(search.trim()) || projects.some((project) => project.can_edit !== false));
   const projectListError = !projectId && projectsError;
   const settingsHref = projectId
     ? `/project/${encodeURIComponent(projectId)}/settings`
     : '/settings';
 
-  const fetchAllRecipes = useCallback(async () => {
+  const fetchRecipes = useCallback(async () => {
+    const request = ++recipeRequest.current;
     if (!projectId && projectsLoading) return;
     if (targetProjectIds.length === 0) {
       setRecipes([]);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -136,23 +158,53 @@ function RecipeSettings({ projectId }: { projectId: string }) {
       setLoading(true);
       setError(null);
       const results = await Promise.allSettled(
-        targetProjectIds.map((targetProjectId) => listRecipes(targetProjectId))
+        targetProjectIds.map((id) => {
+          const cached = recipeReads.current.get(id);
+          if (cached) return cached;
+          const pending = listRecipes(id).catch((cause: unknown) => {
+            if (recipeReads.current.get(id) === pending) recipeReads.current.delete(id);
+            throw cause;
+          });
+          recipeReads.current.set(id, pending);
+          return pending;
+        })
       );
+      if (request !== recipeRequest.current) return;
       setRecipes(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])));
       if (results.every((result) => result.status === 'rejected')) {
         const firstFailure = results.find((result) => result.status === 'rejected');
         throw firstFailure?.reason;
       }
     } catch (fetchError) {
-      setError(formatUserFacingError(fetchError, 'Failed to load recipes.'));
+      if (request === recipeRequest.current)
+        setError(formatUserFacingError(fetchError, 'Failed to load recipes.'));
     } finally {
-      setLoading(false);
+      if (request === recipeRequest.current) setLoading(false);
     }
   }, [listRecipes, projectId, projectsLoading, targetProjectIds]);
 
   useEffect(() => {
-    void fetchAllRecipes();
-  }, [fetchAllRecipes]);
+    void fetchRecipes();
+    return () => {
+      ++recipeRequest.current;
+    };
+  }, [fetchRecipes]);
+
+  const updateLoadedRecipes = useCallback(
+    (id: string, update: (rows: Recipe[]) => Recipe[]) => {
+      const cached = recipeReads.current.get(id);
+      if (cached) {
+        const revised = cached.then(update, () => {
+          if (recipeReads.current.get(id) === revised) recipeReads.current.delete(id);
+          return update([]);
+        });
+        recipeReads.current.set(id, revised);
+        void fetchRecipes();
+      }
+      setRecipes(update);
+    },
+    [fetchRecipes]
+  );
 
   const closeForm = useCallback(() => {
     setFormOpen(false);
@@ -191,13 +243,16 @@ function RecipeSettings({ projectId }: { projectId: string }) {
             editingRecipe.id,
             data as UpdateRecipeInput
           );
-          setRecipes((current) =>
+          updateLoadedRecipes(updated.project_id, (current) =>
             current.map((recipe) => (recipe.id === updated.id ? updated : recipe))
           );
           toast.success('Recipe updated');
         } else {
           const created = await createRecipe(selectedProjectId, data as CreateRecipeInput);
-          setRecipes((current) => [...current, created]);
+          updateLoadedRecipes(created.project_id, (current) => [
+            ...current.filter((recipe) => recipe.id !== created.id),
+            created,
+          ]);
           toast.success('Recipe created');
         }
         closeForm();
@@ -207,7 +262,15 @@ function RecipeSettings({ projectId }: { projectId: string }) {
         setFormLoading(false);
       }
     },
-    [closeForm, createRecipe, editingRecipe, formLoading, selectedProjectId, updateRecipe]
+    [
+      closeForm,
+      createRecipe,
+      editingRecipe,
+      formLoading,
+      selectedProjectId,
+      updateRecipe,
+      updateLoadedRecipes,
+    ]
   );
 
   const handleDelete = useCallback(async () => {
@@ -215,7 +278,9 @@ function RecipeSettings({ projectId }: { projectId: string }) {
     setDeleteLoading(true);
     try {
       await deleteRecipe(deleteTarget.project_id, deleteTarget.id);
-      setRecipes((current) => current.filter((recipe) => recipe.id !== deleteTarget.id));
+      updateLoadedRecipes(deleteTarget.project_id, (current) =>
+        current.filter((recipe) => recipe.id !== deleteTarget.id)
+      );
       setDeleteTarget(null);
       toast.success('Recipe deleted');
     } catch (deleteError) {
@@ -223,7 +288,7 @@ function RecipeSettings({ projectId }: { projectId: string }) {
     } finally {
       setDeleteLoading(false);
     }
-  }, [deleteRecipe, deleteTarget]);
+  }, [deleteRecipe, deleteTarget, updateLoadedRecipes]);
 
   return (
     <div className={styles.page}>
@@ -253,6 +318,35 @@ function RecipeSettings({ projectId }: { projectId: string }) {
             <h2 id="recipe-list-title" className="sr-only">
               Project recipes
             </h2>
+            {!projectId && (
+              <div className="flex flex-wrap items-center gap-2 p-3">
+                <Input
+                  type="search"
+                  aria-label="Search recipe repositories"
+                  placeholder="Search repositories…"
+                  className="max-w-xs"
+                  value={search}
+                  maxLength={200}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                {hasMore && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={projectsLoading || loading}
+                    onClick={() => void loadMore()}
+                  >
+                    {projectListError
+                      ? 'Retry loading more repositories'
+                      : 'Load more repositories'}
+                  </Button>
+                )}
+                {(projectsLoading || loading) && recipes.length > 0 && (
+                  <output className="text-sm text-muted-foreground">Loading recipes…</output>
+                )}
+              </div>
+            )}
             <div className={styles.tableScroll}>
               <table className={styles.table}>
                 <thead>
@@ -267,13 +361,14 @@ function RecipeSettings({ projectId }: { projectId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading || (!projectId && projectsLoading) ? (
+                  {(!projectId && projectsLoading && !projects.length) ||
+                  (loading && !recipes.length) ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
                         <Loader2 aria-label="Loading recipes" className={styles.spinner} />
                       </td>
                     </tr>
-                  ) : projectListError || error ? (
+                  ) : (projectListError && !hasMore) || error ? (
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
                         <span className={styles.errorText}>{projectListError || error}</span>
@@ -281,7 +376,7 @@ function RecipeSettings({ projectId }: { projectId: string }) {
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            void (projectListError ? refreshProjects() : fetchAllRecipes())
+                            void (projectListError && !hasMore ? refreshProjects() : fetchRecipes())
                           }
                         >
                           Retry
@@ -433,11 +528,10 @@ function RecipeSettings({ projectId }: { projectId: string }) {
                 ? undefined
                 : {
                     value: selectedProjectId,
-                    onChange: setSelectedProjectId,
-                    options: editableProjects.map(({ project_id }) => ({
-                      id: project_id,
-                      label: projectLabels.get(project_id) ?? project_id,
-                    })),
+                    onChange: (id, label) => {
+                      setSelectedProjectId(id);
+                      if (id) setChosenLabels((current) => ({ ...current, [id]: label }));
+                    },
                   }
             }
             error={formError}

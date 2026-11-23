@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import { fetchProjectWorkspaces } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { resolveWebSocketBase } from '@/utils/apiBase';
@@ -24,7 +25,8 @@ export function useProjectWorkspaces(
   projectId: string | null | undefined,
   enabled = true
 ): UseProjectWorkspacesResult {
-  const key = JSON.stringify([projectId, enabled]);
+  const userId = useSessionUserId();
+  const key = JSON.stringify([userId, projectId, enabled]);
   const available = Boolean(projectId && enabled);
   const [snapshot, setSnapshot] = useState<{
     key: string;

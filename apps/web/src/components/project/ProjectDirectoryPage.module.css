@@ -430,3 +430,11 @@
     gap: 8px;
   }
 }
+
+.repositoryLink:active,
+.repositoryLink:has([data-navigation-pending]),
+.recentLinks a:active,
+.recentLinks a:has([data-navigation-pending]) {
+  color: var(--accent-commit);
+  text-decoration: underline;
+}

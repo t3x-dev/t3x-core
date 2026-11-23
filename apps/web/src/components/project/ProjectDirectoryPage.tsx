@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavigationFeedback } from '@/components/layout/NavigationFeedback';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,9 +43,11 @@ import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPat
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { REPOSITORY_DIRECTORY_PAGE_SIZE } from '@/hooks/projects/repositoryDirectory';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
@@ -70,7 +73,7 @@ import { RepositoryTagPicker, repositoryTagOptions } from './RepositoryTagPicker
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
-const REPOSITORIES_PER_PAGE = 20;
+const REPOSITORIES_PER_PAGE = REPOSITORY_DIRECTORY_PAGE_SIZE;
 
 function openDirectoryRepository(project: ProjectSummary) {
   const { details, cacheProject } = useProjectStore.getState();
@@ -191,6 +194,7 @@ function ProjectRow({
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
+            <NavigationFeedback />
           </Link>
           {project.visibility && <RepositoryVisibility value={project.visibility} />}
           {project.canEdit === false && <span className={styles.readOnly}>Read only</span>}
@@ -286,9 +290,16 @@ export function ProjectDirectoryPage({
   ownerSlug?: string;
   scope?: 'namespace' | 'accessible';
 }) {
+  const userId = useSessionUserId();
+  const directoryUserId = scope === 'accessible' ? (userId ?? undefined) : undefined;
   return (
     <Suspense fallback={null}>
-      <ProjectDirectoryContent key={`${scope}:${ownerSlug}`} ownerSlug={ownerSlug} scope={scope} />
+      <ProjectDirectoryContent
+        key={JSON.stringify([scope, ownerSlug, userId])}
+        ownerSlug={ownerSlug}
+        scope={scope}
+        directoryUserId={directoryUserId}
+      />
     </Suspense>
   );
 }
@@ -296,9 +307,11 @@ export function ProjectDirectoryPage({
 function ProjectDirectoryContent({
   ownerSlug,
   scope,
+  directoryUserId,
 }: {
   ownerSlug: string;
   scope: 'namespace' | 'accessible';
+  directoryUserId?: string;
 }) {
   const accessible = scope === 'accessible';
   const pathname = usePathname();
@@ -340,7 +353,9 @@ function ProjectDirectoryContent({
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects(REPOSITORIES_PER_PAGE, accessible ? undefined : ownerSlug, 'on-demand');
+  } = useProjects(REPOSITORIES_PER_PAGE, accessible ? undefined : ownerSlug, 'on-demand', {
+    directoryUserId,
+  });
   const [query, setQuery] = useState('');
   const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
   const [visibility, setVisibility] = useState('all');
@@ -716,6 +731,7 @@ function ProjectDirectoryContent({
                           <span>{project.namespace ?? ownerSlug}</span>
                         </span>
                         <ArrowRight aria-hidden="true" size={15} />
+                        <NavigationFeedback />
                       </Link>
                     ))}
                   </div>
