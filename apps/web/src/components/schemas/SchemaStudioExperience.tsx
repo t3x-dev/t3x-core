@@ -198,7 +198,6 @@ export function SchemaStudioExperience({
   const router = useRouter();
   const pathname = usePathname();
   const repositoryPath = getCanonicalRepositoryPath(pathname);
-  const candidates = useStudioCandidates(projectId);
   const { branches: projectBranches, workspaces } = useRepositoryViewData(projectId);
   const { saveDraft } = useWorkspaceFlow();
   const [workspaceSetupFailures, setWorkspaceSetupFailures] = useState<{
@@ -490,11 +489,6 @@ export function SchemaStudioExperience({
     Boolean(persistedTarget?.authoringLedger)
   );
   const draftView = draftState.view;
-  const reviewStatus = useSchemaReviewStatus(
-    projectId,
-    persistedTarget?.id ?? '',
-    persistedTarget?.revision
-  );
   const savedEditIsApplied =
     !!currentBinding?.schemaHash &&
     schemaEdit.candidate?.authoringDraft?.resultSchemaHash === currentBinding.schemaHash;
@@ -506,6 +500,13 @@ export function SchemaStudioExperience({
     schemaEdit.candidate?.baseSources?.length && !savedEditIsApplied && !savedEditUsesBinding
   );
   const definitionNeedsCandidates = needsCandidateSources || selection.length > 0;
+  const candidates = useStudioCandidates(
+    projectId,
+    definitionNeedsCandidates ||
+      Boolean(requested || currentBinding?.studioSources?.length) ||
+      sourceManagerOpen ||
+      definitionOpen
+  );
   const recoveredCandidateKey = schemaEdit.candidate
     ? `${schemaEdit.candidate.candidateId}:${schemaEdit.candidate.revision}`
     : schemaEdit.loading
@@ -996,12 +997,20 @@ export function SchemaStudioExperience({
     setDefinitionOpen(open);
   }
 
-  const workflow = schemaWorkflowStatus({
+  const workflowInput = {
     draft: draftView,
     preview: data,
-    latest: reviewStatus.latest,
     hasDefinition: Boolean(selection.length || currentBinding || creatingBlank || activeCandidate),
-  });
+  };
+  const draftWorkflow = schemaWorkflowStatus(workflowInput);
+  const reviewStatus = useSchemaReviewStatus(
+    projectId,
+    data && recoveredDefinitionReady && draftWorkflow.hasChanges ? (persistedTarget?.id ?? '') : '',
+    persistedTarget?.revision
+  );
+  const workflow = reviewStatus.latest
+    ? schemaWorkflowStatus({ ...workflowInput, latest: reviewStatus.latest })
+    : draftWorkflow;
   const publishBlocker =
     editorUnavailable ||
     !recoveredDefinitionReady ||
