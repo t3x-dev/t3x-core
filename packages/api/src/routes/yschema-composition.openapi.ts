@@ -40,6 +40,7 @@ import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import { readSchemaEditorPicks } from '../lib/schema-editor-picks';
 import { assessWorkspaceSchemaImpact } from '../lib/schema-evolution-impact';
 import {
@@ -706,7 +707,10 @@ yschemaCompositionRoutes.openapi(catalogCollectionsRoute, async (c) => {
   return c.json({ success: true as const, data: { items: catalogCollections } }, 200);
 });
 yschemaCompositionRoutes.openapi(catalogRoute, async (c) => {
-  return readSchemaCatalog(c, await getDB(), c.req.valid('query'));
+  const db = await getDB();
+  return timeRepositoryRead(c, 'public_schema_catalog', () =>
+    readSchemaCatalog(c, db, c.req.valid('query'))
+  );
 });
 
 yschemaCompositionRoutes.openapi(projectCatalogRoute, async (c) => {

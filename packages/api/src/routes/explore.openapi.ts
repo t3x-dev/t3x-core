@@ -10,6 +10,7 @@ import {
   findProjectById,
   findProjects,
   getRepositoryAddress,
+  getRepositoryAddresses,
   listYSchemaCatalogReleases,
 } from '@t3x-dev/storage';
 import { isAuthenticationDisabled } from '../lib/auth-config';
@@ -20,8 +21,10 @@ import {
   evaluateProjectAccess,
   getProjectAccessPrincipal,
   getProjectListAuthority,
+  listAuthorizedProjectActionsForPage,
 } from '../lib/project-access';
 import { projectMetadataFields } from '../lib/repository-profile';
+import { timeRepositoryRead } from '../lib/repository-read-timing';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { resolveStudioSource } from '../lib/schema-studio';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -138,36 +141,44 @@ const schemaReleaseRoute = createRoute({
   },
 });
 
-async function publicCard(
-  c: Parameters<typeof getProjectAccessPrincipal>[0],
-  db: Awaited<ReturnType<typeof getDB>>,
-  project: NonNullable<Awaited<ReturnType<typeof findProjectById>>>
+function publicCard(
+  project: NonNullable<Awaited<ReturnType<typeof findProjectById>>>,
+  namespace: string | null,
+  canRead: boolean
 ) {
-  const address = await getRepositoryAddress(db, project);
   const { metadata, repository_profile } = projectMetadataFields(project.metadataJson);
-  const access = await evaluateProjectAccess(
-    db,
-    project.projectId,
-    getProjectAccessPrincipal(c),
-    'project:read',
-    { allowLocalBypass: isAuthenticationDisabled() }
-  );
   return {
     projectId: project.projectId,
     name: project.name,
-    namespace: address.namespace,
+    namespace,
     description:
       typeof metadata?.description === 'string' ? metadata.description.slice(0, 4096) : '',
     tags: repository_profile.tags,
     icon: repository_profile.icon,
     createdAt: project.createdAt.toISOString(),
-    repositoryPath: access.allowed ? `/project/${encodeURIComponent(project.projectId)}` : null,
+    repositoryPath: canRead ? `/project/${encodeURIComponent(project.projectId)}` : null,
   };
 }
+
 exploreRoutes.openapi(publicProjectsRoute, async (c) => {
   const db = await getDB();
-  const page = await findProjects(db, { ...c.req.valid('query'), visibility: 'public' });
-  const items = await Promise.all(page.items.map((project) => publicCard(c, db, project)));
+  const page = await timeRepositoryRead(c, 'public_projects_page', () =>
+    findProjects(db, { ...c.req.valid('query'), visibility: 'public' })
+  );
+  const ids = page.items.map((project) => project.projectId);
+  const [addresses, actions] = await Promise.all([
+    timeRepositoryRead(c, 'public_projects_addresses', () => getRepositoryAddresses(db, ids)),
+    timeRepositoryRead(c, 'public_projects_access', () =>
+      listAuthorizedProjectActionsForPage(c, db, ids)
+    ),
+  ]);
+  const items = page.items.map((project) =>
+    publicCard(
+      project,
+      addresses.get(project.projectId)?.namespace ?? null,
+      actions.get(project.projectId)?.includes('project:read') ?? false
+    )
+  );
   c.header('Cache-Control', 'private, no-store');
   return c.json(
     { success: true as const, data: PublicProjectPageSchema.parse({ ...page, items }) },
@@ -180,7 +191,13 @@ exploreRoutes.openapi(publicProjectRoute, async (c) => {
   c.header('Cache-Control', 'private, no-store');
   if (!project || project.visibility !== 'public')
     return errorResponse(c, 'NOT_FOUND', 'Public project unavailable');
-  const card = await publicCard(c, db, project);
+  const [address, access] = await Promise.all([
+    getRepositoryAddress(db, project),
+    evaluateProjectAccess(db, project.projectId, getProjectAccessPrincipal(c), 'project:read', {
+      allowLocalBypass: isAuthenticationDisabled(),
+    }),
+  ]);
+  const card = publicCard(project, address.namespace, access.allowed);
   const { repository_profile } = projectMetadataFields(project.metadataJson);
   return c.json(
     {

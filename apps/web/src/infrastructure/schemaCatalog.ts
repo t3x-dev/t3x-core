@@ -7,12 +7,16 @@ import {
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 import { fetchExploreRelease } from './explore';
 
-export async function fetchSchemaCatalog(projectId: string | null, query: string) {
+export async function fetchSchemaCatalog(
+  projectId: string | null,
+  query: string,
+  signal?: AbortSignal
+) {
   const path = projectId
     ? `${API_V1}/projects/${encodeURIComponent(projectId)}/yschema/catalog`
     : `${API_V1}/yschema/catalog`;
   return SchemaCatalogPageSchema.parse(
-    await handleResponse(await fetchWithTimeout(`${path}?${query}`))
+    await handleResponse(await fetchWithTimeout(`${path}?${query}`, undefined, undefined, signal))
   );
 }
 export async function fetchSchemaCollections() {

@@ -34,15 +34,22 @@ const result = {
 beforeEach(() => mocks.fetch.mockReset());
 it('keeps global and project catalog routes separate', async () => {
   mocks.fetch.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
-  await fetchSchemaCatalog(null, 'selection=editor-picks&limit=24');
-  await fetchSchemaCatalog('project/a', 'q=release&limit=24');
+  const { signal } = new AbortController();
+  await fetchSchemaCatalog(null, 'selection=editor-picks&limit=24', signal);
+  await fetchSchemaCatalog('project/a', 'q=release&limit=24', signal);
   expect(mocks.fetch).toHaveBeenNthCalledWith(
     1,
-    '/api/v1/yschema/catalog?selection=editor-picks&limit=24'
+    '/api/v1/yschema/catalog?selection=editor-picks&limit=24',
+    undefined,
+    undefined,
+    signal
   );
   expect(mocks.fetch).toHaveBeenNthCalledWith(
     2,
-    '/api/v1/projects/project%2Fa/yschema/catalog?q=release&limit=24'
+    '/api/v1/projects/project%2Fa/yschema/catalog?q=release&limit=24',
+    undefined,
+    undefined,
+    signal
   );
 });
 describe('exact release introduction', () => {

@@ -20,7 +20,7 @@ import {
   Settings,
   UsersRound,
 } from 'lucide-react';
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { T3XMark } from '@/components/layout/T3XMark';
 import {
   getProjectTabSegment,
@@ -47,6 +47,11 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
   community: LayoutGrid,
   settings: Settings,
 };
+
+function BrowseLinkStatus() {
+  const { pending } = useLinkStatus();
+  return pending ? <output className={styles.browseStatus}>Opening Browse…</output> : null;
+}
 
 export function DiscoverHeader({
   repoPath,
@@ -205,6 +210,7 @@ export function DiscoverHeader({
               aria-current={isExplore && exploreView === 'browse' ? 'page' : undefined}
             >
               Browse
+              <BrowseLinkStatus />
             </Link>
             <Link href="/repositories" aria-current={repositoriesNavigation ? 'page' : undefined}>
               Your repositories
