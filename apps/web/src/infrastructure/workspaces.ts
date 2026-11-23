@@ -138,7 +138,7 @@ export interface WorkspaceSourceTransitionDecisionResponse
 }
 
 export function workspaceWritePayload(workspace: WorkspaceCandidate) {
-  const { revision, ...workspaceState } = workspace;
+  const { revision, schemaActivity: _schemaActivity, ...workspaceState } = workspace;
   return {
     workspace: workspaceState,
     ...(revision === undefined ? {} : { if_revision: revision }),

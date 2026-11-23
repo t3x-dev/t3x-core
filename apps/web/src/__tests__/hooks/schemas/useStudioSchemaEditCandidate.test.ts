@@ -245,3 +245,17 @@ it('rejects queued writes and late replies after the browser account changes', a
   unmount();
   localStorage.removeItem('t3x-user');
 });
+
+it('skips a confirmed empty revision and reads a newly reported candidate', async () => {
+  const { result, rerender } = renderHook(
+    ({ absent }) => useStudioSchemaEditCandidate('project', 'workspace', 7, absent),
+    { initialProps: { absent: true } }
+  );
+  expect(result.current.loading).toBe(false);
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(mocks.read).not.toHaveBeenCalled();
+  mocks.read.mockResolvedValue({ candidateId: 'edit', revision: 1 });
+  rerender({ absent: false });
+  await waitFor(() => expect(result.current.candidate?.candidateId).toBe('edit'));
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith('project', 'workspace');
+});

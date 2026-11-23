@@ -770,9 +770,19 @@ workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
     isAuthenticationDisabled() || !owner
       ? await listWorkspaceDrafts(db, projectId)
       : await listWorkspaceDraftsForOwner(db, projectId, owner);
-  const workspaces = drafts.flatMap((draft) =>
-    draft.workspace_state ? [workspaceFromDraft(draft, draft.workspace_id ?? draft.id)] : []
-  );
+  const workspaces = drafts.flatMap((draft) => {
+    const state = draft.workspace_state;
+    if (!state) return [];
+    return [
+      {
+        ...workspaceFromDraft(draft, draft.workspace_id ?? draft.id),
+        schemaActivity: {
+          hasEditCandidate: Boolean(state.schemaEditCandidate),
+          hasPendingTask: state.schemaPending !== undefined,
+        },
+      },
+    ];
+  });
 
   return c.json({
     success: true as const,
@@ -1167,7 +1177,7 @@ function workspaceFromDraft(draft: Draft, workspaceId: string): Record<string, u
 }
 
 function workspaceStateForPersistence(workspace: Record<string, unknown>): Record<string, unknown> {
-  const { revision: _revision, ...persistedWorkspace } = workspace;
+  const { revision: _revision, schemaActivity: _schemaActivity, ...persistedWorkspace } = workspace;
   return persistedWorkspace;
 }
 

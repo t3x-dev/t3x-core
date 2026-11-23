@@ -1418,7 +1418,7 @@ it('starts the default saved Workspace read while a known branch list is refresh
   mocks.pendingSchemaLoading = true;
   const { rerender } = render(<SchemaStudioExperience projectId="p" />);
 
-  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision);
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', main.id, main.revision, false);
   expect(screen.getByText('Loading Schema definition…')).toBeVisible();
 
   mocks.pendingSchemaLoading = false;
@@ -1431,7 +1431,12 @@ it('starts the default saved Workspace read while a known branch list is refresh
   mocks.branchesLoading = false;
   rerender(<SchemaStudioExperience projectId="p" />);
   expect(screen.getByRole('button', { name: /current branch main/ })).toBeVisible();
-  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith('p', 'feature-draft', main.revision);
+  expect(mocks.readPendingSchema).not.toHaveBeenCalledWith(
+    'p',
+    'feature-draft',
+    main.revision,
+    false
+  );
 });
 
 it.each([
@@ -1447,7 +1452,7 @@ it.each([
   mocks.workspaces = state === 'missing saved default' ? [feature] : [boundWorkspace(), feature];
   render(<SchemaStudioExperience projectId="p" />);
 
-  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined);
+  expect(mocks.readPendingSchema).toHaveBeenCalledWith('p', '', undefined, false);
   expect(mocks.readPendingSchema.mock.calls.every(([, workspaceId]) => workspaceId === '')).toBe(
     true
   );

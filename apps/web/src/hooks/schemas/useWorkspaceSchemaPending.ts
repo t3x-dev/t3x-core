@@ -7,7 +7,8 @@ import { readWorkspaceSchemaPending } from '@/infrastructure/schemaStudio';
 export function useWorkspaceSchemaPending(
   projectId: string,
   workspaceId: string,
-  revision?: number
+  revision?: number,
+  confirmedEmpty = false
 ) {
   const key = JSON.stringify([projectId, workspaceId, revision]);
   const [retry, setRetry] = useState(0);
@@ -19,7 +20,7 @@ export function useWorkspaceSchemaPending(
   useEffect(() => {
     let active = true;
     setResult(undefined);
-    if (projectId && workspaceId)
+    if (projectId && workspaceId && !confirmedEmpty)
       void readWorkspaceSchemaPending(projectId, workspaceId).then(
         (data) => {
           if (active) setResult({ key, data });
@@ -36,17 +37,18 @@ export function useWorkspaceSchemaPending(
     return () => {
       active = false;
     };
-  }, [key, projectId, workspaceId, retry]);
+  }, [key, projectId, workspaceId, retry, confirmedEmpty]);
   useEffect(() => {
+    if (confirmedEmpty) return;
     const refresh = () => setRetry((value) => value + 1);
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
-  }, []);
+  }, [confirmedEmpty]);
   const current = result?.key === key ? result : undefined;
   return {
     data: current?.data,
     error: current?.error,
-    loading: Boolean(projectId && workspaceId) && !current,
+    loading: Boolean(projectId && workspaceId) && !confirmedEmpty && !current,
     refresh: () => setRetry((value) => value + 1),
   };
 }
