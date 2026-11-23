@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavigationFeedback } from '@/components/layout/NavigationFeedback';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -191,6 +192,7 @@ function ProjectRow({
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
+            <NavigationFeedback />
           </Link>
           {project.visibility && <RepositoryVisibility value={project.visibility} />}
           {project.canEdit === false && <span className={styles.readOnly}>Read only</span>}
@@ -716,6 +718,7 @@ function ProjectDirectoryContent({
                           <span>{project.namespace ?? ownerSlug}</span>
                         </span>
                         <ArrowRight aria-hidden="true" size={15} />
+                        <NavigationFeedback />
                       </Link>
                     ))}
                   </div>

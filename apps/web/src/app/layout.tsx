@@ -2,6 +2,7 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata } from 'next';
 import './globals.css';
+import { InvitationInboxProvider } from '@/hooks/accounts/usePendingInvitations';
 import ClientLayout from './ClientLayout';
 
 export const metadata: Metadata = {
@@ -26,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body className="font-sans" suppressHydrationWarning>
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout>
+          <InvitationInboxProvider>{children}</InvitationInboxProvider>
+        </ClientLayout>
       </body>
     </html>
   );

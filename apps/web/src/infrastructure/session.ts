@@ -5,6 +5,20 @@
  * The actual Session credential lives only in an HttpOnly cookie owned by the BFF.
  */
 const USER_STORAGE_KEY = 't3x-user';
+const USER_CHANGE_EVENT = 't3x:session-user-changed';
+
+export function subscribeSessionUser(onStoreChange: () => void): () => void {
+  window.addEventListener(USER_CHANGE_EVENT, onStoreChange);
+  window.addEventListener('storage', onStoreChange);
+  return () => {
+    window.removeEventListener(USER_CHANGE_EVENT, onStoreChange);
+    window.removeEventListener('storage', onStoreChange);
+  };
+}
+
+export function getSessionUserId(): string | null {
+  return getSessionUser()?.id || null;
+}
 
 // ============================================================
 // Session User (localStorage)
@@ -22,7 +36,9 @@ export interface SessionUser {
  */
 export function setSessionUser(user: SessionUser): void {
   if (typeof window === 'undefined') return;
+  const previousId = getSessionUserId();
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  if (getSessionUserId() !== previousId) window.dispatchEvent(new Event(USER_CHANGE_EVENT));
 }
 
 /**
@@ -43,5 +59,6 @@ export function getSessionUser(): SessionUser | null {
  */
 export function clearSession(): void {
   localStorage.removeItem(USER_STORAGE_KEY);
+  window.dispatchEvent(new Event(USER_CHANGE_EVENT));
   window.location.href = '/login';
 }

@@ -20,7 +20,8 @@ import {
   Settings,
   UsersRound,
 } from 'lucide-react';
-import Link, { useLinkStatus } from 'next/link';
+import Link from 'next/link';
+import { NavigationFeedback } from '@/components/layout/NavigationFeedback';
 import { T3XMark } from '@/components/layout/T3XMark';
 import {
   getProjectTabSegment,
@@ -31,7 +32,7 @@ import {
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
-import { usePendingInvitations } from '@/hooks/accounts/usePendingInvitations';
+import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
 import palette from '@/styles/management-palette.module.css';
 import styles from './DiscoverHeader.module.css';
 
@@ -47,11 +48,6 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
   community: LayoutGrid,
   settings: Settings,
 };
-
-function BrowseLinkStatus() {
-  const { pending } = useLinkStatus();
-  return pending ? <output className={styles.browseStatus}>Opening Browse…</output> : null;
-}
 
 export function DiscoverHeader({
   repoPath,
@@ -93,7 +89,8 @@ export function DiscoverHeader({
   repositoriesNavigation?: boolean;
 }) {
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
-  const hasPendingInvitations = usePendingInvitations(!authDisabled);
+  const { invitations } = useInvitationInbox();
+  const hasPendingInvitations = invitations.length > 0;
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
@@ -204,16 +201,18 @@ export function DiscoverHeader({
               aria-current={isExplore && exploreView === 'discover' ? 'page' : undefined}
             >
               Discover
+              <NavigationFeedback />
             </Link>
             <Link
               href={browseHref}
               aria-current={isExplore && exploreView === 'browse' ? 'page' : undefined}
             >
               Browse
-              <BrowseLinkStatus />
+              <NavigationFeedback />
             </Link>
             <Link href="/repositories" aria-current={repositoriesNavigation ? 'page' : undefined}>
               Your repositories
+              <NavigationFeedback />
             </Link>
           </nav>
           <div className={styles.actions}>
@@ -225,6 +224,7 @@ export function DiscoverHeader({
                   title="Invitations"
                 >
                   <Mail aria-hidden="true" />
+                  <NavigationFeedback />
                   {hasPendingInvitations && (
                     <span className={styles.invitationDot} aria-hidden="true" />
                   )}
@@ -266,6 +266,7 @@ export function DiscoverHeader({
                   >
                     <Icon aria-hidden="true" />
                     {tab.label}
+                    <NavigationFeedback />
                   </Link>
                 );
               })
@@ -285,6 +286,7 @@ export function DiscoverHeader({
                   >
                     <Icon aria-hidden="true" />
                     {tab.label}
+                    <NavigationFeedback />
                   </Link>
                 );
               })}

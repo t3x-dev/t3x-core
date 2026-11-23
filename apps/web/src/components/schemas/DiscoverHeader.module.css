@@ -313,8 +313,12 @@
   }
 }
 
-.browseStatus {
-  margin-inline-start: 0.375rem;
-  color: var(--text-secondary);
-  font-size: 12px;
+.globalNav a:active,
+.globalNav a:has([data-navigation-pending]),
+.tab:active,
+.tab:has([data-navigation-pending]),
+.account:active,
+.account:has([data-navigation-pending]) {
+  color: var(--accent-commit);
+  background-color: var(--surface-secondary);
 }

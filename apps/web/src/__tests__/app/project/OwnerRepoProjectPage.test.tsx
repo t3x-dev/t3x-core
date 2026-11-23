@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   resolveObject: vi.fn(),
   replace: vi.fn(),
   listBranches: vi.fn(),
+  fetchProject: vi.fn(),
   fetchProjectWorkspaces: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
   pathname: null as string | null,
@@ -31,6 +32,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
   useRouter: () => router,
 }));
+vi.mock('@/queries/project', () => ({ fetchProject: mocks.fetchProject }));
 vi.mock('@/queries/projects', () => ({
   resolveRepository: (...args: unknown[]) => mocks.resolve(...args),
 }));
@@ -46,12 +48,14 @@ vi.mock('@/queries/repositoryObjectAddresses', () => ({
   getRepositoryObjectAddress: mocks.resolveObject,
 }));
 vi.mock('@/app/project/[projectId]/page', async () => {
+  const { useRepositoryProjectDetail } = await import('@/components/project/ProjectDetailContext');
   const { useRepositoryViewData } = await import('@/components/project/RepositoryRouteContext');
 
   function ViewData({ projectId }: { projectId: string }) {
+    const { project } = useRepositoryProjectDetail(projectId);
     const { branches, workspaces } = useRepositoryViewData(projectId);
     return (
-      <output data-testid="view-data">
+      <output data-testid="view-data" data-project={project?.name}>
         {branches.branches.join(',')}{' '}
         {workspaces.workspaces.map((workspace) => workspace.id).join(',')}
       </output>
@@ -117,6 +121,12 @@ beforeEach(() => {
     branches: ['main', 'feature/release', 'feature/100%'].map((name) => ({ name })),
   });
   mocks.fetchProjectWorkspaces.mockResolvedValue([]);
+  mocks.fetchProject.mockResolvedValue({
+    project_id: 'proj_outside_list',
+    name: 'Repository details',
+    created_at: '2026-01-01T00:00:00Z',
+    visibility: 'private',
+  });
   useProjectStore.setState({ projects: [], details: {} });
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
   mocks.pathname = null;
@@ -133,7 +143,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it('reuses the verified address and in-flight view reads when the Schema page mounts', async () => {
+it('reuses the verified address, project details and in-flight view reads when the Schema page mounts', async () => {
   mocks.query = '';
   let completeBranches!: (value: { branches: { name: string }[] }) => void;
   let completeWorkspaces!: (value: { id: string }[]) => void;
@@ -161,6 +171,8 @@ it('reuses the verified address and in-flight view reads when the Schema page mo
 
   expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice schemas');
   expect(mocks.resolve).toHaveBeenCalledOnce();
+  expect(mocks.fetchProject).toHaveBeenCalledExactlyOnceWith('proj_outside_list');
+  expect(screen.getByTestId('view-data')).toHaveAttribute('data-project', 'Repository details');
   expect(mocks.listBranches).toHaveBeenCalledOnce();
   expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
   await act(async () => {

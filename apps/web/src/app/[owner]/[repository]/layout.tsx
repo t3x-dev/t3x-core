@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { type ReactNode, Suspense } from 'react';
+import { ProjectDetailProvider } from '@/components/project/ProjectDetailContext';
 import {
   RepositoryAddressContext,
   RepositoryViewData,
@@ -33,7 +34,9 @@ function RepositoryLayoutContent({ children }: { children: ReactNode }) {
 
   return (
     <RepositoryAddressContext.Provider value={lookup}>
-      <RepositoryViewData projectId={projectId}>{children}</RepositoryViewData>
+      <ProjectDetailProvider projectId={address?.project_id ?? null}>
+        <RepositoryViewData projectId={projectId}>{children}</RepositoryViewData>
+      </ProjectDetailProvider>
     </RepositoryAddressContext.Provider>
   );
 }
