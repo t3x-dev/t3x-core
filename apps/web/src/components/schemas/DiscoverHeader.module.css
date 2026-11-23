@@ -318,7 +318,3 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-
-.browseStatus:empty {
-  margin: 0;
-}

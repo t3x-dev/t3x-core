@@ -50,7 +50,7 @@ const tabIcons: Record<ProjectTabId, LucideIcon> = {
 
 function BrowseLinkStatus() {
   const { pending } = useLinkStatus();
-  return <output className={styles.browseStatus}>{pending ? 'Opening Browse…' : ''}</output>;
+  return pending ? <output className={styles.browseStatus}>Opening Browse…</output> : null;
 }
 
 export function DiscoverHeader({
