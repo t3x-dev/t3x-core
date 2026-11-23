@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SchemaNodeProvenanceSchema } from './schema-provenance';
 
 export const SchemaReleasePresentationReferenceSchema = z
   .object({
@@ -57,6 +58,14 @@ export const SchemaCatalogPageSchema = z.object({
 });
 export type SchemaCatalogItem = z.infer<typeof SchemaCatalogItemSchema>;
 export type SchemaCatalogPage = z.infer<typeof SchemaCatalogPageSchema>;
+
+export const SchemaReleaseReadingSchema = z.object({
+  artifactHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  manifest: z.record(z.string(), z.unknown()),
+  readme: z.string().nullable(),
+  nodeProvenance: SchemaNodeProvenanceSchema.optional(),
+});
+export type SchemaReleaseReading = z.infer<typeof SchemaReleaseReadingSchema>;
 
 /** Editorial labels only: aliases do not select renderers, validators or adapters. */
 export const SchemaCatalogCollectionsSchema = z.object({

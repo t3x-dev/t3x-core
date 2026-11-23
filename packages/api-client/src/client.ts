@@ -1,4 +1,24 @@
-import { type CommittedSchemaBinding, CommittedSchemaBindingSchema } from './schema-studio';
+import {
+  type SchemaCatalogPage,
+  SchemaCatalogPageSchema,
+  type SchemaReleaseReading,
+  SchemaReleaseReadingSchema,
+} from './schema-catalog';
+import {
+  type CommittedSchemaBinding,
+  CommittedSchemaBindingSchema,
+  type SaveStudioSchemaEditCandidateInput,
+  type SchemaPreparationInput,
+  type SchemaPreparationPreview,
+  SchemaPreparationPreviewSchema,
+  type StudioPreview,
+  type StudioPreviewInput,
+  StudioPreviewSchema,
+  type StudioSchemaEditCandidate,
+  type StudioSchemaEditCandidateSaveResult,
+  StudioSchemaEditCandidateSaveResultSchema,
+  StudioSchemaEditCandidateSchema,
+} from './schema-studio';
 import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
   type StatePresentationInput,
@@ -184,6 +204,10 @@ export class T3xApiError extends Error {
     super(message);
     this.name = 'T3xApiError';
   }
+}
+
+function schemaStudioPath(projectId: string): string {
+  return `/v1/projects/${encodeURIComponent(projectId)}/schema-studio`;
 }
 
 export class T3xClient {
@@ -1603,6 +1627,36 @@ export class T3xClient {
   // YSchema Composition Registry
   // ============================================
 
+  async listSchemaCatalog(
+    params: {
+      projectId?: string;
+      canonical_name?: string;
+      q?: string;
+      cursor?: string;
+      limit?: number;
+    } = {}
+  ): Promise<SchemaCatalogPage> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/catalog`
+      : '/v1/yschema/catalog';
+    return this.request('GET', path, undefined, query, undefined, SchemaCatalogPageSchema);
+  }
+
+  async readSchemaRegistryRelease(params: {
+    projectId?: string;
+    sourceProjectId?: string;
+    canonicalName: string;
+    version: string;
+    expectedHash: string;
+  }): Promise<SchemaReleaseReading> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/schema-studio/source`
+      : '/v1/explore/schema-release';
+    return this.request('GET', path, undefined, query, undefined, SchemaReleaseReadingSchema);
+  }
+
   async listYSchemaArtifacts(
     params: ListYSchemaArtifactsParams = {}
   ): Promise<YSchemaArtifactRegistryPage> {
@@ -1627,6 +1681,57 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/yschema/versions`,
       undefined,
       { family }
+    );
+  }
+
+  async readStudioSchemaEditCandidate(projectId: string, workspaceId: string) {
+    return this.request<StudioSchemaEditCandidate>(
+      'GET',
+      `${schemaStudioPath(projectId)}/edit-candidates/${encodeURIComponent(workspaceId)}`,
+      undefined,
+      undefined,
+      undefined,
+      StudioSchemaEditCandidateSchema
+    );
+  }
+
+  async saveStudioSchemaEditCandidate(
+    projectId: string,
+    input: SaveStudioSchemaEditCandidateInput
+  ) {
+    return this.request<StudioSchemaEditCandidateSaveResult>(
+      'PUT',
+      `${schemaStudioPath(projectId)}/edit-candidates/${encodeURIComponent(input.workspaceId)}`,
+      input,
+      undefined,
+      undefined,
+      StudioSchemaEditCandidateSaveResultSchema
+    );
+  }
+
+  async previewStudioSchema(projectId: string, input: StudioPreviewInput) {
+    return this.request<StudioPreview>(
+      'POST',
+      `${schemaStudioPath(projectId)}/preview`,
+      input,
+      undefined,
+      undefined,
+      StudioPreviewSchema
+    );
+  }
+
+  async previewStudioSchemaPreparation(
+    projectId: string,
+    workspaceId: string,
+    input: SchemaPreparationInput
+  ) {
+    return this.request<SchemaPreparationPreview>(
+      'POST',
+      `${schemaStudioPath(projectId)}/preparation/${encodeURIComponent(workspaceId)}/preview`,
+      input,
+      undefined,
+      undefined,
+      SchemaPreparationPreviewSchema
     );
   }
 

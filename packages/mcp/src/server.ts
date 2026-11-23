@@ -30,6 +30,7 @@ import { getApiClient, isApiBackend } from './backend.js';
 import {
   getBusinessExposure,
   isSafeBusinessIdentifier,
+  isSafeWorkspaceIdentifier,
   type McpCapability,
 } from './business-capabilities.js';
 import { getPrompt, PROMPT_DEFS } from './prompts/index.js';
@@ -50,8 +51,16 @@ import { queryDef, queryHandler } from './tools/core/query.js';
 import { draftReviewDef, draftReviewHandler } from './tools/draft-review.js';
 import { openWorkspaceDef, openWorkspaceHandler } from './tools/open-workspace.js';
 import { repositoryLocationDef, repositoryLocationHandler } from './tools/repository-location.js';
+import {
+  schemaCandidateDef,
+  schemaCandidateHandler,
+  schemaPreparationDef,
+  schemaPreparationHandler,
+} from './tools/schema-authoring.js';
+import { schemaRegistryDef, schemaRegistryHandler } from './tools/schema-registry.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
+import { workspaceCandidateDef, workspaceCandidateHandler } from './tools/workspace-candidate.js';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json') as { version?: string };
@@ -78,6 +87,14 @@ const ADVANCED_TOOLS: ToolEntry[] = [
   { def: diffDef, handler: diffHandler },
   { def: mergeDef, handler: mergeHandler },
   { def: adminDef, handler: adminHandler },
+];
+
+const BUSINESS_TOOLS: ToolEntry[] = [
+  { def: contextDef, handler: contextHandler },
+  { def: schemaCandidateDef, handler: schemaCandidateHandler },
+  { def: schemaPreparationDef, handler: schemaPreparationHandler },
+  { def: schemaRegistryDef, handler: schemaRegistryHandler },
+  { def: workspaceCandidateDef, handler: workspaceCandidateHandler },
 ];
 
 export type McpToolset = 'core' | 'advanced' | 'transition';
@@ -161,8 +178,11 @@ export function createMcpServer(options: McpServerOptions) {
     }
   }
 
-  if (exposure?.allows(contextDef.name, {})) {
-    activeEntries.push({ def: contextDef, handler: contextHandler });
+  if (exposure) {
+    for (const entry of BUSINESS_TOOLS) {
+      const def = exposure.definition(entry.def);
+      if (def) activeEntries.push({ def, handler: entry.handler });
+    }
   }
 
   // 2. Build tool definitions array and handlers map
@@ -210,7 +230,9 @@ export function createMcpServer(options: McpServerOptions) {
         (async ({ kind, id, projectId }) => {
           if (
             !exposure.resources.has(kind) ||
-            !isSafeBusinessIdentifier(id) ||
+            !(kind === 'workspace'
+              ? isSafeWorkspaceIdentifier(id)
+              : isSafeBusinessIdentifier(id)) ||
             (projectId !== undefined && !isSafeBusinessIdentifier(projectId))
           ) {
             throw new Error('Resource is unavailable in T3X_MCP_CAPABILITIES.');
@@ -262,9 +284,15 @@ export function createMcpServer(options: McpServerOptions) {
           'snapshot_id',
         ];
         if (
-          identifiers.some(
-            (key) => Object.hasOwn(input, key) && !isSafeBusinessIdentifier(input[key])
-          )
+          identifiers.some((key) => {
+            if (!Object.hasOwn(input, key)) return false;
+            const workspace =
+              key === 'workspace_id' ||
+              (key === 'id' &&
+                name === 't3x_query' &&
+                (input.target === 'workspace' || input.target === 'workspace_activity'));
+            return !(workspace ? isSafeWorkspaceIdentifier : isSafeBusinessIdentifier)(input[key]);
+          })
         ) {
           return errorResult('Invalid identifier in business tool arguments.');
         }

@@ -123,10 +123,13 @@ capabilities:
 | --- | --- |
 | `context` | Current credential context |
 | `repositories` | Repository and branch lookup, project resource |
-| `repositories:write` | Create a repository or branch |
+| `repositories:create`, `branches:create` | Independently enable personal repository creation or branch creation. `repositories:write` continues to enable both. |
 | `state` | Commit history, exact State read, Schema binding, export, diff, Commit resource |
 | `workspace` | Workspace and Draft reads, Workspace resource |
 | `workspace:write` | Open, edit, initialize, and reconcile a Workspace |
+| `workspace:candidates:write` | Publish an existing governed generation candidate to its Draft |
+| `schemas` | List, read, and validate against releases; read and preview saved Schema candidates; preview Content preparation |
+| `schemas:candidates:write` | Save a Schema definition candidate in its Workspace |
 | `schemas:write` | Exact Schema Draft action |
 | `sources` | Source, evidence, and pin reads, including Source resource aliases |
 | `sources:write` | Extract a candidate, create or delete a pin |
@@ -141,6 +144,29 @@ Discovery shows the enabled values for multi-action tools. Calls and resource
 URIs are checked against the same allowlist. Branch reads in this profile skip
 legacy initialization of missing branches. Legacy workflow prompts are
 available only through the legacy toolset configuration.
+
+### Repository, candidate, and Schema operations
+
+- With `t3x_admin`, use a human credential for `create_project`. For
+  `create_branch`, pass the exact `head_commit_hash` in API mode when
+  inheriting an older Commit. Read the resulting owned Workspace from
+  `t3x_query` using its exact ID.
+- With `t3x_publish_candidate`, use the governed `transition_id` from
+  Draft activity and keep its `request_id` for retries. If an action needs
+  generated-deletion confirmation, open the same Workspace in signed-in Web,
+  confirm the exact action in Draft activity, and prepare a fresh Review.
+- Use `t3x_schema_registry` to select a release by canonical name, version
+  and artifact digest. Supply Content relative to the Schema root for a
+  structural check. A Commit binding supplies a separate definition digest
+  that can be passed as `schema_hash`. Definitions unavailable through the
+  authorized release registry may still have an exact historical binding.
+- Use `t3x_schema_candidate` to preview the editing Base, save with the
+  candidate revision and retry key, and read back the saved candidate.
+  Preview that exact candidate to obtain `reviewHash`, then use
+  `t3x_schema_preparation` to inspect the impact and proposed Content
+  changes at the exact Draft revision. Open the same Workspace in signed-in
+  Web to review and adopt the candidate, then use `t3x_draft_review` to
+  prepare a fixed Review.
 
 ### Authenticated core qualification
 
@@ -163,6 +189,18 @@ The first phase runs the stdio loop with API-issued fixture credentials. The
 second issues and revokes the Agent credential through Web and confirms a fixed
 Review in the signed-in Web session. Machine Decision runs only on a fixture
 ref with an explicit test policy.
+
+Run repository and Schema registry, governed candidate publication, and Schema
+authoring qualification on their own fresh stacks:
+
+```bash
+T3X_E2E_MCP_PHASE=repositories T3X_E2E_ARTIFACT_DIR=test-results/mcp-repositories \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-repository-creation.spec.ts
+T3X_E2E_MCP_PHASE=workspace-candidate T3X_E2E_ARTIFACT_DIR=test-results/mcp-candidates \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-candidate-publication.spec.ts
+T3X_E2E_MCP_PHASE=schema-authoring T3X_E2E_ARTIFACT_DIR=test-results/mcp-schema-authoring \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-schema-authoring.spec.ts
+```
 
 ### Resources
 

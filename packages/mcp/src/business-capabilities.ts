@@ -23,6 +23,12 @@ const GROUPS = {
   'repositories:write': {
     operations: { t3x_admin: { parameter: 'action', values: ['create_project', 'create_branch'] } },
   },
+  'repositories:create': {
+    operations: { t3x_admin: { parameter: 'action', values: ['create_project'] } },
+  },
+  'branches:create': {
+    operations: { t3x_admin: { parameter: 'action', values: ['create_branch'] } },
+  },
   state: {
     tools: ['t3x_committed_state', 't3x_diff'],
     operations: { t3x_query: { parameter: 'target', values: ['commit', 'commits'] } },
@@ -50,6 +56,14 @@ const GROUPS = {
         ],
       },
     },
+  },
+  'workspace:candidates:write': { tools: ['t3x_publish_candidate'] },
+  schemas: {
+    tools: ['t3x_schema_registry', 't3x_schema_preparation'],
+    operations: { t3x_schema_candidate: { parameter: 'action', values: ['read', 'preview'] } },
+  },
+  'schemas:candidates:write': {
+    operations: { t3x_schema_candidate: { parameter: 'action', values: ['save'] } },
   },
   'schemas:write': {
     operations: { t3x_edit: { parameter: 'mode', values: ['schema'] } },
@@ -126,7 +140,7 @@ export function getBusinessExposure(capabilities: readonly McpCapability[]) {
       const current = operations.get(name);
       operations.set(name, {
         parameter: gate.parameter,
-        values: [...(current?.values ?? []), ...gate.values],
+        values: [...new Set([...(current?.values ?? []), ...gate.values])],
         defaultValue: current?.defaultValue ?? gate.defaultValue,
       });
     }
@@ -175,4 +189,16 @@ export function isSafeBusinessIdentifier(value: unknown): value is string {
     value !== '..' &&
     !/[\s\p{Cc}/\\?#%]/u.test(value)
   );
+}
+
+export function isSafeWorkspaceIdentifier(value: unknown): value is string {
+  if (isSafeBusinessIdentifier(value)) return true;
+  const prefix = 'workspace_branch:';
+  if (typeof value !== 'string' || !value.startsWith(prefix)) return false;
+  const branch = value.slice(prefix.length);
+  try {
+    return branch.length > 0 && encodeURIComponent(decodeURIComponent(branch)) === branch;
+  } catch {
+    return false;
+  }
 }
