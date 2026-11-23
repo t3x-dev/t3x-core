@@ -17,6 +17,7 @@ import {
   type RateLimitStore,
   resolveIpRateLimitPolicy,
 } from '../middleware/rate-limit';
+import type { AppEnv } from '../types';
 
 const originalAuthDisabled = process.env.AUTH_DISABLED;
 const originalNpmLifecycleEvent = process.env.npm_lifecycle_event;
@@ -286,6 +287,35 @@ describe('Rate Limit Middleware', () => {
   });
 
   describe('distributed policy behavior', () => {
+    it('uses an already consumed allowance only for the corresponding key', async () => {
+      const store = new MemoryRateLimitStore();
+      const consume = vi.spyOn(store, 'consume');
+      const app = new Hono<AppEnv>();
+      app.use('*', async (c, next) => {
+        const id = c.req.header('X-Test-Key-Id') ?? 'session';
+        c.set('apiKey', { id } as AppEnv['Variables']['apiKey']);
+        c.set('principalRateLimit', {
+          keyId: 'session',
+          result: { allowed: false, count: 101, remaining: 0, resetAt: Date.now() + 30_000 },
+        });
+        await next();
+      });
+      app.use('*', createRateLimitL2(store));
+      app.get('/test', (c) => c.text('ok'));
+
+      const limited = await app.request('/test');
+      expect(limited.status).toBe(429);
+      expect(limited.headers.get('X-RateLimit-Key-Remaining')).toBe('0');
+      expect(limited.headers.get('Retry-After')).toBe('30');
+      expect(consume).not.toHaveBeenCalled();
+
+      const differentKey = await app.request('/test', {
+        headers: { 'X-Test-Key-Id': 'different' },
+      });
+      expect(differentKey.status).toBe(200);
+      expect(consume).toHaveBeenCalledOnce();
+    });
+
     it('does not make liveness or readiness probe routing depend on the counter store', async () => {
       const store: RateLimitStore = {
         consume: async () => {

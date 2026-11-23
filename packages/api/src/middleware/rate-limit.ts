@@ -181,9 +181,13 @@ export function createRateLimitL2(store: RateLimitStore) {
     if (!apiKey) return next();
 
     const policy = RATE_LIMIT_POLICIES.apiKey;
-    const result = await timeRepositoryRead(c, 'principal_rate_limit', () =>
-      consumeRateLimit(store, policy, apiKey.id)
-    );
+    const preconsumed = c.get('principalRateLimit');
+    const result =
+      preconsumed?.keyId === apiKey.id
+        ? preconsumed.result
+        : await timeRepositoryRead(c, 'principal_rate_limit', () =>
+            consumeRateLimit(store, policy, apiKey.id)
+          );
     applyRateLimitHeaders(c, policy, result, 'Key');
 
     if (!result.allowed) {

@@ -1,4 +1,4 @@
-import { lte, sql } from 'drizzle-orm';
+import { lte, type SQL, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { rateLimitBuckets } from '../schema';
 
@@ -26,10 +26,21 @@ export interface ConsumeRateLimitResult {
  * INSERT ... ON CONFLICT performs the increment under PostgreSQL's row lock,
  * so concurrent requests from different processes cannot undercount.
  */
-export async function consumeRateLimit(
+export function consumeRateLimit(
   db: AnyDB,
   input: ConsumeRateLimitInput
-): Promise<ConsumeRateLimitResult> {
+): Promise<ConsumeRateLimitResult>;
+/** The counter is untouched when the database predicate is false. */
+export function consumeRateLimit(
+  db: AnyDB,
+  input: ConsumeRateLimitInput,
+  when: SQL
+): Promise<ConsumeRateLimitResult | null>;
+export async function consumeRateLimit(
+  db: AnyDB,
+  input: ConsumeRateLimitInput,
+  when?: SQL
+): Promise<ConsumeRateLimitResult | null> {
   if (!input.scope || !input.keyHash) {
     throw new Error('Rate-limit scope and keyHash are required');
   }
@@ -44,27 +55,36 @@ export async function consumeRateLimit(
   const windowStartMs = Math.floor(now / input.windowMs) * input.windowMs;
   const resetAt = windowStartMs + input.windowMs;
 
-  const [row] = await db
-    .insert(rateLimitBuckets)
-    .values({
-      scope: input.scope,
-      keyHash: input.keyHash,
-      windowStart: new Date(windowStartMs),
-      count: 1,
-      expiresAt: new Date(resetAt),
-      updatedAt: new Date(now),
-    })
+  const values = {
+    scope: input.scope,
+    keyHash: input.keyHash,
+    windowStart: new Date(windowStartMs),
+    count: 1,
+    expiresAt: new Date(resetAt),
+    updatedAt: new Date(now),
+  };
+  const insert = db.insert(rateLimitBuckets);
+  const update = when
+    ? insert.select(sql`SELECT
+        ${values.scope}, ${values.keyHash}, ${sql.param(values.windowStart, rateLimitBuckets.windowStart)},
+        1, ${sql.param(values.expiresAt, rateLimitBuckets.expiresAt)}, ${sql.param(values.updatedAt, rateLimitBuckets.updatedAt)}
+        WHERE ${when}`)
+    : insert.values(values);
+  const [row] = await update
     .onConflictDoUpdate({
       target: [rateLimitBuckets.scope, rateLimitBuckets.keyHash, rateLimitBuckets.windowStart],
       set: {
         count: sql`${rateLimitBuckets.count} + 1`,
-        expiresAt: new Date(resetAt),
-        updatedAt: new Date(now),
+        expiresAt: values.expiresAt,
+        updatedAt: values.updatedAt,
       },
     })
     .returning({ count: rateLimitBuckets.count });
 
-  if (!row) throw new Error('Rate-limit counter update returned no row');
+  if (!row) {
+    if (when) return null;
+    throw new Error('Rate-limit counter update returned no row');
+  }
 
   return {
     allowed: row.count <= input.limit,
