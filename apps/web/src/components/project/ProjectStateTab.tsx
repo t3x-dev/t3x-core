@@ -318,30 +318,44 @@ export function ProjectStateTab({
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
   const loadedSnapshotScope = useRef('');
+  const initialBranchRead = useRef<{ scope: string; promise: Promise<ApiCommit[]> } | null>(null);
   const waitingForBranch =
     snapshotTargetHead === undefined &&
     !inspectedHeadByBranchRef.current[branchScope] &&
     branchesLoading;
 
   useEffect(() => {
+    if (initialBranchRead.current?.scope !== selectionScope) initialBranchRead.current = null;
     if (!snapshotEnabled) return;
 
     const selectedHead =
       focusedCommitHash ?? inspectedHeadByBranchRef.current[branchScope] ?? snapshotTargetHead;
     const scopePrefix = `${selectionScope}:`;
     if (loadedSnapshotScope.current === `${scopePrefix}${selectedHead ?? ''}`) return;
-    // The registered pointer is authoritative. Wait for it before falling back to history.
-    if (waitingForBranch) return;
+    // The branch-filtered endpoint starts at the verified ref head, so the selector
+    // inventory can finish independently without starting a second snapshot request.
+    if (waitingForBranch && !initialBranchRead.current) {
+      initialBranchRead.current = {
+        scope: selectionScope,
+        promise: loadCommits(projectId, branchFocus, 1),
+      };
+    }
+    const initialRead = initialBranchRead.current?.promise;
     let cancelled = false;
     const load = async () => {
       setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
-        if (!selectedHead && branchesError) throw new Error(branchesError);
+        if (!selectedHead && !initialRead && branchesError) throw new Error(branchesError);
         const requestedBranch = branchFocus || 'main';
-        const branchHeadHash = selectedHead;
+        let branchHeadHash = selectedHead;
         let commits: ApiCommit[] = [];
         let headCommit: ApiCommit | null = null;
-        if (branchHeadHash) {
+        if (initialRead) {
+          const [head] = await initialRead;
+          headCommit = head ?? null;
+          branchHeadHash = headCommit?.hash ?? null;
+          commits = head ? [head] : [];
+        } else if (branchHeadHash) {
           headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
@@ -371,6 +385,7 @@ export function ProjectStateTab({
           throw new Error('Commit response does not match the selected project and branch.');
         }
         if (!cancelled) {
+          if (!headCommit && initialRead) initialBranchRead.current = null;
           if (headCommit && !focusedCommitHash && !inspectedHeadByBranchRef.current[branchScope]) {
             inspectedHeadByBranchRef.current[branchScope] = headCommit.hash;
           }

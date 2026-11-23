@@ -34,6 +34,7 @@ export function useSchemaReviewStatus(projectId: string, workspaceId: string, re
     }
   }, [key, projectId, workspaceId]);
   useEffect(() => {
+    if (!workspaceId) return;
     void refresh();
     const focus = () => void refresh();
     window.addEventListener('focus', focus);
@@ -41,7 +42,7 @@ export function useSchemaReviewStatus(projectId: string, workspaceId: string, re
       ++request.current;
       window.removeEventListener('focus', focus);
     };
-  }, [refresh]);
+  }, [refresh, workspaceId]);
   const current = result?.key === key ? result : undefined;
   return {
     latest: current?.latest,

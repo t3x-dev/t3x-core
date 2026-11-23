@@ -12,7 +12,7 @@ import { stateOverviewRoutes } from './state-overview.openapi';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { exportCommittedState, StateExportIntegrityError } from '@t3x-dev/application';
 import type { SemanticContent } from '@t3x-dev/core';
-import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
+import { projectCommitV2, validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
   ensureMainBranch,
   findBranchesByProject,
@@ -639,13 +639,16 @@ async function withSemanticCommitFields(
   projectId: string,
   entry: CommitHistoryEntry
 ) {
-  const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
+  const [semanticCommit, branch] = await Promise.all([
+    getRepositorySemanticCommitIfSupported(db, entry.id, projectId),
+    commitOriginBranch(db, projectId, entry.assurance.decision.digest),
+  ]);
   const graph = semanticCommit?.intent
     ? null
     : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
   return {
     ...entry,
-    branch: await commitOriginBranch(db, projectId, entry.assurance.decision.digest),
+    branch,
     content:
       semanticCommit?.semanticContent ??
       (graph ? semanticContentFromTransitionState(graph.state) : undefined),
@@ -669,7 +672,10 @@ async function listCommitHistoryForRef(
     const digest = stack.shift()!;
     if (seen.has(digest)) continue;
     seen.add(digest);
-    const entry = await getCommitHistoryEntry(db, projectId, digest);
+    const entry =
+      digest === head.head
+        ? projectCommitV2(head.commit, head.recordedAt)
+        : await getCommitHistoryEntry(db, projectId, digest);
     if (!entry) continue;
     commits.push(await withSemanticCommitFields(db, projectId, entry));
     stack.push(...entry.parents);

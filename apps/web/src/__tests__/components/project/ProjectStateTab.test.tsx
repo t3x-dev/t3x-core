@@ -859,15 +859,19 @@ describe('ProjectStateTab', () => {
     expect(screen.getByTestId('state-page-footer')).toHaveTextContent('Test Project');
   });
 
-  it('waits for the initial branch pointer instead of starting a redundant history request', async () => {
+  it('renders the exact branch head while the branch selector is still loading', async () => {
     hookMocks.branchesLoading = true;
+    const head = deferred<ApiCommit[]>();
+    hookMocks.loadCommits.mockReturnValueOnce(head.promise);
     const view = renderStateTab();
     const pending = screen.getByRole('region', { name: 'State version status' });
     expect(within(pending).getByRole('heading', { name: 'Structure' })).toBeVisible();
     expect(within(pending).getByRole('button', { name: 'Tree', pressed: true })).toBeVisible();
     expect(within(pending).getByRole('status')).toHaveTextContent('Loading state');
-    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommits).toHaveBeenCalledExactlyOnceWith('proj_test', 'main', 1);
     expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+    await act(async () => head.resolve([PRD_COMMIT]));
+    expect(await screen.findByRole('region', { name: 'State structure' })).toBeVisible();
     hookMocks.branchesLoading = false;
     hookMocks.branchHeads = { main: PRD_COMMIT.hash };
     hookMocks.loadCommit.mockImplementation(async (hash: string) =>
@@ -877,7 +881,8 @@ describe('ProjectStateTab', () => {
       <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
     );
     expect(await screen.findByRole('region', { name: 'State structure' })).toBeVisible();
-    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommits).toHaveBeenCalledOnce();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
   });
 
   it('keeps evidence loading across a branch pointer refresh and ignores late evidence from the old version', async () => {

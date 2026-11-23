@@ -97,7 +97,7 @@ beforeAll(async () => {
       ownerId: 'other-owner',
     })
   ).projectId;
-  await publish('public', { provides: ['declared.preview'], kind: 'module' });
+  await publish('public', { provides: ['declared.preview', 'declared.extra'], kind: 'module' });
   await publish('public', { version: '2.0.0', provides: ['declared.preview'], kind: 'module' });
   await publish('private', { owner: projectId, visibility: 'private' });
   await publish('team', { owner: projectId, visibility: 'team' });
@@ -187,6 +187,16 @@ it('uses version declarations for capabilities; tags never create runtime claims
   const result = await page('capability=declared.preview');
   expect(result.items).toHaveLength(2);
   expect(result.items.every((item) => item.identity.canonicalName === 'catalog/public')).toBe(true);
+  expect(
+    result.items.map(({ release, definition }) => [release.version, definition.provides])
+  ).toEqual([
+    ['2.0.0', ['declared.preview']],
+    ['1.0.0', ['declared.extra', 'declared.preview']],
+  ]);
+  expect(result.items.map((item) => item.definition.requires)).toEqual([
+    ['declared.input'],
+    ['declared.input'],
+  ]);
   const tagOnly = (await page('tags=declared.preview')).items[0];
   expect(tagOnly.definition.provides).toEqual([]);
   expect(tagOnly.validation).toBe('not-run');

@@ -168,14 +168,16 @@ function OwnerRepoProjectPageContent() {
   if (!address.canonical_path)
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
   if (branchForPage && !branches.branches.includes(branchForPage)) {
-    if (branches.loading) return <LoadingSpinner message="Loading branch…" />;
-    if (branches.error)
+    const readsHeadDirectly = legacyView === 'state' && search.get('view') !== 'canvas';
+    if (branches.loading && !readsHeadDirectly) return <LoadingSpinner message="Loading branch…" />;
+    if (!branches.loading && branches.error)
       return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
-    return (
-      <p role="alert" className="p-6">
-        Branch {branchForPage} was not found in this repository.
-      </p>
-    );
+    if (!branches.loading)
+      return (
+        <p role="alert" className="p-6">
+          Branch {branchForPage} was not found in this repository.
+        </p>
+      );
   }
   if (numbered && object.isLoading)
     return <LoadingSpinner message="Loading repository object..." />;

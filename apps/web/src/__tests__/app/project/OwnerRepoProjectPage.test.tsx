@@ -158,7 +158,7 @@ it('reuses the verified address, project details and in-flight view reads when t
     })
   );
   const view = render(<OwnerRepoProjectPage />);
-  await screen.findByText('Loading branch…');
+  expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
   await waitFor(() => {
     expect(mocks.listBranches).toHaveBeenCalledOnce();
     expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
@@ -573,9 +573,9 @@ it('rejects an unknown branch without rendering State or falling back to main', 
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
   expect(mocks.replace).not.toHaveBeenCalled();
 });
-it('waits for the branch inventory before mounting a branch page', async () => {
+it('waits for the branch inventory before mounting the branch Canvas', async () => {
   mocks.params.repoPath = ['Repo'];
-  mocks.query = '';
+  mocks.query = 'view=canvas';
   let completeBranches!: (value: { branches: { name: string }[] }) => void;
   mocks.listBranches.mockReturnValue(
     new Promise((resolve) => {

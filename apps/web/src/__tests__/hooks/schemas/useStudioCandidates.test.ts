@@ -13,6 +13,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.list.mockImplementation(async (projectId: string) => [{ id: projectId, projectId }]);
 });
+it('waits until the editor needs sources before reading candidates', async () => {
+  const { result, rerender } = renderHook(({ enabled }) => useStudioCandidates('target', enabled), {
+    initialProps: { enabled: false },
+  });
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(mocks.list).not.toHaveBeenCalled();
+  expect(result.current.loading).toBe(false);
+
+  rerender({ enabled: true });
+  await waitFor(() => expect(result.current.items[0]?.id).toBe('target'));
+  expect(mocks.list).toHaveBeenCalledExactlyOnceWith('target');
+});
 it('does not return a stale addition for navigation after the destination changes', async () => {
   let resolve!: (value: { id: string }) => void;
   mocks.add.mockImplementation(
