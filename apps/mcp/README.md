@@ -39,7 +39,10 @@ name. It returns the canonical path, project ID, ref, and a `null` head for an
 empty branch. Pass a non-null head to `t3x_committed_state` to read the full
 value or export exact YAML or JSON. Its `schema_binding` action reports
 `bound`, `unbound`, or `unknown` from historical Commit evidence.
-Use `t3x_query` for history and the advanced `t3x_diff` tool for comparisons.
+Use `t3x_query` for history and `t3x_diff` to compare two exact Commits.
+In API mode, two repository SemanticContent documents produce a tree and relation diff.
+Other YOps document pairs produce `kind: "document"` with added, removed and modified
+values addressed by JSON Pointer. Array positions are compared by index.
 
 Use `t3x_open_workspace` with the project, explicit branch, expected head and
 request ID. It opens the caller's private Workspace and reports its basis
@@ -255,7 +258,10 @@ document returns `presentation: null`.
 Enable `state:presentation:revise` for `t3x_revise_state_presentation`. Supply
 `project_id`, `ref`, `expected_head` and the full `presentation` document.
 The API checks project edit access and ref authority. Success advances the
-ref to a new Commit with the same State digest. After a lost response, read
+ref to a new Commit with the same State digest. A presentation revision records
+its exact parent so historical Schema reads and fresh Workspaces can recover the
+parent’s verified binding. An ordinary presentation attachment or an older
+revision without that record supplies no binding evidence. After a lost response, read
 the ref and its presentation before deciding whether to submit another revision.
 
 ### Workspace Delivery

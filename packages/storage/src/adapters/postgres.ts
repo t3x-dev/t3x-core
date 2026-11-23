@@ -191,7 +191,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 88;
+export const POSTGRES_SCHEMA_VERSION = 89;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -2682,6 +2682,10 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
       PRIMARY KEY (project_id, commit_digest)
     );
   `);
+
+  await sql.unsafe(
+    'ALTER TABLE state_presentations ADD COLUMN IF NOT EXISTS revision_parent_digest TEXT'
+  );
 
   // Studio candidates retain exact references, never private manifest/resource copies.
   await sql.unsafe(`

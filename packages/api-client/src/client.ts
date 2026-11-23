@@ -125,6 +125,7 @@ import type {
   CommitRepositoryStateInput,
   CommitTransitionInput,
   CommitTransitionResult,
+  CommittedStateComparison,
   ContextParams,
   ContextResult,
   Conversation,
@@ -1371,6 +1372,10 @@ export class T3xClient {
   // ============================================
   // Diff
   // ============================================
+
+  async compareCommittedStates(input: TwoWayDiffInput): Promise<CommittedStateComparison> {
+    return this.request('POST', '/v1/diff/two-way', { ...input, representation: 'auto' });
+  }
 
   async twoWayDiff(input: TwoWayDiffInput): Promise<DiffResult> {
     return this.request<DiffResult>('POST', '/v1/diff/two-way', input);

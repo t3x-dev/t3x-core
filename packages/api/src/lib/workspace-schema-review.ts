@@ -10,6 +10,7 @@ import { describeTransitionObject, type TransitionViewV1 } from '@t3x-dev/core';
 import {
   type AnyDB,
   DraftAuthoringConflictError,
+  findStatePresentation,
   findTransitionCommitReceipt,
   findYSchemaCompositionSnapshot,
   getRepositoryDecisionAuditByDigest,
@@ -77,6 +78,30 @@ export async function recoverCommittedSchema(
   }
   const resources = view.checks.validation.runs.map((run) => run.predicate.schemaResource);
   const hashes = new Set(resources.map((resource) => resource.digest));
+  // Only the atomic presentation revision writer records this link. Attaching
+  // a presentation to an existing Commit does not establish Schema continuity.
+  if (
+    !receipt &&
+    hashes.size === 0 &&
+    view.history?.observation === 'committed' &&
+    view.history.commit.id === refHead &&
+    view.change.base.digest === view.change.result.digest
+  ) {
+    const row = await findStatePresentation(db, projectId, refHead);
+    if (row?.revisionParentDigest) {
+      const parents = view.history.commit.parents;
+      if (parents.length === 1 && parents[0] === row.revisionParentDigest) {
+        const parent = await getVerifiedTransitionCommitGraph(
+          db,
+          projectId,
+          row.revisionParentDigest
+        );
+        if (parent?.commit.result.digest === view.change.base.digest)
+          return readCommittedSchemaBinding(db, projectId, row.revisionParentDigest);
+      }
+      return { ...unboundWorkspaceSchema(), status: 'unknown' };
+    }
+  }
   if (hashes.size !== 1) return null;
   const [committedHash] = hashes;
   if (
@@ -214,7 +239,7 @@ export async function readCommittedSchemaBinding(
   db: AnyDB,
   projectId: string,
   commitDigest: string
-) {
+): Promise<WorkspaceSchemaDefinitionSnapshot | null> {
   const committed = await getVerifiedTransitionCommitGraph(db, projectId, commitDigest);
   if (!committed) return null;
   const unknown = { ...unboundWorkspaceSchema(), status: 'unknown' as const };

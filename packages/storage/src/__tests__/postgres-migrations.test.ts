@@ -35,6 +35,25 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v88 without inferring a revision parent for historical presentations', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('existing-presentation', 'Existing-Presentation', 'ns_t3x_dev', NOW());
+      ALTER TABLE state_presentations DROP COLUMN revision_parent_digest;
+      INSERT INTO state_presentations(project_id, commit_digest, presentation_digest, document, created_by)
+      VALUES ('existing-presentation','commit','digest','{}','author');
+      UPDATE _schema_version SET version = 88;
+    `);
+    const config = { connectionString: setup.connectionString };
+    await migratePostgresStorage(config);
+    await migratePostgresStorage(config);
+    expect(
+      await setup.sql`SELECT revision_parent_digest, document FROM state_presentations`
+    ).toEqual([{ revision_parent_digest: null, document: {} }]);
+  });
+
   it('upgrades v87 and preserves configured Run request receipts on repeated migration', async () => {
     const setup = await createTestDB();
     cleanup = setup.cleanup;

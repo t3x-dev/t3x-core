@@ -316,6 +316,7 @@ statePresentationRoutes.openapi(revisePresentationRoute, async (c) => {
         projectId,
         commitDigest: created.commitDigest,
         presentationDigest: presentation.digest,
+        revisionParentDigest: body.expectedHead,
         document: presentation.document,
         createdBy: `${authority.principal.actor.kind}:${authority.principal.actor.id}`,
       });

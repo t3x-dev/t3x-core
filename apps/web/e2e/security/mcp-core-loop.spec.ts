@@ -62,6 +62,7 @@ async function qualifyCore(input: {
   operatorSession: string;
   namespace: string;
   outsiderSession: string;
+  outsiderId?: string;
   issue: (id: string) => Promise<Credential>;
   evidence: (id: string) => Promise<{ id: string; content_hash: string }>;
   web?: Page;
@@ -432,6 +433,34 @@ async function qualifyCore(input: {
         }>(agentWriter, reviseTool, revision);
         expect(updated.commitDigest).not.toBe(revision.expected_head);
         expect(updated.stateDigest).toBe(exact.state_digest);
+        const baseDiff = { project_id, base: initialCommit, target: committed.commit_digest };
+        expect(await invoke(readonly, 't3x_diff', baseDiff)).toMatchObject({
+          kind: 'document',
+          changes: expect.arrayContaining([
+            expect.objectContaining({ path: '/prd', type: 'added', new_value: valid }),
+          ]),
+        });
+        await denied(foreign, 't3x_diff', baseDiff);
+        expect(
+          await invoke(readonly, 't3x_diff', {
+            project_id,
+            base: committed.commit_digest,
+            target: updated.commitDigest,
+          })
+        ).toMatchObject({
+          kind: 'document',
+          changes: [],
+          stats: { added: 0, removed: 0, modified: 0 },
+        });
+        const bindingArgs = {
+          project_id,
+          action: 'schema_binding',
+          commit_digest: updated.commitDigest,
+        };
+        expect(await invoke(readonly, 't3x_committed_state', bindingArgs)).toEqual({
+          ...bound,
+          commit_digest: updated.commitDigest,
+        });
         const target = {
           ...exact,
           commit_digest: updated.commitDigest,
@@ -448,6 +477,47 @@ async function qualifyCore(input: {
         await denied(agentWriter, reviseTool, revision);
         expect((await branch(human, presentationRef)).head_commit_hash).toBe(updated.commitDigest);
         expect(await invoke(readonly, readTool, exact)).toEqual(historical);
+        // A second revision proves transitive continuity and a second editor opens a fresh Draft.
+        const next = await invoke<{ commitDigest: string }>(agentWriter, reviseTool, {
+          ...revision,
+          expected_head: updated.commitDigest,
+          presentation: { description: 'Revised twice' },
+        });
+        expect(
+          await invoke(readonly, 't3x_committed_state', {
+            ...bindingArgs,
+            commit_digest: next.commitDigest,
+          })
+        ).toEqual({
+          ...bound,
+          commit_digest: next.commitDigest,
+        });
+        await input.actor('PUT', `${projectUrl}/guests`, {
+          principal: { kind: 'human', principal_id: input.outsiderId },
+          role: 'editor',
+          expires_at: null,
+        });
+        const opened = await invoke<{
+          workspace_id: string;
+          created: boolean;
+          basis_ref_head: string;
+        }>(outsider, 't3x_open_workspace', {
+          project_id,
+          ref: presentationRef,
+          expected_head: next.commitDigest,
+          request_id: randomUUID(),
+        });
+        expect(opened).toMatchObject({ created: true, basis_ref_head: next.commitDigest });
+        expect(
+          await invoke(outsider, 't3x_query', {
+            target: 'workspace_activity',
+            project_id,
+            id: opened.workspace_id,
+          })
+        ).toMatchObject({
+          currentSchema: { status: 'bound', schemaHash: bound.schema_hash },
+          current: { prd: valid },
+        });
       } finally {
         await Promise.all(clients.map((client) => client.close()));
       }
@@ -763,6 +833,7 @@ test.describe('MCP core qualification', () => {
     ]);
     await qualifyCore({
       ...person,
+      outsiderId: (await outsider.actor<{ id: string }>('GET', '/auth/me')).id,
       operatorSession: person.session,
       namespace: owner.namespace,
       outsiderSession: outsider.session,

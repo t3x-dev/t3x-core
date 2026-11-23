@@ -8,6 +8,7 @@ import type {
   ClaimView,
   MergeDecision as CoreMergeDecision,
   TransitionGraphViewV1 as CoreTransitionGraphViewV1,
+  TreeDiff,
 } from '@t3x-dev/core';
 
 // Common types
@@ -373,6 +374,18 @@ export interface DiffChange {
   old_value?: unknown;
   new_value?: unknown;
 }
+
+interface ComparedCommit {
+  digest: string;
+  rationale: string | null;
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  recorded_at: string;
+}
+
+export type CommittedStateComparison = { base: ComparedCommit; target: ComparedCommit } & (
+  | { diff: TreeDiff }
+  | ({ kind: 'document' } & DiffResult)
+);
 
 export interface TwoWayDiffInput {
   base_commit_hash: string;

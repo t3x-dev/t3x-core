@@ -6,6 +6,7 @@ const stores = vi.hoisted(() => ({
   getVerifiedTransitionCommitGraph: vi.fn(),
   getRepositoryDecisionAuditByDigest: vi.fn(),
   getTransitionViewForCommit: vi.fn(),
+  findStatePresentation: vi.fn(),
   findTransitionCommitReceipt: vi.fn(),
   resolveTransitionProposalGraph: vi.fn(),
 }));
@@ -67,4 +68,26 @@ it('requires explicit immutable evidence before reporting a historical Commit as
       commitId: 'historical-commit',
     }
   );
+});
+
+it('keeps missing or inconsistent presentation revision evidence unknown', async () => {
+  stores.getVerifiedTransitionCommitGraph.mockImplementation(async (_db, _project, digest) => ({
+    commit: {
+      decision: { digest: 'decision' },
+      result: { digest: digest === 'parent' ? 'different-state' : 'state' },
+    },
+  }));
+  stores.getRepositoryDecisionAuditByDigest.mockResolvedValue({ refName: 'main' });
+  stores.getTransitionViewForCommit.mockResolvedValue({
+    mode: 'transition',
+    history: { observation: 'committed', commit: { id: 'revision', parents: ['parent'] } },
+    change: { base: { digest: 'state' }, result: { digest: 'state' } },
+    checks: { validation: { runs: [] } },
+  });
+  stores.findTransitionCommitReceipt.mockResolvedValue(null);
+  const read = () => readCommittedSchemaBinding({} as AnyDB, 'project', 'revision');
+  for (const revisionParentDigest of [null, 'unrelated', 'parent']) {
+    stores.findStatePresentation.mockResolvedValue({ revisionParentDigest });
+    await expect(read()).resolves.toMatchObject({ status: 'unknown', schemaHash: null });
+  }
 });
