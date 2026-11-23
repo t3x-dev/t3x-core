@@ -1185,6 +1185,18 @@ export interface ProposeTransitionResult {
   view: TransitionControlPlaneView;
 }
 
+export interface GenerateWorkspaceProposalInput {
+  request_id: string;
+  workspace_id: string;
+  if_revision: number;
+  posture?: 'source_only' | 'guided' | 'recommend';
+  instruction: string;
+  source_material_ids: string[];
+  source_turn_hashes?: string[];
+  provider?: string;
+  model?: string;
+}
+
 export interface InspectTransitionResult {
   transition_id: string;
   view: TransitionControlPlaneView;

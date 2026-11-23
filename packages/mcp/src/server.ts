@@ -50,6 +50,7 @@ import { generateDef, generateHandler } from './tools/core/generate.js';
 import { queryDef, queryHandler } from './tools/core/query.js';
 import { draftReviewDef, draftReviewHandler } from './tools/draft-review.js';
 import { openWorkspaceDef, openWorkspaceHandler } from './tools/open-workspace.js';
+import { proposalGenerationDef, proposalGenerationHandler } from './tools/proposal-generation.js';
 import { repositoryLocationDef, repositoryLocationHandler } from './tools/repository-location.js';
 import {
   schemaCandidateDef,
@@ -93,6 +94,7 @@ const ADVANCED_TOOLS: ToolEntry[] = [
 
 const BUSINESS_TOOLS: ToolEntry[] = [
   { def: contextDef, handler: contextHandler },
+  { def: proposalGenerationDef, handler: proposalGenerationHandler },
   { def: schemaCandidateDef, handler: schemaCandidateHandler },
   { def: schemaPreparationDef, handler: schemaPreparationHandler },
   { def: schemaRegistryDef, handler: schemaRegistryHandler },

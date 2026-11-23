@@ -125,6 +125,7 @@ import type {
   ExportCfpackInput,
   ExportLedgerInput,
   GenerateLeafInput,
+  GenerateWorkspaceProposalInput,
   GenerationCapability,
   GenerationModelCatalog,
   GenerationProviderCatalog,
@@ -1596,6 +1597,20 @@ export class T3xClient {
     return this.request<ProposeTransitionResult>(
       'POST',
       `/v1/projects/${encodeURIComponent(projectId)}/transitions`,
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.propose
+    );
+  }
+
+  async generateWorkspaceProposal(
+    projectId: string,
+    input: GenerateWorkspaceProposalInput
+  ): Promise<ProposeTransitionResult> {
+    return this.request<ProposeTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/proposal-generations`,
       input,
       undefined,
       undefined,

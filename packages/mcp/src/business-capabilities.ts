@@ -91,6 +91,7 @@ const GROUPS = {
     operations: { t3x_admin: { parameter: 'action', values: ['create_pin', 'delete_pin'] } },
   },
   'sources:ingest': { tools: ['t3x_ingest_source'] },
+  'sources:generate': { tools: ['t3x_generate_proposal'] },
   transitions: {
     tools: ['inspect_transition', 't3x_commit_result'],
     operations: { t3x_draft_review: { parameter: 'action', values: ['read'] } },

@@ -134,6 +134,7 @@ capabilities:
 | `sources` | Source, evidence, and pin reads, exact material and Source Thread excerpts, and available models |
 | `sources:write` | Extract a candidate, create or delete a pin |
 | `sources:ingest` | Create a Source Thread, append machine-origin text, upload an attachment, and recover the request receipt |
+| `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
 | `transitions:verify` | Run Transition verification |
@@ -171,6 +172,12 @@ request ID before retrying. An exact retry returns the stored receipt,
 including after later turns or archival. A different payload under the
 same ID returns a conflict. Agent-ingested text and newly created attachments
 carry machine origin and are excluded from original human Source evidence.
+
+Use `t3x_generate_proposal` with the saved Workspace revision, a stable
+`request_id`, and exact material IDs or original user turn hashes. The
+server resolves the selected provider and model. Keep the returned
+`transition_id` for the separate `t3x_publish_candidate` action, then
+prepare and read a fixed Review through `t3x_draft_review`.
 
 ### Repository, candidate, and Schema operations
 
@@ -231,6 +238,17 @@ T3X_E2E_MCP_PHASE=source-context T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-co
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-context.spec.ts
 T3X_E2E_MCP_PHASE=source-ingestion T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-ingestion \
   node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-ingestion.spec.ts
+```
+
+The Proposal Generation test uses a deterministic OpenAI-compatible fixture
+that only listens on loopback. The key below is specific to this fixture:
+
+```bash
+T3X_E2E_MCP_PHASE=proposal-generation T3X_E2E_F3_MODEL_PORT=8373 T3X_E2E_ALLOW_EXTERNAL=1 \
+  OPENAI_BASE_URL=http://127.0.0.1:8373/v1 OPENAI_API_KEY=t3x-local-fixture-only \
+  ANTHROPIC_API_KEY='' GOOGLE_AI_STUDIO_KEY='' GOOGLE_API_KEY='' N8N_API_KEY='' \
+  T3X_E2E_ARTIFACT_DIR=test-results/mcp-proposal-generation \
+  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-proposal-generation.spec.ts
 ```
 
 ### Resources

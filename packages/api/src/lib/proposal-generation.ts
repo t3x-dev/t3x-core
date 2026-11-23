@@ -901,7 +901,7 @@ async function generateContentTransitionProposal(
       draft,
       profile: profile.profile,
       context,
-      requestedBy: input.requester,
+      requestedBy: { kind: input.requester.kind, id: input.requester.id },
       generator: PROPOSAL_GENERATOR_ACTOR,
       provider: model.provider,
       model: model.model,
