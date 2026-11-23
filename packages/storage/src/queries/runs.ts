@@ -5,7 +5,7 @@
  */
 import { and, desc, eq, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type Run, runs } from '../schema';
+import { type Run, repositoryRunRequests, runs } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================
@@ -109,6 +109,52 @@ export async function insertRun(db: AnyDB, input: CreateRunInput): Promise<Run> 
     .returning();
 
   return run;
+}
+
+interface RunRequestKey {
+  projectId: string;
+  actorId: string;
+  requestId: string;
+}
+
+/** Serialize first dispatch and keep the receipt even when the Run is deleted. */
+export function reserveRepositoryRun(
+  db: AnyDB,
+  key: RunRequestKey,
+  prepare: (
+    tx: AnyDB
+  ) => Promise<{ run: CreateRunInput; configurationDigest: string; commitDigest: string }>
+) {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(5458244, hashtext(${JSON.stringify([key.projectId, key.actorId, key.requestId])}))`
+    );
+    const [existing] = await tx
+      .select()
+      .from(repositoryRunRequests)
+      .where(
+        and(
+          eq(repositoryRunRequests.projectId, key.projectId),
+          eq(repositoryRunRequests.actorId, key.actorId),
+          eq(repositoryRunRequests.requestId, key.requestId)
+        )
+      );
+    if (existing) return { receipt: existing, created: false };
+    const { run, configurationDigest, commitDigest } = await prepare(tx);
+    await insertRun(tx, run);
+    const [receipt] = await tx
+      .insert(repositoryRunRequests)
+      .values({ ...key, runId: run.run_id, configurationDigest, commitDigest })
+      .returning();
+    return { receipt: receipt!, created: true };
+  });
+}
+
+export async function acknowledgeRepositoryRun(db: AnyDB, runId: string) {
+  await db
+    .update(runs)
+    .set({ status: 'running', updatedAt: new Date() })
+    .where(and(eq(runs.runId, runId), eq(runs.status, 'queued')));
 }
 
 /**

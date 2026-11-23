@@ -1,4 +1,8 @@
-import { type RepositoryRunSummary, T3xApiError } from '@t3x-dev/api-client';
+import {
+  type RepositoryRunSummary,
+  RepositoryRunTriggerInputSchema,
+  T3xApiError,
+} from '@t3x-dev/api-client';
 import { isSafeBusinessIdentifier } from '../business-capabilities.js';
 import { withTransitionApi } from './transition/index.js';
 import type { ToolDef, ToolHandler } from './types.js';
@@ -99,4 +103,33 @@ export const repositoryRunsHandler: ToolHandler = (args) =>
       offset: page.offset,
       next_offset: page.runs.length === page.limit ? page.offset + page.limit : null,
     };
+  });
+
+export const triggerRepositoryRunDef: ToolDef = {
+  name: 't3x_trigger_repository_run',
+  description:
+    'Start the project-configured workflow for an exact CommitV2. Reuse request_id to recover the stored Run.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project_id: { type: 'string' },
+      request_id: { type: 'string', minLength: 1, maxLength: 200 },
+      commit_digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    },
+    required: ['project_id', 'request_id', 'commit_digest'],
+  },
+  annotations: { readOnlyHint: false, idempotentHint: true },
+};
+
+export const triggerRepositoryRunHandler: ToolHandler = (args) =>
+  withTransitionApi(async (client) => {
+    const { project_id, ...rest } = args;
+    const input = RepositoryRunTriggerInputSchema.safeParse(rest);
+    if (!isSafeBusinessIdentifier(project_id) || !input.success)
+      throw new T3xApiError(
+        'INVALID_ARGUMENT',
+        'Provide project_id, request_id and an exact CommitV2 digest.',
+        400
+      );
+    return client.triggerRepositoryRun(project_id, input.data);
   });

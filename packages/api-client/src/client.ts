@@ -101,8 +101,10 @@ import {
   type ListRepositoryRunsInput,
   type RepositoryRunDetails,
   RepositoryRunDetailsSchema,
+  RepositoryRunReceiptSchema,
   type RepositoryRunsPage,
   RepositoryRunsPageSchema,
+  type RepositoryRunTriggerInput,
 } from './repository-runs.js';
 import { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
@@ -1086,6 +1088,17 @@ export class T3xClient {
       undefined,
       undefined,
       CommitYSchemaRunSchema
+    );
+  }
+
+  async triggerRepositoryRun(projectId: string, input: RepositoryRunTriggerInput) {
+    return this.request<ReturnType<typeof RepositoryRunReceiptSchema.parse>>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/repository-runs`,
+      input,
+      undefined,
+      undefined,
+      RepositoryRunReceiptSchema
     );
   }
 

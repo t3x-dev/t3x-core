@@ -14,6 +14,7 @@ export { collaborationInvitationRoutes } from './collaboration-invitations.opena
 export { collaborationReadRoutes } from './collaboration-reads.openapi';
 export { commitRoutes } from './commits.openapi';
 export { comparisonsRoutes } from './comparisons.openapi';
+export { configuredRunsRoutes } from './configured-runs.openapi';
 export { contextRoutes } from './context.openapi';
 export { conversationRoutes } from './conversations.openapi';
 export { curateRoutes } from './curate.openapi';

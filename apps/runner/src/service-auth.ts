@@ -29,33 +29,40 @@ export function verifyRunnerBearer(
   return equalSecret(match?.[1], token) ? 'ok' : 'invalid';
 }
 
-export function signN8nCallback(runId: string, runnerRunId: string): string {
+export function signN8nCallback(runId: string, runnerRunId: string, projectId?: string): string {
   const token = configuredToken();
   if (!token) throw new Error('RUNNER_SERVICE_TOKEN is not configured');
   return createHmac('sha256', token)
-    .update(runId + ':' + runnerRunId)
+    .update(
+      projectId === undefined
+        ? runId + ':' + runnerRunId
+        : JSON.stringify(['configured-run/v1', runId, runnerRunId, projectId])
+    )
     .digest('hex');
 }
 
 export function buildSignedN8nCallbackUrl(
   callbackUrl: string,
   runId: string,
-  runnerRunId: string
+  runnerRunId: string,
+  projectId?: string
 ): string {
   const url = new URL(callbackUrl);
-  url.searchParams.set(SIGNATURE_QUERY, signN8nCallback(runId, runnerRunId));
+  if (projectId !== undefined) url.searchParams.set('configured_project', projectId);
+  url.searchParams.set(SIGNATURE_QUERY, signN8nCallback(runId, runnerRunId, projectId));
   return url.toString();
 }
 
 export function verifyN8nCallbackSignature(
   provided: string | undefined,
   runId: string | undefined,
-  runnerRunId: string | undefined
+  runnerRunId: string | undefined,
+  projectId?: string
 ): 'ok' | 'missing-config' | 'invalid' {
   const token = configuredToken();
   if (!token) return 'missing-config';
   if (!runId || !runnerRunId) return 'invalid';
-  return equalSecret(provided, signN8nCallback(runId, runnerRunId)) ? 'ok' : 'invalid';
+  return equalSecret(provided, signN8nCallback(runId, runnerRunId, projectId)) ? 'ok' : 'invalid';
 }
 
 export const runnerSignatureQuery = SIGNATURE_QUERY;

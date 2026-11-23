@@ -68,6 +68,7 @@ import {
   collaborationReadRoutes,
   commitRoutes,
   comparisonsRoutes,
+  configuredRunsRoutes,
   contextRoutes,
   conversationRoutes,
   createProjectVisibilityRoutes,
@@ -287,6 +288,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
+  api.route('/', configuredRunsRoutes);
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);

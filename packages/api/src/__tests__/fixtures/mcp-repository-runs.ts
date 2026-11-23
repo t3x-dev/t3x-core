@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { insertRun } from '@t3x-dev/storage';
+import { ensureMainBranch, findProjectById, insertProject, insertRun } from '@t3x-dev/storage';
 import { closeDB, getDB } from '../../lib/db';
 
 const [projectId, foreignId] = process.argv.slice(2);
@@ -29,6 +29,14 @@ process.env.T3X_POSTGRES_STARTUP_MODE = 'runtime';
 
 const db = await getDB();
 try {
+  const ownerProject = await findProjectById(db, projectId);
+  if (!ownerProject?.namespaceId) throw new Error('Missing fixture namespace.');
+  await insertProject(db, {
+    projectId: 'configured_run_fixture',
+    name: 'Configured-Run-Fixture',
+    namespaceId: ownerProject.namespaceId,
+  });
+  await ensureMainBranch(db, 'configured_run_fixture');
   for (const status of ['queued', 'running', 'completed', 'failed'] as const) {
     await insertRun(db, {
       run_id: `run_fixture_${status}`,

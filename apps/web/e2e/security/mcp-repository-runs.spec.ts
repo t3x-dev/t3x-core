@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '@playwright/test';
@@ -20,7 +22,7 @@ test.skip(
   'Requires the isolated authentication-enabled MCP repository Runs phase.'
 );
 
-test('read saved repository Runs through the existing project authorization', async ({
+test('read saved Runs and dispatch one configured workflow per authorized request', async ({
   request,
 }) => {
   test.setTimeout(60_000);
@@ -106,6 +108,105 @@ test('read saved repository Runs through the existing project authorization', as
     expect((await human.call(tool, { ...read, run_id: 'run_fixture_foreign' })).isError).toBe(true);
     expect((await viewer.call(tool, { ...list, action: 'trigger' })).isError).toBe(true);
     expect((await agent.call(tool, { action: 'list' })).isError).toBe(true);
+    const trigger = 't3x_trigger_repository_run';
+    expect((await agent.call(trigger, {})).isError).toBe(true);
+    const project = 'configured_run_fixture';
+    const commit = async (id: string) =>
+      (
+        await actor<{ commit: { digest: string } }>('POST', '/commits', {
+          project_id: id,
+          expected_head: null,
+          content: { trees: [{ key: 'root', slots: { description: id }, children: [] }] },
+        })
+      ).commit.digest;
+    const digest = await commit(project);
+    const unrelated = await commit(foreign.project_id);
+    const editorKey = await mintDirect(actor, project, authoringScopes);
+    const editor = mcpClient(editorKey.key, 'runs:repository:trigger,runs:repository');
+    const readOnlyUser = mcpClient(reader.session, 'runs:repository:trigger');
+    await actor('PUT', `/projects/${project}/guests`, {
+      principal: { kind: 'human', principal_id: readerId },
+      role: 'viewer',
+      expires_at: null,
+    });
+    const input = { project_id: project, request_id: 'first-run', commit_digest: digest };
+    const calls: Array<{
+      run_id: string;
+      runner_run_id: string;
+      callback_url: string;
+      commit_ref: string;
+    }> = [];
+    const webhook = createServer(async (req, res) => {
+      if (req.url !== '/webhook/evaluate-v1') {
+        res.writeHead(404).end();
+        return;
+      }
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      calls.push(JSON.parse(body));
+      res.writeHead(503).end();
+    });
+    try {
+      webhook.listen(Number(new URL(process.env.N8N_WEBHOOK_URL!).port), '127.0.0.1');
+      await once(webhook, 'listening');
+      await Promise.all([editor.connect(), readOnlyUser.connect()]);
+      const rejected = async (
+        client: typeof editor,
+        args: Record<string, unknown>,
+        status: number
+      ) => {
+        const result = await client.call(trigger, args);
+        expect(result.isError).toBe(true);
+        expect(JSON.parse(result.content[0]?.text ?? '{}')).toMatchObject({ error: { status } });
+      };
+      await rejected(readOnlyUser, input, 403);
+      await rejected(editor, { ...input, commit_digest: unrelated }, 404);
+      await rejected(editor, { ...input, workflow: { type: 'n8n' } }, 400);
+      const [one, two] = await Promise.all(
+        [1, 2].map(() =>
+          invoke<{ run_id: string; configuration_digest: string }>(editor, trigger, input)
+        )
+      );
+      expect(one.run_id).toBe(two.run_id);
+      expect(one.configuration_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+      await expect.poll(() => calls.length).toBe(1);
+      expect(calls[0]).toMatchObject({
+        run_id: one.run_id,
+        project_id: project,
+        commit_ref: digest,
+      });
+      await rejected(editor, { ...input, commit_digest: unrelated }, 409);
+      const callback = calls[0]!;
+      const altered = new URL(callback.callback_url);
+      altered.searchParams.set('configured_project', foreign.project_id);
+      expect(
+        (
+          await request.post(altered.toString(), {
+            data: { run_id: one.run_id, runner_run_id: callback.runner_run_id },
+          })
+        ).status()
+      ).toBe(401);
+      const ack = await request.post(callback.callback_url, {
+        data: {
+          run_id: one.run_id,
+          runner_run_id: callback.runner_run_id,
+          output: { fixture: true },
+        },
+      });
+      expect(ack.ok()).toBe(true);
+      await expect
+        .poll(async () => (await invoke<{ status: string }>(editor, trigger, input)).status, {
+          timeout: 20000,
+        })
+        .toMatch(/^(completed|failed)$/);
+      expect(calls).toHaveLength(1);
+      await actor('DELETE', `/runs/${one.run_id}`);
+      await rejected(editor, input, 409);
+      expect(calls).toHaveLength(1);
+    } finally {
+      webhook.close();
+      await Promise.allSettled([editor.close(), readOnlyUser.close()]);
+    }
   } finally {
     await Promise.allSettled([agent.close(), human.close(), viewer.close()]);
   }

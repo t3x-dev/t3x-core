@@ -78,6 +78,15 @@ const runtimeEnv = {
   WEBUI_URL: webUrl,
 };
 
+if (runtimeEnv.T3X_E2E_MCP_PHASE === 'repository-runs') {
+  const webhookPort = process.env.T3X_E2E_WEBHOOK_PORT ?? '18267';
+  runtimeEnv.N8N_WEBHOOK_URL = `http://127.0.0.1:${webhookPort}/webhook`;
+  runtimeEnv.RUNNER_CALLBACK_URL = `${runnerUrl}/callbacks/n8n`;
+  runtimeEnv.T3X_REPOSITORY_RUN_WEBHOOKS = JSON.stringify({
+    configured_run_fixture: 'evaluate-v1',
+  });
+}
+
 if (!allowExternal) {
   Object.assign(runtimeEnv, {
     ANTHROPIC_API_KEY: '',

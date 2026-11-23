@@ -31,6 +31,11 @@ export type {
   RepositoryRunSummary,
   RepositoryRunsPage,
 } from './repository-runs.js';
+export {
+  RepositoryRunReceiptSchema,
+  type RepositoryRunTriggerInput,
+  RepositoryRunTriggerInputSchema,
+} from './repository-runs.js';
 export * from './schema-catalog.js';
 export {
   type SchemaNodeProvenance,

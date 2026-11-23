@@ -137,6 +137,7 @@ capabilities:
 | `sources:generate` | Generate a governed candidate from exact authorized Sources at a saved Workspace revision |
 | `runs`, `runs:trigger` | Independently enable reading saved Commit YSchema Runs or starting a Run |
 | `runs:workspace`, `runs:workspace:trigger` | Independently enable reading owned exact Draft validation Runs or starting a Run |
+| `runs:repository:trigger` | Dispatch a project-configured evaluation for an exact CommitV2 |
 | `runs:repository` | List saved repository evaluation Runs and read one by Run ID |
 | `transitions` | Inspect Transition, read fixed Review or Commit result, Transition resource |
 | `transitions:prepare` | Prepare an explicit proposal or a saved Draft Review |
@@ -233,6 +234,19 @@ saved records, or supply a `run_id` with `action=read` to retrieve the
 stored result. A reported Commit reference is the one stored on the Run.
 The API authorizes project reads. Review evidence remains subject to its
 issuer and subject rules.
+
+To enable dispatch, set `T3X_REPOSITORY_RUN_WEBHOOKS` on the API to a JSON
+object mapping exact project IDs to n8n webhook IDs, for example
+`{"project_123":"evaluate-commit-v1"}`. Use a versioned webhook ID when
+changing the workflow. Deploy the matching Runner and apply storage schema
+v88. Grant the MCP host `runs:repository:trigger` and call
+`t3x_trigger_repository_run` with `project_id`, `commit_digest` and
+`request_id`. The API requires an authenticated project editor. The first
+request pins the configuration digest. Reuse the same request ID with the
+same actor and project to recover the Run, including after configuration
+changes. A different Commit returns HTTP 409. A queued Run may represent
+an interrupted or unacknowledged dispatch. Read its status before considering
+a new request ID, which starts a separate execution.
 
 ### Repository, candidate, and Schema operations
 
