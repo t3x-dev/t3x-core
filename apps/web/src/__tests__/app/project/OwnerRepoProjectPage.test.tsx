@@ -83,7 +83,9 @@ vi.mock('@/app/project/[projectId]/page', async () => {
         {workspaceBranch && ` branch=${workspaceBranch}`}
         {commitAddress && ` commit=${commitAddress.id}`}
         {fixedReview && ` review=${fixedReview.snapshotId} workspace=${fixedReview.workspaceId}`}
-        {(initialTabOverride === 'state' || initialTabOverride === 'schemas') && (
+        {(initialTabOverride === 'state' ||
+          initialTabOverride === 'schemas' ||
+          (initialTabOverride === 'workspaces' && !fixedReview)) && (
           <ViewData projectId={projectIdOverride} />
         )}
       </div>
@@ -127,7 +129,7 @@ beforeEach(() => {
     created_at: '2026-01-01T00:00:00Z',
     visibility: 'private',
   });
-  useProjectStore.setState({ projects: [], details: {} });
+  useProjectStore.setState({ projects: [], details: {}, directoryStateEntry: null });
   mocks.params = { owner: 'alice', repoPath: ['Repo'] };
   mocks.pathname = null;
   mocks.query = 'workspace=w&conversation=c&pr=9';
@@ -143,7 +145,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it('reuses the verified address, project details and in-flight view reads when the Schema page mounts', async () => {
+it('reuses the verified address, project details and in-flight view reads across State, Workspace, Schema and Settings', async () => {
   mocks.query = '';
   let completeBranches!: (value: { branches: { name: string }[] }) => void;
   let completeWorkspaces!: (value: { id: string }[]) => void;
@@ -163,8 +165,12 @@ it('reuses the verified address, project details and in-flight view reads when t
     expect(mocks.listBranches).toHaveBeenCalledOnce();
     expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
   });
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'workspaces'];
+  view.rerender(<OwnerRepoProjectPage />);
+  expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice workspaces');
+  expect(mocks.listBranches).toHaveBeenCalledOnce();
+  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
   await act(async () => completeBranches({ branches: [{ name: 'main' }] }));
-  expect(screen.getByTestId('detail')).toHaveTextContent('proj_outside_list alice state');
 
   mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
   view.rerender(<OwnerRepoProjectPage />);
@@ -179,6 +185,52 @@ it('reuses the verified address, project details and in-flight view reads when t
     completeWorkspaces([{ id: 'main-draft' }]);
   });
   expect(screen.getByTestId('view-data')).toHaveTextContent('main main-draft');
+
+  mocks.params.repoPath = ['Repo', 'settings'];
+  view.rerender(<OwnerRepoProjectPage />);
+  await screen.findByTestId('nested');
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'workspaces'];
+  view.rerender(<OwnerRepoProjectPage />);
+  expect(screen.getByTestId('view-data')).toHaveTextContent('main main-draft');
+  expect(mocks.listBranches).toHaveBeenCalledOnce();
+  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+});
+
+it('starts project details from the directory selection and waits for matching address access', async () => {
+  mocks.query = '';
+  let resolveAddress!: (value: unknown) => void;
+  mocks.resolve.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveAddress = resolve;
+    })
+  );
+  useProjectStore.setState({
+    directoryStateEntry: {
+      project: {
+        id: 'proj_outside_list',
+        name: 'Directory summary',
+        canonical_path: '/alice/Repo',
+      } as ProjectSummary,
+      userId: null,
+      expiresAt: Date.now() + 15_000,
+      head: Promise.resolve([]),
+    },
+  });
+  render(<OwnerRepoProjectPage />);
+  expect(screen.getByRole('heading', { name: 'Directory summary' })).toBeInTheDocument();
+  expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+  expect(mocks.fetchProject).toHaveBeenCalledExactlyOnceWith('proj_outside_list');
+  await act(async () =>
+    resolveAddress({
+      project_id: 'proj_outside_list',
+      namespace: 'alice',
+      canonical_path: '/alice/Repo',
+      path_status: 'ready',
+      redirect: false,
+    })
+  );
+  expect(screen.getByTestId('detail')).toBeInTheDocument();
+  expect(mocks.fetchProject).toHaveBeenCalledOnce();
 });
 
 it('checks the new repository before rendering its content', async () => {

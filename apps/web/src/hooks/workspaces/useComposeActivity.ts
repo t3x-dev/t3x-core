@@ -1,13 +1,14 @@
-import type {
-  PublishWorkspaceAuthoringInput,
-  WorkspaceAuthoringAction,
-  WorkspaceAuthoringCard,
-  WorkspaceAuthoringOutcome,
-  WorkspaceAuthoringView,
-  WorkspaceReconciliationPreparation,
-  WorkspaceReconciliationResolution,
+import {
+  type PublishWorkspaceAuthoringInput,
+  T3xApiError,
+  type WorkspaceAuthoringAction,
+  type WorkspaceAuthoringCard,
+  type WorkspaceAuthoringOutcome,
+  type WorkspaceAuthoringView,
+  type WorkspaceReconciliationPreparation,
+  type WorkspaceReconciliationResolution,
 } from '@t3x-dev/api-client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   activityOperation,
   type ComposeActivitySelection,
@@ -23,6 +24,9 @@ import {
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
+import { WorkspaceActivityCacheContext } from './workspaceActivityCache';
+
+const WORKSPACE_ACTIVITY_FRESH_MS = 30_000;
 
 function reconciliationFailure(cause: unknown, fallback: string): string {
   if (!(cause instanceof Error)) return fallback;
@@ -41,6 +45,26 @@ function reconciliationFailure(cause: unknown, fallback: string): string {
 /** Compose-owned adapter over the immutable Draft authoring command and projection APIs. */
 export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverride = false) {
   const enabled = Boolean(candidate.authoringLedger) || enabledOverride;
+  const { revision } = candidate;
+  const cache = useContext(WorkspaceActivityCacheContext);
+  const cacheKey =
+    enabled && revision !== undefined
+      ? JSON.stringify([
+          candidate.projectId,
+          candidate.id,
+          candidate.targetBranch,
+          revision,
+          candidate.baseCommitHash,
+        ])
+      : null;
+  const activeCacheKey = useRef(cacheKey);
+  activeCacheKey.current = cacheKey;
+  const readCached = useCallback(() => {
+    const snapshot = cache?.current;
+    return snapshot && snapshot.key === activeCacheKey.current && snapshot.expiresAt > Date.now()
+      ? snapshot
+      : null;
+  }, [cache]);
   const scopeKey = JSON.stringify([candidate.projectId, candidate.id, enabled]);
   const scope = useMemo(
     () => ({
@@ -62,14 +86,20 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   }, [scope]);
   const [owner, setOwner] = useState(scope);
   const ownsState = owner === scope;
-  const [view, setView] = useState<WorkspaceAuthoringView | null>(null);
-  const [actions, setActions] = useState<WorkspaceAuthoringAction[]>([]);
-  const [cards, setCards] = useState<Record<string, WorkspaceAuthoringCard[]>>({});
-  const [operationItems, setOperationItems] = useState<OperationStackItem[]>([]);
+  const [view, setView] = useState<WorkspaceAuthoringView | null>(() => readCached()?.view ?? null);
+  const [actions, setActions] = useState<WorkspaceAuthoringAction[]>(
+    () => readCached()?.actions ?? []
+  );
+  const [cards, setCards] = useState<Record<string, WorkspaceAuthoringCard[]>>(
+    () => readCached()?.cards ?? {}
+  );
+  const [operationItems, setOperationItems] = useState<OperationStackItem[]>(
+    () => readCached()?.operationItems ?? []
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [pageCount, setPageCount] = useState(1);
-  const [cursor, setCursor] = useState<number | null>(null);
+  const [cursor, setCursor] = useState<number | null>(() => readCached()?.cursor ?? null);
   const [node, setNode] = useState<WorkspaceAuthoringView['node']>(null);
   const [inspectedAction, setInspectedAction] = useState<WorkspaceAuthoringAction | null>(null);
   const [nodeLoading, setNodeLoading] = useState(false);
@@ -98,12 +128,13 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     scope.reconciling = false;
     setOwner(scope);
     setPageCount(1);
-    setView(null);
-    setActions([]);
-    setCards({});
-    setOperationItems([]);
+    const snapshot = readCached();
+    setView(snapshot?.view ?? null);
+    setActions(snapshot?.actions ?? []);
+    setCards(snapshot?.cards ?? {});
+    setOperationItems(snapshot?.operationItems ?? []);
     setError(null);
-    setCursor(null);
+    setCursor(snapshot?.cursor ?? null);
     setNode(null);
     setInspectedAction(null);
     setNodeLoading(false);
@@ -122,11 +153,12 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       scope.active = false;
       ++scope.epoch;
     };
-  }, [scope]);
+  }, [readCached, scope]);
   const load = useCallback(
     async (preserveInspected = false) => {
       const isActive = captureScope();
       if (!enabled || !isActive()) return;
+      if (!preserveInspected && cache?.current?.key === cacheKey) cache.current = null;
       const token = ++scope.read;
       const isCurrent = () => isActive() && token === scope.read;
       setLoading(true);
@@ -158,6 +190,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
             first.basis?.refHead !== inspected.basis?.refHead ||
             first.synchronization?.currentRefHead !== inspected.synchronization?.currentRefHead)
         ) {
+          if (cache?.current?.key === cacheKey) cache.current = null;
           setNewActivity(first);
           return;
         }
@@ -209,6 +242,23 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
           );
           if (!isCurrent()) return;
         }
+        if (
+          cache &&
+          cacheKey &&
+          activeCacheKey.current === cacheKey &&
+          first.workspaceRevision === revision &&
+          pageCount === 1
+        ) {
+          cache.current = {
+            key: cacheKey,
+            expiresAt: Date.now() + WORKSPACE_ACTIVITY_FRESH_MS,
+            view: first,
+            actions: all,
+            cards: details,
+            operationItems: projectedItems,
+            cursor: before,
+          };
+        }
         setView(first);
         setPublishReceipt((receipt) =>
           receipt && !receipt.refreshed ? { ...receipt, refreshed: true } : receipt
@@ -222,13 +272,32 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         return first;
       } catch (error) {
         if (!isCurrent()) return;
+        if (cache?.current?.key === cacheKey) cache.current = null;
+        if (error instanceof T3xApiError && [401, 403, 404].includes(error.status)) {
+          setView(null);
+          setActions([]);
+          setCards({});
+          setOperationItems([]);
+          setCursor(null);
+          setNewActivity(null);
+        }
         setError(error instanceof Error ? error.message : 'Cannot load activity');
         throw error;
       } finally {
         if (isCurrent()) setLoading(false);
       }
     },
-    [candidate.id, candidate.projectId, enabled, pageCount, captureScope, scope]
+    [
+      cache,
+      cacheKey,
+      candidate.id,
+      candidate.projectId,
+      enabled,
+      pageCount,
+      captureScope,
+      revision,
+      scope,
+    ]
   );
 
   useEffect(() => {
@@ -248,6 +317,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     if (!enabled) return;
     const isActive = captureScope();
     const timer = window.setInterval(() => {
+      if (document.hidden) return;
       const token = ++scope.poll;
       const readVersion = scope.read;
       void getSharedApiClient()
@@ -263,8 +333,10 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
               next.basis?.refHead !== viewRef.current.basis?.refHead ||
               next.synchronization?.currentRefHead !==
                 viewRef.current.synchronization?.currentRefHead)
-          )
+          ) {
+            if (cache?.current?.key === cacheKey) cache.current = null;
             setNewActivity(next);
+          }
         })
         .catch(() => {
           // The inspected snapshot remains readable while connectivity recovers.
@@ -274,7 +346,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       ++scope.poll;
       window.clearInterval(timer);
     };
-  }, [candidate.id, candidate.projectId, enabled, captureScope, scope]);
+  }, [cache, cacheKey, candidate.id, candidate.projectId, enabled, captureScope, scope]);
 
   const reconcile = useCallback(async () => {
     const isCurrent = captureScope();
@@ -599,6 +671,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       if (!isCurrent()) return outcome;
       latestPublish.current = { scope, outcome };
       setPublishReceipt({ outcome, refreshed: false });
+      if (cache?.current?.key === cacheKey) cache.current = null;
       setNotice(
         outcome.kind === 'no_change'
           ? 'The current Draft already has this value. No action was added.'
@@ -611,7 +684,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       });
       return outcome;
     },
-    [candidate.id, candidate.projectId, load, view, ownsState, captureScope, scope]
+    [cache, cacheKey, candidate.id, candidate.projectId, load, view, ownsState, captureScope, scope]
   );
 
   const createAssistantConversation = useCallback(async () => {

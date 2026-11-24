@@ -52,18 +52,25 @@ function OwnerRepoProjectPageContent() {
         ? 'state'
         : (pageSegments[0] ?? 'state');
   const query = useSearchParams().toString();
-  const { current, retry } = useContext(RepositoryAddressContext);
+  const { current, directoryStateEntry, retry } = useContext(RepositoryAddressContext);
   const address = current?.address;
   const invalidBranch =
     !branchRoute && ['.', '..'].includes(new URLSearchParams(query).get('branch')?.trim() ?? '');
   const supported = isSupportedRepositorySuffix(suffix) && !invalidBranch;
   const search = new URLSearchParams(query);
   const legacyView = branchRoute || pageSegments.length ? view : (search.get('tab') ?? view);
-  const branchForPage =
-    routeBranch ??
-    (!numbered && legacyView === 'state' && !search.get('commit')
-      ? search.get('branch')?.trim() || 'main'
-      : null);
+  // The live Workspace validates its branch while the workspace list loads.
+  const liveWorkspace =
+    legacyView === 'workspaces' &&
+    !numbered &&
+    !search.get('reviewSnapshot') &&
+    search.get('reviewPane') !== 'checks';
+  const branchForPage = liveWorkspace
+    ? null
+    : (routeBranch ??
+      (!numbered && legacyView === 'state' && !search.get('commit')
+        ? search.get('branch')?.trim() || 'main'
+        : null));
   const branches = useRepositoryBranches(
     address?.project_id ?? null,
     Boolean(supported && branchForPage && address)
@@ -122,7 +129,8 @@ function OwnerRepoProjectPageContent() {
   if (!current || canonicalizing || resolvingExactObject) {
     const loading = <LoadingSpinner message="Loading repository..." />;
     // The known header can render while the repository layout resolves access.
-    return knownProject ? (
+    const summary = directoryStateEntry?.project ?? knownProject;
+    return summary ? (
       <ProjectShell
         activeTab={resolveProjectRouteTab(
           branchRoute ? view : (pageSegments[0] ?? null),
@@ -130,7 +138,7 @@ function OwnerRepoProjectPageContent() {
         )}
         branch={routeBranch ?? new URLSearchParams(query).get('branch')}
         pageTitle={null}
-        project={knownProject}
+        project={summary}
       >
         {loading}
       </ProjectShell>
@@ -170,9 +178,9 @@ function OwnerRepoProjectPageContent() {
   if (branchForPage && !branches.branches.includes(branchForPage)) {
     const readsHeadDirectly = legacyView === 'state' && search.get('view') !== 'canvas';
     if (branches.loading && !readsHeadDirectly) return <LoadingSpinner message="Loading branch…" />;
-    if (!branches.loading && branches.error)
+    if (!branches.loading && branches.error && !(readsHeadDirectly && directoryStateEntry))
       return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
-    if (!branches.loading)
+    if (!branches.loading && !branches.error)
       return (
         <p role="alert" className="p-6">
           Branch {branchForPage} was not found in this repository.
@@ -214,6 +222,7 @@ function OwnerRepoProjectPageContent() {
       initialTabOverride={parseProjectTab(view)}
       ownerSlugOverride={address.namespace ?? undefined}
       projectIdOverride={address.project_id}
+      directoryProject={directoryStateEntry?.project}
       workspaceBranch={view === 'workspaces' ? routeBranch : null}
       commitAddress={numbered?.kind === 'commit' && object.data ? object.data : undefined}
       fixedReview={

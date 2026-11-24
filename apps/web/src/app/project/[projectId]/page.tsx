@@ -38,7 +38,7 @@ import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletio
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import { useProjectStore } from '@/store/projectStore';
+import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -52,6 +52,7 @@ export default function ProjectDetailPage() {
 
 interface ProjectDetailPageContentProps {
   commitAddress?: { id: string; number: string };
+  directoryProject?: ProjectSummary;
   fixedReview?: { workspaceId: string; snapshotId: string; number: string };
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
@@ -68,6 +69,7 @@ function isNotFoundError(error: Error | null): boolean {
 
 export function ProjectDetailPageContent({
   commitAddress,
+  directoryProject,
   fixedReview,
   initialTabOverride,
   projectIdOverride,
@@ -128,8 +130,11 @@ export function ProjectDetailPageContent({
     toYSchemaValidationSummary(null)
   );
   const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
+  const [yschemaValidationLoading, setYschemaValidationLoading] = useState(false);
   const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
-  const projectBase = projectFromStore ?? fetchedProject;
+  const projectBase = fetchedProject
+    ? (projectFromStore ?? fetchedProject)
+    : (directoryProject ?? projectFromStore);
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
     [projectBase, yschemaValidation]
@@ -172,13 +177,15 @@ export function ProjectDetailPageContent({
   }, []);
 
   useEffect(() => {
-    if (isCanvasSurface || !projectBase?.id) {
+    if (activeTab !== 'state' || isCanvasSurface || !projectBase?.id) {
       setYschemaValidation(null);
+      setYschemaValidationLoading(false);
       return;
     }
 
     let cancelled = false;
     setYschemaValidation(null);
+    setYschemaValidationLoading(true);
 
     fetchLatestYSchemaValidation(projectBase.id)
       .then((run) => {
@@ -186,12 +193,15 @@ export function ProjectDetailPageContent({
       })
       .catch(() => {
         if (!cancelled) setYschemaValidation(null);
+      })
+      .finally(() => {
+        if (!cancelled) setYschemaValidationLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isCanvasSurface, projectBase?.id]);
+  }, [activeTab, isCanvasSurface, projectBase?.id]);
 
   const handleRunYSchemaValidation = useCallback(
     async (commitHash: string, schemaName: string) => {
@@ -289,7 +299,7 @@ export function ProjectDetailPageContent({
 
   // Show loading while projects list is still loading, or while confirming a
   // direct/new project URL that is not present in the list cache yet.
-  const projectLookupPending = !projectFromStore && !fetchedProject && !projectLookupError;
+  const projectLookupPending = !projectBase && !projectLookupError;
 
   if (isSettingsRedirect || isHistoryRedirect) {
     return null;
@@ -303,7 +313,14 @@ export function ProjectDetailPageContent({
     );
   }
 
-  if (projectLookupError && !isNotFoundError(projectLookupError)) {
+  const notFound = isNotFoundError(projectLookupError);
+  const detailAccessFailed =
+    projectLookupError &&
+    'code' in projectLookupError &&
+    ['UNAUTHORIZED', 'FORBIDDEN', 'SESSION_NOT_CURRENT', 'NOT_FOUND'].includes(
+      String(projectLookupError.code)
+    );
+  if (projectLookupError && !notFound && (!directoryProject || detailAccessFailed)) {
     return (
       <div className="flex h-full flex-col">
         <ErrorMessage error={projectLookupError} onRetry={retryProjectDetail} />
@@ -312,7 +329,7 @@ export function ProjectDetailPageContent({
   }
 
   // Show not-found page only when a single-project lookup confirms it.
-  if (!project || (projectLookupError && isNotFoundError(projectLookupError))) {
+  if (!project || notFound) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
         <div className="rounded-2xl bg-muted/50 p-8 text-center backdrop-blur-sm">
@@ -393,7 +410,9 @@ export function ProjectDetailPageContent({
     return (
       <ProjectStateTab
         key={projectId}
-        onRunValidation={handleRunYSchemaValidation}
+        onRunValidation={
+          projectIdOverride && !fetchedProject ? undefined : handleRunYSchemaValidation
+        }
         projectId={projectId}
         commitAddress={commitAddress}
         projectName={project.name}
@@ -403,9 +422,12 @@ export function ProjectDetailPageContent({
         projectVisibility={project.visibility}
         repositoryProfile={project.repositoryProfile}
         repositoryPath={project.canonical_path ?? undefined}
-        canEditRepository={project.canEdit}
+        canEditRepository={projectIdOverride ? fetchedProject?.canEdit === true : project.canEdit}
+        detailsError={directoryProject ? projectLookupError?.message : undefined}
+        onRetryDetails={retryProjectDetail}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
+        validationLoading={yschemaValidationLoading}
         validationRunning={yschemaValidationRunning}
       />
     );

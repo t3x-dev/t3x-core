@@ -4,12 +4,19 @@ import { Check, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
-import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
+import {
+  type UseAvailableModelsResult,
+  useAvailableModels,
+} from '@/hooks/shared/useAvailableModels';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
 import styles from './GenerationModelSelector.module.css';
 
 interface GenerationModelSelectorProps {
+  availability?: Pick<
+    UseAvailableModelsResult,
+    'defaultModel' | 'defaultProvider' | 'providers' | 'loading' | 'availabilityError'
+  >;
   onThinkingChange?: (enabled: boolean) => void;
   selectedProvider?: string;
   selectedModel: string;
@@ -22,6 +29,7 @@ interface GenerationModelSelectorProps {
 type SelectorPane = 'effort' | 'model' | 'provider' | 'context';
 
 export function GenerationModelSelector({
+  availability,
   onThinkingChange,
   selectedProvider,
   selectedModel,
@@ -34,8 +42,9 @@ export function GenerationModelSelector({
   const [query, setQuery] = useState('');
   const preferences = useChatSessionStore();
   const [popoverHeight, setPopoverHeight] = useState(320);
+  const localAvailability = useAvailableModels(!availability);
   const { defaultModel, defaultProvider, providers, loading, availabilityError } =
-    useAvailableModels();
+    availability ?? localAvailability;
   const { canAdministerProviderCredentials } = useDeploymentCapabilities();
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const buttonRef = useRef<HTMLButtonElement>(null);

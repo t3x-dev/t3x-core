@@ -12,7 +12,7 @@
 
 import type { RepositoryProfile } from '@t3x-dev/api-client';
 import { create } from 'zustand';
-import type { Project, ProjectVisibility } from '@/types/api';
+import type { ApiCommit, Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
@@ -39,7 +39,15 @@ export interface ProjectSummary {
   visibility?: ProjectVisibility;
 }
 
+export interface DirectoryStateEntry {
+  project: ProjectSummary;
+  userId: string | null;
+  expiresAt: number;
+  head: Promise<ApiCommit[]>;
+}
+
 type ProjectStore = {
+  directoryStateEntry: DirectoryStateEntry | null;
   details: Record<string, ProjectSummary>;
   cacheProject: (project: ProjectSummary) => void;
   projects: ProjectSummary[];
@@ -108,6 +116,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
+  directoryStateEntry: null,
   details: {},
   cacheProject: (project) =>
     set((state) => ({ details: { ...state.details, [project.id]: project } })),
@@ -132,7 +141,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set((state) => {
       const details = { ...state.details };
       delete details[id];
-      return { projects: state.projects.filter((p) => p.id !== id), details };
+      return {
+        projects: state.projects.filter((p) => p.id !== id),
+        details,
+        directoryStateEntry:
+          state.directoryStateEntry?.project.id === id ? null : state.directoryStateEntry,
+      };
     });
     return existing;
   },

@@ -100,7 +100,7 @@ export function resolveAvailableModelSelection(
   return { provider, model };
 }
 
-export function useAvailableModels(): {
+export function useAvailableModels(enabled = true): {
   providers: LLMProviderInfo[];
   loading: boolean;
   loadModels: () => Promise<{ providers: LLMProviderInfo[] }>;
@@ -123,6 +123,7 @@ export function useAvailableModels(): {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     setLoading(true);
     setAvailabilityError(null);
@@ -144,16 +145,17 @@ export function useAvailableModels(): {
     return () => {
       cancelled = true;
     };
-  }, [revision]);
+  }, [enabled, revision]);
 
   useEffect(() => {
+    if (!enabled) return;
     window.addEventListener('focus', refresh);
     window.addEventListener('t3x:provider-configuration-changed', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('t3x:provider-configuration-changed', refresh);
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {

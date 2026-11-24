@@ -5,6 +5,7 @@ import { fetchProjectWorkspaces } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { resolveWebSocketBase } from '@/utils/apiBase';
 
+const WORKSPACE_LIST_FRESH_MS = 30_000;
 const REALTIME_RECONNECT_DELAY = 5000;
 const MAX_SEEN_EVENT_IDS = 200;
 const WORKSPACE_INVALIDATION_EVENTS = new Set([
@@ -19,6 +20,7 @@ export interface UseProjectWorkspacesResult {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  revalidate: () => void;
 }
 
 export function useProjectWorkspaces(
@@ -38,11 +40,13 @@ export function useProjectWorkspaces(
   activeKey.current = key;
   const mounted = useRef(false);
   const request = useRef(0);
+  const lastRead = useRef<{ key: string; completedAt: number | null } | null>(null);
 
   const load = useCallback(
     async (showLoading: boolean) => {
       if (!projectId || !enabled || !mounted.current || activeKey.current !== key) return;
       const token = ++request.current;
+      lastRead.current = { key, completedAt: null };
       const isCurrent = () =>
         mounted.current && activeKey.current === key && token === request.current;
       setSnapshot((current) => ({
@@ -62,12 +66,23 @@ export function useProjectWorkspaces(
             loading: false,
             error: formatUserFacingError(err, 'Failed to load workspaces.'),
           }));
+      } finally {
+        if (isCurrent()) lastRead.current = { key, completedAt: Date.now() };
       }
     },
     [enabled, key, projectId]
   );
 
   const refresh = useCallback(() => load(true), [load]);
+  const revalidate = useCallback(() => {
+    const read = lastRead.current;
+    if (
+      read?.key === key &&
+      read.completedAt !== null &&
+      Date.now() - read.completedAt >= WORKSPACE_LIST_FRESH_MS
+    )
+      void load(false);
+  }, [key, load]);
 
   useEffect(() => {
     mounted.current = true;
@@ -173,5 +188,6 @@ export function useProjectWorkspaces(
     loading: available && (current?.loading ?? true),
     error: current?.error ?? null,
     refresh,
+    revalidate,
   };
 }

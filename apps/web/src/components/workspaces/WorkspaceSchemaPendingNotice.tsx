@@ -12,18 +12,21 @@ export function WorkspaceSchemaPendingNotice({
   projectId,
   workspaceId,
   revision,
+  confirmedEmpty,
   branch,
   onPrepared,
 }: {
   projectId: string;
   workspaceId: string;
   revision?: number;
+  confirmedEmpty?: boolean;
   branch: string;
   onPrepared?: () => void | Promise<void>;
 }) {
   const [preparing, setPreparing] = useState(false);
-  const pending = useWorkspaceSchemaPending(projectId, workspaceId, revision);
-  if (pending.loading || pending.data?.status === 'none') return null;
+  const pending = useWorkspaceSchemaPending(projectId, workspaceId, revision, confirmedEmpty);
+  if (pending.loading || pending.data?.status === 'none' || (!pending.data && !pending.error))
+    return null;
   if (pending.error) {
     return (
       <Alert
