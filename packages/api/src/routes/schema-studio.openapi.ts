@@ -41,7 +41,7 @@ import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
-import { timeRepositoryRead } from '../lib/repository-read-timing';
+import { markRepositoryReadOutcome, timeRepositoryRead } from '../lib/repository-read-timing';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
@@ -507,13 +507,19 @@ const applyRoute = createRoute({
 schemaStudioRoutes.openapi(previewRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');
-  const access = await assertProjectAccess(c, db, projectId, 'project:read');
-  if (access instanceof Response) return access;
-  try {
-    return c.json(
-      { success: true as const, data: await previewStudio(c, db, projectId, c.req.valid('json')) },
-      200
+  if ((c as Context<AppEnv>).get('repositoryReadAccess')?.projectId !== projectId) {
+    const access = await timeRepositoryRead(c, 'project_access', () =>
+      assertProjectAccess(c, db, projectId, 'project:read')
     );
+    if (access instanceof Response) return access;
+  }
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    const input = c.req.valid('json');
+    const data = await timeRepositoryRead(c, 'schema_preview', () =>
+      previewStudio(c, db, projectId, input)
+    );
+    return c.json({ success: true as const, data }, 200);
   } catch (error) {
     if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
     throw error;
@@ -697,6 +703,8 @@ schemaStudioRoutes.openapi(readPendingRoute, async (c) => {
   const data = await timeRepositoryRead(c, 'pending_schema', () =>
     readPendingWorkspaceSchema(c, db, projectId, draft)
   );
+  if (data.status === 'none') markRepositoryReadOutcome(c, 'empty');
+  if (data.status === 'unavailable') markRepositoryReadOutcome(c, 'unavailable');
   return c.json({ success: true as const, data }, 200);
 });
 

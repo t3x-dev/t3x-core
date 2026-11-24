@@ -2,12 +2,15 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearQueryCache, useQuery } from '@/hooks/shared/useQuery';
+import { invalidateSessionReads, setSessionUser } from '@/infrastructure/session';
 import { deferred } from './deferred';
 
 describe('useQuery cache', () => {
   afterEach(() => {
     cleanup();
     clearQueryCache();
+    localStorage.clear();
+    window.dispatchEvent(new Event('storage'));
   });
 
   it('clearQueryCache removes all entries', () => {
@@ -32,6 +35,48 @@ describe('useQuery cache', () => {
     await waitFor(() => expect(result.current.data).toBe('b'));
     await act(async () => old.resolve('late a'));
     expect(result.current.data).toBe('b');
+  });
+
+  it('does not share the same resource key across accounts', async () => {
+    setSessionUser({ id: 'first-account', name: null, username: null });
+    const queryFn = vi
+      .fn()
+      .mockResolvedValueOnce('first private data')
+      .mockResolvedValueOnce('second private data');
+    const { result } = renderHook(() => useQuery({ queryKey: ['repository', 'same-id'], queryFn }));
+    await waitFor(() => expect(result.current.data).toBe('first private data'));
+    act(() => setSessionUser({ id: 'second-account', name: null, username: null }));
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.data).toBe('second private data'));
+    expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears already visible data after permission invalidation without retrying by itself', async () => {
+    const queryFn = vi.fn().mockResolvedValueOnce('private data').mockResolvedValueOnce('checked');
+    const { result } = renderHook(() => useQuery({ queryKey: ['repository', 'private'], queryFn }));
+    await waitFor(() => expect(result.current.data).toBe('private data'));
+
+    act(invalidateSessionReads);
+    expect(result.current.data).toBeNull();
+    expect(result.current.error?.message).toMatch(/access changed/i);
+    expect(queryFn).toHaveBeenCalledOnce();
+
+    act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.data).toBe('checked'));
+  });
+
+  it('drops in-flight data that arrives after an authorization invalidation', async () => {
+    const old = deferred<string>();
+    const queryFn = vi.fn().mockReturnValueOnce(old.promise).mockResolvedValueOnce('rechecked');
+    const query = () => useQuery({ queryKey: ['repository', 'protected'], queryFn });
+    const first = renderHook(query);
+    act(() => invalidateSessionReads());
+    await act(async () => old.resolve('revoked private data'));
+    expect(first.result.current.data).toBeNull();
+    first.unmount();
+    const next = renderHook(query);
+    await waitFor(() => expect(next.result.current.data).toBe('rechecked'));
+    expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the newest same-key refresh when an older request fails later', async () => {

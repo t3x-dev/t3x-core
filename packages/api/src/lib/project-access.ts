@@ -65,6 +65,7 @@ export type ProjectAccessDecision =
       code: 'FORBIDDEN' | 'NOT_FOUND';
       message: string;
       reason: string;
+      deniedAction?: ProjectAction;
     };
 
 function includesValue<T extends string>(values: readonly T[], value: string): value is T {
@@ -151,7 +152,12 @@ async function evaluateProjectAccessFromFacts(
   projectId: string,
   principal: ProjectAccessPrincipal | undefined,
   action: ProjectAction,
-  options: { includeDeleted?: boolean; allowLocalBypass?: boolean; includeEditPermission?: boolean }
+  options: {
+    includeDeleted?: boolean;
+    allowLocalBypass?: boolean;
+    includeEditPermission?: boolean;
+    alsoRequireRead?: boolean;
+  }
 ): Promise<ProjectAccessDecision> {
   if (!principal) {
     const project = await (options.includeDeleted
@@ -223,6 +229,19 @@ async function evaluateProjectAccessFromFacts(
       message: 'Access denied',
       reason: decision.reason,
     };
+  }
+
+  if (options.alsoRequireRead) {
+    const read = evaluateProjectAction(authorityFacts, 'project:read');
+    if (!read.allowed)
+      return {
+        allowed: false,
+        status: 403,
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        reason: read.reason,
+        deniedAction: 'project:read',
+      };
   }
 
   return {
@@ -364,7 +383,13 @@ export async function assertProjectAccess(
 
 /** Detail views use the same current membership and grant for both actions. */
 export function assertProjectReadWithEditPermission(c: Context, db: AnyDB, projectId: string) {
-  return assertProjectAccessDecision(c, db, projectId, 'project:read', true);
+  return assertProjectAccessDecision(c, db, projectId, 'project:read', {
+    includeEditPermission: true,
+  });
+}
+
+export function assertProjectEditAndRead(c: Context, db: AnyDB, projectId: string) {
+  return assertProjectAccessDecision(c, db, projectId, 'project:edit', { alsoRequireRead: true });
 }
 
 async function assertProjectAccessDecision(
@@ -372,7 +397,7 @@ async function assertProjectAccessDecision(
   db: AnyDB,
   projectId: string,
   action: ProjectAction,
-  includeEditPermission?: boolean
+  options?: { includeEditPermission?: boolean; alsoRequireRead?: boolean }
 ) {
   const decision = await evaluateProjectAccessFromFacts(
     db,
@@ -381,14 +406,14 @@ async function assertProjectAccessDecision(
     action,
     {
       allowLocalBypass: isAuthenticationDisabled(),
-      includeEditPermission,
+      ...options,
     }
   );
   if (!decision.allowed) {
     if (decision.status === 403) {
       logAuthorizationDenial({
         principal: getRequestPrincipal(c),
-        action,
+        action: decision.deniedAction ?? action,
         resource: { kind: 'project', id: projectId },
         reason: decision.reason,
       });

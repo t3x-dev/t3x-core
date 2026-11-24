@@ -5,7 +5,10 @@ import { expect, it, vi } from 'vitest';
 import { RepositoryProjectPicker } from '@/components/project/RepositoryProjectPicker';
 
 const listProjectPage = vi.hoisted(() => vi.fn());
-vi.mock('@/infrastructure/projects', () => ({ listProjectPage }));
+vi.mock(import('@/infrastructure/projects'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listProjectPage,
+}));
 
 it('searches before paginating and keeps the selected project outside the current results', async () => {
   const picked = { project_id: 'picked', name: 'Picked' };
@@ -26,7 +29,13 @@ it('searches before paginating and keeps the selected project outside the curren
     <RepositoryProjectPicker id="project" label="Project" value="" onChange={pick} />
   );
   await screen.findByRole('option', { name: 'Picked' });
-  expect(listProjectPage).toHaveBeenCalledExactlyOnceWith(20, '', undefined);
+  expect(listProjectPage).toHaveBeenCalledExactlyOnceWith(
+    20,
+    '',
+    undefined,
+    undefined,
+    expect.any(AbortSignal)
+  );
   fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'picked' } });
   expect(pick).toHaveBeenCalledWith('picked', 'Picked');
   view.rerender(
@@ -41,7 +50,8 @@ it('searches before paginating and keeps the selected project outside the curren
     20,
     '',
     undefined,
-    expect.objectContaining({ q: 'Search' })
+    expect.objectContaining({ q: 'Search' }),
+    expect.any(AbortSignal)
   );
   expect(screen.getByLabelText('Project')).toHaveValue('picked');
   fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
@@ -50,7 +60,8 @@ it('searches before paginating and keeps the selected project outside the curren
     20,
     'match',
     undefined,
-    expect.objectContaining({ q: 'Search' })
+    expect.objectContaining({ q: 'Search' }),
+    expect.any(AbortSignal)
   );
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Load more projects' })).not.toBeInTheDocument()
@@ -62,11 +73,14 @@ it('discards late results from a superseded search', async () => {
     items: { project_id: string; name: string }[];
     next_cursor: string;
   }) => void;
-  listProjectPage.mockReset().mockImplementation((_limit, _cursor, _namespace, filter) => {
-    if (filter?.q === 'older')
+  let oldSignal: AbortSignal | undefined;
+  listProjectPage.mockReset().mockImplementation((_limit, _cursor, _namespace, filter, signal) => {
+    if (filter?.q === 'older') {
+      oldSignal = signal;
       return new Promise((resolve) => {
         finishOld = resolve;
       });
+    }
     return Promise.resolve({
       items: filter?.q ? [{ project_id: 'latest', name: 'Latest' }] : [],
       next_cursor: null,
@@ -78,6 +92,7 @@ it('discards late results from a superseded search', async () => {
   await waitFor(() => expect(finishOld).toBeTypeOf('function'));
   fireEvent.change(search, { target: { value: 'latest' } });
   await screen.findByRole('option', { name: 'Latest' });
+  expect(oldSignal?.aborted).toBe(true);
 
   await act(async () =>
     finishOld({ items: [{ project_id: 'old', name: 'Stale' }], next_cursor: 'old' })

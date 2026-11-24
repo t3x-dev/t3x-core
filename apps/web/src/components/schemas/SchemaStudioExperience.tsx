@@ -56,6 +56,7 @@ import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEdi
 import { useWorkspaceSchemaPending } from '@/hooks/schemas/useWorkspaceSchemaPending';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import type { SchemaSaveState } from '@/types/schemas';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import { SchemaContentPreparationDialog } from './SchemaContentPreparationDialog';
 import { SchemaDataEditor } from './SchemaDataEditor';
 import { SchemaSourceComposition } from './SchemaSourceComposition';
@@ -194,6 +195,7 @@ export function SchemaStudioExperience({
   children?: ReactNode;
   navigation?: ReactNode;
 }) {
+  useEffect(() => markNavigationTiming('schemas', 'shell'), []);
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();

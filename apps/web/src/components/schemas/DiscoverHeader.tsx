@@ -36,6 +36,7 @@ import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
 import { prefetchRepositoryDirectoryPage } from '@/hooks/projects/repositoryDirectory';
 import palette from '@/styles/management-palette.module.css';
 import { markInteraction } from '@/utils/interactionTiming';
+import { beginNavigationTiming } from '@/utils/navigationTiming';
 import styles from './DiscoverHeader.module.css';
 
 const tabIcons: Record<ProjectTabId, LucideIcon> = {
@@ -214,6 +215,7 @@ export function DiscoverHeader({
             </Link>
             <Link
               href="/repositories"
+              onNavigate={() => beginNavigationTiming('repositories')}
               aria-current={repositoriesNavigation ? 'page' : undefined}
               onPointerEnter={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
               onFocus={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
@@ -287,7 +289,10 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tabHref(tab.id)}
-                    onNavigate={tab.id === 'settings' && !selected ? onSettingsNavigate : undefined}
+                    onNavigate={() => {
+                      if (!selected) beginNavigationTiming(tab.id);
+                      if (tab.id === 'settings' && !selected) onSettingsNavigate?.();
+                    }}
                     scroll={false}
                     className={styles.tab}
                     aria-label={tab.label}

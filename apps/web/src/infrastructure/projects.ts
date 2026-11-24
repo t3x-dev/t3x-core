@@ -10,7 +10,11 @@ import type {
   RepositoryProfilePatch,
 } from '@t3x-dev/api-client';
 import { API_V1, ApiError, buildQueryString, fetchWithTimeout, handleResponse } from './core';
-import { getSessionUserId, subscribeSessionUser } from './session';
+import {
+  getSessionUserId,
+  subscribeSessionReadInvalidation,
+  subscribeSessionUser,
+} from './session';
 import { getSharedApiClient } from './sharedApiClient';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
@@ -58,12 +62,13 @@ export async function listProjectPage(
     editable?: true;
     visibility?: Project['visibility'];
     tags?: string[];
-  }
+  },
+  signal?: AbortSignal
 ) {
   const { tags, ...scope } = filters ?? {};
   const query = new URLSearchParams(buildQueryString({ limit, cursor, namespace, ...scope }));
   for (const tag of tags ?? []) query.append('tags', tag);
-  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
+  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`, undefined, undefined, signal);
   return handleResponse<{ items: Project[]; next_cursor: string | null; has_more: boolean }>(res);
 }
 
@@ -76,10 +81,35 @@ let directoryPage:
   | {
       userId: string;
       snapshot?: { page: DirectoryPage; loadedAt: number };
-      request?: Promise<DirectoryPage>;
+      request?: {
+        promise: Promise<DirectoryPage>;
+        controller: AbortController;
+        speculative: boolean;
+      };
     }
   | undefined;
 let watchingDirectorySession = false;
+let lastPrefetch: { userId: string; at: number } | undefined;
+
+function invalidateDirectoryPage() {
+  directoryPage?.request?.controller.abort();
+  directoryPage = undefined;
+}
+
+export function cancelRepositoryDirectoryPrefetch() {
+  const request = directoryPage?.request;
+  if (request?.speculative) {
+    directoryPage!.request = undefined;
+    request.controller.abort();
+  }
+}
+
+export function cancelRepositoryDirectoryRead(userId: string): void {
+  if (directoryPage?.userId !== userId || !directoryPage.request) return;
+  const request = directoryPage.request;
+  directoryPage.request = undefined;
+  request.controller.abort();
+}
 
 export function readCachedRepositoryDirectoryPage(userId: string) {
   const cached = directoryPage?.userId === userId ? directoryPage.snapshot : undefined;
@@ -88,16 +118,42 @@ export function readCachedRepositoryDirectoryPage(userId: string) {
     : undefined;
 }
 
-export function loadRepositoryDirectoryPage(userId: string, force = false): Promise<DirectoryPage> {
+export function prefetchDirectoryPage(userId: string) {
+  if (
+    lastPrefetch?.userId === userId &&
+    Date.now() - lastPrefetch.at < DIRECTORY_PAGE_PREFETCH_FRESH_MS
+  )
+    return;
+  lastPrefetch = { userId, at: Date.now() };
+  void loadRepositoryDirectoryPage(userId, false, true).catch(() => {});
+}
+
+export function loadRepositoryDirectoryPage(
+  userId: string,
+  force = false,
+  speculative = false
+): Promise<DirectoryPage> {
   if (!watchingDirectorySession) {
     watchingDirectorySession = true;
+    subscribeSessionReadInvalidation(() => {
+      directoryPage = undefined;
+      lastPrefetch = undefined;
+    });
     subscribeSessionUser(() => {
-      if (getSessionUserId() !== directoryPage?.userId) directoryPage = undefined;
+      const userId = getSessionUserId();
+      if (lastPrefetch && lastPrefetch.userId !== userId) lastPrefetch = undefined;
+      if (userId !== directoryPage?.userId) invalidateDirectoryPage();
     });
   }
-  if (directoryPage?.userId !== userId) directoryPage = { userId };
+  if (directoryPage?.userId !== userId) {
+    invalidateDirectoryPage();
+    directoryPage = { userId };
+  }
   const entry = directoryPage;
-  if (entry.request) return entry.request;
+  if (entry.request) {
+    if (!speculative) entry.request.speculative = false;
+    return entry.request.promise;
+  }
   if (
     !force &&
     entry.snapshot &&
@@ -105,28 +161,34 @@ export function loadRepositoryDirectoryPage(userId: string, force = false): Prom
   )
     return Promise.resolve(entry.snapshot.page);
 
-  const request = listProjectPage(REPOSITORY_DIRECTORY_PAGE_SIZE, '')
+  const controller = new AbortController();
+  const promise = listProjectPage(
+    REPOSITORY_DIRECTORY_PAGE_SIZE,
+    '',
+    undefined,
+    undefined,
+    controller.signal
+  )
     .then((page) => {
-      if (getSessionUserId() !== userId)
-        throw new ApiError('ABORTED', 'The active account changed.');
-      if (entry !== directoryPage) return loadRepositoryDirectoryPage(userId);
+      if (controller.signal.aborted || getSessionUserId() !== userId || entry !== directoryPage)
+        throw new ApiError('ABORTED', 'The repository list changed.');
       entry.snapshot = { page, loadedAt: Date.now() };
       return page;
     })
     .catch((error: unknown) => {
-      if (entry === directoryPage) entry.snapshot = undefined;
+      if (entry.request?.controller === controller) entry.snapshot = undefined;
       throw error;
     })
     .finally(() => {
-      entry.request = undefined;
+      if (entry.request?.controller === controller) entry.request = undefined;
     });
-  entry.request = request;
-  return request;
+  entry.request = { promise, controller, speculative };
+  return promise;
 }
 
 async function afterRepositoryWrite<T>(write: Promise<T>): Promise<T> {
   const result = await write;
-  directoryPage = undefined;
+  invalidateDirectoryPage();
   return result;
 }
 

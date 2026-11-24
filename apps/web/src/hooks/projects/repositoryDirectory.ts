@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { useSessionUserId } from '@/hooks/shared/useSession';
-import { loadRepositoryDirectoryPage } from '@/infrastructure/projects';
+import { prefetchDirectoryPage } from '@/infrastructure/projects';
 import { getSessionUserId } from '@/infrastructure/session';
 
 export { REPOSITORY_DIRECTORY_PAGE_SIZE } from '@/infrastructure/projects';
 
 export function prefetchRepositoryDirectoryPage() {
   const userId = getSessionUserId();
-  if (userId) void loadRepositoryDirectoryPage(userId).catch(() => {});
+  if (userId && !document.hidden) prefetchDirectoryPage(userId);
 }
 
 export function useRepositoryDirectoryIdlePrefetch(enabled: boolean) {

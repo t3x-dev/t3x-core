@@ -10,7 +10,7 @@ import {
   loadRepositoryDirectoryPage,
   readCachedRepositoryDirectoryPage,
 } from '@/infrastructure/projects';
-import { setSessionUser } from '@/infrastructure/session';
+import { invalidateSessionReads, setSessionUser } from '@/infrastructure/session';
 import { deferred } from './deferred';
 
 const account = (id: string) => setSessionUser({ id, name: null, username: null });
@@ -79,6 +79,7 @@ it.each([20, 200])('shares the idle first page for %i accessible repositories', 
   expect(fetch).not.toHaveBeenCalled();
   expect(runIdle).toBeDefined();
   await act(async () => runIdle?.({ didTimeout: false, timeRemaining: () => 50 }));
+  await waitFor(() => expect(readCachedRepositoryDirectoryPage('idle-reader')).toEqual(page));
   const directory = renderHook(() =>
     useProjects(20, undefined, 'on-demand', { directoryUserId: 'idle-reader' })
   );
@@ -86,4 +87,35 @@ it.each([20, 200])('shares the idle first page for %i accessible repositories', 
   expect(directory.result.current.hasMore).toBe(total > 20);
   expect(fetch).toHaveBeenCalledTimes(1);
   prefetch.unmount();
+});
+
+it('cancels an adopted first-page request when leaving the directory', async () => {
+  account('leaving-reader');
+  const response = deferred<Response>();
+  const fetch = vi.fn((_url: string, _options: RequestInit) => response.promise);
+  vi.stubGlobal('fetch', fetch);
+  const directory = renderHook(() =>
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'leaving-reader' })
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  const signal = fetch.mock.calls[0]?.[1]?.signal;
+  directory.unmount();
+  expect(signal?.aborted).toBe(true);
+  await act(async () => response.resolve(Response.json({ success: true, data: firstPage })));
+  expect(readCachedRepositoryDirectoryPage('leaving-reader')).toBeUndefined();
+});
+
+it('hides the already visible repository list when same-account authorization changes', async () => {
+  account('active-reader');
+  const fetch = vi.fn().mockResolvedValue(Response.json({ success: true, data: firstPage }));
+  vi.stubGlobal('fetch', fetch);
+  const directory = renderHook(() =>
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'active-reader' })
+  );
+  await waitFor(() => expect(directory.result.current.projects).toEqual(firstPage.items));
+  act(invalidateSessionReads);
+  expect(directory.result.current.projects).toEqual([]);
+  expect(directory.result.current.hasMore).toBe(false);
+  expect(directory.result.current.error).toMatch(/access changed/i);
+  expect(fetch).toHaveBeenCalledOnce();
 });

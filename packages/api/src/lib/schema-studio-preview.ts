@@ -29,6 +29,7 @@ import {
   type YSchemaLocalContributionV2,
 } from '@t3x-dev/yschema';
 import type { Context } from 'hono';
+import { timeRepositoryRead } from './repository-read-timing';
 import { assessWorkspaceSchemaImpact, workspaceContent } from './schema-evolution-impact';
 import {
   accessibleNodeProvenance,
@@ -331,7 +332,11 @@ export async function workspaceStudioSelection(
     !resolved.schema &&
     (!Array.isArray(workspace.schemaBindings) || !workspace.schemaBindings.length)
   )
-    return { selection: await compileStudioSelection(c, db, projectId, []), basis: undefined };
+    return {
+      selection: await compileStudioSelection(c, db, projectId, []),
+      basis: undefined,
+      resolved,
+    };
   if (!resolved.schema)
     throw new StudioError(
       'CONFLICT',
@@ -353,7 +358,7 @@ export async function workspaceStudioSelection(
     report: { valid: true, issues: [] },
     adoption: { allowed: true, reason: null },
   };
-  return { selection, basis };
+  return { selection, basis, resolved };
 }
 
 export async function previewStudio(
@@ -363,7 +368,12 @@ export async function previewStudio(
   input: StudioPreviewInput,
   confirmedChange?: AssistantSchemaSettingsInput
 ) {
-  let draft = input.workspaceId ? await findWorkspaceDraft(db, projectId, input.workspaceId) : null;
+  const workspaceId = input.workspaceId;
+  const draft = workspaceId
+    ? await timeRepositoryRead(c, 'schema_workspace', () =>
+        findWorkspaceDraft(db, projectId, workspaceId)
+      )
+    : null;
   let editCandidate: WorkspaceSchemaEditCandidate | null = null;
   if (input.schemaEditCandidate) {
     if (!input.workspaceId)
@@ -407,38 +417,48 @@ export async function previewStudio(
       'INVALID_REQUEST',
       'Edit the complete bound Schema definition, or select sources to compose a new definition.'
     );
-  let selected = !input.candidateIds.length
-    ? (await workspaceStudioSelection(c, db, projectId, draft!.workspace_state!)).selection
-    : await compileStudioSelection(
-        c,
-        db,
-        projectId,
-        input.candidateIds,
-        (editCandidate?.localContribution ?? input.localContribution) as
-          | Record<string, unknown>
-          | undefined,
-        editCandidate
-          ? { id: editCandidate.candidateId, revision: editCandidate.revision }
-          : undefined,
-        recoveredComposition ?? input.composition
-      );
+  const workspaceSelection = !input.candidateIds.length
+    ? await workspaceStudioSelection(c, db, projectId, draft!.workspace_state!)
+    : undefined;
+  let selected =
+    workspaceSelection?.selection ??
+    (await compileStudioSelection(
+      c,
+      db,
+      projectId,
+      input.candidateIds,
+      (editCandidate?.localContribution ?? input.localContribution) as
+        | Record<string, unknown>
+        | undefined,
+      editCandidate
+        ? { id: editCandidate.candidateId, revision: editCandidate.revision }
+        : undefined,
+      recoveredComposition ?? input.composition
+    ));
   if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
     throw new StudioError(
       'CONFLICT',
       'The selected base sources changed after this Schema edit candidate was saved.'
     );
   let boundSchema: Record<string, unknown> | undefined;
+  let resolvedWorkspaceSchema = workspaceSelection?.resolved;
   if (!editCandidate && !input.localContribution && draft?.workspace_state) {
-    const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    const resolved = (resolvedWorkspaceSchema ??= await resolveWorkspaceYSchema(
+      draft.workspace_state,
+      db,
+      projectId
+    ));
     if (resolved.schema) {
       try {
-        const basis = await resolveWorkspaceSchemaEditBasis(
-          c,
-          db,
-          projectId,
-          draft.workspace_state,
-          resolved.schema
-        );
+        const basis =
+          workspaceSelection?.basis ??
+          (await resolveWorkspaceSchemaEditBasis(
+            c,
+            db,
+            projectId,
+            draft.workspace_state,
+            resolved.schema
+          ));
         if (
           input.candidateIds.length > 0 &&
           !input.composition &&
@@ -599,10 +619,11 @@ export async function previewStudio(
   let impact: Awaited<ReturnType<typeof assessWorkspaceSchemaImpact>> | null = null;
   let baseSchemaHash: string | null = null;
   if (input.workspaceId) {
-    draft ??= await findWorkspaceDraft(db, projectId, input.workspaceId);
     if (!draft?.workspace_state)
       throw new StudioError('NOT_FOUND', 'Target Workspace is unavailable.');
-    const resolved = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    const resolved =
+      resolvedWorkspaceSchema ??
+      (await resolveWorkspaceYSchema(draft.workspace_state, db, projectId));
     const bindings = draft.workspace_state.schemaBindings;
     if (Array.isArray(bindings) && bindings.length && !resolved.schema)
       throw new StudioError(

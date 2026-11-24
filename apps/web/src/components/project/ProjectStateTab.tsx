@@ -112,6 +112,7 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import { BranchLoadError } from './BranchLoadError';
 import { StateArtifactDialog } from './StateArtifactDialog';
 import { StateEmptyContent } from './StateEmptyContent';
@@ -789,6 +790,12 @@ export function ProjectStateTab({
   const stateLoadError = branchBlocksState
     ? 'Retry the branch list above to load committed State.'
     : snapshot.primaryError;
+  useEffect(() => {
+    markNavigationTiming('state', 'shell');
+    if (snapshotEnabled && !snapshot.loading && !snapshot.primaryError) {
+      markNavigationTiming('state', 'ready');
+    }
+  }, [snapshotEnabled, snapshot.loading, snapshot.primaryError]);
   const retryState = () => setSnapshotRefreshVersion((version) => version + 1);
   return (
     <section

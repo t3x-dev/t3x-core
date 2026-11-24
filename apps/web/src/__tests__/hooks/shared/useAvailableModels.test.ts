@@ -64,3 +64,16 @@ it('distinguishes discovery failure from an empty catalog and retries without co
   await waitFor(() => expect(result.current.availabilityError).toBeNull());
   expect(result.current.hasConfiguredGenerationProvider).toBe(false);
 });
+
+it.each([
+  ['TIMEOUT', 'timeout'],
+  ['DATA_LOAD_TIMEOUT', 'timeout'],
+  ['MODEL_UPSTREAM_UNAVAILABLE', 'upstream_error'],
+])('classifies model discovery failure %s', async (code, expected) => {
+  vi.mocked(fetchAvailableModels).mockRejectedValue(
+    Object.assign(new Error('Unavailable'), { code })
+  );
+  const { result } = renderHook(() => useAvailableModels());
+  await waitFor(() => expect(result.current.availabilityError).toBe(expected));
+  expect(result.current.providers).toEqual([]);
+});
