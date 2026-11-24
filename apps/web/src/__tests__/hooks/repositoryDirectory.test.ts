@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { prefetchRepositoryDirectoryPage } from '@/hooks/projects/repositoryDirectory';
+import {
+  prefetchRepositoryDirectoryPage,
+  useRepositoryDirectoryIdlePrefetch,
+} from '@/hooks/projects/repositoryDirectory';
 import { useProjects } from '@/hooks/projects/useProjects';
 import {
   loadRepositoryDirectoryPage,
@@ -55,4 +58,32 @@ it('drops a previous account’s cached page and ignores its late request', asyn
   late.resolve(Response.json({ success: true, data: firstPage }));
   await expect(pending).rejects.toMatchObject({ code: 'ABORTED' });
   expect(readCachedRepositoryDirectoryPage('new-reader')).toBeUndefined();
+});
+
+it.each([20, 200])('shares the idle first page for %i accessible repositories', async (total) => {
+  account('idle-reader');
+  let runIdle: IdleRequestCallback | undefined;
+  vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback) => {
+    runIdle = callback;
+    return 1;
+  });
+  vi.stubGlobal('cancelIdleCallback', vi.fn());
+  const items = Array.from({ length: 20 }, (_, index) => ({
+    project_id: `repo-${index}`,
+    namespace: index < 10 ? 'personal' : 'team',
+  }));
+  const page = { items, next_cursor: total > 20 ? 'next' : null, has_more: total > 20 };
+  const fetch = vi.fn().mockResolvedValue(Response.json({ success: true, data: page }));
+  vi.stubGlobal('fetch', fetch);
+  const prefetch = renderHook(() => useRepositoryDirectoryIdlePrefetch(true));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(runIdle).toBeDefined();
+  await act(async () => runIdle?.({ didTimeout: false, timeRemaining: () => 50 }));
+  const directory = renderHook(() =>
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'idle-reader' })
+  );
+  expect(directory.result.current.projects).toEqual(items);
+  expect(directory.result.current.hasMore).toBe(total > 20);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  prefetch.unmount();
 });

@@ -52,9 +52,17 @@ export async function listProjectPage(
   limit: number,
   cursor: string,
   namespace?: string,
-  filters?: { q?: string; tag_query?: string; editable?: true }
+  filters?: {
+    q?: string;
+    tag_query?: string;
+    editable?: true;
+    visibility?: Project['visibility'];
+    tags?: string[];
+  }
 ) {
-  const query = buildQueryString({ limit, cursor, namespace, ...filters });
+  const { tags, ...scope } = filters ?? {};
+  const query = new URLSearchParams(buildQueryString({ limit, cursor, namespace, ...scope }));
+  for (const tag of tags ?? []) query.append('tags', tag);
   const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
   return handleResponse<{ items: Project[]; next_cursor: string | null; has_more: boolean }>(res);
 }

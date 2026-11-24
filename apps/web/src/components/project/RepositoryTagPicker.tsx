@@ -78,7 +78,10 @@ function TagChoices({
   );
 }
 
-export function NamespaceTagChoices({ namespace, ...props }: ChoicesProps & { namespace: string }) {
+export function NamespaceTagChoices({
+  namespace,
+  ...props
+}: ChoicesProps & { namespace?: string }) {
   const { projects, loading, error, refresh, hasMore, loadMore } = useProjects(
     20,
     namespace,
@@ -127,6 +130,7 @@ export function RepositoryTagPicker({
   className,
   loading,
   onOpenChange,
+  remoteSearch = false,
 }: {
   selected: string[];
   onChange: (tags: string[]) => void;
@@ -136,6 +140,7 @@ export function RepositoryTagPicker({
   className?: string;
   loading?: boolean;
   onOpenChange?: (open: boolean) => void;
+  remoteSearch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -185,7 +190,7 @@ export function RepositoryTagPicker({
           />
         </div>
         {open &&
-          (editing ? (
+          (editing || remoteSearch ? (
             <NamespaceTagChoices
               key={namespace}
               namespace={namespace}

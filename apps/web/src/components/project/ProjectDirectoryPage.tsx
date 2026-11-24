@@ -359,6 +359,15 @@ function ProjectDirectoryContent({
   const activeHref = `${pathname}${activeParams.size ? `?${activeParams.toString()}` : ''}`;
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
+  const [query, setQuery] = useState('');
+  const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
+  const [visibility, setVisibility] = useState<'all' | (typeof visibilityOptions)[number]['value']>(
+    'all'
+  );
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
+  const serverFiltersAvailable = Boolean(directoryUserId && directoryView === 'all');
+  const serverFiltering = serverFiltersAvailable && hasFilter;
   const {
     error,
     hasMore,
@@ -369,12 +378,15 @@ function ProjectDirectoryContent({
     remove: removeProject,
     rename: renameProject,
   } = useProjects(REPOSITORIES_PER_PAGE, accessible ? undefined : ownerSlug, 'on-demand', {
-    directoryUserId,
+    directoryUserId: serverFiltering ? undefined : directoryUserId,
+    ...(serverFiltering
+      ? {
+          search: query.trim(),
+          visibility: visibility === 'all' ? undefined : visibility,
+          tags: selectedTags,
+        }
+      : {}),
   });
-  const [query, setQuery] = useState('');
-  const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
-  const [visibility, setVisibility] = useState('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [sort, setSort] = useState('created');
   const [page, setPage] = useState(1);
@@ -491,6 +503,11 @@ function ProjectDirectoryContent({
     () => orderProjectsByRecentOpen(projectSummaries, recentProjectIds),
     [projectSummaries, recentProjectIds]
   );
+  const [unfilteredSize, setUnfilteredSize] = useState<string>();
+  useEffect(() => {
+    if (!serverFiltering && !loading && !error)
+      setUnfilteredSize(`${projects.length}${hasMore ? '+' : ''}`);
+  }, [error, hasMore, loading, projects.length, serverFiltering]);
   const tags = useMemo(() => repositoryTagOptions(projects), [projects]);
   const filteredProjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -514,14 +531,32 @@ function ProjectDirectoryContent({
     currentPage * REPOSITORIES_PER_PAGE
   );
   const hasLoadedProjects = projectSummaries.length > 0;
-  const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
-  const needsCompleteList = hasFilter || directoryView === 'recent' || sort === 'name';
+  const allCount = serverFiltering
+    ? (unfilteredSize ?? '…')
+    : `${projectSummaries.length}${hasMore ? '+' : ''}`;
+  const needsCompleteList =
+    (!serverFiltering && hasFilter) || directoryView === 'recent' || sort === 'name';
   const resultsPending = needsCompleteList && hasMore && !error;
   useEffect(() => {
-    if (!deletedView && (needsCompleteList || tagPickerOpen) && hasMore && !loading && !error) {
+    if (
+      !deletedView &&
+      (needsCompleteList || (tagPickerOpen && !serverFiltersAvailable)) &&
+      hasMore &&
+      !loading &&
+      !error
+    ) {
       void loadMore();
     }
-  }, [deletedView, error, hasMore, loadMore, loading, needsCompleteList, tagPickerOpen]);
+  }, [
+    deletedView,
+    error,
+    hasMore,
+    loadMore,
+    loading,
+    needsCompleteList,
+    serverFiltersAvailable,
+    tagPickerOpen,
+  ]);
 
   async function nextPage() {
     const targetPage = currentPage + 1;
@@ -592,11 +627,7 @@ function ProjectDirectoryContent({
               <div className={styles.titleRow}>
                 <h1>
                   {accessible ? 'Your repositories' : 'Repositories'}{' '}
-                  <span>
-                    {loading && !hasLoadedProjects
-                      ? '…'
-                      : `${projectSummaries.length}${hasMore ? '+' : ''}`}
-                  </span>
+                  <span>{loading && !hasLoadedProjects && !unfilteredSize ? '…' : allCount}</span>
                 </h1>
                 <div className={styles.titleActions}>
                   {!accessible && (
@@ -639,11 +670,7 @@ function ProjectDirectoryContent({
                     setPage(1);
                   }}
                 >
-                  All repositories{' '}
-                  <span>
-                    {projectSummaries.length}
-                    {hasMore ? '+' : ''}
-                  </span>
+                  All repositories <span>{allCount}</span>
                 </button>
                 <button
                   type="button"
@@ -667,6 +694,7 @@ function ProjectDirectoryContent({
                   <Input
                     id="directory-search"
                     type="search"
+                    maxLength={200}
                     aria-controls="repository-list"
                     onChange={(event) => {
                       setQuery(event.target.value);
@@ -681,7 +709,9 @@ function ProjectDirectoryContent({
                   label="Filter by visibility"
                   value={visibility}
                   onValueChange={(value) => {
-                    setVisibility(value);
+                    setVisibility(
+                      visibilityOptions.find((option) => option.value === value)?.value ?? 'all'
+                    );
                     setPage(1);
                   }}
                   options={[{ value: 'all', label: 'All visibility' }, ...visibilityOptions]}
@@ -689,7 +719,8 @@ function ProjectDirectoryContent({
                 <RepositoryTagPicker
                   className={styles.tagFilter}
                   onOpenChange={setTagPickerOpen}
-                  loading={hasMore && !error}
+                  loading={!serverFiltersAvailable && hasMore && !error}
+                  remoteSearch={serverFiltersAvailable}
                   selected={selectedTags}
                   onChange={(values) => {
                     setSelectedTags(values);
@@ -796,7 +827,7 @@ function ProjectDirectoryContent({
                     onRetry={handleRefreshProjects}
                     retrying={loading}
                   />
-                ) : !hasLoadedProjects ? (
+                ) : !hasLoadedProjects && !hasFilter && directoryView === 'all' ? (
                   <EmptyDirectory newRepositoryPath={newRepositoryPath} />
                 ) : (
                   <div className={styles.repositories} id="repository-list" aria-busy={loading}>

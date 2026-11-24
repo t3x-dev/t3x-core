@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { showToast } from '@/components/layout/Toast';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Toaster } from '@/components/ui/sonner';
+import { useRepositoryDirectoryIdlePrefetch } from '@/hooks/projects/repositoryDirectory';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -33,6 +34,7 @@ export function isSettingsRoute(pathname: string): boolean {
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
+  useRepositoryDirectoryIdlePrefetch(!isLoginPage && pathname !== '/repositories');
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
