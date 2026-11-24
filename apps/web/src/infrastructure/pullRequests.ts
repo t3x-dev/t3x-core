@@ -101,6 +101,20 @@ export interface ProjectPullRequestListData {
     active: number;
     merged: number;
   };
+  page?: {
+    next_before: number | null;
+    total: number;
+    state_counts: { open: number; merged: number; closed: number };
+  };
+}
+
+export interface ProjectPullRequestListOptions {
+  query?: string;
+  status?: 'active' | 'merged' | 'all';
+  state?: ApiProjectPullRequest['status'];
+  limit?: number;
+  before?: number;
+  signal?: AbortSignal;
 }
 
 export interface ApiProjectPullRequestCompareCandidate {
@@ -154,14 +168,20 @@ export interface MergeProjectPullRequestInput {
 
 export async function listProjectPullRequests(
   projectId: string,
-  options: { query?: string; status?: 'active' | 'merged' | 'all' } = {}
+  options: ProjectPullRequestListOptions = {}
 ): Promise<ProjectPullRequestListData> {
   const params = new URLSearchParams();
   if (options.status) params.set('status', options.status);
   if (options.query) params.set('query', options.query);
+  if (options.state) params.set('state', options.state);
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.before) params.set('before', String(options.before));
   const suffix = params.toString() ? `?${params.toString()}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests${suffix}`
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests${suffix}`,
+    undefined,
+    undefined,
+    options.signal
   );
   return handleResponse<ProjectPullRequestListData>(res);
 }

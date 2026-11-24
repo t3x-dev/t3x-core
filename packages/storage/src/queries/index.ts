@@ -389,6 +389,7 @@ export {
   findPullRequestByNumber,
   listPullRequestActivity,
   listPullRequestChecks,
+  listPullRequestPage,
   listPullRequestsByProject,
   type PullRequestActivityType,
   type PullRequestCheckKind,

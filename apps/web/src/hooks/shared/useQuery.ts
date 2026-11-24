@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseQueryOptions<T> {
   queryKey: unknown[];
-  queryFn: () => Promise<T>;
+  queryFn: (signal: AbortSignal) => Promise<T>;
   enabled?: boolean;
   staleTime?: number;
 }
@@ -40,6 +40,7 @@ export function useQuery<T>({
   const [snapshot, setSnapshot] = useState<QuerySnapshot<T>>();
   const mountedRef = useRef(false);
   const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | undefined>(undefined);
   const queryFnRef = useRef(queryFn);
   queryFnRef.current = queryFn;
   const activeKeyRef = useRef(cacheKey);
@@ -50,6 +51,7 @@ export function useQuery<T>({
   const fetchData = useCallback(async () => {
     if (!mountedRef.current || !enabled || !enabledRef.current || activeKeyRef.current !== cacheKey)
       return;
+    controllerRef.current?.abort();
     const request = ++requestRef.current;
     const isCurrent = () =>
       mountedRef.current &&
@@ -68,8 +70,10 @@ export function useQuery<T>({
       status: 'loading',
       error: null,
     }));
+    const controller = new AbortController();
+    controllerRef.current = controller;
     try {
-      const result = await queryFnRef.current();
+      const result = await queryFnRef.current(controller.signal);
       if (!isCurrent()) return;
       setSnapshot({ key: cacheKey, data: result, status: 'success', error: null });
       const now = Date.now();
@@ -101,6 +105,7 @@ export function useQuery<T>({
     return () => {
       mountedRef.current = false;
       ++requestRef.current;
+      controllerRef.current?.abort();
     };
   }, [enabled, fetchData]);
 
