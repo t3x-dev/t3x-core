@@ -10,7 +10,7 @@ import {
   loadRepositoryDirectoryPage,
   readCachedRepositoryDirectoryPage,
 } from '@/infrastructure/projects';
-import { setSessionUser } from '@/infrastructure/session';
+import { invalidateSessionReads, setSessionUser } from '@/infrastructure/session';
 import { deferred } from './deferred';
 
 const account = (id: string) => setSessionUser({ id, name: null, username: null });
@@ -103,4 +103,19 @@ it('cancels an adopted first-page request when leaving the directory', async () 
   expect(signal?.aborted).toBe(true);
   await act(async () => response.resolve(Response.json({ success: true, data: firstPage })));
   expect(readCachedRepositoryDirectoryPage('leaving-reader')).toBeUndefined();
+});
+
+it('hides the already visible repository list when same-account authorization changes', async () => {
+  account('active-reader');
+  const fetch = vi.fn().mockResolvedValue(Response.json({ success: true, data: firstPage }));
+  vi.stubGlobal('fetch', fetch);
+  const directory = renderHook(() =>
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'active-reader' })
+  );
+  await waitFor(() => expect(directory.result.current.projects).toEqual(firstPage.items));
+  act(invalidateSessionReads);
+  expect(directory.result.current.projects).toEqual([]);
+  expect(directory.result.current.hasMore).toBe(false);
+  expect(directory.result.current.error).toMatch(/access changed/i);
+  expect(fetch).toHaveBeenCalledOnce();
 });

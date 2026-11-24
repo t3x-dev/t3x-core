@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
 
-export type GenerationProviderAvailabilityError = 'api_unavailable';
+export type GenerationProviderAvailabilityError = 'api_unavailable' | 'timeout' | 'upstream_error';
 
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];
@@ -133,11 +133,14 @@ export function useAvailableModels(enabled = true): {
         setProviders(getUsableProviders(data));
         setBackendDefaultProvider(data.default_provider);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
         setProviders([]);
         setBackendDefaultProvider(null);
-        setAvailabilityError('api_unavailable');
+        const code = error instanceof Error && 'code' in error ? error.code : undefined;
+        if (code === 'TIMEOUT' || code === 'DATA_LOAD_TIMEOUT') setAvailabilityError('timeout');
+        else if (code === 'MODEL_UPSTREAM_UNAVAILABLE') setAvailabilityError('upstream_error');
+        else setAvailabilityError('api_unavailable');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

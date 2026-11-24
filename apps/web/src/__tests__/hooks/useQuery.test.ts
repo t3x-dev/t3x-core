@@ -51,6 +51,20 @@ describe('useQuery cache', () => {
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
+  it('clears already visible data after permission invalidation without retrying by itself', async () => {
+    const queryFn = vi.fn().mockResolvedValueOnce('private data').mockResolvedValueOnce('checked');
+    const { result } = renderHook(() => useQuery({ queryKey: ['repository', 'private'], queryFn }));
+    await waitFor(() => expect(result.current.data).toBe('private data'));
+
+    act(invalidateSessionReads);
+    expect(result.current.data).toBeNull();
+    expect(result.current.error?.message).toMatch(/access changed/i);
+    expect(queryFn).toHaveBeenCalledOnce();
+
+    act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.data).toBe('checked'));
+  });
+
   it('drops in-flight data that arrives after an authorization invalidation', async () => {
     const old = deferred<string>();
     const queryFn = vi.fn().mockReturnValueOnce(old.promise).mockResolvedValueOnce('rechecked');

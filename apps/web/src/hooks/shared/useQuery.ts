@@ -27,6 +27,7 @@ const queryCache = new Map<string, { data: unknown; timestamp: number }>();
 const QUERY_CACHE_MAX_SIZE = 200;
 const STALE_CLEANUP_MS = 60_000; // Prune entries older than 60s
 let cacheSubscribed = false;
+const accessChanged = new Error('Your access changed. Refresh to load this data.');
 
 function getCacheKey(queryKey: unknown[]): string {
   return JSON.stringify(queryKey);
@@ -34,6 +35,7 @@ function getCacheKey(queryKey: unknown[]): string {
 
 type QuerySnapshot<T> = {
   key: string;
+  epoch: number;
   data: T | null;
 } & ({ status: 'loading' | 'success'; error: null } | { status: 'error'; error: Error });
 
@@ -44,6 +46,11 @@ export function useQuery<T>({
   staleTime = 30000,
 }: UseQueryOptions<T>): UseQueryResult<T> {
   const userId = useSyncExternalStore(subscribeSessionUser, getSessionUserId, () => null);
+  const epoch = useSyncExternalStore(
+    subscribeSessionReadInvalidation,
+    getSessionReadEpoch,
+    () => 0
+  );
   const cacheKey = getCacheKey([...queryKey, userId]);
   const [snapshot, setSnapshot] = useState<QuerySnapshot<T>>();
   const mountedRef = useRef(false);
@@ -70,13 +77,14 @@ export function useQuery<T>({
       requestRef.current === request;
     const cached = queryCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < staleTime) {
-      setSnapshot({ key: cacheKey, data: cached.data as T, status: 'success', error: null });
+      setSnapshot({ key: cacheKey, epoch, data: cached.data as T, status: 'success', error: null });
       return;
     }
 
     setSnapshot((current) => ({
       key: cacheKey,
-      data: current?.key === cacheKey ? current.data : null,
+      epoch,
+      data: current?.key === cacheKey && current.epoch === epoch ? current.data : null,
       status: 'loading',
       error: null,
     }));
@@ -85,9 +93,8 @@ export function useQuery<T>({
     try {
       const result = await queryFnRef.current(controller.signal);
       if (!isCurrent()) return;
-      if (getSessionReadEpoch() !== epoch)
-        throw new Error('Your access changed. Refresh to load this data.');
-      setSnapshot({ key: cacheKey, data: result, status: 'success', error: null });
+      if (getSessionReadEpoch() !== epoch) throw accessChanged;
+      setSnapshot({ key: cacheKey, epoch, data: result, status: 'success', error: null });
       const now = Date.now();
       if (queryCache.size >= QUERY_CACHE_MAX_SIZE) {
         for (const [k, v] of queryCache) {
@@ -110,7 +117,8 @@ export function useQuery<T>({
       if (denied) queryCache.delete(cacheKey);
       setSnapshot((current) => ({
         key: cacheKey,
-        data: !denied && current?.key === cacheKey ? current.data : null,
+        epoch: getSessionReadEpoch(),
+        data: !denied && current?.key === cacheKey && current.epoch === epoch ? current.data : null,
         status: 'error',
         error: err instanceof Error ? err : new Error(String(err)),
       }));
@@ -145,11 +153,12 @@ export function useQuery<T>({
     fetchData();
   }, [cacheKey, fetchData]);
 
-  const current = enabled && snapshot?.key === cacheKey ? snapshot : undefined;
+  const invalidated = enabled && snapshot?.key === cacheKey && snapshot.epoch !== epoch;
+  const current = enabled && !invalidated && snapshot?.key === cacheKey ? snapshot : undefined;
   return {
     data: current?.data ?? null,
-    isLoading: enabled && (!current || current.status === 'loading'),
-    error: current?.error ?? null,
+    isLoading: enabled && !invalidated && (!current || current.status === 'loading'),
+    error: invalidated ? accessChanged : (current?.error ?? null),
     refetch,
   };
 }

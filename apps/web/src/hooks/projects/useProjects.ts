@@ -5,7 +5,7 @@
  * components do not import `@/infrastructure/*` directly.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
@@ -32,7 +32,11 @@ import {
   loadRepositoryDirectoryPage,
   readCachedRepositoryDirectoryPage,
 } from '@/infrastructure/projects';
-import { getSessionUserId } from '@/infrastructure/session';
+import {
+  getSessionReadEpoch,
+  getSessionUserId,
+  subscribeSessionReadInvalidation,
+} from '@/infrastructure/session';
 import type { Project } from '@/infrastructure/types';
 
 export interface UseProjectsResult {
@@ -69,6 +73,12 @@ export function useProjects(
     directoryUserId?: string;
   } = {}
 ): UseProjectsResult {
+  const epoch = useSyncExternalStore(
+    subscribeSessionReadInvalidation,
+    getSessionReadEpoch,
+    () => 0
+  );
+  const [projectsEpoch, setProjectsEpoch] = useState(getSessionReadEpoch);
   const [initialPage] = useState(() =>
     directoryUserId ? readCachedRepositoryDirectoryPage(directoryUserId) : undefined
   );
@@ -99,6 +109,7 @@ export function useProjects(
     async (force: boolean) => {
       if (!enabled) return;
       const requestId = ++requestIdRef.current;
+      const readEpoch = getSessionReadEpoch();
       activePage.current?.abort();
       const controller = new AbortController();
       activePage.current = controller;
@@ -113,6 +124,8 @@ export function useProjects(
             (directoryUserId && getSessionUserId() !== directoryUserId)
           )
             return;
+          if (readEpoch !== getSessionReadEpoch()) return;
+          setProjectsEpoch(readEpoch);
           setProjects(data.items);
           setNextCursor(data.next_cursor);
           setError(null);
@@ -122,7 +135,7 @@ export function useProjects(
         let offset = 0;
         for (;;) {
           const data = await listProjects(limit, offset, namespaceSlug);
-          if (requestId !== requestIdRef.current) return;
+          if (requestId !== requestIdRef.current || readEpoch !== getSessionReadEpoch()) return;
           const rows = data.projects ?? [];
           const previousSize = collected.size;
           for (const project of rows) collected.set(project.project_id, project);
@@ -131,6 +144,7 @@ export function useProjects(
             throw new Error('Repository pagination did not advance. Please refresh.');
           offset += rows.length;
         }
+        setProjectsEpoch(readEpoch);
         setProjects([...collected.values()]);
         setError(null);
       } catch (err) {
@@ -153,14 +167,22 @@ export function useProjects(
 
   const loadMore = useCallback(async () => {
     const requestId = requestIdRef.current;
-    if (!enabled || !nextCursor || loading || nextPageRequest.current === requestId) return false;
+    const readEpoch = getSessionReadEpoch();
+    if (
+      projectsEpoch !== readEpoch ||
+      !enabled ||
+      !nextCursor ||
+      loading ||
+      nextPageRequest.current === requestId
+    )
+      return false;
     nextPageRequest.current = requestId;
     const controller = new AbortController();
     activePage.current = controller;
     setLoading(true);
     try {
       const data = await fetchPage(nextCursor, controller.signal);
-      if (requestId !== requestIdRef.current) return false;
+      if (requestId !== requestIdRef.current || readEpoch !== getSessionReadEpoch()) return false;
       if (data.next_cursor === nextCursor)
         throw new Error('Repository pagination did not advance. Please refresh.');
       setProjects((previous) => {
@@ -189,7 +211,7 @@ export function useProjects(
         setLoading(false);
       }
     }
-  }, [enabled, fetchPage, nextCursor, loading]);
+  }, [enabled, fetchPage, nextCursor, loading, projectsEpoch]);
 
   useEffect(() => {
     if (!directoryUserId) {
@@ -275,12 +297,13 @@ export function useProjects(
     return project;
   }, []);
 
+  const invalidated = projectsEpoch !== epoch;
   return {
-    projects,
+    projects: invalidated ? [] : projects,
     loading,
-    error,
+    error: invalidated ? (error ?? 'Your access changed. Refresh to load this data.') : error,
     refresh,
-    hasMore: nextCursor !== null,
+    hasMore: !invalidated && nextCursor !== null,
     loadMore,
     remove,
     create,

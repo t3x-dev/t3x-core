@@ -41,7 +41,7 @@ import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
-import { timeRepositoryRead } from '../lib/repository-read-timing';
+import { markRepositoryReadOutcome, timeRepositoryRead } from '../lib/repository-read-timing';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
 import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studio';
@@ -703,6 +703,8 @@ schemaStudioRoutes.openapi(readPendingRoute, async (c) => {
   const data = await timeRepositoryRead(c, 'pending_schema', () =>
     readPendingWorkspaceSchema(c, db, projectId, draft)
   );
+  if (data.status === 'none') markRepositoryReadOutcome(c, 'empty');
+  if (data.status === 'unavailable') markRepositoryReadOutcome(c, 'unavailable');
   return c.json({ success: true as const, data }, 200);
 });
 

@@ -58,6 +58,7 @@ import {
 import { schemaSourceRelations } from '@/domain/schemas/schemaSourceRelations';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import type { SchemaSaveState } from '@/types/schemas';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import styles from './SchemaDataEditor.module.css';
 import {
   SchemaDefinitionStructure,
@@ -271,6 +272,11 @@ export function SchemaDataEditor({
     autoSave,
     saving,
   ]);
+  useEffect(() => {
+    if (!definition || loaded.current !== revisionKey) return;
+    const frame = requestAnimationFrame(() => markNavigationTiming('schemas', 'ready'));
+    return () => cancelAnimationFrame(frame);
+  }, [definition, revisionKey]);
   const measuredDefinition = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (

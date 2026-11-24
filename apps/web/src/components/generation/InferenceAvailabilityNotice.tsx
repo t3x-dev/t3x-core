@@ -22,6 +22,12 @@ export function InferenceAvailabilityNotice({
   const searchParams = useSearchParams();
   if (ready) return null;
   if (loading || status === 'loading') return <output>Checking AI…</output>;
+  const message =
+    error === 'timeout'
+      ? 'Checking AI availability timed out.'
+      : error === 'upstream_error'
+        ? 'The upstream model service is unavailable.'
+        : 'AI status unavailable.';
   if (
     error ||
     status === 'error' ||
@@ -30,7 +36,7 @@ export function InferenceAvailabilityNotice({
   ) {
     return (
       <p role="alert">
-        AI status unavailable.{' '}
+        {message}{' '}
         <button
           type="button"
           onClick={() => {

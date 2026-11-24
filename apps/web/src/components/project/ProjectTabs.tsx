@@ -7,6 +7,7 @@ import {
 } from '@/components/project/projectTabModel';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { cn } from '@/utils/cn';
+import { beginNavigationTiming } from '@/utils/navigationTiming';
 
 export interface ProjectTabsProps {
   activeTab: ProjectTabId;
@@ -80,6 +81,9 @@ export function ProjectTabs({
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
             href={href}
+            onNavigate={() => {
+              if (!selected) beginNavigationTiming(tab.id);
+            }}
             key={tab.id}
             scroll={false}
           >

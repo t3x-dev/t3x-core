@@ -53,6 +53,7 @@ import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/sto
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import { buildReturnTo } from '@/utils/navigationReturn';
+import { beginNavigationTiming, markNavigationTiming } from '@/utils/navigationTiming';
 import {
   orderProjectsByRecentOpen,
   readRecentProjectIds,
@@ -80,6 +81,7 @@ function useOpenDirectoryRepository() {
   const userId = useSessionUserId();
   const { loadCommits } = useCommitsList();
   return (project: ProjectSummary) => {
+    beginNavigationTiming('state');
     const { details, cacheProject } = useProjectStore.getState();
     if (!details[project.id]) cacheProject(project);
     recordRecentProjectOpen(project.id);
@@ -387,6 +389,12 @@ function ProjectDirectoryContent({
         }
       : {}),
   });
+  useEffect(() => {
+    if (!accessible) return;
+    markNavigationTiming('repositories', 'shell');
+    if (!loading && !error) markNavigationTiming('repositories', 'ready');
+  }, [accessible, loading, error]);
+
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [sort, setSort] = useState('created');
   const [page, setPage] = useState(1);

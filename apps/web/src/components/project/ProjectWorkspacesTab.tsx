@@ -26,6 +26,7 @@ import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useReposito
 import { useSession } from '@/hooks/shared/useSession';
 import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import { BranchLoadError } from './BranchLoadError';
 import { useRepositoryViewData } from './RepositoryRouteContext';
 
@@ -173,6 +174,27 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
           ? `Workspace ${requestedWorkspaceId} belongs to ${requestedCandidate?.targetBranch}, not ${branch}.`
           : null);
 
+  const workbenchLoading =
+    (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+    (Boolean(branch) && branchesLoading && !branchKnown && !hasMatchingPersistedWorkspace);
+
+  useEffect(() => {
+    markNavigationTiming('workspaces', 'shell');
+    if (
+      !workbenchLoading &&
+      !navigationError &&
+      !(branchesError && !branchKnown && !hasMatchingPersistedWorkspace)
+    ) {
+      markNavigationTiming('workspaces', 'ready');
+    }
+  }, [
+    workbenchLoading,
+    navigationError,
+    branchesError,
+    branchKnown,
+    hasMatchingPersistedWorkspace,
+  ]);
+
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -275,14 +297,7 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
             key={projectId}
             projectId={projectId}
             selectedWorkspaceId={selectedWorkspaceId}
-            viewState={
-              (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
-              (Boolean(branch) && branchesLoading && !branchKnown && !hasMatchingPersistedWorkspace)
-                ? 'loading'
-                : navigationError
-                  ? 'error'
-                  : 'ready'
-            }
+            viewState={workbenchLoading ? 'loading' : navigationError ? 'error' : 'ready'}
             onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
             onViewCommitInState={handleViewCommitInState}

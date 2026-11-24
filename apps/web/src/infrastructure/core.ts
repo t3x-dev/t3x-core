@@ -2,6 +2,7 @@
  * API client core infrastructure - shared utilities
  */
 
+import { traceNavigationRequest } from '@/utils/navigationTiming';
 import { invalidateSessionReads } from './session';
 import type { ApiCommitAnchors, ApiResponse } from './types';
 
@@ -161,9 +162,18 @@ export async function fetchWithTimeout(
     for (let attempt = 1; ; attempt++) {
       signal.throwIfAborted();
       let response: Response | undefined;
+      const trace = traceNavigationRequest(url, method, headers);
       try {
-        response = await fetch(url, { ...options, headers, signal });
+        response = await fetch(url, { ...options, headers: trace?.headers ?? headers, signal });
+        trace?.finish(response.status);
       } catch (error) {
+        trace?.finish(
+          signal.aborted
+            ? signal.reason === deadline.reason
+              ? 'timeout'
+              : 'cancelled'
+            : 'network-error'
+        );
         if (signal.aborted || attempt >= maxAttempts || !(error instanceof TypeError)) throw error;
       }
       if (response) {
