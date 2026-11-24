@@ -234,6 +234,11 @@
   font-weight: 600;
 }
 
+.tab:has(> [data-navigation-pending]) {
+  background-color: var(--accent-commit-soft);
+  color: var(--text-primary);
+}
+
 .globalNav a[aria-current="page"],
 .header a:hover {
   color: var(--text-primary);

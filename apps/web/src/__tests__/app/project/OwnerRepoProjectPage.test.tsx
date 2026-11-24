@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import RepositoryLoading from '@/app/[owner]/[repository]/[[...repoPath]]/loading';
 import RepositoryPage from '@/app/[owner]/[repository]/[[...repoPath]]/page';
 import RepositoryLayout from '@/app/[owner]/[repository]/layout';
 import OwnerPage from '@/app/[owner]/page';
+import { ProjectShell } from '@/components/project/ProjectShell';
 import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 const mocks = vi.hoisted(() => ({
@@ -108,10 +111,10 @@ vi.mock('@/components/project/NewRepositoryPage', () => ({
 vi.mock('@/components/project/OrganizationSettingsPage', () => ({
   OrganizationSettingsPage: () => <div>Organization settings</div>,
 }));
-function OwnerRepoProjectPage() {
+function OwnerRepoProjectPage({ children }: { children?: ReactNode }) {
   return (
     <RepositoryLayout>
-      <RepositoryPage key={mocks.params.repoPath.join('/')} />
+      {children ?? <RepositoryPage key={mocks.params.repoPath.join('/')} />}
     </RepositoryLayout>
   );
 }
@@ -144,6 +147,72 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it('keeps a single repository navigation mounted during loading across all seven tabs', async () => {
+  mocks.query = '';
+  const view = render(<OwnerRepoProjectPage />);
+  const navigation = await screen.findByRole('navigation', { name: 'Project views' });
+
+  for (const [name, segments] of [
+    ['Schema', ['branches', 'main', 'schemas']],
+    ['Workspace', ['branches', 'main', 'workspaces']],
+    ['Run', ['checks']],
+    ['Pull requests', ['pull-requests']],
+    ['Community', ['community']],
+    ['Settings', ['settings']],
+    ['State', []],
+  ] as const) {
+    mocks.params.repoPath = ['Repo', ...segments];
+    view.rerender(
+      <OwnerRepoProjectPage>
+        <RepositoryLoading />
+      </OwnerRepoProjectPage>
+    );
+    expect(screen.getByRole('navigation', { name: 'Project views' })).toBe(navigation);
+    expect(screen.getByText('Loading repository view...')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name })).toHaveAttribute('aria-current', 'page');
+  }
+
+  view.rerender(
+    <OwnerRepoProjectPage>
+      <ProjectShell
+        activeTab="state"
+        project={{ id: 'proj_outside_list', name: 'Repo', namespace: 'alice' }}
+        pageTitle="Commit #1"
+      >
+        <div>Repository content</div>
+      </ProjectShell>
+    </OwnerRepoProjectPage>
+  );
+  expect(screen.getByRole('navigation', { name: 'Project views' })).toBe(navigation);
+  expect(screen.getByText('Repository content')).toBeInTheDocument();
+  expect(document.title).toBe('Commit #1 · alice/Repo · T3X');
+  expect(mocks.resolve).toHaveBeenCalledOnce();
+});
+
+it('shows the repository visibility in shared navigation once project details arrive', async () => {
+  let completeDetail!: (value: unknown) => void;
+  mocks.fetchProject.mockReturnValueOnce(
+    new Promise((resolve) => {
+      completeDetail = resolve;
+    })
+  );
+
+  render(<OwnerRepoProjectPage />);
+  await screen.findByRole('navigation', { name: 'Project views' });
+  expect(screen.queryByText('Private')).not.toBeInTheDocument();
+
+  completeDetail({
+    project_id: 'proj_outside_list',
+    name: 'Repo',
+    namespace: 'alice',
+    canonical_path: '/alice/Repo',
+    visibility: 'public',
+    created_at: '2026-01-01T00:00:00Z',
+  });
+
+  expect(await screen.findByText('Public')).toBeInTheDocument();
+});
 
 it('reuses the verified address, project details and in-flight view reads across State, Workspace, Schema and Settings', async () => {
   mocks.query = '';
@@ -236,11 +305,13 @@ it('starts project details from the directory selection and waits for matching a
 it('checks the new repository before rendering its content', async () => {
   const view = render(<OwnerRepoProjectPage />);
   expect(await screen.findByTestId('detail')).toHaveTextContent('proj_outside_list');
+  expect(screen.getByRole('navigation', { name: 'Project views' })).toBeInTheDocument();
   mocks.resolve.mockRejectedValueOnce(Object.assign(new Error('No access'), { code: 'FORBIDDEN' }));
   mocks.params.repoPath = ['Other', 'schemas'];
   view.rerender(<OwnerRepoProjectPage />);
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
   expect(await screen.findByText('Repository unavailable')).toBeInTheDocument();
+  expect(screen.queryByRole('navigation', { name: 'Project views' })).not.toBeInTheDocument();
   expect(mocks.resolve).toHaveBeenLastCalledWith('alice', 'Other');
 });
 it('resolves directly, without any list cache or pagination', async () => {
