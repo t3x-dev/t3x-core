@@ -43,6 +43,7 @@ import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPat
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { REPOSITORY_DIRECTORY_PAGE_SIZE } from '@/hooks/projects/repositoryDirectory';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
@@ -75,10 +76,22 @@ const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
 const REPOSITORIES_PER_PAGE = REPOSITORY_DIRECTORY_PAGE_SIZE;
 
-function openDirectoryRepository(project: ProjectSummary) {
-  const { details, cacheProject } = useProjectStore.getState();
-  if (!details[project.id]) cacheProject(project);
-  recordRecentProjectOpen(project.id);
+function useOpenDirectoryRepository() {
+  const userId = useSessionUserId();
+  const { loadCommits } = useCommitsList();
+  return (project: ProjectSummary) => {
+    const { details, cacheProject } = useProjectStore.getState();
+    if (!details[project.id]) cacheProject(project);
+    recordRecentProjectOpen(project.id);
+    if (project.canonical_path && project.path_status !== 'pending_migration') {
+      const head = loadCommits(project.id, 'main', 1);
+      // The destination may never mount, or the address may resolve to another project.
+      void head.catch(() => {});
+      useProjectStore.setState({
+        directoryStateEntry: { project, userId, expiresAt: Date.now() + 15_000, head },
+      });
+    }
+  };
 }
 
 function metricValue(value: number | undefined): number {
@@ -104,10 +117,12 @@ function ProjectMetrics({ project }: { project: ProjectSummary }) {
 
 function ProjectActions({
   onDelete,
+  onOpen,
   onRename,
   project,
 }: {
   onDelete: (project: ProjectSummary) => void;
+  onOpen: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
 }) {
@@ -121,10 +136,7 @@ function ProjectActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={cn(palette.scope, styles.menu)}>
         <DropdownMenuItem asChild>
-          <Link
-            href={repositoryLocation(path, '', '')}
-            onClick={() => openDirectoryRepository(project)}
-          >
+          <Link href={repositoryLocation(path, '', '')} onNavigate={() => onOpen(project)}>
             <FolderOpen aria-hidden="true" size={15} />
             Open repository
           </Link>
@@ -169,6 +181,7 @@ function ProjectActions({
 
 function ProjectRow({
   onDelete,
+  onOpen,
   onRename,
   project,
   selectedTags,
@@ -178,6 +191,7 @@ function ProjectRow({
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
+  onOpen: (project: ProjectSummary) => void;
   selectedTags: string[];
   onTag: (tag: string) => void;
   showAccess: boolean;
@@ -190,7 +204,7 @@ function ProjectRow({
           <Link
             href={repositoryLocation(getProjectRepoPath(project), '', '')}
             title={getProjectRepoPath(project)}
-            onClick={() => openDirectoryRepository(project)}
+            onNavigate={() => onOpen(project)}
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
@@ -227,7 +241,7 @@ function ProjectRow({
           <span>Created {project.updatedAt}</span>
         </div>
       </div>
-      <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
+      <ProjectActions onDelete={onDelete} onOpen={onOpen} onRename={onRename} project={project} />
     </article>
   );
 }
@@ -314,6 +328,7 @@ function ProjectDirectoryContent({
   directoryUserId?: string;
 }) {
   const accessible = scope === 'accessible';
+  const openDirectoryRepository = useOpenDirectoryRepository();
   const pathname = usePathname();
   const router = useRouter();
   const { accounts, activeAccount, selectNamespace } = useNamespaceAccounts();
@@ -723,7 +738,7 @@ function ProjectDirectoryContent({
                         key={project.id}
                         href={repositoryLocation(getProjectRepoPath(project), '', '')}
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
-                        onClick={() => openDirectoryRepository(project)}
+                        onNavigate={() => openDirectoryRepository(project)}
                       >
                         <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
                         <span>
@@ -791,6 +806,7 @@ function ProjectDirectoryContent({
                           key={project.id}
                           project={project}
                           onDelete={openDeleteDialog}
+                          onOpen={openDirectoryRepository}
                           onRename={openRenameDialog}
                           selectedTags={selectedTags}
                           onTag={changeTag}

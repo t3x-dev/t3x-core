@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
@@ -28,6 +28,7 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     loading: false,
     error: null,
     refresh: vi.fn(),
+    revalidate: vi.fn(),
   }),
 }));
 
@@ -66,6 +67,9 @@ describe('project foundation previews', () => {
     ];
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Structure', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Schema', exact: true }));
     expect((await screen.findAllByText('Docker Compose v2')).length).toBeGreaterThan(0);
   });
 });

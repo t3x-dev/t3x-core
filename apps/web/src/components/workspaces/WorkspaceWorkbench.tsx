@@ -479,6 +479,7 @@ export function WorkspaceWorkbench({
           workspaceId={selectedWorkspace.id}
           revision={selectedWorkspace.revision}
           branch={selectedWorkspace.targetBranch}
+          confirmedEmpty={selectedWorkspace.schemaActivity?.hasPendingTask === false}
           onPrepared={async () => {
             const refreshed = await refreshWorkspaces(projectId);
             const remote = refreshed.find((workspace) => workspace.id === selectedWorkspace.id);

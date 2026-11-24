@@ -2,7 +2,7 @@
  * useProjectMaterials — read-only project material list for chat Sources.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchMaterialsByProject } from '@/queries/materials';
 import type { Material } from '@/types/api';
@@ -13,6 +13,13 @@ export interface UseProjectMaterialsResult {
   error: string | null;
   refresh: () => Promise<void>;
 }
+
+export const WorkspaceMaterialInventoryContext = createContext<{
+  open: () => void;
+  loading: boolean;
+  error: string | null;
+  retry: () => Promise<void>;
+} | null>(null);
 
 export function useProjectMaterials(
   projectId: string | null | undefined,

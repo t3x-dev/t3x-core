@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
+import type { StudioSchemaEditCandidate, WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useMemo, useState } from 'react';
@@ -28,6 +28,8 @@ export function WorkspaceCurrentDraft({
   stagedCount = 0,
   authoring,
   schemaControl,
+  savedSchema,
+  visible = true,
   schemaCandidateNotice,
   subject = 'content',
   onSubjectChange,
@@ -43,6 +45,8 @@ export function WorkspaceCurrentDraft({
   stagedCount?: number;
   authoring?: Pick<WorkspaceAuthoringView, 'workspaceRevision' | 'currentSchema'> | null;
   schemaControl?: ReactNode;
+  savedSchema?: { candidate: StudioSchemaEditCandidate | null; loading: boolean };
+  visible?: boolean;
   schemaCandidateNotice?: ReactNode;
   subject?: 'content' | 'schema';
   onSubjectChange?: (subject: 'content' | 'schema') => void;
@@ -50,8 +54,13 @@ export function WorkspaceCurrentDraft({
   onDiscuss?: (subject: 'content' | 'schema', path: string) => void;
 }) {
   const [selectedContent, setSelectedContent] = useState<string>();
-  const schema = useWorkspaceDraftSchema(candidate, authoring);
-  const pending = useWorkspaceSchemaPending(candidate.projectId, candidate.id, candidate.revision);
+  const schema = useWorkspaceDraftSchema(candidate, authoring, savedSchema, visible);
+  const pending = useWorkspaceSchemaPending(
+    candidate.projectId,
+    candidate.revision === undefined ? '' : candidate.id,
+    candidate.revision,
+    candidate.schemaActivity?.hasPendingTask === false
+  );
   const inspectedSchema = authoring?.currentSchema;
   const binding = inspectedSchema
     ? inspectedSchema.status === 'bound'

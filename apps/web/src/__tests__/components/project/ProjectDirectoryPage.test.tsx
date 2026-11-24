@@ -52,15 +52,44 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(currentQuery),
 }));
 
+const preloadHead = vi.hoisted(() => vi.fn());
+
+vi.mock('@/hooks/commits/useCommitsList', () => ({
+  useCommitsList: () => ({ loadCommits: preloadHead }),
+}));
+
 vi.mock('next/link', () => ({
   useLinkStatus: () => ({ pending: false }),
   default: ({
     children,
     href,
     scroll: _scroll,
+    onNavigate,
+    onClick,
     ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; scroll?: boolean }) => (
-    <a href={href} {...props}>
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    scroll?: boolean;
+    onNavigate?: () => void;
+  }) => (
+    <a
+      href={href}
+      {...props}
+      onClick={(event) => {
+        onClick?.(event);
+        if (
+          onNavigate &&
+          !event.defaultPrevented &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          onNavigate();
+        }
+      }}
+    >
       {children}
     </a>
   ),
@@ -144,13 +173,30 @@ describe('ProjectDirectoryPage', () => {
     hookLoading = false;
     hookHasMore = false;
     hookProjects = projects;
+    preloadHead.mockReset().mockResolvedValue([]);
     useProjectStore.setState({
+      directoryStateEntry: null,
       error: null,
       initialized: true,
       loading: false,
       projects: [],
       details: {},
     });
+  });
+
+  it('passes the selected repository and its first State read to the destination on navigation', async () => {
+    currentPath = '/t3x-dev';
+    render(<ProjectDirectoryPage />);
+    const link = await screen.findByRole('link', { name: 'prd-workflow', exact: true });
+    expect(preloadHead).not.toHaveBeenCalled();
+    fireEvent.click(link);
+    expect(preloadHead).toHaveBeenCalledExactlyOnceWith('proj_prd', 'main', 1);
+    const entry = useProjectStore.getState().directoryStateEntry;
+    expect(entry?.project).toMatchObject({
+      id: 'proj_prd',
+      canonical_path: '/t3x-dev/prd-workflow',
+    });
+    expect(entry?.head).toBe(preloadHead.mock.results[0].value);
   });
 
   it('renders the organization-level repository directory as the app entrypoint', () => {

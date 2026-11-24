@@ -19,13 +19,24 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspector';
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
+import {
+  RepositoryAddressContext,
+  useRepositoryViewData,
+} from '@/components/project/RepositoryRouteContext';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
@@ -135,7 +146,10 @@ interface ProjectStateTabProps {
   projectVisibility?: string;
   validation?: YSchemaValidationSummary | null;
   validationError?: string | null;
+  validationLoading?: boolean;
   validationRunning?: boolean;
+  detailsError?: string;
+  onRetryDetails?: () => void;
 }
 
 interface StateSnapshot {
@@ -198,7 +212,10 @@ export function ProjectStateTab({
   canEditRepository = false,
   validation,
   validationError,
+  validationLoading = false,
   validationRunning = false,
+  detailsError,
+  onRetryDetails,
 }: ProjectStateTabProps) {
   const saveRepositoryProfile = useRepositoryProfile(projectId);
   const saveRepositoryDescription = useRepositoryDescription(projectId);
@@ -259,6 +276,14 @@ export function ProjectStateTab({
     error: branchesError,
     refresh,
   } = projectBranches;
+  const { directoryStateEntry } = useContext(RepositoryAddressContext);
+  const directoryHead =
+    directoryStateEntry?.project.id === projectId &&
+    branchFocus === 'main' &&
+    !focusedCommitHash &&
+    snapshotRefreshVersion === 0
+      ? directoryStateEntry.head
+      : undefined;
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -334,10 +359,10 @@ export function ProjectStateTab({
     if (loadedSnapshotScope.current === `${scopePrefix}${selectedHead ?? ''}`) return;
     // The branch-filtered endpoint starts at the verified ref head, so the selector
     // inventory can finish independently without starting a second snapshot request.
-    if (waitingForBranch && !initialBranchRead.current) {
+    if ((waitingForBranch || directoryHead) && !initialBranchRead.current) {
       initialBranchRead.current = {
         scope: selectionScope,
-        promise: loadCommits(projectId, branchFocus, 1),
+        promise: directoryHead ?? loadCommits(projectId, branchFocus, 1),
       };
     }
     const initialRead = initialBranchRead.current?.promise;
@@ -347,14 +372,24 @@ export function ProjectStateTab({
       try {
         if (!selectedHead && !initialRead && branchesError) throw new Error(branchesError);
         const requestedBranch = branchFocus || 'main';
-        let branchHeadHash = selectedHead;
+        let branchHeadHash: string | null | undefined = selectedHead;
         let commits: ApiCommit[] = [];
         let headCommit: ApiCommit | null = null;
         if (initialRead) {
           const [head] = await initialRead;
           headCommit = head ?? null;
+          // A registered head that changed since the click takes precedence.
+          if (
+            initialRead === directoryHead &&
+            selectedHead !== undefined &&
+            selectedHead !== (head?.hash ?? null)
+          ) {
+            headCommit = selectedHead ? await loadCommit(selectedHead, projectId) : null;
+            if (headCommit && headCommit.hash !== selectedHead)
+              throw new Error('Branch HEAD response does not match the registered branch pointer.');
+          }
           branchHeadHash = headCommit?.hash ?? null;
-          commits = head ? [head] : [];
+          commits = headCommit ? [headCommit] : [];
         } else if (branchHeadHash) {
           headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
@@ -417,6 +452,7 @@ export function ProjectStateTab({
   }, [
     branchFocus,
     branchScope,
+    directoryHead,
     waitingForBranch,
     branchesError,
     selectionScope,
@@ -739,7 +775,9 @@ export function ProjectStateTab({
               : nativeReview.error
                 ? 'Validation evidence unavailable'
                 : 'No validation recorded'
-        : stateReadinessLabel(validationReady);
+        : validationLoading
+          ? 'Loading validation'
+          : stateReadinessLabel(validationReady);
   const lastCheckedLabel =
     freshnessChecking || branchesLoading
       ? 'Checking…'
@@ -764,6 +802,22 @@ export function ProjectStateTab({
         />
       </div>
 
+      {detailsError ? (
+        <Alert
+          title="Repository details unavailable"
+          tone="warning"
+          layout="banner"
+          actions={
+            onRetryDetails ? (
+              <Button size="sm" variant="outline" onClick={onRetryDetails}>
+                Retry details
+              </Button>
+            ) : undefined
+          }
+        >
+          {detailsError}
+        </Alert>
+      ) : null}
       {activeView === 'canvas' ? (
         <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
       ) : null}

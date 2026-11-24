@@ -46,6 +46,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ChangeEvent, CSSProperties, FormEvent, RefObject } from 'react';
 import {
   useCallback,
+  useContext,
   useEffect,
   useId,
   useImperativeHandle,
@@ -137,6 +138,7 @@ import {
   listWorkspaceSchemaChoices,
   workspaceSchemaChoiceId,
 } from '@/domain/workspaces/schemaBindings';
+import { WorkspaceMaterialInventoryContext } from '@/hooks/materials/useProjectMaterials';
 import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
 import { useAssistantSchemaSettings } from '@/hooks/schemas/useAssistantSchemaSettings';
 import { useProjectYSchemaVersions } from '@/hooks/schemas/useProjectYSchemaVersions';
@@ -309,6 +311,20 @@ export function WorkspaceComposeReviewSurface({
   );
   // Compose publication and Review must observe the same current Draft projection.
   const activity = useComposeActivity(controller.candidate, authoringBootstrap.active);
+  const selectedWorkspace =
+    controller.candidate.id === candidate.id &&
+    controller.candidate.projectId === candidate.projectId
+      ? controller.candidate
+      : candidate;
+  const savedSchema = useStudioSchemaEditCandidate(
+    selectedWorkspace.projectId,
+    selectedWorkspace.id,
+    selectedWorkspace.revision,
+    selectedWorkspace.id === candidate.id &&
+      selectedWorkspace.revision === candidate.revision &&
+      (selectedWorkspace.revision === undefined ||
+        candidate.schemaActivity?.hasEditCandidate === false)
+  );
   const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 
   const requestNavigation = (navigate: () => void) => {
@@ -661,6 +677,7 @@ export function WorkspaceComposeReviewSurface({
               compareScenarioId=""
               controller={controller}
               pane={reviewPane}
+              savedSchema={savedSchema}
               setPane={setReviewPane}
               onModeChange={setSurfaceMode}
             />
@@ -674,6 +691,7 @@ export function WorkspaceComposeReviewSurface({
               candidate={controller.candidate ?? candidate}
               controller={controller}
               hidden={Boolean(workspaceTool)}
+              savedSchema={savedSchema}
             />
           ) : null}
         </div>
@@ -882,6 +900,7 @@ function ComposeSurface({
   candidate,
   controller,
   hidden,
+  savedSchema,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
   authoringBootstrap: ReturnType<typeof useWorkspaceAuthoringBootstrap>;
@@ -889,6 +908,7 @@ function ComposeSurface({
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   hidden: boolean;
+  savedSchema: ReturnType<typeof useStudioSchemaEditCandidate>;
 }) {
   const [fieldDialog, setFieldDialog] = useState<'structure' | 'yaml' | 'schema' | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1236,11 +1256,6 @@ function ComposeSurface({
     schemaConversationId ?? activeConversationId,
     String(activity.view?.workspaceRevision ?? candidate.revision) + ':' + schemaCandidateEpoch
   );
-  const savedSchema = useStudioSchemaEditCandidate(
-    candidate.projectId,
-    candidate.id,
-    candidate.revision
-  );
   const hasSavedSchema = hasUnappliedSchemaEdit(
     savedSchema.candidate,
     candidate,
@@ -1290,7 +1305,10 @@ function ComposeSurface({
   const sourceMaterialIds = controller.materialSources
     .filter((source) => source.included)
     .map((source) => source.materialId);
-  const conversationsQuery = useWorkspaceConversations(candidate.projectId);
+  const conversationsQuery = useWorkspaceConversations(
+    candidate.projectId,
+    !hidden && (!draftCollapsed || mobileChats)
+  );
   const currentChatTitle =
     conversationsQuery.data?.conversations.find(
       (item) => item.conversation_id === activeConversationId
@@ -1675,15 +1693,19 @@ function ComposeSurface({
               stagedCount={staged.length}
               authoring={activity.view}
               subject={draftSubject}
+              visible={inspectorOpen && rightView === 'structure'}
+              savedSchema={savedSchema}
               schemaCandidateNotice={schemaCandidateNotice}
               onSubjectChange={setDraftSubject}
               schemaControl={
-                <WorkspaceSchemaSelect
-                  candidate={candidate}
-                  controller={controller}
-                  unbound={activity.view?.currentSchema?.status === 'unbound'}
-                  requestNavigation={contentNavigation.requestNavigation}
-                />
+                inspectorOpen && rightView === 'structure' && draftSubject === 'schema' ? (
+                  <WorkspaceSchemaSelect
+                    candidate={candidate}
+                    controller={controller}
+                    unbound={activity.view?.currentSchema?.status === 'unbound'}
+                    requestNavigation={contentNavigation.requestNavigation}
+                  />
+                ) : undefined
               }
               onEdit={(subject, path) => {
                 setFocusSchemaPath(path);
@@ -2416,8 +2438,20 @@ function WorkspaceConversationSidebar({
           </div>
         ) : null}
         {unfiled.map(renderConversation)}
-        {!conversationsQuery.loading && conversations.length === 0 ? (
+        {!conversationsQuery.loading &&
+        !conversationsQuery.hasMore &&
+        conversations.length === 0 ? (
           <p>No conversations yet. Create one to start with a blank chat.</p>
+        ) : null}
+        {conversationsQuery.hasMore ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={conversationsQuery.loading}
+            onClick={conversationsQuery.loadMore}
+          >
+            Load more conversations
+          </Button>
         ) : null}
         {conversationsQuery.loading ? <p>Loading conversations…</p> : null}
         {error || conversationsQuery.error ? (
@@ -2542,6 +2576,7 @@ function WorkspaceSourcesMenu({
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
 }) {
+  const inventory = useContext(WorkspaceMaterialInventoryContext);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const included = controller.materialSources.filter((material) => material.included);
   const tokenEstimate = (materialId: string) =>
@@ -2563,7 +2598,7 @@ function WorkspaceSourcesMenu({
         ref={fileInputRef}
         type="file"
       />
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => open && inventory?.open()}>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
@@ -2599,6 +2634,17 @@ function WorkspaceSourcesMenu({
         </Tooltip>
         <DropdownMenuContent align="start" className={composeStyles.sourceMaterialMenu} side="top">
           <DropdownMenuLabel>Workspace sources</DropdownMenuLabel>
+          {inventory?.loading ? <DropdownMenuLabel>Loading sources…</DropdownMenuLabel> : null}
+          {inventory?.error ? (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                void inventory.retry();
+              }}
+            >
+              Retry loading sources
+            </DropdownMenuItem>
+          ) : null}
           {controller.materialSources.map((material) => {
             const tokens = tokenEstimate(material.materialId);
             return (
@@ -2966,6 +3012,7 @@ function ReviewSurface({
   controller,
   onModeChange,
   pane,
+  savedSchema,
   setPane,
 }: {
   activity: ReturnType<typeof useComposeActivity>;
@@ -2973,6 +3020,7 @@ function ReviewSurface({
   controller: WorkspaceComposeReviewController;
   onModeChange: (mode: WorkspaceSurfaceMode) => void;
   pane: ReviewPane;
+  savedSchema: ReturnType<typeof useStudioSchemaEditCandidate>;
   setPane: (pane: ReviewPane) => void;
 }) {
   const authoring = activity.view;
@@ -3020,11 +3068,6 @@ function ReviewSurface({
   const schemaRequests = useWorkspaceSchemaEditingRequests(
     controller.candidate.projectId,
     controller.candidate.id
-  );
-  const savedSchema = useStudioSchemaEditCandidate(
-    controller.candidate.projectId,
-    controller.candidate.id,
-    controller.candidate.revision
   );
   const hasSavedSchema =
     !newerDraft &&

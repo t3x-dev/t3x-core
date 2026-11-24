@@ -61,7 +61,7 @@ export function StatePageToolbar({
               headCommitHash={headCommitHash}
               sourceCommitHash={sourceCommitHash}
               onBranchChange={onBranchChange}
-              onCreateBranch={onCreateBranch}
+              onCreateBranch={canProposeChanges ? onCreateBranch : undefined}
               showCreate={false}
             />
             {headCommit ? (

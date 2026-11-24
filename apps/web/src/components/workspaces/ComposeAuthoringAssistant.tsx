@@ -546,6 +546,7 @@ export function ComposeAuthoringAssistant({
             <div className={styles.composerControl}>
               <span>Model</span>
               <GenerationModelSelector
+                availability={model}
                 onModelChange={model.handleModelChange}
                 onThinkingChange={setThinking}
                 selectedModel={model.selectedModel ?? ''}

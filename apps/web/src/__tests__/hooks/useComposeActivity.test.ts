@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
+import { T3xApiError } from '@t3x-dev/api-client';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { expect, it, vi } from 'vitest';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
+import {
+  WorkspaceActivityCacheContext,
+  type WorkspaceActivitySnapshot,
+} from '@/hooks/workspaces/workspaceActivityCache';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { deferred } from './deferred';
 
@@ -610,4 +616,47 @@ it('projects scalar history and the net draft onto their snapshot object while p
   expect(result.current.inspectedAction?.actionId).toBe('a1');
   expect(read).toHaveBeenLastCalledWith('p', 'ws', { action_id: 'a1', node_id: 'actual-done-id' });
   unmount();
+});
+
+it('shows a cached saved Draft on return and removes it when revalidation denies access', async () => {
+  const cache = { current: null as WorkspaceActivitySnapshot | null };
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(WorkspaceActivityCacheContext.Provider, { value: cache }, children);
+  const candidate = {
+    id: 'ws',
+    projectId: 'p',
+    targetBranch: 'main',
+    baseCommitHash: null,
+    revision: 5,
+  } as WorkspaceCandidate;
+  const saved = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    compositionRevision: 1,
+    workspaceRevision: 5,
+  };
+
+  read.mockReset().mockResolvedValueOnce(saved);
+  const first = renderHook(() => useComposeActivity(candidate, true), { wrapper });
+  await waitFor(() => expect(first.result.current.view).toEqual(saved));
+  first.unmount();
+
+  read.mockReturnValueOnce(deferred<unknown>().promise);
+  const newer = renderHook(() => useComposeActivity({ ...candidate, revision: 6 }, true), {
+    wrapper,
+  });
+  expect(newer.result.current.view).toBeNull();
+  newer.unmount();
+
+  const revalidation = deferred<unknown>();
+  read.mockReturnValueOnce(revalidation.promise);
+  const next = renderHook(() => useComposeActivity(candidate, true), { wrapper });
+  expect(next.result.current.view).toEqual(saved);
+  await act(async () => revalidation.reject(new T3xApiError('FORBIDDEN', 'Access expired', 403)));
+  expect(next.result.current.view).toBeNull();
+  expect(next.result.current.error).toBe('Access expired');
+  expect(cache.current).toBeNull();
+  next.unmount();
 });

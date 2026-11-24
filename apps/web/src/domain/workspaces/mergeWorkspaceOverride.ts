@@ -11,6 +11,7 @@ export function mergeWorkspaceOverride(
     ...candidate,
     ...override,
     ...draft,
+    schemaActivity: draft.revision === candidate.revision ? candidate.schemaActivity : undefined,
     outputTargets: candidate.outputTargets,
     schemaBindings:
       (override.revision ?? -1) > (candidate.revision ?? -1)

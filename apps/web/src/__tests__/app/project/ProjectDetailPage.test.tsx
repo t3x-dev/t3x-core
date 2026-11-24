@@ -48,7 +48,8 @@ vi.mock('@/hooks/schemas/useProjectYSchemaVersions', () => ({
   }),
 }));
 
-vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+vi.mock('@/hooks/materials/useProjectMaterials', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/materials/useProjectMaterials')>()),
   useProjectMaterials: () => ({
     error: null,
     loading: false,
@@ -110,6 +111,7 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     error: null,
     loading: false,
     refresh: stateHookMocks.refreshWorkspaces,
+    revalidate: vi.fn(),
     workspaces: [],
   }),
 }));

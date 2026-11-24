@@ -5,10 +5,12 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { dump, JSON_SCHEMA } from 'js-yaml';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
+import { RepositoryAddressContext } from '@/components/project/RepositoryRouteContext';
 import { PRD_CORE_ARTIFACT, PRD_MODULE_ARTIFACTS } from '@/data/schemaModules';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import type { CommittedSchemaState } from '@/hooks/commits/useCommittedSchema';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { ProjectSummary } from '@/store/projectStore';
 import type { ApiCommit, SkillArtifact } from '@/types/api';
 import type { SchemaArtifactPreview } from '@/types/schemaModules';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -883,6 +885,56 @@ describe('ProjectStateTab', () => {
     expect(await screen.findByRole('region', { name: 'State structure' })).toBeVisible();
     expect(hookMocks.loadCommits).toHaveBeenCalledOnce();
     expect(hookMocks.loadCommit).not.toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
+  });
+
+  it('uses the directory head read without waiting for an unavailable branch picker', async () => {
+    hookMocks.branchesError = 'Branch service offline';
+    render(
+      <RepositoryAddressContext.Provider
+        value={{
+          current: null,
+          retry: () => {},
+          directoryStateEntry: {
+            project: { id: 'proj_test' } as ProjectSummary,
+            userId: null,
+            expiresAt: Date.now() + 15_000,
+            head: Promise.resolve([PRD_COMMIT]),
+          },
+        }}
+      >
+        <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+      </RepositoryAddressContext.Provider>
+    );
+    expect(await screen.findByRole('link', { name: PRD_COMMIT.message! })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry branches' })).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
+  });
+
+  it('uses the registered branch head if it changed during directory navigation', async () => {
+    const latest = { ...PRD_COMMIT, hash: 'sha256:updated-at-open', message: 'Updated at open' };
+    hookMocks.branchHeads = { main: latest.hash };
+    hookMocks.loadCommit.mockResolvedValue(latest);
+    render(
+      <RepositoryAddressContext.Provider
+        value={{
+          current: null,
+          retry: () => {},
+          directoryStateEntry: {
+            project: { id: 'proj_test' } as ProjectSummary,
+            userId: null,
+            expiresAt: Date.now() + 15_000,
+            head: Promise.resolve([PRD_COMMIT]),
+          },
+        }}
+      >
+        <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+      </RepositoryAddressContext.Provider>
+    );
+    expect(await screen.findByRole('link', { name: latest.message })).toBeVisible();
+    expect(hookMocks.loadCommit).toHaveBeenCalledWith(latest.hash, 'proj_test');
+    expect(screen.queryByText(PRD_COMMIT.message!)).not.toBeInTheDocument();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
   });
 
   it('keeps evidence loading across a branch pointer refresh and ignores late evidence from the old version', async () => {

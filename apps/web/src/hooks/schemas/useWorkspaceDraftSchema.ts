@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkspaceAuthoringView } from '@t3x-dev/api-client';
+import type { StudioSchemaEditCandidate, WorkspaceAuthoringView } from '@t3x-dev/api-client';
 import { canonicalJson, type YValue } from '@t3x-dev/yops';
 import { useEffect, useState } from 'react';
 import {
@@ -17,7 +17,9 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 /** Read only. A saved Studio candidate is never treated as the effective binding. */
 export function useWorkspaceDraftSchema(
   candidate: WorkspaceCandidate,
-  authoring?: Pick<WorkspaceAuthoringView, 'workspaceRevision' | 'currentSchema'> | null
+  authoring?: Pick<WorkspaceAuthoringView, 'workspaceRevision' | 'currentSchema'> | null,
+  edit?: { candidate: StudioSchemaEditCandidate | null; loading: boolean },
+  enabled = true
 ) {
   const key = JSON.stringify([
     candidate.projectId,
@@ -34,7 +36,11 @@ export function useWorkspaceDraftSchema(
     hasCandidate?: boolean;
     error?: string;
   }>();
+  const sharedEdit = edit?.candidate;
+  const waitingForEdit = edit?.loading ?? false;
+  const hasSharedEdit = edit !== undefined;
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     const [projectId, workspaceId, workspaceRevision, bindings, view] = JSON.parse(key) as [
       string,
@@ -48,11 +54,14 @@ export function useWorkspaceDraftSchema(
       setResult({ key });
       return;
     }
+    if (!view && waitingForEdit) return;
     const matches = async (schema: Record<string, unknown>) =>
       !binding.schemaHash || (await definitionHash(schema)) === binding.schemaHash;
     async function read() {
       const unavailable = 'The exact bound Schema is unavailable. Open Studio to inspect it.';
-      const editRead = readStudioSchemaEditCandidate(projectId, workspaceId).catch(() => null);
+      const editRead = hasSharedEdit
+        ? Promise.resolve(sharedEdit ?? null)
+        : readStudioSchemaEditCandidate(projectId, workspaceId).catch(() => null);
       if (view?.currentSchema !== undefined) {
         const snapshot = view.currentSchema;
         const edit = await editRead;
@@ -145,13 +154,13 @@ export function useWorkspaceDraftSchema(
     return () => {
       active = false;
     };
-  }, [key]);
-  const current = result?.key === key ? result : undefined;
+  }, [enabled, key, hasSharedEdit, sharedEdit, waitingForEdit]);
+  const current = enabled && result?.key === key ? result : undefined;
   return {
     definition: current?.definition,
     hasCandidate: current?.hasCandidate,
     error: current?.error,
-    loading: !!candidate.schemaBindings.length && !current,
+    loading: enabled && !!candidate.schemaBindings.length && !current,
   };
 }
 

@@ -2,7 +2,10 @@
 
 import type { WorkspaceSchemaPendingView } from '@t3x-dev/api-client';
 import { useEffect, useState } from 'react';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import { readWorkspaceSchemaPending } from '@/infrastructure/schemaStudio';
+
+const pendingReads = new Map<string, Promise<WorkspaceSchemaPendingView>>();
 
 export function useWorkspaceSchemaPending(
   projectId: string,
@@ -10,7 +13,8 @@ export function useWorkspaceSchemaPending(
   revision?: number,
   confirmedEmpty = false
 ) {
-  const key = JSON.stringify([projectId, workspaceId, revision]);
+  const userId = useSessionUserId();
+  const key = JSON.stringify([userId, projectId, workspaceId, revision]);
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{
     key: string;
@@ -20,8 +24,14 @@ export function useWorkspaceSchemaPending(
   useEffect(() => {
     let active = true;
     setResult(undefined);
-    if (projectId && workspaceId && !confirmedEmpty)
-      void readWorkspaceSchemaPending(projectId, workspaceId).then(
+    if (projectId && workspaceId && !confirmedEmpty) {
+      const read = pendingReads.get(key) ?? readWorkspaceSchemaPending(projectId, workspaceId);
+      if (!pendingReads.has(key)) {
+        pendingReads.set(key, read);
+        const clear = () => pendingReads.delete(key);
+        void read.then(clear, clear);
+      }
+      void read.then(
         (data) => {
           if (active) setResult({ key, data });
         },
@@ -34,6 +44,7 @@ export function useWorkspaceSchemaPending(
             });
         }
       );
+    }
     return () => {
       active = false;
     };
@@ -44,7 +55,7 @@ export function useWorkspaceSchemaPending(
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [confirmedEmpty]);
-  const current = result?.key === key ? result : undefined;
+  const current = !confirmedEmpty && result?.key === key ? result : undefined;
   return {
     data: current?.data,
     error: current?.error,

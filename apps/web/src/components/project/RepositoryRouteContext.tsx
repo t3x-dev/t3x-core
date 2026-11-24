@@ -1,15 +1,22 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { createContext, type ReactNode, useContext } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import type { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { type UseBranchesResult, useBranches } from '@/hooks/shared/useBranches';
 import {
   type UseProjectWorkspacesResult,
   useProjectWorkspaces,
 } from '@/hooks/workspaces/useProjectWorkspaces';
+import {
+  WorkspaceActivityCacheContext,
+  type WorkspaceActivitySnapshot,
+} from '@/hooks/workspaces/workspaceActivityCache';
+import type { DirectoryStateEntry } from '@/store/projectStore';
 
-export const RepositoryAddressContext = createContext<ReturnType<typeof useRepositoryAddress>>({
+export const RepositoryAddressContext = createContext<
+  ReturnType<typeof useRepositoryAddress> & { directoryStateEntry?: DirectoryStateEntry }
+>({
   current: null,
   retry: () => {},
 });
@@ -44,19 +51,32 @@ const RepositoryViewDataContext = createContext<{
 } | null>(null);
 
 export function RepositoryViewData({
+  active,
   children,
   projectId,
 }: {
+  active: boolean;
   children: ReactNode;
   projectId: string | null;
 }) {
-  const branches = useBranches(projectId, Boolean(projectId));
-  const workspaces = useProjectWorkspaces(projectId, Boolean(projectId));
+  const [retainedProjectId, setRetainedProjectId] = useState<string | null>(null);
+  const enabled = Boolean(projectId && (active || retainedProjectId === projectId));
+  useEffect(() => {
+    if (active || retainedProjectId !== projectId) setRetainedProjectId(active ? projectId : null);
+  }, [active, projectId, retainedProjectId]);
+  const activityCache = useMemo<{ current: WorkspaceActivitySnapshot | null }>(
+    () => ({ current: null }),
+    [projectId]
+  );
+  const branches = useBranches(projectId, enabled);
+  const workspaces = useProjectWorkspaces(projectId, enabled);
   return (
     <RepositoryViewDataContext.Provider
-      value={projectId ? { projectId, branches, workspaces } : null}
+      value={enabled && projectId ? { projectId, branches, workspaces } : null}
     >
-      {children}
+      <WorkspaceActivityCacheContext.Provider value={enabled ? activityCache : null}>
+        {children}
+      </WorkspaceActivityCacheContext.Provider>
     </RepositoryViewDataContext.Provider>
   );
 }
