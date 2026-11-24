@@ -1,6 +1,8 @@
 'use client';
 import type { SchemaCatalogPage, SchemaReleasePresentationReference } from '@t3x-dev/api-client';
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@/hooks/shared/useQuery';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import {
   fetchSchemaCatalog,
   fetchSchemaCollections,
@@ -85,22 +87,22 @@ export function useSchemaCatalog(projectId: string | null, query: string, enable
     retry: () => setRetry((value) => value + 1),
   };
 }
-export function useSchemaCollections() {
-  const [items, setItems] = useState<Awaited<ReturnType<typeof fetchSchemaCollections>>>([]);
-  useEffect(() => {
-    let cancelled = false;
-    fetchSchemaCollections()
-      .then((result) => {
-        if (!cancelled) setItems(result);
-      })
-      .catch(() => {
-        /* Browse remains available without editorial collections. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return items;
+const collectionReads = new Map<string | null, ReturnType<typeof fetchSchemaCollections>>();
+
+export function useSchemaCollections(enabled = true) {
+  const userId = useSessionUserId();
+  const { data } = useQuery({
+    queryKey: ['explore-schema-collections', userId],
+    enabled,
+    queryFn: () => {
+      const current = collectionReads.get(userId);
+      if (current) return current;
+      const request = fetchSchemaCollections().finally(() => collectionReads.delete(userId));
+      collectionReads.set(userId, request);
+      return request;
+    },
+  });
+  return data ?? [];
 }
 export function useSchemaIntroduction(reference?: SchemaReleasePresentationReference | null) {
   const projectId = reference?.projectId;
