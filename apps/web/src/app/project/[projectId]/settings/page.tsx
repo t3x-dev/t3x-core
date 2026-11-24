@@ -22,10 +22,13 @@ import {
   Bot,
   CheckCircle2,
   Circle,
+  Eye,
+  GitBranch,
   GripVertical,
   Loader2,
   RotateCcw,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -33,6 +36,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ProjectCollaborationPanel } from '@/components/project/ProjectCollaborationPanel';
 import { ProjectVisibilitySettings } from '@/components/project/ProjectVisibilitySettings';
+import { DeferredSettingsSection } from '@/components/project/settings/DeferredSettingsSection';
 import { ProjectBranchRulesSettings } from '@/components/project/settings/ProjectBranchRulesSettings';
 import { ProjectDangerZone } from '@/components/project/settings/ProjectDangerZone';
 import { ProjectExportSettings } from '@/components/project/settings/ProjectExportSettings';
@@ -60,7 +64,7 @@ import {
 } from '@/queries/providers';
 import { useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
-import type { ProviderInfo, RoleAssignment } from '@/types/api';
+import type { ProjectDetail, ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { readRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
@@ -274,6 +278,122 @@ function ProjectSettingsPageContent() {
   }, [awaitingAddress, pathname, projectId, query]);
   const saveRepositoryProfile = useRepositoryProfile(projectId);
   const repositoryProfile = useProjectStore((state) => state.details[projectId]?.repositoryProfile);
+  const handleDelete = async () => {
+    await settings.remove();
+    router.push(getDeletedRepositoriesPath(settings.project?.namespace));
+  };
+
+  const project = settings.project;
+
+  return (
+    <div className={`${palette.scope} ${generalStyles.layout}`}>
+      <aside className={generalStyles.sidebar}>
+        <ProjectSettingsNav />
+      </aside>
+
+      <div className={generalStyles.content}>
+        <header className={generalStyles.pageHeading}>
+          <Link
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
+            href={returnHref}
+          >
+            <ArrowLeft aria-hidden="true" className="size-3.5" />
+            {returnHref === repositoryPath ? 'Back to repository' : 'Back to previous page'}
+          </Link>
+          {project ? (
+            <span className={generalStyles.scope}>
+              {project.namespace ? `${project.namespace} / ` : ''}
+              {project.name}
+            </span>
+          ) : null}
+          <h1>Repository settings</h1>
+          <p>Manage details, access, and defaults for this repository.</p>
+        </header>
+        {settings.loading ? (
+          <output className="flex min-h-32 items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            Loading repository settings…
+          </output>
+        ) : !project ? (
+          <p
+            className="rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-5 text-[13px] text-[var(--status-error)]"
+            role="alert"
+          >
+            {settings.error ?? 'Repository not found.'}
+          </p>
+        ) : (
+          <>
+            <ProjectGeneralSettings
+              key={`${project.name}:${projectDescription(project)}`}
+              onSave={settings.saveGeneral}
+              project={project}
+            />
+            <RepositoryIconSettings
+              key={projectId}
+              projectId={projectId}
+              name={project.name}
+              icon={(repositoryProfile ?? project.repository_profile)?.icon}
+              canEdit={project.can_edit === true}
+              onSave={(icon) => saveRepositoryProfile({ icon })}
+            />
+          </>
+        )}
+
+        <DeferredSettingsSection id="visibility" icon={Eye} title="Visibility">
+          <ProjectVisibilitySettings projectId={projectId} />
+        </DeferredSettingsSection>
+        <DeferredSettingsSection id="access" icon={Users} title="Access">
+          <ProjectCollaborationPanel projectId={projectId} />
+        </DeferredSettingsSection>
+        <DeferredSettingsSection id="branch-rules" icon={GitBranch} title="Branch rules">
+          <ProjectBranchRulesSettings projectId={projectId} />
+        </DeferredSettingsSection>
+        <DeferredSettingsSection id="ai" icon={Sparkles} title="AI defaults">
+          <ProjectAiSettings
+            key={projectId}
+            projectId={projectId}
+            project={project}
+            projectLoading={settings.loading}
+          />
+        </DeferredSettingsSection>
+
+        <DeferredSettingsSection id="autopilot" icon={Bot} title="Autopilot">
+          <SettingsSection
+            description="Review extraction threshold suggestions for this project."
+            icon={Bot}
+            id="autopilot"
+            title="Autopilot"
+          >
+            <AutopilotSettings projectId={projectId} />
+          </SettingsSection>
+        </DeferredSettingsSection>
+
+        <ProjectIntegritySettings onVerify={settings.verify} />
+
+        {project ? (
+          <>
+            <ProjectExportSettings
+              onExport={settings.exportArchive}
+              projectId={projectId}
+              projectName={project.name}
+            />
+            <ProjectDangerZone onDelete={handleDelete} project={project} />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ProjectAiSettings({
+  projectId,
+  project,
+  projectLoading,
+}: {
+  projectId: string;
+  project: ProjectDetail | null;
+  projectLoading: boolean;
+}) {
   const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
@@ -290,10 +410,10 @@ function ProjectSettingsPageContent() {
   const { setModel: updateProjectModel } = useProjectCrud();
   const projectModel =
     savedModel ??
-    (settings.project
+    (project
       ? {
-          provider: settings.project.default_provider ?? null,
-          model: settings.project.default_model ?? null,
+          provider: project.default_provider ?? null,
+          model: project.default_model ?? null,
         }
       : null);
 
@@ -306,11 +426,6 @@ function ProjectSettingsPageContent() {
       setModelError(error instanceof Error ? error.message : 'Failed to save model settings.');
       setModelVersion((version) => version + 1);
     }
-  };
-
-  const handleDelete = async () => {
-    await settings.remove();
-    router.push(getDeletedRepositoriesPath(settings.project?.namespace));
   };
 
   const loadData = useCallback(async () => {
@@ -434,185 +549,101 @@ function ProjectSettingsPageContent() {
   };
 
   const grouped = groupByRole(providers);
-  const project = settings.project;
 
   return (
-    <div className={`${palette.scope} ${generalStyles.layout}`}>
-      <aside className={generalStyles.sidebar}>
-        <ProjectSettingsNav />
-      </aside>
-
-      <div className={generalStyles.content}>
-        <header className={generalStyles.pageHeading}>
-          <Link
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:underline"
-            href={returnHref}
+    <SettingsSection
+      action={
+        overriddenRoles.size > 0 ? (
+          <button
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
+              'border border-[var(--stroke-default)]',
+              'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+              'hover:bg-[var(--hover-bg)] transition-colors',
+              'disabled:cursor-not-allowed disabled:opacity-50'
+            )}
+            disabled={saving}
+            onClick={handleResetToGlobal}
+            type="button"
           >
-            <ArrowLeft aria-hidden="true" className="size-3.5" />
-            {returnHref === repositoryPath ? 'Back to repository' : 'Back to previous page'}
-          </Link>
-          {project ? (
-            <span className={generalStyles.scope}>
-              {project.namespace ? `${project.namespace} / ` : ''}
-              {project.name}
-            </span>
-          ) : null}
-          <h1>Repository settings</h1>
-          <p>Manage details, access, and defaults for this repository.</p>
-        </header>
-        {settings.loading ? (
-          <output className="flex min-h-32 items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-            Loading repository settings…
-          </output>
-        ) : !project ? (
-          <p
-            className="rounded-xl border border-[var(--status-error)]/25 bg-[var(--surface-elevated)] p-5 text-[13px] text-[var(--status-error)]"
-            role="alert"
-          >
-            {settings.error ?? 'Repository not found.'}
+            <RotateCcw className="size-3" />
+            Reset to global
+          </button>
+        ) : null
+      }
+      description={
+        <>
+          The model and provider order used when AI proposes changes here. Replay and commits never
+          depend on them.
+          {saving && <span className="ml-2 text-[var(--text-tertiary)]">Saving...</span>}
+        </>
+      }
+      icon={Sparkles}
+      id="ai"
+      title="AI defaults"
+    >
+      <div className="grid gap-6">
+        <div>
+          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Default model</h3>
+          <p className="mb-3 mt-0.5 text-xs text-[var(--text-tertiary)]">
+            Used for AI operations in this project unless a run picks another model.
           </p>
-        ) : (
-          <>
-            <ProjectGeneralSettings
-              key={`${project.name}:${projectDescription(project)}`}
-              onSave={settings.saveGeneral}
-              project={project}
+          {modelError ? (
+            <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+              {modelError}
+            </p>
+          ) : null}
+          {projectLoading ? (
+            <output className="text-xs text-[var(--text-tertiary)]">
+              Loading project model settings...
+            </output>
+          ) : projectModel ? (
+            <ModelSelector
+              contentClassName={palette.scope}
+              initialModel={projectModel.model}
+              initialProvider={projectModel.provider}
+              key={modelVersion}
+              onChange={handleModelChange}
             />
-            <RepositoryIconSettings
-              key={projectId}
-              projectId={projectId}
-              name={project.name}
-              icon={(repositoryProfile ?? project.repository_profile)?.icon}
-              canEdit={project.can_edit === true}
-              onSave={(icon) => saveRepositoryProfile({ icon })}
-            />
-          </>
-        )}
+          ) : null}
+        </div>
 
-        <ProjectVisibilitySettings projectId={projectId} />
-        <ProjectCollaborationPanel projectId={projectId} />
-        <ProjectBranchRulesSettings projectId={projectId} />
-
-        <SettingsSection
-          action={
-            overriddenRoles.size > 0 ? (
-              <button
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
-                  'border border-[var(--stroke-default)]',
-                  'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-                  'hover:bg-[var(--hover-bg)] transition-colors',
-                  'disabled:cursor-not-allowed disabled:opacity-50'
-                )}
-                disabled={saving}
-                onClick={handleResetToGlobal}
-                type="button"
-              >
-                <RotateCcw className="size-3" />
-                Reset to global
-              </button>
-            ) : null
-          }
-          description={
-            <>
-              The model and provider order used when AI proposes changes here. Replay and commits
-              never depend on them.
-              {saving && <span className="ml-2 text-[var(--text-tertiary)]">Saving...</span>}
-            </>
-          }
-          icon={Sparkles}
-          id="ai"
-          title="AI defaults"
-        >
-          <div className="grid gap-6">
-            <div>
-              <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
-                Default model
-              </h3>
-              <p className="mb-3 mt-0.5 text-xs text-[var(--text-tertiary)]">
-                Used for AI operations in this project unless a run picks another model.
-              </p>
-              {modelError ? (
-                <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
-                  {modelError}
-                </p>
-              ) : null}
-              {settings.loading ? (
-                <output className="text-xs text-[var(--text-tertiary)]">
-                  Loading project model settings...
-                </output>
-              ) : projectModel ? (
-                <ModelSelector
-                  contentClassName={palette.scope}
-                  initialModel={projectModel.model}
-                  initialProvider={projectModel.provider}
-                  key={modelVersion}
-                  onChange={handleModelChange}
-                />
-              ) : null}
+        <div className="border-t border-[var(--stroke-divider)] pt-5">
+          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
+            Provider overrides
+          </h3>
+          <p className="mb-4 mt-0.5 text-xs text-[var(--text-tertiary)]">
+            Override the global fallback order for this project only.
+          </p>
+          {providerError ? (
+            <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+              {providerError}
+            </p>
+          ) : null}
+          {loading ? (
+            <div className="flex h-20 items-center justify-center">
+              <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
             </div>
-
-            <div className="border-t border-[var(--stroke-divider)] pt-5">
-              <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
-                Provider overrides
-              </h3>
-              <p className="mb-4 mt-0.5 text-xs text-[var(--text-tertiary)]">
-                Override the global fallback order for this project only.
-              </p>
-              {providerError ? (
-                <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
-                  {providerError}
-                </p>
-              ) : null}
-              {loading ? (
-                <div className="flex h-20 items-center justify-center">
-                  <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
-                    const roleProviders = grouped[role] ?? [];
-                    if (roleProviders.length === 0) return null;
-                    return (
-                      <SortableRoleGroup
-                        isOverridden={overriddenRoles.has(role)}
-                        key={role}
-                        onReorder={handleReorder}
-                        providers={roleProviders}
-                        role={role}
-                      />
-                    );
-                  })}
-                </div>
-              )}
+          ) : (
+            <div className="space-y-6">
+              {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
+                const roleProviders = grouped[role] ?? [];
+                if (roleProviders.length === 0) return null;
+                return (
+                  <SortableRoleGroup
+                    isOverridden={overriddenRoles.has(role)}
+                    key={role}
+                    onReorder={handleReorder}
+                    providers={roleProviders}
+                    role={role}
+                  />
+                );
+              })}
             </div>
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          description="Review extraction threshold suggestions for this project."
-          icon={Bot}
-          id="autopilot"
-          title="Autopilot"
-        >
-          <AutopilotSettings projectId={projectId} />
-        </SettingsSection>
-
-        <ProjectIntegritySettings onVerify={settings.verify} />
-
-        {project ? (
-          <>
-            <ProjectExportSettings
-              onExport={settings.exportArchive}
-              projectId={projectId}
-              projectName={project.name}
-            />
-            <ProjectDangerZone onDelete={handleDelete} project={project} />
-          </>
-        ) : null}
+          )}
+        </div>
       </div>
-    </div>
+    </SettingsSection>
   );
 }
 

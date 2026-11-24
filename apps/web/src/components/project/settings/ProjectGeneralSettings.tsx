@@ -87,10 +87,14 @@ export function ProjectGeneralSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nameCheck = useRepositoryName(project.namespace, name, project.project_id);
+  const nameEdited = name !== project.name;
+  const nameCheck = useRepositoryName(
+    nameEdited ? project.namespace : undefined,
+    name,
+    project.project_id
+  );
   const trimmedName = nameCheck.result?.name ?? name.trim();
   const trimmedDescription = description.trim();
-  const nameEdited = name !== project.name;
   const dirty = nameEdited || trimmedDescription !== savedDescription;
   const slugChanges = trimmedName !== project.name;
   const stableLink =

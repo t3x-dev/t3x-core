@@ -1,19 +1,12 @@
 'use client';
 
-import { createContext, type ReactNode, useContext } from 'react';
-import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
+import type { ReactNode } from 'react';
+import {
+  ProjectDetailContext,
+  useRepositoryProjectDetail,
+} from '@/hooks/projects/useProjectDetail';
 
-export function useRepositoryProjectDetail(projectId: string | null) {
-  const shared = useContext(ProjectDetailContext);
-  const detail = shared && shared.projectId === projectId ? shared.detail : undefined;
-  const local = useProjectDetail(detail ? null : projectId);
-  return detail ?? local;
-}
-
-const ProjectDetailContext = createContext<{
-  projectId: string | null;
-  detail: ReturnType<typeof useProjectDetail>;
-} | null>(null);
+export { useRepositoryProjectDetail } from '@/hooks/projects/useProjectDetail';
 
 export function ProjectDetailProvider({
   projectId,

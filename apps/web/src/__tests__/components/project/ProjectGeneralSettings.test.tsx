@@ -32,7 +32,7 @@ beforeEach(() => {
 it('shows rename feedback when editing, blocks an unavailable name, and clears it on discard', async () => {
   const onSave = vi.fn();
   render(<ProjectGeneralSettings project={project} onSave={onSave} />);
-  await waitFor(() => expect(mocks.checkName).toHaveBeenCalled());
+  expect(mocks.checkName).not.toHaveBeenCalled();
   expect(screen.queryByText(/Final repository name/)).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByRole('textbox', { name: 'Repository name' }), {
