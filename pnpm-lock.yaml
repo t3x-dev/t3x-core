@@ -992,6 +992,9 @@ importers:
       '@t3x-dev/storage':
         specifier: workspace:*
         version: link:../storage
+      '@t3x-dev/yschema':
+        specifier: workspace:*
+        version: link:../yschema
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

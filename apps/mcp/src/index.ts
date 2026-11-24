@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createMcpServer, type McpToolset } from '@t3x-dev/mcp-lib';
+import { createMcpServer, type McpToolset, parseMcpCapabilities } from '@t3x-dev/mcp-lib';
 
 const SUPPORTED_TOOLSETS = new Set<McpToolset>(['core', 'advanced', 'transition']);
 
@@ -33,12 +33,19 @@ function parseToolsets(value: string): McpToolset[] {
   return parsed as McpToolset[];
 }
 
-const toolsetEnv = process.env.T3X_TOOLSETS ?? 'core';
-const toolsets = parseToolsets(toolsetEnv);
-
+const capabilityEnv = process.env.T3X_MCP_CAPABILITIES;
 const transport = process.env.T3X_TRANSPORT ?? 'stdio';
 
-const { server } = createMcpServer({ toolsets });
+const { server } = (() => {
+  if (capabilityEnv === undefined) {
+    return createMcpServer({ toolsets: parseToolsets(process.env.T3X_TOOLSETS ?? 'core') });
+  }
+  try {
+    return createMcpServer({ toolsets: [], capabilities: parseMcpCapabilities(capabilityEnv) });
+  } catch (error) {
+    return failConfiguration(error instanceof Error ? error.message : 'Invalid MCP capabilities.');
+  }
+})();
 
 if (transport === 'stdio') {
   const stdioTransport = new StdioServerTransport();

@@ -10,6 +10,7 @@ import { stateOverviewRoutes } from './state-overview.openapi';
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { CommittedSchemaBindingSchema } from '@t3x-dev/api-client';
 import { exportCommittedState, StateExportIntegrityError } from '@t3x-dev/application';
 import type { SemanticContent } from '@t3x-dev/core';
 import { projectCommitV2, validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
@@ -18,6 +19,7 @@ import {
   findBranchesByProject,
   findConversationById,
   findRepositoryObjectAddress,
+  findTransitionCommitReceipt,
   getCommitHistoryEntry,
   getRepositoryDecisionAuditByDigest,
   getTransitionRefHead,
@@ -54,6 +56,7 @@ import {
   transitionApiKey,
 } from '../lib/transition-authority';
 import { synchronizeCleanBranchWorkspaces } from '../lib/workspace-reconciliation';
+import { readCommittedSchemaBinding } from '../lib/workspace-schema-review';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import {
   ErrorResponseSchema,
@@ -69,6 +72,52 @@ export const commitRoutes = new OpenAPIHono({
 });
 commitRoutes.route('/', statePresentationRoutes);
 commitRoutes.route('/', stateOverviewRoutes);
+
+const getCommittedSchemaBindingRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commits/{hash}/schema-binding',
+  tags: ['Commits'],
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      hash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Historical Schema binding evidence',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(CommittedSchemaBindingSchema) },
+      },
+    },
+    403: { description: 'Project access denied' },
+    404: { description: 'Commit unavailable' },
+  },
+});
+commitRoutes.openapi(getCommittedSchemaBindingRoute, async (c) => {
+  const { projectId, hash } = c.req.valid('param');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
+  if (access instanceof Response) return access;
+  const result = await readCommittedSchemaBinding(db, projectId, hash);
+  if (!result) return errorResponse(c, 'NOT_FOUND', 'Commit not found in project');
+  const data =
+    result.status === 'bound'
+      ? CommittedSchemaBindingSchema.parse({
+          commit_digest: hash,
+          status: result.status,
+          schema_hash: result.schemaHash,
+          identities: result.bindings.map((binding) => ({
+            canonical_name: binding.canonicalName,
+            version: binding.version,
+            composition_id: binding.compositionId,
+            composition_revision: binding.compositionRevision,
+            root_key: binding.rootKey,
+          })),
+        })
+      : { commit_digest: hash, status: result.status };
+  return c.json({ success: true as const, data }, 200);
+});
 
 const getCommitChangesRoute = createRoute({
   method: 'get',
@@ -560,7 +609,13 @@ const getCommitRoute = createRoute({
   summary: 'Get a commit by hash',
   request: {
     params: HashParamSchema,
-    query: z.object({ project_id: z.string().min(1) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      transition_id: z
+        .string()
+        .regex(/^trn_[0-9a-f]{32}$/)
+        .optional(),
+    }),
   },
   responses: {
     200: {
@@ -584,12 +639,17 @@ const getCommitRoute = createRoute({
 
 commitRoutes.openapi(getCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { project_id: projectId } = c.req.valid('query');
+  const { project_id: projectId, transition_id: transitionId } = c.req.valid('query');
   const db = await getDB();
 
   try {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
+    if (transitionId !== undefined) {
+      const receipt = await findTransitionCommitReceipt(db, projectId, hash);
+      if (receipt?.transitionId !== transitionId)
+        return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found for this Transition.');
+    }
     const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
     if (!graph) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);

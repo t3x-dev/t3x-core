@@ -122,11 +122,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       typeof req.query[runnerSignatureQuery] === 'string'
         ? req.query[runnerSignatureQuery]
         : undefined;
+    const projectId =
+      typeof req.query.configured_project === 'string' ? req.query.configured_project : undefined;
     const signedCallback = verifyN8nCallbackSignature(
       signature,
       typeof req.body?.run_id === 'string' ? req.body.run_id : undefined,
-      typeof req.body?.runner_run_id === 'string' ? req.body.runner_run_id : undefined
+      typeof req.body?.runner_run_id === 'string' ? req.body.runner_run_id : undefined,
+      projectId
     );
+    if (signedCallback === 'ok' && projectId) res.locals.configuredProjectId = projectId;
     const bearer = verifyRunnerBearer(req.header('authorization'));
     authentication = signedCallback === 'ok' || bearer === 'ok' ? 'ok' : signedCallback;
   } else {
@@ -535,10 +539,11 @@ app.get('/runs', (req, res) => {
  * Note: Runner is stateless - we don't store pending run info.
  * When n8n calls back, we fetch run details from Engine API.
  */
-app.post('/runs', async (req, res) => {
+app.post(['/runs', '/configured-runs'], async (req, res) => {
   try {
     const data = EngineRunRequestSchema.parse(req.body);
-    const runner_run_id = `runner_run_${randomUUID()}`;
+    const configured = req.path === '/configured-runs';
+    const runner_run_id = configured ? `runner_${data.run_id}` : `runner_run_${randomUUID()}`;
 
     // Note: No longer storing in pendingRuns Map
     // Run info is stored in Engine's PostgreSQL and fetched on callback
@@ -550,13 +555,16 @@ app.post('/runs', async (req, res) => {
       const signedCallbackUrl = buildSignedN8nCallbackUrl(
         data.callback_url,
         data.run_id,
-        runner_run_id
+        runner_run_id,
+        configured ? data.project_id : undefined
       );
-      triggerN8nWorkflow({ ...data, callback_url: signedCallbackUrl }, runner_run_id).catch(
-        (err) => {
-          logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
-        }
-      );
+      triggerN8nWorkflow(
+        { ...data, callback_url: signedCallbackUrl },
+        runner_run_id,
+        configured
+      ).catch((err) => {
+        logger.error({ run_id: data.run_id, error: String(err) }, 'n8n trigger failed');
+      });
     }
 
     res.json({ success: true, data: { runner_run_id, status: 'running' } });
@@ -607,7 +615,7 @@ app.post('/callbacks/n8n', async (req, res) => {
 
     setTimeout(async () => {
       try {
-        await processN8nCallback(data);
+        await processN8nCallback(data, res.locals.configuredProjectId);
       } catch (error) {
         logger.error(
           { run_id: data.run_id, runner_run_id: data.runner_run_id, error: String(error) },
@@ -626,14 +634,17 @@ app.post('/callbacks/n8n', async (req, res) => {
  * Process n8n callback data asynchronously
  * Called after a delay to ensure n8n workflow has completed
  */
-async function processN8nCallback(data: {
-  runner_run_id: string;
-  run_id: string;
-  execution_id?: string;
-  output?: Record<string, unknown>;
-  meta?: { latency_ms?: number; tokens?: number; model?: string };
-  error?: string | null;
-}) {
+async function processN8nCallback(
+  data: {
+    runner_run_id: string;
+    run_id: string;
+    execution_id?: string;
+    output?: Record<string, unknown>;
+    meta?: { latency_ms?: number; tokens?: number; model?: string };
+    error?: string | null;
+  },
+  configuredProjectId?: string
+) {
   logger.info(
     { run_id: data.run_id, runner_run_id: data.runner_run_id },
     'Starting async callback processing'
@@ -642,7 +653,11 @@ async function processN8nCallback(data: {
   // ═══════════════════════════════════════════════════
   // Step 0: Fetch run details from Engine API (stateless)
   // ═══════════════════════════════════════════════════
-  const runInfo = await getRunByRunnerRunId(data.runner_run_id);
+  // Configured evaluations have no caller-supplied inputs or leaf. The signed
+  // callback already binds the project and Run used to evaluate this result.
+  const runInfo = configuredProjectId
+    ? { run_id: data.run_id, project_id: configuredProjectId, inputs: {}, leaf: null }
+    : await getRunByRunnerRunId(data.runner_run_id);
 
   if (!runInfo) {
     logger.warn({ runner_run_id: data.runner_run_id }, 'Run not found in Engine');
@@ -917,7 +932,7 @@ function buildRunRecordFromCallback(
     meta?: { latency_ms?: number };
     error?: string | null;
   },
-  runInfo: ParsedRun
+  runInfo: Pick<ParsedRun, 'run_id' | 'project_id' | 'inputs'>
 ): RunRecord {
   const now = new Date().toISOString();
   return {

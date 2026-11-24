@@ -1,3 +1,4 @@
+import { createRepositorySemanticState } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -9,6 +10,7 @@ let mockDB: AnyDB;
 const commitSpies = vi.hoisted(() => ({
   listProjectIds: vi.fn(),
   getCommit: vi.fn(),
+  getGraph: vi.fn(),
   findLeaves: vi.fn(),
   createShareToken: vi.fn(),
 }));
@@ -17,6 +19,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
   return {
     ...actual,
+    getVerifiedTransitionCommitGraph: commitSpies.getGraph,
     listTransitionCommitProjectIds: commitSpies.listProjectIds,
     findLeavesByCommit: commitSpies.findLeaves,
     createShareToken: commitSpies.createShareToken,
@@ -121,6 +124,7 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     importSpies.parsePlatformExport.mockReset();
     commitSpies.listProjectIds.mockReset();
     commitSpies.getCommit.mockReset();
+    commitSpies.getGraph.mockReset();
     commitSpies.findLeaves.mockReset();
     commitSpies.createShareToken.mockReset();
   });
@@ -176,6 +180,7 @@ describe('project ownership on remaining HTTP project surfaces', () => {
       })
     );
     expect(commitSpies.listProjectIds).not.toHaveBeenCalled();
+    expect(commitSpies.getGraph).not.toHaveBeenCalled();
     expect(commitSpies.getCommit).not.toHaveBeenCalled();
   });
 
@@ -201,6 +206,14 @@ describe('project ownership on remaining HTTP project surfaces', () => {
       target_commit_hash: 'sha256:owner-target',
     });
 
+    commitSpies.getGraph.mockResolvedValue({
+      state: createRepositorySemanticState({ trees: [], relations: [] }),
+      recordedAt: '2026-08-11T00:00:00.000Z',
+      proposal: {
+        actor: { kind: 'human', id: 'user_owner' },
+        predicate: { rationale: { mode: 'unspecified' } },
+      },
+    });
     const twoWay = await app.request('/v1/diff/two-way', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,7 +227,11 @@ describe('project ownership on remaining HTTP project surfaces', () => {
       body: payload,
     });
     expect(frame.status).toBe(200);
-    expect(commitSpies.getCommit).toHaveBeenCalledTimes(4);
+    expect(commitSpies.getCommit).toHaveBeenCalledTimes(2);
+    expect(commitSpies.getGraph.mock.calls).toEqual([
+      [mockDB, ownerProjectId, 'sha256:owner-base'],
+      [mockDB, ownerProjectId, 'sha256:owner-target'],
+    ]);
     for (const call of commitSpies.getCommit.mock.calls) {
       expect(call[2]).toBe(ownerProjectId);
     }

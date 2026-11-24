@@ -21,7 +21,8 @@
     "@t3x-dev/api": "workspace:*",
     "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/core": "workspace:*",
-    "@t3x-dev/storage": "workspace:*"
+    "@t3x-dev/storage": "workspace:*",
+    "@t3x-dev/yschema": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

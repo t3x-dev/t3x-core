@@ -860,3 +860,20 @@ it('accepts original project user turns as evidence and rejects assistant self-c
     resolveProposalGenerationSources(db, other.projectId, [], [original.turnHash])
   ).rejects.toThrow();
 });
+
+it('does not treat Agent-ingested material as original evidence', async () => {
+  const data = await fixture('Machine-ingested material');
+  const material = await createMaterial(db, {
+    project_id: data.projectId,
+    source_type: 'document',
+    content_text: 'Machine-supplied material.',
+    content_hash: 'machine-ingested-fixture',
+    created_by: 'agent:api-key:key_ingestion',
+  });
+  await expect(resolveProposalGenerationSources(db, data.projectId, [material.id])).rejects.toThrow(
+    ProposalGenerationContextError
+  );
+  expect(
+    await resolveProposalGenerationSources(db, data.projectId, [data.material.id])
+  ).toHaveLength(1);
+});

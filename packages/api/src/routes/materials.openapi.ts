@@ -5,7 +5,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type CreateMaterialInput, estimateTokens, type Material, sha256 } from '@t3x-dev/core';
+import { type CreateMaterialInput, estimateTokens, type Material } from '@t3x-dev/core';
 import {
   type AnyDB,
   archiveMaterial,
@@ -17,31 +17,13 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
-import { parseDocument } from '../lib/import';
 import { assertProjectAccess } from '../lib/project-access';
+import { parseSourceAttachment } from '../lib/source-attachments';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_MATERIAL_TEXT_CHARS = 20_000;
 const EXCERPT_CHARS = 600;
 const SEGMENT_MAX_CHARS = 1200;
-const IMAGE_TOKEN_ESTIMATE = 1600;
-const IMAGE_SIGNATURES: Array<{ mimeType: string; matches: (bytes: Buffer) => boolean }> = [
-  {
-    mimeType: 'image/png',
-    matches: (b) =>
-      b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-  },
-  { mimeType: 'image/jpeg', matches: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  { mimeType: 'image/gif', matches: (b) => b.subarray(0, 6).toString('latin1').startsWith('GIF8') },
-  {
-    mimeType: 'image/webp',
-    matches: (b) =>
-      b.subarray(0, 4).toString('latin1') === 'RIFF' &&
-      b.subarray(8, 12).toString('latin1') === 'WEBP',
-  },
-];
-
 export const materialsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -314,53 +296,11 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const imageMimeType = IMAGE_SIGNATURES.find((signature) => signature.matches(buffer))?.mimeType;
-    if (imageMimeType) {
-      const data = buffer.toString('base64');
-      const material = await storeMaterial(db, {
-        project_id: projectId,
-        source_type: 'image',
-        title: file.name,
-        filename: file.name,
-        mime_type: imageMimeType,
-        content_text: data,
-        content_hash: sha256(data),
-        metadata: { byte_length: buffer.length },
-        token_estimate: IMAGE_TOKEN_ESTIMATE,
-      });
-      return c.json({ success: true as const, data: toMaterialResponse(material) });
-    }
-    if (file.type.startsWith('image/')) {
-      throw new Error('Unsupported image. Use PNG, JPEG, GIF, or WebP.');
-    }
-
-    const parsed = await parseDocument(buffer, file.name, file.type);
-    const parsedTextLength = parsed.raw_text.trim().length;
-    if (parsedTextLength === 0) {
-      throw new Error('No readable text was extracted from this file.');
-    }
-    if (parsedTextLength > MAX_MATERIAL_TEXT_CHARS) {
-      throw new Error(
-        'Parsed text is too long for chat context. This file produced more than 20,000 characters.'
-      );
-    }
     const material = await storeMaterial(db, {
       project_id: projectId,
-      source_type: 'document',
-      title: parsed.metadata.title ?? file.name,
-      filename: file.name,
-      mime_type: file.type || undefined,
-      content_text: parsed.raw_text,
-      content_hash: parsed.metadata.content_hash,
-      metadata: parsed.metadata as unknown as Record<string, unknown>,
-      token_estimate: estimateTokens(parsed.raw_text),
+      ...(await parseSourceAttachment(Buffer.from(await file.arrayBuffer()), file.name, file.type)),
     });
-
-    return c.json({
-      success: true as const,
-      data: toMaterialResponse(material),
-    });
+    return c.json({ success: true as const, data: toMaterialResponse(material) });
   } catch (err) {
     return c.json(
       {

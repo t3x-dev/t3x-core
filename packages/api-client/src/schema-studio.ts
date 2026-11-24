@@ -450,6 +450,25 @@ export const WorkspaceSchemaDefinitionSnapshotSchema = z
         message: 'Schema snapshot status does not match its definition, hash and bindings.',
       });
   });
+const CommittedSchemaIdentitySchema = z.object({
+  canonical_name: z.string().optional(),
+  version: z.string().optional(),
+  composition_id: z.string().optional(),
+  composition_revision: z.number().int().optional(),
+  root_key: z.string().optional(),
+});
+const committedSchemaDigest = z.object({ commit_digest: digest });
+export const CommittedSchemaBindingSchema = z.discriminatedUnion('status', [
+  committedSchemaDigest.extend({
+    status: z.literal('bound'),
+    schema_hash: digest,
+    identities: z.array(CommittedSchemaIdentitySchema),
+  }),
+  committedSchemaDigest.extend({ status: z.literal('unbound') }),
+  committedSchemaDigest.extend({ status: z.literal('unknown') }),
+]);
+export type CommittedSchemaBinding = z.infer<typeof CommittedSchemaBindingSchema>;
+
 export const WorkspaceFullSchemaReviewSchema = z
   .object({
     schema: z.literal('t3x.application/workspace-schema-review/v1'),

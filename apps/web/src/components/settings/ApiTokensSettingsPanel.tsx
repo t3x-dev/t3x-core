@@ -1,5 +1,6 @@
 'use client';
 
+import type { TransitionScope } from '@t3x-dev/core';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -12,6 +13,19 @@ type ScopeFilter = 'all' | 'organization' | 'projects';
 type StatusFilter = 'all' | 'active' | 'revoked';
 
 type TokenDisplay = T3xApiKey;
+
+const DEFAULT_AGENT_EXPIRY_DAYS = '7';
+const AGENT_DRAFT_SCOPES = [
+  'transition:inspect',
+  'transition:propose',
+  'transition:verify',
+] satisfies TransitionScope[];
+const AGENT_SCOPE_OPTIONS = [
+  { scope: 'transition:decide:accept', label: 'Accept changes' },
+  { scope: 'transition:decide:reject', label: 'Reject changes' },
+  { scope: 'transition:commit:create', label: 'Create commits' },
+  { scope: 'transition:ref:advance', label: 'Advance branch refs' },
+] as const satisfies ReadonlyArray<{ scope: TransitionScope; label: string }>;
 
 function dateParts(value: string) {
   const date = new Date(value);
@@ -56,6 +70,9 @@ export function ApiTokensSettingsPanel() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newProjectId, setNewProjectId] = useState('');
+  const [newTokenType, setNewTokenType] = useState<'standard' | 'agent'>('standard');
+  const [newExpiryDays, setNewExpiryDays] = useState(DEFAULT_AGENT_EXPIRY_DAYS);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedT3xApiKey | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -119,12 +136,41 @@ export function ApiTokensSettingsPanel() {
     event.preventDefault();
     const name = newName.trim();
     const projectId = newProjectId.trim();
-    if (!name) return;
+    if (!name || creating) return;
+    setCreateError(null);
+    const isAgent = newTokenType === 'agent';
+    const days = Number(newExpiryDays);
+    const expiresAt = new Date(Date.now() + days * 86_400_000);
+    if (isAgent && !projectId) {
+      setCreateError('Enter a project ID for this Agent token.');
+      return;
+    }
+    if (
+      isAgent &&
+      (!Number.isSafeInteger(days) || days < 1 || !Number.isFinite(expiresAt.getTime()))
+    ) {
+      setCreateError('Enter a valid number of days greater than zero.');
+      return;
+    }
+    const requestedScopes = new FormData(event.currentTarget).getAll('transition_scope');
     setCreating(true);
     try {
       const token = await createApiKey({
         name,
         ...(projectId ? { project_id: projectId } : {}),
+        ...(isAgent
+          ? {
+              principal_kind: 'agent',
+              credential_kind: 'agent',
+              expires_at: expiresAt.toISOString(),
+              transition_scopes: [
+                ...AGENT_DRAFT_SCOPES,
+                ...AGENT_SCOPE_OPTIONS.filter(({ scope }) => requestedScopes.includes(scope)).map(
+                  ({ scope }) => scope
+                ),
+              ],
+            }
+          : {}),
       });
       setCreatedKey(token);
       setNewName('');
@@ -132,7 +178,7 @@ export function ApiTokensSettingsPanel() {
       await loadKeys();
       toast.success('API token created');
     } catch (error) {
-      toast.error(formatUserFacingError(error, 'Failed to create API token.'));
+      setCreateError(formatUserFacingError(error, 'Failed to create API token.'));
     } finally {
       setCreating(false);
     }
@@ -179,6 +225,9 @@ export function ApiTokensSettingsPanel() {
               className={styles.primaryButton}
               onClick={() => {
                 setCreatedKey(null);
+                setCreateError(null);
+                setNewTokenType('standard');
+                setNewExpiryDays(DEFAULT_AGENT_EXPIRY_DAYS);
                 setShowCreate(true);
               }}
               type="button"
@@ -285,6 +334,17 @@ export function ApiTokensSettingsPanel() {
                           />
                           {token.project_id ? 'Project' : 'No project restriction'}
                         </span>
+                        {token.principal_kind === 'agent' ? (
+                          <details className={styles.tokenScopeDetails}>
+                            <summary>Agent permissions</summary>
+                            <span>{token.project_id}</span>
+                            <ul>
+                              {token.transition_scopes.map((scope) => (
+                                <li key={scope}>{scope}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
                       </td>
                       <td className={styles.dateCell}>
                         <span>{created.date}</span>
@@ -399,24 +459,80 @@ export function ApiTokensSettingsPanel() {
             role="dialog"
           >
             <h2 id="create-api-token-title">Create API token</h2>
-            <p>Create a token, optionally restricted to one project.</p>
             <form className={styles.dialogForm} onSubmit={(event) => void handleCreate(event)}>
-              <label className={styles.dialogField}>
-                Token name
-                <input
-                  onChange={(event) => setNewName(event.target.value)}
-                  placeholder="Production"
-                  value={newName}
-                />
-              </label>
-              <label className={styles.dialogField}>
-                Project ID (optional)
-                <input
-                  onChange={(event) => setNewProjectId(event.target.value)}
-                  placeholder="Leave empty for no project restriction"
-                  value={newProjectId}
-                />
-              </label>
+              <fieldset
+                aria-label="Token details"
+                className={styles.dialogFields}
+                disabled={creating || Boolean(createdKey)}
+                hidden={Boolean(createdKey)}
+              >
+                <label className={styles.dialogField}>
+                  Token type
+                  <select
+                    onChange={(event) => {
+                      setNewTokenType(event.target.value === 'agent' ? 'agent' : 'standard');
+                      setCreateError(null);
+                    }}
+                    value={newTokenType}
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="agent">Agent</option>
+                  </select>
+                </label>
+                <label className={styles.dialogField}>
+                  Token name
+                  <input
+                    maxLength={100}
+                    onChange={(event) => setNewName(event.target.value)}
+                    placeholder="Production"
+                    required
+                    value={newName}
+                  />
+                </label>
+                <label className={styles.dialogField}>
+                  {newTokenType === 'agent' ? 'Project ID' : 'Project ID (optional)'}
+                  <input
+                    onChange={(event) => setNewProjectId(event.target.value)}
+                    placeholder={
+                      newTokenType === 'agent' ? 'proj_…' : 'Leave empty for no project restriction'
+                    }
+                    required={newTokenType === 'agent'}
+                    value={newProjectId}
+                  />
+                </label>
+                {newTokenType === 'agent' ? (
+                  <>
+                    <label className={styles.dialogField}>
+                      Expires in (days)
+                      <input
+                        min={1}
+                        onChange={(event) => setNewExpiryDays(event.target.value)}
+                        required
+                        step={1}
+                        type="number"
+                        value={newExpiryDays}
+                      />
+                    </label>
+                    <fieldset className={styles.scopeOptions}>
+                      <legend>Transition permissions</legend>
+                      <p>The token gets editor access to this project.</p>
+                      <p>Includes inspecting, editing drafts, and preparing reviews.</p>
+                      {AGENT_SCOPE_OPTIONS.map(({ scope, label }) => (
+                        <label key={scope}>
+                          <input name="transition_scope" type="checkbox" value={scope} />
+                          {label}
+                        </label>
+                      ))}
+                      <p>Committing requires both commit permissions and an authorized Decision.</p>
+                    </fieldset>
+                  </>
+                ) : null}
+              </fieldset>
+              {createError ? (
+                <p className="m-0 text-sm text-[var(--status-error)]" role="alert">
+                  {createError}
+                </p>
+              ) : null}
               {createdKey ? (
                 <div className={styles.createdKey}>
                   Copy this token now. It will not be shown again.
@@ -433,21 +549,28 @@ export function ApiTokensSettingsPanel() {
               <div className={styles.dialogActions}>
                 <button
                   className={styles.secondaryButton}
+                  disabled={creating}
                   onClick={() => {
                     setShowCreate(false);
                     setCreatedKey(null);
                   }}
                   type="button"
                 >
-                  Cancel
+                  {createdKey ? 'Done' : 'Cancel'}
                 </button>
-                <button
-                  className={styles.primaryButton}
-                  disabled={creating || !newName.trim()}
-                  type="submit"
-                >
-                  {creating ? 'Creating…' : 'Create token'}
-                </button>
+                {createdKey ? null : (
+                  <button
+                    className={styles.primaryButton}
+                    disabled={
+                      creating ||
+                      !newName.trim() ||
+                      (newTokenType === 'agent' && !newProjectId.trim())
+                    }
+                    type="submit"
+                  >
+                    {creating ? 'Creating…' : 'Create token'}
+                  </button>
+                )}
               </div>
             </form>
           </section>

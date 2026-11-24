@@ -14,7 +14,7 @@ import {
   toProjectReadModel,
 } from '../read-models/index.js';
 
-type ResourceKind =
+export type ResourceKind =
   | 'project'
   | 'commit'
   | 'transition'
@@ -137,8 +137,12 @@ function jsonTextContent(uri: string, data: unknown) {
   };
 }
 
-export async function readResource(uri: string) {
+export async function readResource(
+  uri: string,
+  authorize?: (parsed: ParsedResourceUri) => Promise<unknown>
+) {
   const parsed = parseResourceUri(uri);
+  await authorize?.(parsed);
 
   if (isApiBackend()) {
     const client = getApiClient();

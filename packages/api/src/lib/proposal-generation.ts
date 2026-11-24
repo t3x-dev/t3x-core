@@ -40,6 +40,7 @@ import {
   type SchemaProposalGenerationInput,
 } from './schema-proposal-generation';
 import { type SemanticSchemaLayout, workspaceSemanticSchemaLayout } from './semantic-schema-layout';
+import { isMachineIngestedMaterial } from './source-attachments';
 import { inspectTransition, type TransitionControlPlaneView } from './transition-control-plane';
 import {
   canonicalTransitionRequest,
@@ -531,6 +532,7 @@ export async function resolveProposalGenerationImages(
       material === undefined ||
       material.project_id !== projectId ||
       material.archived_at ||
+      isMachineIngestedMaterial(material) ||
       material.source_type !== 'image' ||
       !material.mime_type
     ) {
@@ -565,7 +567,12 @@ export async function resolveProposalGenerationSources(
   const byId = new Map(materials.map((material) => [material.id, material]));
   const documents: ProposalGenerationSourceInput[] = ids.map((id) => {
     const material = byId.get(id);
-    if (material === undefined || material.project_id !== projectId || material.archived_at) {
+    if (
+      material === undefined ||
+      material.project_id !== projectId ||
+      material.archived_at ||
+      isMachineIngestedMaterial(material)
+    ) {
       throw new ProposalGenerationContextError(
         `Source material ${id} is unavailable in project ${projectId}`
       );
@@ -894,7 +901,7 @@ async function generateContentTransitionProposal(
       draft,
       profile: profile.profile,
       context,
-      requestedBy: input.requester,
+      requestedBy: { kind: input.requester.kind, id: input.requester.id },
       generator: PROPOSAL_GENERATOR_ACTOR,
       provider: model.provider,
       model: model.model,

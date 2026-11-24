@@ -20,27 +20,37 @@ export interface ListMaterialsOptions {
   includeArchived?: boolean;
 }
 
-export async function createMaterial(db: AnyDB, input: CreateMaterialInput): Promise<Material> {
+export async function createMaterial(
+  db: AnyDB,
+  input: CreateMaterialInput,
+  reuseExisting = false
+): Promise<Material> {
   const id = generateMaterialId();
   const now = new Date();
 
-  const [row] = await db
-    .insert(materials)
-    .values({
-      id,
-      projectId: input.project_id,
-      sourceType: input.source_type,
-      title: input.title ?? null,
-      filename: input.filename ?? null,
-      mimeType: input.mime_type ?? null,
-      contentText: input.content_text,
-      contentHash: input.content_hash,
-      metadata: input.metadata ?? {},
-      tokenEstimate: input.token_estimate ?? 0,
-      createdAt: now,
-      createdBy: input.created_by ?? null,
-    })
-    .returning();
+  const insert = db.insert(materials).values({
+    id,
+    projectId: input.project_id,
+    sourceType: input.source_type,
+    title: input.title ?? null,
+    filename: input.filename ?? null,
+    mimeType: input.mime_type ?? null,
+    contentText: input.content_text,
+    contentHash: input.content_hash,
+    metadata: input.metadata ?? {},
+    tokenEstimate: input.token_estimate ?? 0,
+    createdAt: now,
+    createdBy: input.created_by ?? null,
+  });
+  const [row] = await (reuseExisting
+    ? insert.onConflictDoNothing({ target: [materials.projectId, materials.contentHash] })
+    : insert
+  ).returning();
+  if (!row && reuseExisting) {
+    const existing = await findMaterialByProjectHash(db, input.project_id, input.content_hash);
+    if (existing) return existing;
+    throw new Error('Matching source material disappeared during ingestion.');
+  }
 
   return rowToMaterial(row);
 }

@@ -35,6 +35,70 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL schema migrations', () => {
+  it('upgrades v88 without inferring a revision parent for historical presentations', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('existing-presentation', 'Existing-Presentation', 'ns_t3x_dev', NOW());
+      ALTER TABLE state_presentations DROP COLUMN revision_parent_digest;
+      INSERT INTO state_presentations(project_id, commit_digest, presentation_digest, document, created_by)
+      VALUES ('existing-presentation','commit','digest','{}','author');
+      UPDATE _schema_version SET version = 88;
+    `);
+    const config = { connectionString: setup.connectionString };
+    await migratePostgresStorage(config);
+    await migratePostgresStorage(config);
+    expect(
+      await setup.sql`SELECT revision_parent_digest, document FROM state_presentations`
+    ).toEqual([{ revision_parent_digest: null, document: {} }]);
+  });
+
+  it('upgrades v87 and preserves configured Run request receipts on repeated migration', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('existing-run', 'Existing-Run', 'ns_t3x_dev', NOW());
+      DROP TABLE repository_run_requests;
+      UPDATE _schema_version SET version = 87;
+    `);
+    const config = { connectionString: setup.connectionString };
+    await migratePostgresStorage(config);
+    await setup.sql`INSERT INTO repository_run_requests
+      (project_id, actor_id, request_id, commit_digest, configuration_digest, run_id)
+      VALUES ('existing-run','actor','request','commit','configuration','run')`;
+    await migratePostgresStorage(config);
+    expect(await setup.sql`SELECT request_id, run_id FROM repository_run_requests`).toEqual([
+      { request_id: 'request', run_id: 'run' },
+    ]);
+  });
+
+  it('adds Source ingestion receipts to a v86 database and preserves them on repeat migration', async () => {
+    const setup = await createTestDB();
+    cleanup = setup.cleanup;
+    await setup.sql.unsafe(`
+      INSERT INTO projects(project_id, name, namespace_id, created_at)
+      VALUES ('source-existing', 'Existing-Source-Project', 'ns_t3x_dev', NOW());
+      DROP TABLE source_ingestion_receipts;
+      UPDATE _schema_version SET version = 86;
+    `);
+    const config = { connectionString: setup.connectionString };
+    await migratePostgresStorage(config);
+    await setup.sql`
+      INSERT INTO source_ingestion_receipts
+      (project_id, actor_id, request_id, request_digest, result)
+      VALUES ('source-existing', 'agent:api-key:test', 'request-1', 'digest', '{"action":"create_thread"}')
+    `;
+    await migratePostgresStorage(config);
+    expect(await setup.sql`SELECT version FROM _schema_version`).toEqual([
+      { version: POSTGRES_SCHEMA_VERSION },
+    ]);
+    expect(await setup.sql`SELECT request_id FROM source_ingestion_receipts`).toEqual([
+      { request_id: 'request-1' },
+    ]);
+  });
+
   it.each([
     { version: 83, mode: 'standalone' },
     { version: 84, mode: 'bootstrap' },

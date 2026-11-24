@@ -34,6 +34,7 @@ import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-revi
 import {
   assertWorkspaceSchemaReview,
   hasSchemaReviewEvidence,
+  readCommittedSchemaBinding,
 } from '../lib/workspace-schema-review';
 import { decideWorkspaceTransition, reviewWorkspaceTransition } from '../lib/workspace-transition';
 import { resolveWorkspaceYSchema } from '../lib/workspace-yschema';
@@ -576,6 +577,12 @@ it('allows a Schema-only change even when the complete content matches Base', as
   expect(authoring.hasChanges).toBe(true);
   const review = await fullReview(id, 'schema-only-change');
   expect((await fullDecision(id, review)).commit).toBeDefined();
+  const { head } = await getTransitionRefHead(db, { projectId, refName: id });
+  expect(head).toBeTruthy();
+  await expect(readCommittedSchemaBinding(db, projectId, head!)).resolves.toMatchObject({
+    status: 'bound',
+    schemaHash: (await prepared.json()).data.schemaHash,
+  });
   expect((await readWorkspaceAuthoring(db, { projectId, workspaceId: id })).hasChanges).toBe(false);
 });
 it('commits an empty Schema Review over HTTP, then saves metadata without crossing the authoring boundary', async () => {

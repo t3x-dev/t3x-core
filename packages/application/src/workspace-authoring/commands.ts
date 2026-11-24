@@ -168,6 +168,18 @@ export function importLegacyDocument(input: {
   });
 }
 
+export function restoreDocumentOperations(base: DraftDocument, historical: DraftDocument): YOp[] {
+  if (!isMapping(base) || !isMapping(historical))
+    throw new TypeError(
+      'Content restore requires mapping documents supported by Workspace authoring'
+    );
+  const operations = diffSetOps(base, historical);
+  const replay = applyDraftYOps(base, operations);
+  if (!replay.ok || canonicalJson(replay.doc) !== canonicalJson(historical))
+    throw new TypeError('Historical content cannot be replayed exactly in this Draft');
+  return operations;
+}
+
 function diffSetOps(base: DraftDocument, current: DraftDocument): YOp[] {
   if (!isMapping(base) || !isMapping(current))
     throw new TypeError('Legacy import requires mapping documents');

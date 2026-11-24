@@ -65,6 +65,7 @@ export const queryDef: ToolDef = {
     '',
     'Notes:',
     '  source_evidence also requires `project_id` and is available through the API backend',
+    '  workspace_activity accepts an optional JSON Pointer path into the current saved Draft.',
     '  workspace_activity shows action-scoped cards and immutable node history; optional action_id, node_id and before_sequence',
     '  workspace / workspaces require `project_id` and the authenticated API backend',
     '  conversation / conversations are compatibility aliases for source_thread / source_threads',
@@ -99,6 +100,11 @@ export const queryDef: ToolDef = {
         type: 'string',
         description: 'Selected immutable action; does not restrict the current Draft.',
       },
+      path: {
+        type: 'string',
+        description:
+          'JSON Pointer into the current saved Draft for workspace_activity. Empty selects the entire value.',
+      },
       node_id: { type: 'string', description: 'Node identity for exact history.' },
       before_sequence: { type: 'integer', minimum: 1, description: 'History pagination cursor.' },
       offset: {
@@ -114,9 +120,23 @@ export const queryDef: ToolDef = {
   },
 };
 
+function readDraftPath(current: unknown, path: string): unknown {
+  if (path === '') return current;
+  return path
+    .slice(1)
+    .split('/')
+    .reduce<unknown>((value, token) => {
+      const key = token.replaceAll('~1', '/').replaceAll('~0', '~');
+      if (Array.isArray(value) && !/^(0|[1-9][0-9]*)$/.test(key)) return undefined;
+      if (value === null || typeof value !== 'object' || !Object.hasOwn(value, key))
+        return undefined;
+      return (value as Record<string, unknown>)[key];
+    }, current);
+}
+
 // ── Handler ──
 
-export const queryHandler: ToolHandler = async (args) => {
+export const queryHandler: ToolHandler = async (args, options) => {
   const target = args.target as Target | undefined;
 
   if (!target || !ALL_TARGETS.includes(target as Target)) {
@@ -164,18 +184,34 @@ export const queryHandler: ToolHandler = async (args) => {
             );
           }
           return ok(await client.sourceThreads.evidence(projectId, id, { limit, offset }));
-        case 'workspace_activity':
+        case 'workspace_activity': {
           if (!projectId) return fail('project_id is required for workspace_activity');
-          return ok(
-            await client.workspaces.authoring.read(projectId, id, {
-              limit,
-              ...(typeof args.action_id === 'string' ? { action_id: args.action_id } : {}),
-              ...(typeof args.node_id === 'string' ? { node_id: args.node_id } : {}),
-              ...(typeof args.before_sequence === 'number'
-                ? { before_sequence: args.before_sequence }
-                : {}),
-            })
-          );
+          const path = args.path;
+          if (
+            path !== undefined &&
+            (typeof path !== 'string' || (path !== '' && !/^\/(?:[^~]|~[01])*$/.test(path)))
+          ) {
+            return fail('path must be a JSON Pointer into the current saved Draft.');
+          }
+          const view = await client.workspaces.authoring.read(projectId, id, {
+            limit,
+            ...(typeof args.action_id === 'string' ? { action_id: args.action_id } : {}),
+            ...(typeof args.node_id === 'string' ? { node_id: args.node_id } : {}),
+            ...(typeof args.before_sequence === 'number'
+              ? { before_sequence: args.before_sequence }
+              : {}),
+          });
+          if (path === undefined) return ok(view);
+          const value = readDraftPath(view.current, path);
+          return ok({
+            path,
+            found: value !== undefined,
+            ...(value === undefined ? {} : { value }),
+            workspaceRevision: view.workspaceRevision,
+            compositionRevision: view.compositionRevision,
+            basis: view.basis,
+          });
+        }
         case 'workspace':
           if (!projectId) {
             return fail('"project_id" is required for target="workspace".');
@@ -204,7 +240,14 @@ export const queryHandler: ToolHandler = async (args) => {
         return ok(unwrapListPayload(await client.listPins(projectId!), 'pins'));
       case 'branches':
         return ok(
-          unwrapListPayload(await client.listBranches(projectId!, { limit, offset }), 'branches')
+          unwrapListPayload(
+            await client.listBranches(projectId!, {
+              limit,
+              offset,
+              ...(options?.skipMainBranchInitialization ? { initialize_main: '0' as const } : {}),
+            }),
+            'branches'
+          )
         );
       case 'source_threads':
       case 'conversations':

@@ -8,6 +8,8 @@ export * from './assistant-schema-settings';
 export type { T3xClientConfig, T3xRequestOptions } from './client.js';
 export { createClient, T3xApiError, T3xClient } from './client.js';
 export * from './collaboration.js';
+export type { CommitYSchemaRun, CreateCommitYSchemaRunInput } from './commit-yschema-run.js';
+export * from './credential-context.js';
 export {
   type AccountOperation,
   AccountOperationSchema,
@@ -23,6 +25,17 @@ export * from './explore.js';
 export * from './merge-workspace';
 export * from './recipe-triggers.js';
 export * from './repository-profile.js';
+export type {
+  ListRepositoryRunsInput,
+  RepositoryRunDetails,
+  RepositoryRunSummary,
+  RepositoryRunsPage,
+} from './repository-runs.js';
+export {
+  RepositoryRunReceiptSchema,
+  type RepositoryRunTriggerInput,
+  RepositoryRunTriggerInputSchema,
+} from './repository-runs.js';
 export * from './schema-catalog.js';
 export {
   type SchemaNodeProvenance,
@@ -31,6 +44,7 @@ export {
   SchemaSourceCommitSchema,
 } from './schema-provenance';
 export * from './schema-studio';
+export * from './source-ingestion.js';
 export {
   type DownloadArtifact,
   DownloadArtifactSchema,
@@ -44,3 +58,7 @@ export * from './state-presentation.js';
 export type * from './types.js';
 export type * from './workspace-authoring';
 export * from './workspace-delivery.js';
+export type {
+  RunWorkspaceValidationInput,
+  WorkspaceValidationDetails,
+} from './workspace-validation.js';

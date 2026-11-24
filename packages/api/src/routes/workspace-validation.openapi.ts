@@ -1,4 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { currentComposition } from '@t3x-dev/application';
+import { createYOpsState, decodeRepositorySemanticState, treesToYValue } from '@t3x-dev/core';
 import {
   type AnyDB,
   createValidationFinding,
@@ -7,12 +9,16 @@ import {
   findLatestValidationRunByWorkspace,
   findValidationRunDetailsById,
   findWorkspaceDraft,
+  findWorkspaceDraftForOwner,
+  type WorkspaceOwner,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { workspaceAuthoringState } from '../lib/workspace-authoring';
 import {
+  ESPHOME_VALIDATION_WORKFLOW_NAME,
   type MaterializedEsphomeDeviceInput,
   materializeEsphomeDeviceInput,
   WorkspaceValidationMaterializerError,
@@ -21,9 +27,10 @@ import {
   type LocalEsphomeValidationResult,
   runLocalEsphomeConfigValidation,
 } from '../lib/workspace-validation/local-oci-provider';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
-const DEFAULT_WORKFLOW_NAME = 'workspace-validation/esphome-config@v0';
+const DEFAULT_WORKFLOW_NAME = ESPHOME_VALIDATION_WORKFLOW_NAME;
 
 const ProjectWorkspaceParamsSchema = z.object({
   projectId: z.string().min(1),
@@ -40,6 +47,8 @@ const LatestValidationRunQuerySchema = z.object({
 
 const CreateValidationRunRequestSchema = z.object({
   workflow_name: z.string().min(1).default(DEFAULT_WORKFLOW_NAME),
+  expected_workspace_revision: z.number().int().positive().optional(),
+  expected_composition_revision: z.number().int().nonnegative().optional(),
 });
 
 const ValidationRunStatusSchema = z.enum([
@@ -168,6 +177,10 @@ const createWorkspaceValidationRunRoute = createRoute({
       description: 'Project or workspace not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'Saved Workspace or composition revision changed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     403: {
       description: 'Project access denied',
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -246,7 +259,11 @@ const getWorkspaceValidationRunRoute = createRoute({
 
 workspaceValidationRoutes.openapi(createWorkspaceValidationRunRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
-  const { workflow_name = DEFAULT_WORKFLOW_NAME } = c.req.valid('json') ?? {};
+  const {
+    workflow_name = DEFAULT_WORKFLOW_NAME,
+    expected_workspace_revision,
+    expected_composition_revision,
+  } = c.req.valid('json') ?? {};
 
   if (workflow_name !== DEFAULT_WORKFLOW_NAME) {
     return c.json(
@@ -257,33 +274,90 @@ workspaceValidationRoutes.openapi(createWorkspaceValidationRunRoute, async (c) =
       400
     );
   }
+  if (expected_workspace_revision === undefined && expected_composition_revision !== undefined) {
+    return c.json(createError('INVALID_REQUEST', 'Provide expected_workspace_revision.'), 400);
+  }
 
   try {
     const db = await getDB();
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+    const owner = workspaceOwnerFromContext(c);
+    const exact = expected_workspace_revision !== undefined;
+    if (exact && !owner) {
+      return c.json(createError('FORBIDDEN', 'Exact validation requires a Workspace owner.'), 403);
+    }
+    const draft =
+      exact && owner
+        ? await findWorkspaceDraftForOwner(db, projectId, workspaceId, owner)
+        : await findWorkspaceDraft(db, projectId, workspaceId);
     if (!draft?.workspace_state) {
       return c.json(createError('WORKSPACE_NOT_FOUND', `Workspace ${workspaceId} not found`), 404);
     }
 
+    let workspace = draft.workspace_state;
+    let compositionRevision: number | null = null;
+    if (exact) {
+      if (draft.revision !== expected_workspace_revision) {
+        return c.json(createError('CONFLICT', 'Workspace revision changed.'), 409);
+      }
+      if (workspace.authoringLedger !== undefined) {
+        const { ledger } = workspaceAuthoringState(workspace);
+        compositionRevision = ledger.compositionRevision;
+        if (expected_composition_revision === undefined) {
+          return c.json(
+            createError('INVALID_REQUEST', 'Provide expected_composition_revision.'),
+            400
+          );
+        }
+        if (compositionRevision !== expected_composition_revision) {
+          return c.json(createError('CONFLICT', 'Draft composition revision changed.'), 409);
+        }
+        let document = currentComposition(ledger);
+        if (
+          document &&
+          typeof document === 'object' &&
+          !Array.isArray(document) &&
+          document.domain === 't3x.dev/semantic-content'
+        ) {
+          document = treesToYValue(decodeRepositorySemanticState(createYOpsState(document)).trees);
+        }
+        workspace =
+          document && typeof document === 'object' && !Array.isArray(document) ? document : {};
+      } else if (expected_composition_revision !== undefined) {
+        return c.json(createError('CONFLICT', 'Draft has no authoring composition.'), 409);
+      }
+    }
+    // Use only the document captured by the guarded Draft read, even if edits land during validation.
     const materialized = materializeEsphomeDeviceInput({
       projectId,
       workspaceId,
-      workspace: draft.workspace_state,
+      workspace,
     });
     const startedAt = new Date();
     const providerResult = await runLocalEsphomeConfigValidation({
       deviceYaml: materialized.files[0].content,
     });
     const finishedAt = new Date();
-    const details = await persistWorkspaceValidationResult(db, {
+    const outcome = {
       materialized,
       providerResult,
       startedAt,
       finishedAt,
-    });
+      ...(exact && owner
+        ? {
+            exactDraft: {
+              owner,
+              workspace_revision: draft.revision,
+              composition_revision: compositionRevision,
+            },
+          }
+        : {}),
+    };
+    const details = exact
+      ? await db.transaction((tx) => persistWorkspaceValidationResult(tx as AnyDB, outcome))
+      : await persistWorkspaceValidationResult(db, outcome);
 
     return c.json({ success: true as const, data: details }, 201);
   } catch (error) {
@@ -305,6 +379,7 @@ workspaceValidationRoutes.openapi(getLatestWorkspaceValidationRunRoute, async (c
       project_id: projectId,
       workspace_id: workspaceId,
       workflow_name,
+      owner: workspaceOwnerFromContext(c),
     });
 
     return c.json({ success: true as const, data: { run } }, 200);
@@ -319,7 +394,7 @@ workspaceValidationRoutes.openapi(getWorkspaceValidationRunRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const details = await findValidationRunDetailsById(db, runId);
+    const details = await findValidationRunDetailsById(db, runId, workspaceOwnerFromContext(c));
     if (!details) {
       return c.json(createError('NOT_FOUND', `Workspace validation run ${runId} not found`), 404);
     }
@@ -340,6 +415,11 @@ async function persistWorkspaceValidationResult(
     providerResult: LocalEsphomeValidationResult;
     startedAt: Date;
     finishedAt: Date;
+    exactDraft?: {
+      owner: WorkspaceOwner;
+      workspace_revision: number;
+      composition_revision: number | null;
+    };
   }
 ): Promise<z.infer<typeof ValidationRunDetailsResponseSchema>> {
   const run = await createValidationRun(db, {
@@ -355,8 +435,17 @@ async function persistWorkspaceValidationResult(
     gate_status: input.providerResult.gate_status,
     environment_hash: input.providerResult.environment_hash,
     summary: input.providerResult.summary,
+    workspace_owner: input.exactDraft?.owner,
     result_json: {
       input_files: input.materialized.files.map(({ content: _content, ...file }) => file),
+      ...(input.exactDraft
+        ? {
+            draft_revision: {
+              workspace_revision: input.exactDraft.workspace_revision,
+              composition_revision: input.exactDraft.composition_revision,
+            },
+          }
+        : {}),
     },
     started_at: input.startedAt,
     finished_at: input.finishedAt,

@@ -423,6 +423,7 @@ export * from './repository-object-addresses';
 export * from './repository-paths';
 // Runs (Engine → Runner → n8n flow)
 export {
+  acknowledgeRepositoryRun,
   type ConfigurationStats,
   type CreateRunInput,
   deleteRun,
@@ -436,6 +437,7 @@ export {
   listRuns,
   markRunAsTimeout,
   type RunStatus,
+  reserveRepositoryRun,
   type UpdateRunInput,
   updateRun,
 } from './runs';
@@ -497,6 +499,7 @@ export {
   hasConversationSourceCommitReferences,
   listConversationCommitReferences,
 } from './source-evidence-references';
+export * from './source-ingestion';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,

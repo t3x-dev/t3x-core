@@ -9,6 +9,7 @@ import {
   lockTurnsForAuthoring,
   resolveTransitionProposalGraph,
 } from '@t3x-dev/storage';
+import { isMachineIngestedMaterial } from './source-attachments';
 import {
   findRetiredAuthoringLedger,
   publishWorkspaceAuthoringAction,
@@ -132,7 +133,11 @@ export async function publishWorkspaceGeneration(input: {
         let text: string | undefined;
         if (ref.kind === 'material') {
           const source = materials.find((source) => source.id === ref.id);
-          if (source?.project_id === input.projectId && !source.archived_at)
+          if (
+            source?.project_id === input.projectId &&
+            !source.archived_at &&
+            !isMachineIngestedMaterial(source)
+          )
             text = source.content_text;
         } else {
           const turn = turns.find((turn) => turn.turnHash === ref.id);

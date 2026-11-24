@@ -6,6 +6,7 @@ export const statePresentations = pgTable(
     commitDigest: text('commit_digest').notNull(),
     presentationDigest: text('presentation_digest').notNull(),
     document: jsonb('document').notNull().$type<Record<string, unknown>>(),
+    revisionParentDigest: text('revision_parent_digest'),
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

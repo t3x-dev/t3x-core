@@ -154,7 +154,8 @@
 }
 
 .search input,
-.dialogField input {
+.dialogField input,
+.dialogField select {
   width: 100%;
   height: 40px;
   border: 1px solid var(--stroke-strong);
@@ -178,6 +179,7 @@
 
 .search input:focus,
 .dialogField input:focus,
+.dialogField select:focus,
 .filterSelect:focus-visible,
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible,
@@ -490,6 +492,8 @@
 
 .dialog {
   width: min(480px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
   border: 1px solid var(--stroke-default);
   border-radius: 12px;
   background: var(--surface-card);
@@ -504,16 +508,16 @@
   line-height: 28px;
 }
 
-.dialog > p {
-  margin: 6px 0 20px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 20px;
-}
-
 .dialogForm {
   display: grid;
   gap: 16px;
+  margin-top: 16px;
+}
+
+.dialogFields:not([hidden]) {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .dialogField {
@@ -524,8 +528,44 @@
   font-weight: 500;
 }
 
-.dialogField input {
+.dialogField input,
+.dialogField select {
   padding: 8px 12px;
+}
+
+.scopeOptions {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.scopeOptions legend {
+  font-weight: 600;
+}
+
+.scopeOptions p {
+  color: var(--text-secondary);
+}
+
+.scopeOptions label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.tokenScopeDetails {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.tokenScopeDetails summary {
+  cursor: pointer;
 }
 
 .dialogActions {

@@ -121,7 +121,8 @@ vi.mock('../db.js', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('@t3x-dev/core', () => ({
+vi.mock('@t3x-dev/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@t3x-dev/core')>()),
   ALL_LEAF_TYPES: [
     'tweet',
     'linkedin',

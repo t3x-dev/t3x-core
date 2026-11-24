@@ -5,6 +5,7 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   bindTransitionPolicy,
+  findBranchByName,
   findWorkspaceDraft,
   getTransitionPolicyBinding,
   insertProject,
@@ -54,6 +55,16 @@ describe('Branches Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('INVALID_REQUEST');
+    });
+
+    it('supports a branch read without initializing a missing main', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Read-only branches' }));
+      const response = await app.request(
+        `/v1/branches?project_id=${project.projectId}&initialize_main=0`
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).data.branches).toEqual([]);
+      expect(await findBranchByName(mockDB, project.projectId, 'main')).toBeNull();
     });
 
     it('backfills main for a project with no registered branches', async () => {

@@ -8,6 +8,7 @@ import {
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const Kind = z.enum(['review', 'validation', 'schema', 'pull-request']);
@@ -86,6 +87,7 @@ projectChecksRoutes.openapi(listProjectChecksRoute, async (c) => {
   }
   const rows = await listProjectCheckRecords(db, {
     projectId,
+    validationOwner: workspaceOwnerFromContext(c),
     ...filters,
     before,
     limit: limit + 1,
@@ -121,16 +123,23 @@ projectChecksRoutes.openapi(getProjectCheckRoute, async (c) => {
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
+  const validationOwner = workspaceOwnerFromContext(c);
   // PR heads and their replaceable checks must come from the same database snapshot.
   const record = await db.transaction(
     async (tx) => {
       const readDB = tx as AnyDB;
-      const [found] = await listProjectCheckRecords(readDB, { projectId, id: recordId, limit: 1 });
+      const [found] = await listProjectCheckRecords(readDB, {
+        projectId,
+        validationOwner,
+        id: recordId,
+        limit: 1,
+      });
       if (!found) return null;
       if (found.kind === 'validation') {
         found.payload.details = await findValidationRunDetailsById(
           readDB,
-          String(found.payload.id)
+          String(found.payload.id),
+          validationOwner
         );
       } else if (found.kind === 'pull-request') {
         found.payload.checks = await listPullRequestChecks(

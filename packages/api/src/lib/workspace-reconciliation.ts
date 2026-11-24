@@ -284,7 +284,7 @@ function resolvePreparation(
   return { document, schema };
 }
 
-async function validateResolvedDocument(
+export async function validateResolvedDocument(
   db: AnyDB,
   projectId: string,
   workspace: Record<string, unknown>,

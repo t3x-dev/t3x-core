@@ -33,8 +33,8 @@ export const adminDef: ToolDef = {
     'Manage projects, branches, leaves, and pins.',
     '',
     'Actions:',
-    '  create_project  -- Create a new project.',
-    '  create_branch   -- Create a branch in a project.',
+    '  create_project  -- Create a personal repository with a human credential in API mode.',
+    '  create_branch   -- Create a branch, optionally pinned to an exact Commit in API mode.',
     '  create_leaf     -- Retired; export State or Commit instead.',
     '  create_pin      -- Pin a conversation, leaf, or import material for context.',
     '  delete_pin      -- Remove a pin by ID.',
@@ -64,6 +64,12 @@ export const adminDef: ToolDef = {
       parent_branch: {
         type: 'string',
         description: 'Parent branch name (optional, for create_branch).',
+      },
+      head_commit_hash: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'Exact Commit digest in this repository to use as the initial branch head (optional, for create_branch in API mode).',
       },
       description: {
         type: 'string',
@@ -162,9 +168,13 @@ async function handleCreateBranch(args: Record<string, unknown>) {
   const name = args.name as string | undefined;
   const parentBranch = args.parent_branch as string | undefined;
   const description = args.description as string | undefined;
+  const headCommitHash = args.head_commit_hash;
 
   if (!projectId) return fail('"project_id" is required for create_branch.');
   if (!name) return fail('"name" is required for create_branch.');
+  if (headCommitHash !== undefined && (typeof headCommitHash !== 'string' || !headCommitHash)) {
+    return fail('"head_commit_hash" must be a nonempty Commit digest.');
+  }
 
   if (isApiBackend()) {
     const client = getApiClient();
@@ -174,7 +184,12 @@ async function handleCreateBranch(args: Record<string, unknown>) {
     };
     if (parentBranch !== undefined) input.parent_branch = parentBranch;
     if (description !== undefined) input.description = description;
+    if (headCommitHash !== undefined) input.head_commit_hash = headCommitHash;
     return ok(await client.createBranch(input));
+  }
+
+  if (headCommitHash !== undefined) {
+    return fail('Exact Commit branch creation requires T3X_MCP_BACKEND=api.');
   }
 
   const db = await getDB();

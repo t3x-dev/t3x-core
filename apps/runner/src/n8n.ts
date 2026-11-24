@@ -19,7 +19,8 @@ const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_URL || 'http://n8n:5678/webhook
  */
 export async function triggerN8nWorkflow(
   data: EngineRunRequest,
-  runner_run_id: string
+  runner_run_id: string,
+  singleAttempt = false
 ): Promise<void> {
   const webhookId = data.workflow?.webhook_id;
 
@@ -43,6 +44,7 @@ export async function triggerN8nWorkflow(
   const payload = {
     run_id: data.run_id,
     runner_run_id,
+    ...(singleAttempt && { project_id: data.project_id }),
     commit_ref: data.commit_ref,
     leaf: data.leaf,
     inputs: data.inputs,
@@ -61,9 +63,10 @@ export async function triggerN8nWorkflow(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        ...(singleAttempt && { redirect: 'error' as const }),
         signal: AbortSignal.timeout(30000),
       },
-      { maxRetries: 3, operationName: 'n8n webhook' }
+      { maxRetries: singleAttempt ? 0 : 3, operationName: 'n8n webhook' }
     );
 
     if (!response.ok) {

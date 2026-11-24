@@ -60,6 +60,7 @@ export const WorkspaceDeploymentInputSchema = z
 export const WorkspaceRollbackInputSchema = z
   .object({
     deploymentId: z.string().uuid(),
+    environment: WorkspaceDeploymentInputSchema.shape.environment.optional(),
     idempotencyKey: z.string().uuid(),
   })
   .strict();

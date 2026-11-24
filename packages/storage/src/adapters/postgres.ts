@@ -191,7 +191,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 86;
+export const POSTGRES_SCHEMA_VERSION = 89;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -602,6 +602,25 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
     CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
     CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
+
+    CREATE TABLE IF NOT EXISTS repository_run_requests (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      configuration_digest TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      PRIMARY KEY (project_id, actor_id, request_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS source_ingestion_receipts (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      result JSONB NOT NULL,
+      PRIMARY KEY (project_id, actor_id, request_id)
+    );
 
     -- Pins table (source selection for commit sources + conversation context)
     CREATE TABLE IF NOT EXISTS pins (
@@ -2663,6 +2682,10 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
       PRIMARY KEY (project_id, commit_digest)
     );
   `);
+
+  await sql.unsafe(
+    'ALTER TABLE state_presentations ADD COLUMN IF NOT EXISTS revision_parent_digest TEXT'
+  );
 
   // Studio candidates retain exact references, never private manifest/resource copies.
   await sql.unsafe(`

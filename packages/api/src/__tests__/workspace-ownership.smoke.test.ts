@@ -2,6 +2,7 @@ import { createClient } from '@t3x-dev/api-client';
 import { createYOpsState } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  apiKeys,
   createApiKey,
   createPostgresCollaborationLifecycleUnitOfWork,
   createUser,
@@ -10,6 +11,7 @@ import {
   insertProject,
   revokeApiKey,
 } from '@t3x-dev/storage';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestRateLimitStore, setupTestDB } from './setup';
 
@@ -370,11 +372,93 @@ describe('principal-private Workspace boundary', () => {
     });
   });
 
+  it('opens once per ref and owner across concurrent Web and MCP credentials', async () => {
+    const ref = 'open-workspace-fixture';
+    await insertBranch(testDb, { projectId, name: ref });
+    const open = (token: string, requestId: string, head: string | null = null) =>
+      request(`/api/v1/projects/${projectId}/workspaces`, token, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref, expected_head: head, request_id: requestId }),
+      });
+    const responses = await Promise.all([open(keyA, 'web-open'), open(keyAMcp, 'mcp-open')]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const results = await Promise.all(
+      responses.map(async (response) => (await response.json()).data)
+    );
+    const [first, second] = results;
+    expect(first.workspace_id).toBe(second.workspace_id);
+    expect(results.map((result) => result.created).sort()).toEqual([false, true]);
+    expect(first.basis_ref_head).toBeNull();
+    const stored = await findWorkspaceDraft(testDb, projectId, first.workspace_id);
+    expect(stored).toMatchObject({
+      owner_principal_id: testAId,
+      revision: first.workspace_revision,
+    });
+
+    expect((await open(keyA, 'stale-open', `sha256:${'a'.repeat(64)}`)).status).toBe(409);
+    expect(await findWorkspaceDraft(testDb, projectId, first.workspace_id)).toEqual(stored);
+    expect(
+      (await request(`/api/v1/projects/${projectId}/workspaces/${first.workspace_id}`, keyB)).status
+    ).toBe(404);
+
+    const other = await open(keyB, 'other-owner-open');
+    expect(other.status).toBe(200);
+    expect((await other.json()).data.workspace_id).not.toBe(first.workspace_id);
+  });
+
+  it('reports only the current credential context for each principal of the same user', async () => {
+    const human = await request('/api/v1/auth/me/credential', keyA);
+    expect(human.status).toBe(200);
+    expect(human.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await human.json()).toEqual({
+      success: true,
+      data: {
+        actor_kind: 'human',
+        credential_kind: 'api_key',
+        project_id: null,
+        namespace_id: null,
+        transition_scopes: ['transition:inspect', 'transition:propose'],
+      },
+    });
+    await expect(mcpApiClient().getCredentialContext()).resolves.toEqual({
+      actor_kind: 'service',
+      credential_kind: 'service',
+      project_id: projectId,
+      namespace_id: null,
+      transition_scopes: ['transition:inspect', 'transition:propose'],
+    });
+  });
+
   it('observes MCP credential revocation at the next request boundary', async () => {
     await expect(mcpApiClient().workspaces.get(projectId, 'workspace-a')).resolves.toBeTruthy();
     await revokeApiKey(testDb, mcpKeyId);
     await expect(mcpApiClient().workspaces.get(projectId, 'workspace-a')).rejects.toThrow(
       /401|Invalid API key/
     );
+    const expiredKeyValue = 't3xk_workspace_test_expired_0123456789abcdef';
+    const expiredKey = await createApiKey(testDb, {
+      name: 'Expired fixture',
+      userId: testAId,
+      keyValue: expiredKeyValue,
+    });
+    await testDb
+      .update(apiKeys)
+      .set({ createdAt: new Date('2000-01-01'), expiresAt: new Date('2000-01-02') })
+      .where(eq(apiKeys.id, expiredKey.id));
+    const credentialPath = '/api/v1/auth/me/credential';
+    const invalid = await request(credentialPath, 't3xk_unknown');
+    const error = await invalid.json();
+    expect(invalid.status).toBe(401);
+    expect(error).toMatchObject({ success: false, error: { code: 'UNAUTHORIZED' } });
+
+    for (const key of [keyAMcp, expiredKeyValue]) {
+      const denied = await request(credentialPath, key);
+      expect(denied.status).toBe(invalid.status);
+      expect(await denied.json()).toEqual(error);
+    }
+
+    process.env.AUTH_DISABLED = 'true';
+    expect((await app.request(credentialPath)).status).toBe(401);
   });
 });

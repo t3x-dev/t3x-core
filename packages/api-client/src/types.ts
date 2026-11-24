@@ -8,6 +8,7 @@ import type {
   ClaimView,
   MergeDecision as CoreMergeDecision,
   TransitionGraphViewV1 as CoreTransitionGraphViewV1,
+  TreeDiff,
 } from '@t3x-dev/core';
 
 // Common types
@@ -374,6 +375,18 @@ export interface DiffChange {
   new_value?: unknown;
 }
 
+interface ComparedCommit {
+  digest: string;
+  rationale: string | null;
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  recorded_at: string;
+}
+
+export type CommittedStateComparison = { base: ComparedCommit; target: ComparedCommit } & (
+  | { diff: TreeDiff }
+  | ({ kind: 'document' } & DiffResult)
+);
+
 export interface TwoWayDiffInput {
   base_commit_hash: string;
   target_commit_hash: string;
@@ -567,6 +580,34 @@ export interface GenerationResponse {
 export interface GenerationProviderCatalog {
   providers: string[];
   default: string;
+}
+
+export interface GenerationModelCatalog {
+  default_provider: string | null;
+  generation_provider_order: string[];
+  providers: Array<{
+    name: string;
+    label: string;
+    available: boolean;
+    default_model?: string | null;
+    models: Array<{
+      id: string;
+      label: string;
+      capabilities: string[];
+      max_output_tokens: number;
+    }>;
+  }>;
+}
+
+export interface ProjectSourceMaterial {
+  id: string;
+  project_id: string;
+  source_type: 'document' | 'url' | 'platform' | 'image';
+  title: string;
+  mime_type: string | null;
+  content_hash: string;
+  content_excerpt: string;
+  archived_at: string | null;
 }
 
 export interface SourceThreadMemory {
@@ -795,9 +836,24 @@ export interface ListWorkspaceTransitionReviewSnapshotsResponse {
   snapshots: WorkspaceTransitionReviewSnapshotEnvelope[];
 }
 
+export interface OpenWorkspaceInput {
+  ref: string;
+  expected_head: string | null;
+  request_id: string;
+}
+
+export interface OpenWorkspaceResult {
+  workspace_id: string;
+  workspace_revision: number;
+  basis_ref_head: string | null;
+  head_commit_hash: string | null;
+  created: boolean;
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   authoring: WorkspaceAuthoringCapability;
+  open(projectId: string, input: OpenWorkspaceInput): Promise<OpenWorkspaceResult>;
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
   createExtractionProposal(
@@ -1140,6 +1196,18 @@ export interface ProposeTransitionResult {
   transition_id: string;
   reused: boolean;
   view: TransitionControlPlaneView;
+}
+
+export interface GenerateWorkspaceProposalInput {
+  request_id: string;
+  workspace_id: string;
+  if_revision: number;
+  posture?: 'source_only' | 'guided' | 'recommend';
+  instruction: string;
+  source_material_ids: string[];
+  source_turn_hashes?: string[];
+  provider?: string;
+  model?: string;
 }
 
 export interface InspectTransitionResult {
