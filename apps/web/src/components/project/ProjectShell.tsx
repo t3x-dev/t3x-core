@@ -33,6 +33,7 @@ export interface ProjectShellProps {
   activeTab: ProjectTabId;
   branch?: string | null;
   projectIdNavigation?: boolean;
+  hideUnknownVisibility?: boolean;
   pullRequestNumber?: number;
   ownerSlug?: string;
   immersive?: boolean;
@@ -47,6 +48,7 @@ export function ProjectShell({
   branch,
   children,
   immersive = false,
+  hideUnknownVisibility = false,
   project,
   ownerSlug,
   pullRequestNumber,
@@ -59,7 +61,7 @@ export function ProjectShell({
       ? 'Public'
       : project.visibility === 'unlisted'
         ? 'Unlisted'
-        : project.visibility === 'private'
+        : project.visibility === 'private' || !hideUnknownVisibility
           ? 'Private'
           : undefined;
   const repoPath = getProjectRepoPath(project);

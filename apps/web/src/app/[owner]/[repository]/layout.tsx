@@ -49,6 +49,7 @@ function RepositoryNavigationShell({
     <ProjectShell
       activeTab={activeTab}
       branch={repositoryBranch(pathname, query)}
+      hideUnknownVisibility
       immersive={
         activeTab === 'schemas' || (activeTab === 'browse' && query.get('schemaView') === 'release')
       }

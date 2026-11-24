@@ -190,6 +190,30 @@ it('keeps a single repository navigation mounted during loading across all seven
   expect(mocks.resolve).toHaveBeenCalledOnce();
 });
 
+it('shows the repository visibility in shared navigation once project details arrive', async () => {
+  let completeDetail!: (value: unknown) => void;
+  mocks.fetchProject.mockReturnValueOnce(
+    new Promise((resolve) => {
+      completeDetail = resolve;
+    })
+  );
+
+  render(<OwnerRepoProjectPage />);
+  await screen.findByRole('navigation', { name: 'Project views' });
+  expect(screen.queryByText('Private')).not.toBeInTheDocument();
+
+  completeDetail({
+    project_id: 'proj_outside_list',
+    name: 'Repo',
+    namespace: 'alice',
+    canonical_path: '/alice/Repo',
+    visibility: 'public',
+    created_at: '2026-01-01T00:00:00Z',
+  });
+
+  expect(await screen.findByText('Public')).toBeInTheDocument();
+});
+
 it('reuses the verified address, project details and in-flight view reads across State, Workspace, Schema and Settings', async () => {
   mocks.query = '';
   let completeBranches!: (value: { branches: { name: string }[] }) => void;
