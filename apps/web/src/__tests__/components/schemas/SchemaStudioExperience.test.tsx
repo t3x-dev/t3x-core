@@ -521,6 +521,41 @@ it.each([
   expect(mocks.saveDraft).not.toHaveBeenCalled();
 });
 
+it.each([
+  1, 80,
+])('shows an exact bound Schema with %i fields during pending-status checks', async (fieldCount) => {
+  mocks.query = 'branch=main&workspace=workspace_branch%3Amain';
+  const workspace = boundWorkspace();
+  mocks.workspaces = [workspace];
+  mocks.workspacesLoading = true;
+  mocks.branchesLoading = true;
+  mocks.pendingSchemaLoading = true;
+  const boundSchema = {
+    yschema: '0.1',
+    name: 'bound',
+    nodes: {
+      verified: {
+        slots: Object.fromEntries(
+          Array.from({ length: fieldCount }, (_, index) => [`field_${index}`, { type: 'string' }])
+        ),
+      },
+    },
+  };
+  mocks.data = {
+    ...(mocks.data as object),
+    schema: boundSchema,
+    workspace: { id: workspace.id, revision: workspace.revision, boundSchema, changes: [] },
+  };
+  render(<SchemaStudioExperience projectId="p" />);
+
+  expect(await screen.findByRole('heading', { name: 'Fields', exact: true })).toBeVisible();
+  expect(screen.queryByText('Loading Schema definition…')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: /^(Review in Workspace|Save and review in Workspace)$/ })
+  ).toBeDisabled();
+  expect(mocks.saveSchemaEdit).not.toHaveBeenCalled();
+});
+
 it('keeps bound snapshot editing independent of source list refreshes', async () => {
   mocks.query = '';
   mocks.workspaces = [boundWorkspace()];

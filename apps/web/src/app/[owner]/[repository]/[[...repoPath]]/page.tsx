@@ -177,7 +177,10 @@ function OwnerRepoProjectPageContent() {
     return <LoadingSpinner message="Opening repository by ID; its name needs migration." />;
   if (branchForPage && !branches.branches.includes(branchForPage)) {
     const readsHeadDirectly = legacyView === 'state' && search.get('view') !== 'canvas';
-    if (branches.loading && !readsHeadDirectly) return <LoadingSpinner message="Loading branch…" />;
+    const studioSelectsWorkspace =
+      legacyView === 'schemas' && search.get('schemaView') !== 'review';
+    if (branches.loading && !readsHeadDirectly && !studioSelectsWorkspace)
+      return <LoadingSpinner message="Loading branch…" />;
     if (!branches.loading && branches.error && !(readsHeadDirectly && directoryStateEntry))
       return <ErrorMessage error={new Error(branches.error)} onRetry={branches.refresh} />;
     if (!branches.loading && !branches.error)

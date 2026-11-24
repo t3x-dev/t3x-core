@@ -617,6 +617,22 @@ it.each([
   expect(mocks.resolve).not.toHaveBeenCalled();
 });
 
+it('mounts branch Schema while the branch inventory is still pending', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
+  mocks.query = '';
+  let completeBranches!: (value: { branches: { name: string }[] }) => void;
+  mocks.listBranches.mockReturnValueOnce(
+    new Promise((resolve) => {
+      completeBranches = resolve;
+    })
+  );
+  render(<OwnerRepoProjectPage />);
+  expect(await screen.findByTestId('detail')).toHaveTextContent('schemas');
+  expect(screen.queryByText('Loading branch…')).not.toBeInTheDocument();
+  await act(async () => completeBranches({ branches: [{ name: 'main' }] }));
+  expect(screen.getByTestId('detail')).toHaveTextContent('schemas');
+});
+
 it('rejects an unknown branch without rendering State or falling back to main', async () => {
   mocks.params.repoPath = ['Repo', 'branches', 'missing', 'schemas'];
   mocks.query = '';

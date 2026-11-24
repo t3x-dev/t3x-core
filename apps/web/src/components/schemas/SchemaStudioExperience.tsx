@@ -332,7 +332,7 @@ export function SchemaStudioExperience({
   const implicitScope = JSON.stringify([projectId, pathname, requestedBranch]);
   const pinned = implicitTarget?.scope === implicitScope ? implicitTarget : undefined;
   const explicitBranchWorkspace =
-    requestedBranch && workspacesReady
+    requestedBranch && !workspaces.error
       ? resolveStudioWorkspaceId(workspaces.workspaces, '', requestedBranch)
       : '';
   const defaultWorkspaceId = resolveStudioWorkspaceId(draftWorkspaces, '', requestedBranch);
@@ -757,6 +757,19 @@ export function SchemaStudioExperience({
       : undefined;
   // Do not initialize Data with the base result while a saved edit is being recovered.
   const recoveredDefinitionReady = !schemaEdit.loading && recoveredEditIdentity === editIdentity;
+  const checkingPendingSchema = pendingSchema.loading || Boolean(pendingSchema.error);
+  const canInspectBoundDefinition =
+    recoveredDefinitionReady &&
+    checkingPendingSchema &&
+    !hasSchemaEdit &&
+    selection.length === 0 &&
+    Boolean(
+      currentBinding &&
+        persistedTarget &&
+        basePreview.data?.workspace?.boundSchema &&
+        basePreview.data.workspace.id === persistedTarget.id &&
+        basePreview.data.workspace.revision === persistedTarget.revision
+    );
   const candidateSelectionKey = JSON.stringify(selection);
 
   useEffect(() => {
@@ -1020,6 +1033,7 @@ export function SchemaStudioExperience({
   const publishBlocker =
     editorUnavailable ||
     !recoveredDefinitionReady ||
+    checkingPendingSchema ||
     definitionOpen ||
     applying ||
     preview.loading ||
@@ -1036,6 +1050,7 @@ export function SchemaStudioExperience({
     !preview.loading &&
     !definitionOpen &&
     recoveredDefinitionReady &&
+    !checkingPendingSchema &&
     !schemaEdit.error &&
     !recoveryError &&
     !draftState.loading &&
@@ -1466,6 +1481,7 @@ export function SchemaStudioExperience({
               onSaveAvailabilityChange={setDataCanSave}
               onValidationChange={setEditorInvalid}
               provenance={data}
+              definitionReceivedAt={preview.receivedAt}
               sourceIdentities={sourceIdentities}
               wholeSchemaSource={wholeSchemaSource}
               projectId={projectId}
@@ -1533,13 +1549,16 @@ export function SchemaStudioExperience({
               revisionKey={`${workspaceId}:${recoveredCandidateKey}:${candidateSelectionKey}:${boundRevision}`}
               disabledReason={
                 recoveryError ??
-                (!persistedTarget ? 'Select a saved Workspace to edit its Schema.' : undefined)
+                (checkingPendingSchema
+                  ? 'Checking for pending Schema changes.'
+                  : !persistedTarget
+                    ? 'Select a saved Workspace to edit its Schema.'
+                    : undefined)
               }
-              pending={applying}
+              pending={applying || canInspectBoundDefinition}
               loading={
-                workspaces.loading ||
-                (!persistedTarget && projectBranches.loading) ||
-                pendingSchema.loading ||
+                (!persistedTarget && (workspaces.loading || projectBranches.loading)) ||
+                (pendingSchema.loading && !canInspectBoundDefinition) ||
                 preview.loading ||
                 schemaEdit.loading ||
                 (definitionNeedsCandidates && candidates.loading)
@@ -1548,6 +1567,7 @@ export function SchemaStudioExperience({
                 workspaces.error ||
                 recoveryError ||
                 schemaEdit.error ||
+                pendingSchema.error ||
                 (definitionNeedsCandidates && candidates.error) ||
                 preview.error
               }
@@ -1692,6 +1712,7 @@ export function SchemaStudioExperience({
         canEditDefinition={Boolean(
           persistedTarget &&
             recoveredDefinitionReady &&
+            !checkingPendingSchema &&
             (schemaDefinition || data) &&
             (selection.length || currentBinding || creatingBlank || activeCandidate) &&
             !editorInvalid &&
@@ -1729,6 +1750,7 @@ export function SchemaStudioExperience({
         canSave={
           !editorUnavailable &&
           !recoveryError &&
+          !checkingPendingSchema &&
           dataCanSave &&
           !definitionOpen &&
           !applying &&
@@ -1806,33 +1828,35 @@ export function SchemaStudioExperience({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <SchemaYamlEditor
-        autoSave
-        autoSavePaused={!data?.report.valid}
-        open={definitionOpen}
-        onOpenChange={setDefinitionOpen}
-        workspaceTitle={selectedWorkspaceTitle}
-        initialDefinition={yamlInitial}
-        initiallyDirty={dataDirty}
-        onSave={async (definition, intent) => {
-          const saved = await saveDefinition(
-            definition,
-            intent,
-            pruneSchemaMappings(sourceMappings, definition)
-          );
-          yamlSavedRef.current = saved;
-          setEditorBase((current) =>
-            current ? { ...current, initial: structuredClone(definition) } : current
-          );
-          updateDataDirty(false);
-          setEditorInvalid(false);
-          setEditorReset((value) => value + 1);
-        }}
-        onReview={async () => {
-          if (!yamlSavedRef.current) throw new Error('Save the Schema before reviewing.');
-          await openReview(yamlSavedRef.current);
-        }}
-      />
+      {definitionOpen ? (
+        <SchemaYamlEditor
+          autoSave
+          autoSavePaused={!data?.report.valid}
+          open={definitionOpen}
+          onOpenChange={setDefinitionOpen}
+          workspaceTitle={selectedWorkspaceTitle}
+          initialDefinition={yamlInitial}
+          initiallyDirty={dataDirty}
+          onSave={async (definition, intent) => {
+            const saved = await saveDefinition(
+              definition,
+              intent,
+              pruneSchemaMappings(sourceMappings, definition)
+            );
+            yamlSavedRef.current = saved;
+            setEditorBase((current) =>
+              current ? { ...current, initial: structuredClone(definition) } : current
+            );
+            updateDataDirty(false);
+            setEditorInvalid(false);
+            setEditorReset((value) => value + 1);
+          }}
+          onReview={async () => {
+            if (!yamlSavedRef.current) throw new Error('Save the Schema before reviewing.');
+            await openReview(yamlSavedRef.current);
+          }}
+        />
+      ) : null}
       {preparation ? (
         <SchemaContentPreparationDialog
           projectId={projectId}
