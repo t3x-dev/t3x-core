@@ -4,15 +4,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
  * settings page (identity edits, integrity checks, exports, deletion).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { deleteProject } from '@/commands/projects/deleteProject';
 import { updateProject } from '@/commands/projects/updateProject';
+import { useRepositoryProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { dispatchProjectDeleted } from '@/hooks/shared/deleteEvents';
 import { exportCfpack, exportLedger } from '@/infrastructure/export';
 import { verifyProjectHashChain } from '@/infrastructure/projects';
 import type { ProjectDetail } from '@/infrastructure/types';
-import { fetchProject } from '@/queries/project';
-import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 import { carryRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 export type ProjectExportKind = 'cfpack' | 'ledger';
@@ -25,33 +25,7 @@ export function projectDescription(project: Pick<ProjectDetail, 'metadata'> | nu
 export function useProjectSettings(projectId: string) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchProject(projectId)
-      .then((value) => {
-        if (!cancelled) {
-          setProject(value);
-          useProjectStore.getState().cacheProject(apiProjectToSummary(value));
-        }
-      })
-      .catch((cause) => {
-        if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Failed to load repository.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  const { detail: project, loading, error, updateDetail } = useRepositoryProjectDetail(projectId);
 
   const saveGeneral = useCallback(
     async ({ description, name }: { description: string; name: string }) => {
@@ -60,9 +34,9 @@ export function useProjectSettings(projectId: string) {
         ...(name !== project?.name ? { name } : {}),
       });
       const metadata = updated.metadata;
-      setProject((prev) => (prev ? { ...prev, ...updated } : prev));
+      updateDetail(updated);
       useProjectStore.getState().updateProject(projectId, {
-        description,
+        description: typeof metadata?.description === 'string' ? metadata.description : description,
         metadata,
         name: updated.name ?? name,
         namespace: updated.namespace,
@@ -80,7 +54,7 @@ export function useProjectSettings(projectId: string) {
         }
       }
     },
-    [project?.name, projectId, router, searchParams]
+    [project?.name, projectId, router, searchParams, updateDetail]
   );
 
   const verify = useCallback(() => verifyProjectHashChain(projectId), [projectId]);
@@ -97,5 +71,13 @@ export function useProjectSettings(projectId: string) {
     dispatchProjectDeleted({ projectId });
   }, [projectId]);
 
-  return { error, exportArchive, loading, project, remove, saveGeneral, verify };
+  return {
+    error: error?.message ?? null,
+    exportArchive,
+    loading,
+    project,
+    remove,
+    saveGeneral,
+    verify,
+  };
 }

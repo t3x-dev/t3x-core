@@ -115,6 +115,7 @@ describe('DiscoverHeader navigation', () => {
   it('finds a new invitation while the recipient keeps the page open', async () => {
     setSessionUser({ id: 'recipient', name: null, username: null });
     vi.useFakeTimers();
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     const { unmount } = render(
       <InvitationInboxProvider>
         <DiscoverHeader />
@@ -126,9 +127,14 @@ describe('DiscoverHeader navigation', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000);
       });
+      expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(1);
+      focus.mockReturnValue(true);
+      await act(async () => window.dispatchEvent(new Event('focus')));
+      expect(listReceivedCollaborationInvitations).toHaveBeenCalledTimes(2);
       expect(screen.getByRole('link', { name: 'Invitations, pending' })).toBeInTheDocument();
     } finally {
       unmount();
+      focus.mockRestore();
       vi.useRealTimers();
     }
   });

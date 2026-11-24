@@ -110,7 +110,9 @@ export function ExploreExperience({
     'selection=editor-picks&limit=3',
     !release && !project && view === 'discover' && type !== 'projects'
   );
-  const collections = useSchemaCollections();
+  const collections = useSchemaCollections(
+    !release && !project && (view === 'discover' || type !== 'projects')
+  );
   const projectQuery = new URLSearchParams({ limit: view === 'discover' ? '6' : '24' });
   if (routeSearch) projectQuery.set('q', routeSearch);
   if (params.get('projectTag')) projectQuery.set('tag', params.get('projectTag')!);

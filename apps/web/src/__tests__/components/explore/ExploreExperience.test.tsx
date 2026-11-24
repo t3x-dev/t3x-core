@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   catalog: vi.fn(),
+  collections: vi.fn(),
   publicProjects: vi.fn(),
   publicProject: vi.fn(),
   release: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@/infrastructure/explore', () => ({
 }));
 vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaCatalog: mocks.catalog,
-  useSchemaCollections: () => [{ id: 'work-life', title: 'Work & Life', tags: ['care'] }],
+  useSchemaCollections: mocks.collections,
   useSchemaIntroduction: () => ({}),
   useSchemaReleaseReading: () => ({ data: { readme: '# Schema', manifest: {} } }),
 }));
@@ -51,6 +52,7 @@ const item = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.query = '';
+  mocks.collections.mockReturnValue([{ id: 'work-life', title: 'Work & Life', tags: ['care'] }]);
   mocks.catalog.mockReturnValue({
     loading: false,
     data: { items: [item], has_more: false },
@@ -238,4 +240,11 @@ it('retries only the public projects and cancels an obsolete results request', a
   expect(signal?.aborted).toBe(false);
   view.unmount();
   expect(signal?.aborted).toBe(true);
+});
+
+it('does not fetch Schema collections on a projects-only Browse page', async () => {
+  mocks.query = 'type=projects';
+  render(<ExploreExperience pageView="browse" />);
+  expect(mocks.collections).toHaveBeenCalledWith(false);
+  expect(await screen.findByRole('button', { name: 'Garden', exact: true })).toBeVisible();
 });

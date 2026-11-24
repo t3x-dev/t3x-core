@@ -41,15 +41,24 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
   const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
   const [pullRequestsExpanded, setPullRequestsExpanded] = useState(false);
   const [workspacesExpanded, setWorkspacesExpanded] = useState(false);
-  const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId);
+  const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId, {
+    includeInvitations: false,
+  });
   const namespaceId = guestsQuery.data?.namespace_id ?? null;
   const { membersQuery } = useNamespaceCollaboration({
     namespaceId,
     canReadMembers: !!namespaceId,
     canManageInvitations: false,
   });
-  const { pullRequests, workspaces, activityError, activityLoading } =
+  const { pullRequests: pullRequestRead, workspaces: workspaceRead } =
     useProjectCommunityActivity(projectId);
+  const pullRequests = pullRequestRead.data ?? [];
+  const workspaces = workspaceRead.data ?? [];
+  const activityLoading =
+    (filter !== 'workspaces' && pullRequestRead.isLoading) ||
+    (filter !== 'prs' && workspaceRead.isLoading);
+  const activityError =
+    (filter !== 'workspaces' && pullRequestRead.error) || (filter !== 'prs' && workspaceRead.error);
 
   const collaborators = new Map<string, { name: string; scopes: string[] }>();
   for (const member of membersQuery.data?.members ?? []) {
@@ -143,18 +152,23 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           <fieldset className={styles.filters} aria-label="Filter recent work">
             {(
               [
-                ['all', 'All', pullRequests.length + workspaces.length],
-                ['prs', 'Pull requests', pullRequests.length],
-                ['workspaces', 'Workspaces', workspaces.length],
+                [
+                  'all',
+                  'All',
+                  pullRequests.length + workspaces.length,
+                  pullRequestRead.isLoading || workspaceRead.isLoading,
+                ],
+                ['prs', 'Pull requests', pullRequests.length, pullRequestRead.isLoading],
+                ['workspaces', 'Workspaces', workspaces.length, workspaceRead.isLoading],
               ] as const
-            ).map(([key, label, count]) => (
+            ).map(([key, label, count, loading]) => (
               <button
                 key={key}
                 type="button"
                 aria-pressed={filter === key}
                 onClick={() => setFilter(key)}
               >
-                {label} <span>{activityLoading ? '…' : count}</span>
+                {label} <span>{loading ? '…' : count}</span>
               </button>
             ))}
           </fieldset>
@@ -163,11 +177,12 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           ) : null}
           {activityError ? (
             <p className={styles.message} role="alert">
-              {activityError}
+              Some project objects could not be loaded.
             </p>
           ) : null}
           {!activityLoading &&
           !activityError &&
+          filter === 'all' &&
           pullRequests.length === 0 &&
           workspaces.length === 0 ? (
             <p className={styles.message}>
@@ -266,8 +281,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           {!activityLoading &&
           !activityError &&
           filter !== 'all' &&
-          (filter === 'prs' ? pullRequests.length : workspaces.length) === 0 &&
-          pullRequests.length + workspaces.length > 0 ? (
+          (filter === 'prs' ? pullRequests.length : workspaces.length) === 0 ? (
             <p className={styles.message}>
               No {filter === 'prs' ? 'pull requests' : 'workspaces'} available.
             </p>

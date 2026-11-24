@@ -35,6 +35,7 @@ import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
 import { prefetchRepositoryDirectoryPage } from '@/hooks/projects/repositoryDirectory';
 import palette from '@/styles/management-palette.module.css';
+import { markInteraction } from '@/utils/interactionTiming';
 import styles from './DiscoverHeader.module.css';
 
 const tabIcons: Record<ProjectTabId, LucideIcon> = {
@@ -227,6 +228,7 @@ export function DiscoverHeader({
               <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
                 <Link
                   href="/invitations"
+                  onClick={() => markInteraction('invitations', 'click')}
                   aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
                   title="Invitations"
                 >

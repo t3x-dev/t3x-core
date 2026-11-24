@@ -2,22 +2,33 @@
 
 import type { ReceivedCollaborationInvitation } from '@t3x-dev/api-client';
 import { usePathname } from 'next/navigation';
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useQuery } from '@/hooks/shared/useQuery';
 import { useSessionUserId } from '@/hooks/shared/useSession';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
+import { markInteraction } from '@/utils/interactionTiming';
 
 const InvitationInboxContext = createContext<{
   invitations: ReceivedCollaborationInvitation[];
   loading: boolean;
   error: Error | null;
   refresh: () => void;
+  refreshOnEntry: () => void;
   remove: (id: string) => void;
 }>({
   invitations: [],
   loading: true,
   error: null,
   refresh: () => {},
+  refreshOnEntry: () => {},
   remove: () => {},
 });
 
@@ -32,6 +43,7 @@ export function InvitationInboxProvider({ children }: { children: ReactNode }) {
     userId: string;
     promise: Promise<ReceivedCollaborationInvitation[]>;
   } | null>(null);
+  const lastLoaded = useRef<{ userId: string; at: number } | undefined>(undefined);
   const [removed, setRemoved] = useState<{ userId: string; ids: string[] }>();
 
   const { data, error, isLoading, refetch } = useQuery({
@@ -41,9 +53,14 @@ export function InvitationInboxProvider({ children }: { children: ReactNode }) {
     queryFn: () => {
       if (!userId) return Promise.resolve([]);
       if (inFlight.current?.userId === userId) return inFlight.current.promise;
+      markInteraction('invitations', 'request-start');
       const promise = getSharedApiClient()
         .listReceivedCollaborationInvitations()
-        .then(({ invitations }) => invitations)
+        .then(({ invitations }) => {
+          if (inFlight.current?.promise === promise)
+            lastLoaded.current = { userId, at: Date.now() };
+          return invitations;
+        })
         .finally(() => {
           if (inFlight.current?.promise === promise) inFlight.current = null;
         });
@@ -53,14 +70,40 @@ export function InvitationInboxProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!enabled) return;
-    window.addEventListener('focus', refetch);
-    const poll = window.setInterval(refetch, 60_000);
+    if (!enabled || !userId) return;
+    const canRefresh = () =>
+      !document.hidden && document.hasFocus() && inFlight.current?.userId !== userId;
+    const refreshVisible = () => {
+      if (!canRefresh()) return;
+      if (!navigator.locks) {
+        refetch();
+        return;
+      }
+      void navigator.locks
+        .request(`t3x:invitations:${userId}`, { ifAvailable: true }, async (lock) => {
+          if (!lock || !canRefresh()) return;
+          refetch();
+          await inFlight.current?.promise;
+        })
+        .catch(() => {
+          // The inbox owns request errors and can retry on the next visible tick.
+        });
+    };
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    const poll = window.setInterval(refreshVisible, 60_000);
     return () => {
-      window.removeEventListener('focus', refetch);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
       window.clearInterval(poll);
     };
-  }, [enabled, refetch]);
+  }, [enabled, refetch, userId]);
+
+  const refreshOnEntry = useCallback(() => {
+    if (!enabled || document.hidden || inFlight.current?.userId === userId) return;
+    const loaded = lastLoaded.current;
+    if (loaded?.userId !== userId || Date.now() - loaded.at >= 15_000) refetch();
+  }, [enabled, refetch, userId]);
 
   function remove(id: string) {
     if (!userId) return;
@@ -76,7 +119,14 @@ export function InvitationInboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <InvitationInboxContext.Provider
-      value={{ invitations, loading: isLoading && !data, error, refresh: refetch, remove }}
+      value={{
+        invitations,
+        loading: isLoading && !data,
+        error,
+        refresh: refetch,
+        refreshOnEntry,
+        remove,
+      }}
     >
       {children}
     </InvitationInboxContext.Provider>

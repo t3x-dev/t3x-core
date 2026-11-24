@@ -27,6 +27,7 @@ const query = z.object({
   commit: z.string().min(1).optional(),
   q: z.string().trim().max(200).optional(),
   cursor: z.string().max(2048).optional(),
+  view: z.literal('summary').optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 const errorResponses = {
@@ -68,7 +69,7 @@ const listProjectChecksRoute = createRoute({
 
 projectChecksRoutes.openapi(listProjectChecksRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { cursor, limit, ...filters } = c.req.valid('query');
+  const { cursor, limit, view, ...filters } = c.req.valid('query');
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
@@ -88,6 +89,7 @@ projectChecksRoutes.openapi(listProjectChecksRoute, async (c) => {
   const rows = await listProjectCheckRecords(db, {
     projectId,
     validationOwner: workspaceOwnerFromContext(c),
+    summary: view === 'summary',
     ...filters,
     before,
     limit: limit + 1,

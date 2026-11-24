@@ -8,6 +8,7 @@ import {
   findPullRequestByNumber,
   listPullRequestActivity,
   listPullRequestChecks,
+  listPullRequestPage,
   listPullRequestsByProject,
   replacePullRequestChecks,
   updatePullRequest,
@@ -73,6 +74,45 @@ describe('Pull Requests Storage', () => {
         authorId: 'user_2',
       })
     ).rejects.toThrow();
+  });
+
+  it('filters before paging and returns exact counts for a large project', async () => {
+    const repo = await insertProject(db, testData.project({ name: 'Large PR project' }));
+    for (let index = 1; index <= 47; index++) {
+      await createPullRequest(db, {
+        projectId: repo.projectId,
+        title: `Change ${index}`,
+        sourceBranch: `feature-${index}`,
+        targetBranch: 'main',
+        sourceCommitHash: 'sha256:source',
+        targetBaseCommitHash: 'sha256:target',
+        authorId: 'user_1',
+        status: index === 1 ? 'closed' : 'open',
+      });
+    }
+    const first = await listPullRequestPage(db, repo.projectId, { statuses: ['open'], limit: 20 });
+    expect(first.items.map((item) => item.number)).toEqual(
+      Array.from({ length: 20 }, (_, index) => 47 - index)
+    );
+    expect(first).toMatchObject({
+      nextBefore: 28,
+      total: 46,
+      stateCounts: { open: 46, merged: 0, closed: 1 },
+    });
+    const second = await listPullRequestPage(db, repo.projectId, {
+      statuses: ['open'],
+      before: first.nextBefore!,
+      limit: 20,
+    });
+    expect(second.items.at(0)?.number).toBe(27);
+    const exact = await listPullRequestPage(db, repo.projectId, { query: '#1', limit: 20 });
+    expect(exact.items.map((item) => item.number)).toEqual([1]);
+    const empty = await listPullRequestPage(db, repo.projectId, {
+      query: '#1',
+      statuses: ['open'],
+      limit: 20,
+    });
+    expect(empty).toMatchObject({ items: [], total: 0, nextBefore: null });
   });
 
   it('persists readiness checks, activity, and terminal merge metadata', async () => {

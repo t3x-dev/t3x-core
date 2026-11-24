@@ -3,6 +3,7 @@ import { getWorkspaceYOpsRootKey, validateWorkspaceYOps } from '@/infrastructure
 import { fetchCommitByHash } from '@/queries/commitByHash';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
+import { markInteraction } from '@/utils/interactionTiming';
 
 export function useWorkspaceYOps(candidate: WorkspaceCandidate) {
   const validate = useCallback(async () => {
@@ -24,6 +25,7 @@ export function useWorkspaceYOps(candidate: WorkspaceCandidate) {
 }
 
 async function loadWorkspaceBaseline(hash: string, projectId: string) {
+  markInteraction('review', 'request-start');
   const commit = await fetchCommitByHash(hash, projectId);
   return {
     trees: commit.content.trees as WorkspaceYOpsTreeNode[],

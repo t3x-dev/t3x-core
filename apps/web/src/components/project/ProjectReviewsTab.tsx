@@ -53,6 +53,8 @@ import type {
 } from '@/hooks/projects/useProjectPullRequestsApi';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { usePullRequestChangePreview } from '@/hooks/projects/usePullRequestChangePreview';
+import { invalidateQueries, useQuery } from '@/hooks/shared/useQuery';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import { useViewPreference } from '@/hooks/shared/useViewPreference';
 import { cn } from '@/utils/cn';
 import createStyles from './ProjectReviewsCreate.module.css';
@@ -543,9 +545,6 @@ export function ProjectReviewsTab({
     saveMergeDecision,
   } = useProjectPullRequestsApi();
   const [pullRequests, setPullRequests] = useState(() => (projectId ? [] : INITIAL_PULL_REQUESTS));
-  const [listLoading, setListLoading] = useState(Boolean(projectId));
-  const [listError, setListError] = useState<string | null>(null);
-  const [listRefreshKey, setListRefreshKey] = useState(0);
   const listId = useId();
   const searchInput = useRef<HTMLInputElement>(null);
   const [baseBranches, setBaseBranches] = useState(() => (projectId ? [] : BASE_BRANCHES));
@@ -558,7 +557,7 @@ export function ProjectReviewsTab({
     'open'
   );
   const [statusFilter, setStatusFilter] = useState<'all' | PullRequestStatus>('all');
-  const [view, setView] = useState<PullRequestView>('list');
+  const [view, setView] = useState<PullRequestView>(initialPullRequestNumber ? 'detail' : 'list');
   const [selectedId, setSelectedId] = useState(
     projectId ? '' : (INITIAL_PULL_REQUESTS[0]?.id ?? '')
   );
@@ -579,6 +578,36 @@ export function ProjectReviewsTab({
     else if (hasPreferredDetailTab) setDetailTab(preferredDetailTab);
   }, [requestedTab, preferredDetailTab, hasPreferredDetailTab]);
   const [query, setQuery] = useState('');
+  const userId = useSessionUserId();
+  const listPrefix = `project-pull-request-pages:${projectId}`;
+  const listScope = JSON.stringify([userId, projectId, mode, statusFilter, query.trim()]);
+  const [path, setPath] = useState<{ scope: string; cursors: number[] }>();
+  const cursors = path?.scope === listScope ? path.cursors : [];
+  const [listVersion, setListVersion] = useState(0);
+  const everLoaded = useRef(false);
+  const listRead = useQuery({
+    enabled: Boolean(projectId && view === 'list'),
+    queryKey: [listPrefix, listScope, cursors.at(-1), listVersion],
+    queryFn: (signal) =>
+      fetchPullRequests(projectId!, {
+        limit: 20,
+        before: cursors.at(-1),
+        status: mode === 'open' ? 'active' : 'merged',
+        state: mode === 'open' ? (statusFilter === 'all' ? undefined : statusFilter) : mode,
+        query: query.trim() || undefined,
+        signal,
+      }),
+  });
+  const listLoading = listRead.isLoading;
+  const listError = listRead.error?.message;
+  const page = listRead.data?.page;
+
+  function invalidateList() {
+    if (!projectId) return;
+    invalidateQueries(listPrefix);
+    setListVersion((version) => version + 1);
+    setPath(undefined);
+  }
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -656,40 +685,22 @@ export function ProjectReviewsTab({
   }, [fetchProjectPullRequest, initialPullRequestNumber, projectId]);
 
   useEffect(() => {
-    if (!projectId) return;
-
-    let cancelled = false;
-    setListLoading(true);
-    setListError(null);
-    fetchPullRequests(projectId)
-      .then((data) => {
-        if (!cancelled)
-          setPullRequests((current) => {
-            const listed = data.pull_requests.map((item) => {
-              const previous = current.find((entry) => entry.number === item.number);
-              return previous?.checks ? previous : toProjectPullRequest(item);
-            });
-            const linkedDetail = current.find(
-              (entry) => entry.number === initialPullRequestNumber && entry.checks
-            );
-            return linkedDetail && !listed.some((entry) => entry.number === linkedDetail.number)
-              ? [linkedDetail, ...listed]
-              : listed;
-          });
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setListError(err instanceof Error ? err.message : 'Could not load pull requests');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setListLoading(false);
+    const data = listRead.data;
+    if (!data) return;
+    everLoaded.current = true;
+    setPullRequests((current) => {
+      const listed = data.pull_requests.map((item) => {
+        const previous = current.find((entry) => entry.number === item.number);
+        return previous?.checks && previous.status === item.status
+          ? previous
+          : toProjectPullRequest(item);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchPullRequests, initialPullRequestNumber, listRefreshKey, projectId]);
+      const selected = current.find((entry) => entry.id === selectedId && entry.checks);
+      return selected && !listed.some((entry) => entry.id === selected.id)
+        ? [selected, ...listed]
+        : listed;
+    });
+  }, [listRead.data, selectedId]);
 
   useEffect(() => {
     if (!projectId || view !== 'create') return;
@@ -774,6 +785,13 @@ export function ProjectReviewsTab({
   const selectedPullRequest = pullRequests.find((item) => item.id === selectedId);
 
   const visiblePullRequests = useMemo(() => {
+    if (listRead.data?.page) {
+      return listRead.data.pull_requests.map(
+        (item) =>
+          pullRequests.find((entry) => entry.id === item.id && entry.status === item.status) ??
+          toProjectPullRequest(item)
+      );
+    }
     const source =
       mode === 'open'
         ? openPullRequests
@@ -801,16 +819,27 @@ export function ProjectReviewsTab({
         .toLowerCase()
         .includes(normalized);
     });
-  }, [closedPullRequests, mergedPullRequests, mode, openPullRequests, query, statusFilter]);
+  }, [
+    closedPullRequests,
+    listRead.data,
+    mergedPullRequests,
+    mode,
+    openPullRequests,
+    pullRequests,
+    query,
+    statusFilter,
+  ]);
 
-  const listCount =
-    mode === 'open'
-      ? openPullRequests.length
-      : mode === 'merged'
-        ? mergedPullRequests.length
-        : closedPullRequests.length;
+  const counts = page?.state_counts ?? {
+    open: openPullRequests.length,
+    merged: mergedPullRequests.length,
+    closed: closedPullRequests.length,
+  };
+  const listCount = counts[mode];
+  const hasAnyPullRequests = counts.open + counts.merged + counts.closed > 0;
   const hasListFilters = Boolean(query.trim()) || (mode === 'open' && statusFilter !== 'all');
   const listUnavailable = listLoading || Boolean(listError);
+  const filterUnavailable = Boolean(projectId && !everLoaded.current && listUnavailable);
   const changeListMode = (nextMode: PullRequestListMode) => {
     setMode(nextMode);
     setStatusFilter('all');
@@ -1023,6 +1052,7 @@ export function ProjectReviewsTab({
         editedCreateFields.current = { title: false, description: false };
         const mapped = toProjectPullRequestDetail(created);
         setPullRequests((items) => [mapped, ...items]);
+        invalidateList();
         markCompareCandidateOpened(mapped.sourceBranch, mapped.targetBranch, mapped.number);
         setApiError(null);
         if (mapped.status === 'blocked') {
@@ -1045,6 +1075,7 @@ export function ProjectReviewsTab({
   };
 
   const showFinishedPullRequest = (finished: ProjectPullRequest) => {
+    invalidateList();
     setPullRequests((items) =>
       items.map((item) =>
         item.id === finished.id || item.number === finished.number ? finished : item
@@ -1197,6 +1228,7 @@ export function ProjectReviewsTab({
     rerunProjectPullRequestReadiness(projectId, { number: pullRequest.number })
       .then((updated) => {
         const mapped = toProjectPullRequestDetail(updated);
+        invalidateList();
         setPullRequests((items) => items.map((item) => (item.id === mapped.id ? mapped : item)));
         setConflictDecision(null);
         setConflictProgress(null);
@@ -1359,7 +1391,7 @@ export function ProjectReviewsTab({
           <ModeButton
             active={mode === 'open'}
             controlsId={`${listId}-panel`}
-            count={listUnavailable ? null : openPullRequests.length}
+            count={listUnavailable ? null : counts.open}
             id={`${listId}-open`}
             label="Open"
             onClick={() => changeListMode('open')}
@@ -1367,7 +1399,7 @@ export function ProjectReviewsTab({
           <ModeButton
             active={mode === 'merged'}
             controlsId={`${listId}-panel`}
-            count={listUnavailable ? null : mergedPullRequests.length}
+            count={listUnavailable ? null : counts.merged}
             id={`${listId}-merged`}
             label="Merged"
             onClick={() => changeListMode('merged')}
@@ -1375,7 +1407,7 @@ export function ProjectReviewsTab({
           <ModeButton
             active={mode === 'closed'}
             controlsId={`${listId}-panel`}
-            count={listUnavailable ? null : closedPullRequests.length}
+            count={listUnavailable ? null : counts.closed}
             id={`${listId}-closed`}
             label="Closed"
             onClick={() => changeListMode('closed')}
@@ -1386,7 +1418,7 @@ export function ProjectReviewsTab({
             <Search aria-hidden="true" />
             <input
               aria-label="Search pull requests"
-              disabled={listUnavailable}
+              disabled={filterUnavailable}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search title, branch, or #number"
               ref={searchInput}
@@ -1398,7 +1430,7 @@ export function ProjectReviewsTab({
             <label className={listStyles.statusSelect}>
               <select
                 aria-label="Pull request status"
-                disabled={listUnavailable}
+                disabled={filterUnavailable}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as 'all' | PullRequestStatus)
                 }
@@ -1425,7 +1457,7 @@ export function ProjectReviewsTab({
               : listError
                 ? ''
                 : hasListFilters
-                  ? `${visiblePullRequests.length} of ${listCount}`
+                  ? `${page?.total ?? visiblePullRequests.length} of ${listCount}`
                   : `${listCount} pull request${listCount === 1 ? '' : 's'}`}
           </output>
         </div>
@@ -1452,11 +1484,7 @@ export function ProjectReviewsTab({
             <CircleAlert aria-hidden="true" />
             <h2>Could not load pull requests</h2>
             <p>{listError}</p>
-            <Button
-              onClick={() => setListRefreshKey((key) => key + 1)}
-              type="button"
-              variant="outline"
-            >
+            <Button onClick={listRead.refetch} type="button" variant="outline">
               Try again
             </Button>
           </section>
@@ -1482,14 +1510,14 @@ export function ProjectReviewsTab({
             <h2>
               {hasListFilters
                 ? 'No matching pull requests'
-                : pullRequests.length === 0
+                : !hasAnyPullRequests
                   ? 'Propose your first change'
                   : `No ${mode} pull requests`}
             </h2>
             <p>
               {hasListFilters
                 ? 'Try a different search or clear the filters.'
-                : pullRequests.length === 0
+                : !hasAnyPullRequests
                   ? 'Create a pull request to review changes between branches.'
                   : mode === 'merged'
                     ? 'Merged pull requests will appear here.'
@@ -1501,7 +1529,7 @@ export function ProjectReviewsTab({
               <Button onClick={clearListFilters} type="button" variant="outline">
                 Clear filters
               </Button>
-            ) : pullRequests.length === 0 ? (
+            ) : !hasAnyPullRequests ? (
               <Button
                 onClick={() => {
                   setApiError(null);
@@ -1516,6 +1544,30 @@ export function ProjectReviewsTab({
           </section>
         )}
       </div>
+      {cursors.length > 0 || page?.next_before ? (
+        <nav aria-label="Pull request pages" className="flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={cursors.length === 0}
+            onClick={() => setPath({ scope: listScope, cursors: cursors.slice(0, -1) })}
+          >
+            Previous page
+          </Button>
+          <span>Page {cursors.length + 1}</span>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!page?.next_before}
+            onClick={() => {
+              if (page?.next_before)
+                setPath({ scope: listScope, cursors: [...cursors, page.next_before] });
+            }}
+          >
+            Next page
+          </Button>
+        </nav>
+      ) : null}
     </section>
   );
 }

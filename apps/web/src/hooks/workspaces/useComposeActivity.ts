@@ -24,6 +24,7 @@ import {
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
+import { markInteraction } from '@/utils/interactionTiming';
 import { WorkspaceActivityCacheContext } from './workspaceActivityCache';
 
 const WORKSPACE_ACTIVITY_FRESH_MS = 30_000;
@@ -73,6 +74,8 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       epoch: 0,
       read: 0,
       poll: 0,
+      polling: false,
+      reading: false,
       node: 0,
       reconciling: false,
     }),
@@ -160,11 +163,14 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       if (!enabled || !isActive()) return;
       if (!preserveInspected && cache?.current?.key === cacheKey) cache.current = null;
       const token = ++scope.read;
+      scope.reading = true;
       const isCurrent = () => isActive() && token === scope.read;
       setLoading(true);
       setError(null);
       try {
         const api = getSharedApiClient().workspaces.authoring;
+        markInteraction('draft', 'request-start');
+        markInteraction('review', 'request-start');
         const first = await api.read(candidate.projectId, candidate.id);
         if (!isCurrent()) return;
         const receipt =
@@ -284,7 +290,10 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         setError(error instanceof Error ? error.message : 'Cannot load activity');
         throw error;
       } finally {
-        if (isCurrent()) setLoading(false);
+        if (isCurrent()) {
+          scope.reading = false;
+          setLoading(false);
+        }
       }
     },
     [
@@ -310,6 +319,7 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     });
     return () => {
       ++scope.read;
+      scope.reading = false;
     };
   }, [enabled, candidate.revision, load, scope]);
 
@@ -317,7 +327,8 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
     if (!enabled) return;
     const isActive = captureScope();
     const timer = window.setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || scope.polling || scope.reading) return;
+      scope.polling = true;
       const token = ++scope.poll;
       const readVersion = scope.read;
       void getSharedApiClient()
@@ -340,10 +351,14 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
         })
         .catch(() => {
           // The inspected snapshot remains readable while connectivity recovers.
+        })
+        .finally(() => {
+          if (token === scope.poll) scope.polling = false;
         });
     }, 5000);
     return () => {
       ++scope.poll;
+      scope.polling = false;
       window.clearInterval(timer);
     };
   }, [cache, cacheKey, candidate.id, candidate.projectId, enabled, captureScope, scope]);

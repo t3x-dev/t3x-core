@@ -31,8 +31,8 @@ vi.mock('@/infrastructure/pullRequests', () => ({ listProjectPullRequests: mocks
 vi.mock('@/infrastructure/workspaces', () => ({ listProjectWorkspaces: mocks.workspaces }));
 
 beforeEach(() => {
-  mocks.prs.mockResolvedValue({ pull_requests: [], counts: { active: 0, merged: 0 } });
-  mocks.workspaces.mockResolvedValue([]);
+  mocks.prs.mockReset().mockResolvedValue({ pull_requests: [], counts: { active: 0, merged: 0 } });
+  mocks.workspaces.mockReset().mockResolvedValue([]);
   mocks.guests.data = undefined;
   mocks.guests.error = null;
   mocks.members.data = undefined;
@@ -132,6 +132,20 @@ describe('ProjectCommunityTab', () => {
     );
     expect(screen.queryByText(/No pull requests or workspaces yet/)).not.toBeInTheDocument();
     expect(screen.queryByText('No collaborators visible.')).not.toBeInTheDocument();
+  });
+
+  it('keeps pull requests usable while Workspaces are still loading', async () => {
+    mocks.prs.mockResolvedValue({
+      pull_requests: [
+        { id: 'pr-1', number: 7, title: 'Available now', updated_at: '2026-09-01T00:00:00Z' },
+      ],
+    });
+    mocks.workspaces.mockReturnValue(new Promise(() => {}));
+    render(<ProjectCommunityTab projectId="project one" />);
+
+    expect(await screen.findByRole('link', { name: 'Open pull request' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Pull requests 1' }));
+    expect(screen.queryByText('Loading recent work…')).not.toBeInTheDocument();
   });
 
   it('opens a recent Workspace on its actual branch', async () => {

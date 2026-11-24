@@ -53,12 +53,16 @@ export function useProjects(
     search,
     tagSearch,
     editableOnly = false,
+    visibility,
+    tags,
     enabled = true,
     directoryUserId,
   }: {
     search?: string;
     tagSearch?: string;
     editableOnly?: boolean;
+    visibility?: Project['visibility'];
+    tags?: string[];
     enabled?: boolean;
     directoryUserId?: string;
   } = {}
@@ -76,14 +80,16 @@ export function useProjects(
   const tag_query = tagSearch?.trim() || undefined;
   const fetchPage = useCallback(
     (cursor: string) =>
-      q || tag_query || editableOnly
+      q || tag_query || editableOnly || visibility || tags?.length
         ? listProjectPage(limit, cursor, namespaceSlug, {
             q,
             tag_query,
             editable: editableOnly || undefined,
+            visibility,
+            tags,
           })
         : listProjectPage(limit, cursor, namespaceSlug),
-    [limit, namespaceSlug, q, tag_query, editableOnly]
+    [limit, namespaceSlug, q, tag_query, editableOnly, visibility, tags]
   );
 
   const refreshFirstPage = useCallback(

@@ -163,6 +163,7 @@ import type {
 } from '@/types/workspaces';
 import type { WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
+import { markInteraction } from '@/utils/interactionTiming';
 import {
   AssistantSchemaSettingsDetails,
   AssistantSchemaSettingsTimeline,
@@ -280,6 +281,10 @@ export function WorkspaceComposeReviewSurface({
   const searchParams = useSearchParams();
   const routeQuery = searchParams.toString();
   const routeParams = new URLSearchParams(routeQuery);
+  const reviewRoute = routeParams.get('workspaceMode') === 'review';
+  useEffect(() => {
+    if (reviewRoute) markInteraction('review', 'route');
+  }, [reviewRoute]);
   const preferenceKey = `t3x.workspace-view:${candidate.projectId}:${candidate.id}`;
   const [preferredMode, rememberMode, modeReady] = useViewPreference(
     `${preferenceKey}:mode`,
@@ -915,6 +920,7 @@ function ComposeSurface({
   const dragOrigin = useRef<{ x: number; width: number } | null>(null);
   const draftDragOrigin = useRef<{ x: number; width: number } | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectedStructure, setInspectedStructure] = useState(false);
   const [mobileChats, setMobileChats] = useState(false);
   const draftButton = useRef<HTMLButtonElement>(null);
   const closeDraftButton = useRef<HTMLButtonElement>(null);
@@ -1321,6 +1327,7 @@ function ComposeSurface({
         .length
     : candidate.yopsDraft.operations.length;
   const openDraft = () => {
+    if (!inspectorOpen) markInteraction('draft', 'click');
     setInspectorOpen(true);
     setMobileChats(false);
     setRightView('changes');
@@ -1332,8 +1339,17 @@ function ComposeSurface({
     requestAnimationFrame(() => draftButton.current?.focus());
   };
   useEffect(() => {
-    if (inspectorOpen) closeDraftButton.current?.focus();
+    if (!inspectorOpen) return;
+    markInteraction('draft', 'mount');
+    closeDraftButton.current?.focus();
   }, [inspectorOpen]);
+  useEffect(() => {
+    if (inspectorOpen && !activity.loading && !activity.error) markInteraction('draft', 'ready');
+  }, [inspectorOpen, activity.loading, activity.error]);
+  const showDraftStructure = inspectorOpen && rightView === 'structure';
+  useEffect(() => {
+    if (showDraftStructure) setInspectedStructure(true);
+  }, [showDraftStructure]);
   const openChat = () => {
     setInspectorOpen(false);
     setSidePanel('chat');
@@ -1682,42 +1698,44 @@ function ComposeSurface({
             </button>
           </nav>
           <div className={composeStyles.structurePanel} hidden={rightView !== 'structure'}>
-            <WorkspaceCurrentDraft
-              key={candidate.id}
-              candidate={candidate}
-              current={workingCurrent}
-              revision={activity.compositionRevision}
-              loading={activity.loading}
-              error={workingCopy.error ?? activity.error}
-              enabled={activity.enabled}
-              stagedCount={staged.length}
-              authoring={activity.view}
-              subject={draftSubject}
-              visible={inspectorOpen && rightView === 'structure'}
-              savedSchema={savedSchema}
-              schemaCandidateNotice={schemaCandidateNotice}
-              onSubjectChange={setDraftSubject}
-              schemaControl={
-                inspectorOpen && rightView === 'structure' && draftSubject === 'schema' ? (
-                  <WorkspaceSchemaSelect
-                    candidate={candidate}
-                    controller={controller}
-                    unbound={activity.view?.currentSchema?.status === 'unbound'}
-                    requestNavigation={contentNavigation.requestNavigation}
-                  />
-                ) : undefined
-              }
-              onEdit={(subject, path) => {
-                setFocusSchemaPath(path);
-                void openStructure(subject === 'schema' ? 'schema' : 'structure');
-              }}
-              onDiscuss={(subject, path) => {
-                controller.prefillAssistant(
-                  `修改 ${subject === 'schema' ? 'Schema 定义' : 'Content'} ${path}：`
-                );
-                openChat();
-              }}
-            />
+            {showDraftStructure || inspectedStructure ? (
+              <WorkspaceCurrentDraft
+                key={candidate.id}
+                candidate={candidate}
+                current={workingCurrent}
+                revision={activity.compositionRevision}
+                loading={activity.loading}
+                error={workingCopy.error ?? activity.error}
+                enabled={activity.enabled}
+                stagedCount={staged.length}
+                authoring={activity.view}
+                subject={draftSubject}
+                visible={inspectorOpen && rightView === 'structure'}
+                savedSchema={savedSchema}
+                schemaCandidateNotice={schemaCandidateNotice}
+                onSubjectChange={setDraftSubject}
+                schemaControl={
+                  inspectorOpen && rightView === 'structure' && draftSubject === 'schema' ? (
+                    <WorkspaceSchemaSelect
+                      candidate={candidate}
+                      controller={controller}
+                      unbound={activity.view?.currentSchema?.status === 'unbound'}
+                      requestNavigation={contentNavigation.requestNavigation}
+                    />
+                  ) : undefined
+                }
+                onEdit={(subject, path) => {
+                  setFocusSchemaPath(path);
+                  void openStructure(subject === 'schema' ? 'schema' : 'structure');
+                }}
+                onDiscuss={(subject, path) => {
+                  controller.prefillAssistant(
+                    `修改 ${subject === 'schema' ? 'Schema 定义' : 'Content'} ${path}：`
+                  );
+                  openChat();
+                }}
+              />
+            ) : null}
           </div>
           {rightView === 'changes' && showingDetails ? (
             <section
@@ -3195,6 +3213,29 @@ function ReviewSurface({
   }, [candidate, exactValidation, operations.length]);
   const comparisonResult = comparison?.candidate === candidate ? comparison.result : undefined;
   const comparisonError = comparison?.candidate === candidate ? comparison.error : undefined;
+  useEffect(() => {
+    markInteraction('review', 'mount');
+  }, []);
+  useEffect(() => {
+    const needsComparison = operations.length > 0 && !authoringReview && !exactValidation;
+    if (
+      !controller.isBusy &&
+      !activity.loading &&
+      !activity.error &&
+      !comparisonError &&
+      (!needsComparison || comparisonResult)
+    )
+      markInteraction('review', 'ready');
+  }, [
+    activity.loading,
+    activity.error,
+    authoringReview,
+    comparisonError,
+    comparisonResult,
+    controller.isBusy,
+    exactValidation,
+    operations.length,
+  ]);
   const comparisonReview = useMemo(
     () =>
       authoringReview

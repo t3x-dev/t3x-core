@@ -3,7 +3,11 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { initialRepositoryReadme, RepositoryReadmeSchema } from '@t3x-dev/api-client';
+import {
+  initialRepositoryReadme,
+  RepositoryReadmeSchema,
+  RepositoryTagsSchema,
+} from '@t3x-dev/api-client';
 import { inspectRepositoryName } from '@t3x-dev/application';
 import {
   DEMO_WORKSPACE_FIXTURE,
@@ -133,6 +137,12 @@ const listProjectsRoute = createRoute({
       cursor: z.string().optional(),
       namespace: NamespaceSlugSchema.optional(),
       q: z.string().trim().max(200).optional(),
+      visibility: z.enum(['private', 'unlisted', 'public']).optional(),
+      tags: z
+        .union([z.string(), z.array(z.string())])
+        .transform((tags) => (typeof tags === 'string' ? [tags] : tags))
+        .pipe(RepositoryTagsSchema)
+        .optional(),
       tag_query: z.string().trim().max(64).optional(),
       editable: z.literal('true').optional(),
       status: z.enum(['active', 'deleted']).default('active'),
@@ -181,6 +191,8 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     namespace: namespaceSlug,
     status,
     q,
+    visibility,
+    tags,
     tag_query,
     editable,
   } = c.req.valid('query');
@@ -262,6 +274,9 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     const filters = {
       status,
       q,
+      directory_search: true,
+      visibility,
+      tags,
       tag_query,
       authority,
       namespace_id: namespace?.namespaceId,

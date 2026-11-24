@@ -62,9 +62,11 @@ export interface CreateProjectInput {
 export interface ListProjectsOptions {
   /** Deleted repositories remain private management resources. Defaults to active. */
   status?: 'active' | 'deleted';
-  visibility?: 'public';
+  visibility?: Project['visibility'];
   q?: string;
+  directory_search?: boolean;
   tag?: string;
+  tags?: string[];
   tag_query?: string;
   /** Server-selected capability, applied before pagination. */
   required_action?: 'project:edit';
@@ -254,13 +256,31 @@ export async function findProjects(
   const discoveryConditions = [
     options.visibility ? eq(projects.visibility, options.visibility) : undefined,
     escapedSearch
-      ? or(
-          ilike(projects.name, `%${escapedSearch}%`),
-          sql<boolean>`${projects.metadataJson}::jsonb->>'description' ILIKE ${`%${escapedSearch}%`}`
-        )
+      ? options.directory_search
+        ? sql<boolean>`concat_ws(' ',
+            coalesce((select ${namespaces.slug} from ${namespaces}
+              where ${namespaces.namespaceId} = ${projects.namespaceId}), ''),
+            ${projects.name},
+            coalesce(${projects.metadataJson}::jsonb->>'description', ''),
+            coalesce((select string_agg(tag.name, ' ' order by tag.position)
+              from jsonb_array_elements_text(case
+                when jsonb_typeof(${projects.metadataJson}::jsonb#>'{repository_profile,tags}') = 'array'
+                then ${projects.metadataJson}::jsonb#>'{repository_profile,tags}' else '[]'::jsonb end)
+              with ordinality as tag(name, position)), '')
+          ) ilike ${`%${escapedSearch}%`}`
+        : or(
+            ilike(projects.name, `%${escapedSearch}%`),
+            sql<boolean>`${projects.metadataJson}::jsonb->>'description' ILIKE ${`%${escapedSearch}%`}`
+          )
       : undefined,
     options.tag
       ? sql<boolean>`coalesce(${projects.metadataJson}::jsonb->'repository_profile'->'tags', '[]'::jsonb) @> ${JSON.stringify([options.tag])}::jsonb`
+      : undefined,
+    options.tags?.length
+      ? sql<boolean>`coalesce(${projects.metadataJson}::jsonb->'repository_profile'->'tags', '[]'::jsonb) ?| array[${sql.join(
+          options.tags.map((tag) => sql`${tag}`),
+          sql`, `
+        )}]::text[]`
       : undefined,
     escapedTagSearch
       ? sql<boolean>`exists (

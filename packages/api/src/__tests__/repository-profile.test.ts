@@ -243,6 +243,26 @@ describe('project-scoped repository information', () => {
     );
   });
 
+  it('filters accessible repository pages by visibility and any selected exact tag', async () => {
+    const first = await create({ name: 'Exact-private', tags: ['字句', 'optional'] });
+    const second = await create({ name: 'Secondary-private', tags: ['extra'] });
+    const publicRepo = await create({ name: 'Exact-public', tags: ['字句'] });
+    await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, publicRepo.project_id));
+    const query = new URLSearchParams({ visibility: 'private', cursor: '', limit: '20' });
+    query.append('tags', '字句');
+    query.append('tags', 'extra');
+    const response = await appFor().request(`/v1/projects?${query}`);
+    expect(response.status).toBe(200);
+    const { items, has_more } = (await response.json()).data;
+    expect(new Set(items.map((item: { project_id: string }) => item.project_id))).toEqual(
+      new Set([first.project_id, second.project_id])
+    );
+    expect(has_more).toBe(false);
+  });
+
   it('enforces existing read/edit permissions on direct requests', async () => {
     const p = await create({ name: 'Permissions' });
     for (const role of ['viewer', 'editor'])
