@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import type { CheckRecord } from '@/domain/project/checks';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
+import { useProjectChecks } from '@/hooks/projects/useProjectChecks';
 import { useRunPagination } from '@/hooks/projects/useRunPagination';
 
 const mocks = vi.hoisted(() => ({
@@ -70,6 +71,32 @@ describe('Repository Checks', () => {
     mocks.list.mockResolvedValue({ records: [record], next_cursor: 'older' });
     mocks.detail.mockResolvedValue(record);
   });
+  it('pauses selected validation tracking while hidden and stops at a terminal state', async () => {
+    vi.useFakeTimers();
+    let hidden = true;
+    const visibility = vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
+    const running = { ...record, kind: 'validation', payload: { status: 'running' } };
+    mocks.detail
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce({ ...running, payload: { status: 'passed' } });
+    const page = renderHook(() => useProjectChecks('p', 'validation-1', ''));
+    try {
+      await act(async () => {});
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      expect(mocks.detail).toHaveBeenCalledTimes(1);
+      hidden = false;
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      expect(mocks.detail).toHaveBeenCalledTimes(2);
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      expect(mocks.detail).toHaveBeenCalledTimes(2);
+      expect(mocks.list).not.toHaveBeenCalled();
+    } finally {
+      page.unmount();
+      visibility.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('clears the empty result scope and retains the Run tab and source navigation', async () => {
     mocks.pathname = '/project/p';
     mocks.query =

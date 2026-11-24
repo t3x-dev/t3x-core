@@ -135,6 +135,23 @@ describe('Project checks read surface', () => {
     ).json()) as ListResponse;
     expect(pr.data.records.map((r) => r.id)).toEqual([`pull-request:${prId}`]);
   });
+  it('lists only headings and status when the Run history requests summaries', async () => {
+    const response = await app.request(`/v1/projects/${projectId}/checks?view=summary`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as ListResponse;
+    expect(
+      body.data.records.find((record) => record.id === `validation:${runId}`)?.payload
+    ).toEqual({ workspace_id: 'ws:main', workflow_name: 'config', status: 'failed' });
+    expect(
+      body.data.records.find((record) => record.id === `pull-request:${prId}`)?.payload
+    ).toEqual({
+      number: 1,
+      title: 'Device update',
+      source_branch: 'feature',
+      target_branch: 'main',
+    });
+  });
+
   it('returns stored steps and findings only within the owning project', async () => {
     const res = await app.request(`/v1/projects/${projectId}/checks/validation%3A${runId}`);
     expect(res.status).toBe(200);

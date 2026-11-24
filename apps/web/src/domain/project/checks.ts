@@ -73,6 +73,7 @@ export function checkItems(record: CheckRecord): CheckItem[] {
           key === 'validation' &&
           p.content_validation === 'not_applicable' &&
           runs.length === 0 &&
+          check.has_runs !== true &&
           check.observation !== 'observed' &&
           (!Array.isArray(check.outcomes) || check.outcomes.length === 0);
         return {
