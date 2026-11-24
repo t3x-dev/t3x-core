@@ -1,4 +1,5 @@
 import { CheckCircle2, Pencil } from 'lucide-react';
+import { markInteraction } from '@/utils/interactionTiming';
 import styles from './WorkspaceStageHeader.module.css';
 
 export function WorkspaceStageNavigation({
@@ -29,7 +30,10 @@ export function WorkspaceStageNavigation({
       <button
         aria-selected={mode === 'review'}
         disabled={reviewDisabled}
-        onClick={() => onModeChange('review')}
+        onClick={() => {
+          if (mode !== 'review') markInteraction('review', 'click');
+          onModeChange('review');
+        }}
         role="tab"
         type="button"
       >

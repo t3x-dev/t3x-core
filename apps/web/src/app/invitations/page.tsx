@@ -4,12 +4,13 @@ import type { ReceivedCollaborationInvitation } from '@t3x-dev/api-client';
 import { CheckCircle2, Inbox, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
+import { markInteraction } from '@/utils/interactionTiming';
 
 function invitationTarget(item: ReceivedCollaborationInvitation): string {
   return item.project ? `${item.namespace.slug}/${item.project.name}` : item.namespace.display_name;
@@ -23,7 +24,14 @@ function invitationHref(item: ReceivedCollaborationInvitation): string {
 
 export function InvitationsPageContent() {
   const client = getSharedApiClient();
-  const { invitations, loading, error, refresh, remove } = useInvitationInbox();
+  const { invitations, loading, error, refresh, refreshOnEntry, remove } = useInvitationInbox();
+  useEffect(() => {
+    markInteraction('invitations', 'mount');
+    refreshOnEntry();
+  }, [refreshOnEntry]);
+  useEffect(() => {
+    if (!loading && !error) markInteraction('invitations', 'ready');
+  }, [loading, error]);
   const [actions, setActions] = useState<Record<string, { error?: string } | undefined>>({});
   const [accepted, setAccepted] = useState<ReceivedCollaborationInvitation | null>(null);
 

@@ -14,6 +14,7 @@ import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { markInteraction } from '@/utils/interactionTiming';
 
 export function isProjectDiffRoute(pathname: string): boolean {
   return /^\/project\/[^/]+\/diff(?:\/)?$/.test(pathname);
@@ -33,6 +34,9 @@ export function isSettingsRoute(pathname: string): boolean {
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  useEffect(() => {
+    if (pathname === '/invitations') markInteraction('invitations', 'route');
+  }, [pathname]);
   const isLoginPage = pathname === '/login';
   useRepositoryDirectoryIdlePrefetch(!isLoginPage && pathname !== '/repositories');
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);

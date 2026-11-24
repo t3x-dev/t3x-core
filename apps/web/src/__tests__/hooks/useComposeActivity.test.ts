@@ -467,6 +467,43 @@ it('acknowledges a save before refresh and rejects a read older than the receipt
   expect(publish).toHaveBeenCalledTimes(1);
 });
 
+it('keeps one Draft activity poll in flight when a reply takes multiple intervals', async () => {
+  read.mockReset();
+  const interval = vi.spyOn(window, 'setInterval');
+  const first = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 0,
+  };
+  read.mockResolvedValue(first);
+  const candidate = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const view = renderHook(() => useComposeActivity(candidate, true));
+  try {
+    await waitFor(() => expect(view.result.current.view).toEqual(first));
+    const poll = interval.mock.calls.find(([, delay]) => delay === 5000)?.[0] as () => void;
+    let finish!: (value: typeof first) => void;
+    read.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    act(() => {
+      poll();
+      poll();
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+    await act(async () => finish(first));
+    await act(async () => poll());
+    expect(read).toHaveBeenCalledTimes(3);
+  } finally {
+    view.unmount();
+    interval.mockRestore();
+  }
+});
+
 it('detects branch-head changes even when the composition revision stays at zero', async () => {
   read.mockReset();
   const interval = vi.spyOn(window, 'setInterval');
