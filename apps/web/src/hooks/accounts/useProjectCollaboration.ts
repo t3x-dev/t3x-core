@@ -12,7 +12,7 @@ export function projectCollaborationQueryKey(
   return ['project', projectId, 'collaboration', resource];
 }
 
-export function useProjectCollaboration(projectId: string) {
+export function useProjectCollaboration(projectId: string, { includeInvitations = true } = {}) {
   const client = getSharedApiClient();
   const guestsQuery = useQuery({
     queryKey: projectCollaborationQueryKey(projectId, 'guests'),
@@ -24,7 +24,7 @@ export function useProjectCollaboration(projectId: string) {
   const invitationsQuery = useQuery({
     queryKey: projectCollaborationQueryKey(projectId, 'invitations'),
     queryFn: () => client.listProjectInvitations(projectId),
-    enabled: canManageGuests,
+    enabled: includeInvitations && canManageGuests,
     staleTime: 15_000,
   });
 

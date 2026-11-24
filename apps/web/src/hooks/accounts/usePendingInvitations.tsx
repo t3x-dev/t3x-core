@@ -54,13 +54,18 @@ export function InvitationInboxProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!enabled) return;
-    window.addEventListener('focus', refetch);
-    const poll = window.setInterval(refetch, 60_000);
+    const refreshVisible = () => {
+      if (document.visibilityState !== 'hidden' && inFlight.current?.userId !== userId) refetch();
+    };
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    const poll = window.setInterval(refreshVisible, 60_000);
     return () => {
-      window.removeEventListener('focus', refetch);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
       window.clearInterval(poll);
     };
-  }, [enabled, refetch]);
+  }, [enabled, refetch, userId]);
 
   function remove(id: string) {
     if (!userId) return;
