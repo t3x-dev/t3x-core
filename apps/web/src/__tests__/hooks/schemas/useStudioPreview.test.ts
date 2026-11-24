@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  StudioPreviewCacheContext,
+  type StudioPreviewSnapshot,
+} from '@/hooks/schemas/studioPreviewCache';
 import { useStudioPreview } from '@/hooks/schemas/useStudioPreview';
 import { previewStudioSelection } from '@/infrastructure/schemaStudio';
 
@@ -65,4 +70,39 @@ describe('Studio preview ownership', () => {
     await waitFor(() => expect(result.current.error).toBe('Source no longer authorized'));
     expect(result.current.data).toBeUndefined();
   });
+});
+
+it('shares an exact bound definition request and reuses the resolved revision on return', async () => {
+  const cache = new Map<string, StudioPreviewSnapshot>();
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StudioPreviewCacheContext.Provider, { value: cache }, children);
+  const read = vi.mocked(previewStudioSelection);
+  read.mockReset().mockResolvedValue({
+    schemaHash: 'r8',
+    workspace: { id: 'docs', revision: 8, boundSchema: { nodes: {} } },
+  } as never);
+  const input = { candidateIds: [], workspaceId: 'docs' };
+  const left = renderHook(() => useStudioPreview('project', input, 8), { wrapper });
+  const right = renderHook(() => useStudioPreview('project', input, 8), { wrapper });
+  await waitFor(() => expect(left.result.current.data?.schemaHash).toBe('r8'));
+  expect(right.result.current.data?.schemaHash).toBe('r8');
+  left.unmount();
+  right.unmount();
+  const next = renderHook(() => useStudioPreview('project', input, 8), { wrapper });
+  expect(next.result.current.data?.schemaHash).toBe('r8');
+  expect(read).toHaveBeenCalledExactlyOnceWith('project', input);
+});
+
+it('rejects a definition returned for a different Workspace revision', async () => {
+  vi.mocked(previewStudioSelection)
+    .mockReset()
+    .mockResolvedValue({
+      schemaHash: 'r7',
+      workspace: { id: 'docs', revision: 7, boundSchema: { nodes: {} } },
+    } as never);
+  const { result } = renderHook(() =>
+    useStudioPreview('project', { candidateIds: [], workspaceId: 'docs' }, 8)
+  );
+  await waitFor(() => expect(result.current.error).toMatch(/Workspace changed/));
+  expect(result.current.data).toBeUndefined();
 });

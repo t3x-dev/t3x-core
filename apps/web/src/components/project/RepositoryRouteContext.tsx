@@ -3,6 +3,10 @@
 import { useParams } from 'next/navigation';
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import type { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
+import {
+  StudioPreviewCacheContext,
+  type StudioPreviewSnapshot,
+} from '@/hooks/schemas/studioPreviewCache';
 import { type UseBranchesResult, useBranches } from '@/hooks/shared/useBranches';
 import {
   type UseProjectWorkspacesResult,
@@ -68,6 +72,9 @@ export function RepositoryViewData({
     () => ({ current: null }),
     [projectId]
   );
+  const studioPreviewCache = useMemo(() => {
+    return projectId ? new Map<string, StudioPreviewSnapshot>() : null;
+  }, [projectId]);
   const branches = useBranches(projectId, enabled);
   const workspaces = useProjectWorkspaces(projectId, enabled);
   return (
@@ -75,7 +82,9 @@ export function RepositoryViewData({
       value={enabled && projectId ? { projectId, branches, workspaces } : null}
     >
       <WorkspaceActivityCacheContext.Provider value={enabled ? activityCache : null}>
-        {children}
+        <StudioPreviewCacheContext.Provider value={enabled ? studioPreviewCache : null}>
+          {children}
+        </StudioPreviewCacheContext.Provider>
       </WorkspaceActivityCacheContext.Provider>
     </RepositoryViewDataContext.Provider>
   );
