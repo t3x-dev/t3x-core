@@ -93,7 +93,10 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // Open-source: built-in local auth (username/password)
-const { app, websocket } = createApp({ enableLocalConfigRoutes: true });
+const { app, websocket } = createApp({
+  enableLocalConfigRoutes: true,
+  repositoryReadTiming: process.env.T3X_REPOSITORY_READ_TIMING === 'true',
+});
 
 // Server startup
 const port = parseInt(process.env.PORT || '8000', 10);

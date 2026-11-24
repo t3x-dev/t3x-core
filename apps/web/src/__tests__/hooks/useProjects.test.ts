@@ -11,6 +11,8 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 // commands (createProject) before importing the hook.
 vi.mock('@/infrastructure/projects', () => ({
   listProjectPage: vi.fn(),
+  cancelRepositoryDirectoryPrefetch: vi.fn(),
+  cancelRepositoryDirectoryRead: vi.fn(),
   listProjects: vi.fn(),
   deleteProject: vi.fn(),
 }));
@@ -42,14 +44,26 @@ describe('useProjects.create', () => {
       .mockResolvedValueOnce({ items: [second], next_cursor: null, has_more: false } as never);
     const { result } = renderHook(() => useProjects(1, 'alice', 'on-demand'));
     await waitForHook();
-    expect(listProjectPage).toHaveBeenCalledExactlyOnceWith(1, '', 'alice');
+    expect(listProjectPage).toHaveBeenCalledExactlyOnceWith(
+      1,
+      '',
+      'alice',
+      undefined,
+      expect.any(AbortSignal)
+    );
     expect(result.current.projects).toEqual([first]);
     expect(result.current.hasMore).toBe(true);
 
     await act(async () => {
       await result.current.loadMore();
     });
-    expect(listProjectPage).toHaveBeenLastCalledWith(1, 'next', 'alice');
+    expect(listProjectPage).toHaveBeenLastCalledWith(
+      1,
+      'next',
+      'alice',
+      undefined,
+      expect.any(AbortSignal)
+    );
     expect(result.current.projects).toEqual([first, second]);
     expect(result.current.hasMore).toBe(false);
     expect(listProjects).not.toHaveBeenCalled();

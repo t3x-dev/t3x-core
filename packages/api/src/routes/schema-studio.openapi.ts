@@ -507,13 +507,19 @@ const applyRoute = createRoute({
 schemaStudioRoutes.openapi(previewRoute, async (c) => {
   const db = await getDB();
   const { projectId } = c.req.valid('param');
-  const access = await assertProjectAccess(c, db, projectId, 'project:read');
-  if (access instanceof Response) return access;
-  try {
-    return c.json(
-      { success: true as const, data: await previewStudio(c, db, projectId, c.req.valid('json')) },
-      200
+  if ((c as Context<AppEnv>).get('repositoryReadAccess')?.projectId !== projectId) {
+    const access = await timeRepositoryRead(c, 'project_access', () =>
+      assertProjectAccess(c, db, projectId, 'project:read')
     );
+    if (access instanceof Response) return access;
+  }
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    const input = c.req.valid('json');
+    const data = await timeRepositoryRead(c, 'schema_preview', () =>
+      previewStudio(c, db, projectId, input)
+    );
+    return c.json({ success: true as const, data }, 200);
   } catch (error) {
     if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
     throw error;

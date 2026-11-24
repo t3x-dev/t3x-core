@@ -89,6 +89,7 @@ export async function proxyBrowserApi(request: Request, path: string[]): Promise
     headers: upstreamHeaders(request, session),
     body: body && body.size > 0 ? body : undefined,
     redirect: 'manual',
+    signal: request.signal,
   });
   const route = path.join('/');
 

@@ -24,6 +24,8 @@ import {
 } from '@/hooks/shared/deleteEvents';
 import { ApiError } from '@/infrastructure/core';
 import {
+  cancelRepositoryDirectoryPrefetch,
+  cancelRepositoryDirectoryRead,
   deleteProject,
   listProjectPage,
   listProjects,
@@ -75,20 +77,21 @@ export function useProjects(
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(initialPage?.next_cursor ?? null);
   const requestIdRef = useRef(0);
+  const activePage = useRef<AbortController | undefined>(undefined);
   const nextPageRequest = useRef<number | null>(null);
   const q = search?.trim() || undefined;
   const tag_query = tagSearch?.trim() || undefined;
   const fetchPage = useCallback(
-    (cursor: string) =>
-      q || tag_query || editableOnly || visibility || tags?.length
-        ? listProjectPage(limit, cursor, namespaceSlug, {
-            q,
-            tag_query,
-            editable: editableOnly || undefined,
-            visibility,
-            tags,
-          })
-        : listProjectPage(limit, cursor, namespaceSlug),
+    (cursor: string, signal: AbortSignal) =>
+      listProjectPage(
+        limit,
+        cursor,
+        namespaceSlug,
+        q || tag_query || editableOnly || visibility || tags?.length
+          ? { q, tag_query, editable: editableOnly || undefined, visibility, tags }
+          : undefined,
+        signal
+      ),
     [limit, namespaceSlug, q, tag_query, editableOnly, visibility, tags]
   );
 
@@ -96,12 +99,15 @@ export function useProjects(
     async (force: boolean) => {
       if (!enabled) return;
       const requestId = ++requestIdRef.current;
+      activePage.current?.abort();
+      const controller = new AbortController();
+      activePage.current = controller;
       setLoading(true);
       try {
         if (mode === 'on-demand') {
           const data = directoryUserId
             ? await loadRepositoryDirectoryPage(directoryUserId, force)
-            : await fetchPage('');
+            : await fetchPage('', controller.signal);
           if (
             requestId !== requestIdRef.current ||
             (directoryUserId && getSessionUserId() !== directoryUserId)
@@ -130,7 +136,6 @@ export function useProjects(
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
         if (
-          directoryUserId &&
           err instanceof ApiError &&
           ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'SESSION_NOT_CURRENT'].includes(err.code)
         ) {
@@ -150,9 +155,11 @@ export function useProjects(
     const requestId = requestIdRef.current;
     if (!enabled || !nextCursor || loading || nextPageRequest.current === requestId) return false;
     nextPageRequest.current = requestId;
+    const controller = new AbortController();
+    activePage.current = controller;
     setLoading(true);
     try {
-      const data = await fetchPage(nextCursor);
+      const data = await fetchPage(nextCursor, controller.signal);
       if (requestId !== requestIdRef.current) return false;
       if (data.next_cursor === nextCursor)
         throw new Error('Repository pagination did not advance. Please refresh.');
@@ -165,8 +172,16 @@ export function useProjects(
       setError(null);
       return data.items.length > 0;
     } catch (err) {
-      if (requestId === requestIdRef.current)
+      if (requestId === requestIdRef.current) {
+        if (
+          err instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN', 'SESSION_NOT_CURRENT'].includes(err.code)
+        ) {
+          setProjects([]);
+          setNextCursor(null);
+        }
         setError(formatUserFacingError(err, 'Failed to load more projects.'));
+      }
       return false;
     } finally {
       if (requestId === requestIdRef.current) {
@@ -183,14 +198,19 @@ export function useProjects(
     }
     setError(null);
     setLoading(enabled);
+    if (enabled && (q || tag_query || visibility || tags?.length)) {
+      cancelRepositoryDirectoryPrefetch();
+    }
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
     if (q || tag_query) searchTimer = setTimeout(() => void refreshFirstPage(false), 250);
     else void refreshFirstPage(false);
     return () => {
       clearTimeout(searchTimer);
       requestIdRef.current += 1;
+      activePage.current?.abort();
+      if (directoryUserId) cancelRepositoryDirectoryRead(directoryUserId);
     };
-  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId]);
+  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId, visibility, tags]);
 
   useEffect(() => {
     const restored = () => {

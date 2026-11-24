@@ -2,6 +2,7 @@
  * API client core infrastructure - shared utilities
  */
 
+import { invalidateSessionReads } from './session';
 import type { ApiCommitAnchors, ApiResponse } from './types';
 
 // Browser HTTP stays same-origin. The BFF owns the server-side API credential.
@@ -96,10 +97,13 @@ export class ApiError extends Error {
 }
 
 export async function handleResponse<T>(response: Response): Promise<T> {
-  const json = (await response.json().catch(() => ({
-    success: false,
-    error: { code: 'PARSE_ERROR', message: 'Failed to parse response' },
-  }))) as ApiResponse<T>;
+  const json = (await response.json().catch((error: unknown) => {
+    if (error instanceof Error && error.name === 'AbortError')
+      throw new ApiError('ABORTED', 'Request was cancelled');
+    if (error instanceof Error && error.name === 'TimeoutError')
+      throw new ApiError('TIMEOUT', 'Request timed out while loading data');
+    return { success: false, error: { code: 'PARSE_ERROR', message: 'Failed to parse response' } };
+  })) as ApiResponse<T>;
 
   if (!response.ok || !json.success) {
     throw new ApiError(
@@ -123,48 +127,22 @@ export async function injectAuthHeaders(headers: Headers): Promise<Headers> {
   return headers;
 }
 
-// Single fetch attempt with timeout + abort support
-async function fetchOnce(
-  url: string,
-  options?: RequestInit,
-  timeoutMs = DEFAULT_TIMEOUT,
-  externalSignal?: AbortSignal
-): Promise<Response> {
-  if (externalSignal?.aborted) throw new ApiError('ABORTED', 'Request was cancelled');
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  // Link external signal to our controller
-  const abortHandler = () => controller.abort();
-  externalSignal?.addEventListener('abort', abortHandler);
-
-  const headers = await injectAuthHeaders(new Headers(options?.headers));
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      signal: controller.signal,
-    });
-    return response;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      // Check if it was external abort vs timeout
-      if (externalSignal?.aborted) {
-        throw new ApiError('ABORTED', 'Request was cancelled');
-      }
-      throw new ApiError('TIMEOUT', `Request timed out after ${timeoutMs}ms`);
+function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    signal.throwIfAborted();
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    function abort() {
+      clearTimeout(timer);
+      reject(signal.reason);
     }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-    externalSignal?.removeEventListener('abort', abortHandler);
-  }
+    signal.addEventListener('abort', abort, { once: true });
+  });
 }
 
-// Fetch with timeout wrapper + automatic retry for GET requests.
-// GET requests (no method or method='GET') retry up to 3 times on server/network errors
-// with exponential backoff (500ms -> 1s -> 2s). Non-GET requests are never retried.
+// The deadline covers all attempts and backoff. Mutations and declared BFF failures never retry.
 export async function fetchWithTimeout(
   url: string,
   options?: RequestInit,
@@ -172,36 +150,42 @@ export async function fetchWithTimeout(
   externalSignal?: AbortSignal
 ): Promise<Response> {
   const method = (options?.method || 'GET').toUpperCase();
-  const isIdempotent = method === 'GET' || method === 'HEAD';
-  const maxAttempts = isIdempotent ? 3 : 1;
-
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const response = await fetchOnce(url, options, timeoutMs, externalSignal);
-      // Don't retry on success or client errors (4xx)
-      if (
-        response.ok ||
-        (response.status >= 400 && response.status < 500) ||
-        attempt >= maxAttempts
-      ) {
-        return response;
+  const maxAttempts = method === 'GET' || method === 'HEAD' ? 3 : 1;
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const signals = [options?.signal, externalSignal, deadline].filter(
+    (signal): signal is AbortSignal => Boolean(signal)
+  );
+  const signal = AbortSignal.any(signals);
+  const headers = await injectAuthHeaders(new Headers(options?.headers));
+  try {
+    for (let attempt = 1; ; attempt++) {
+      signal.throwIfAborted();
+      let response: Response | undefined;
+      try {
+        response = await fetch(url, { ...options, headers, signal });
+      } catch (error) {
+        if (signal.aborted || attempt >= maxAttempts || !(error instanceof TypeError)) throw error;
       }
-      // Server error (5xx) — retry with backoff
-      lastError = new ApiError('SERVER_ERROR', `HTTP ${response.status}`);
-    } catch (err) {
-      // Never retry aborted or timed-out requests
-      if (err instanceof ApiError && (err.code === 'ABORTED' || err.code === 'TIMEOUT')) {
-        throw err;
+      if (response) {
+        if (response.status === 401 || response.status === 403) invalidateSessionReads();
+        if (
+          attempt >= maxAttempts ||
+          ![502, 503, 504].includes(response.status) ||
+          response.headers.has('x-t3x-request-failure')
+        )
+          return response;
+        void response.body?.cancel().catch(() => {});
       }
-      lastError = err;
-      if (attempt >= maxAttempts) throw err;
+      await waitForRetry(250 * 2 ** (attempt - 1), signal);
     }
-    // Exponential backoff: 500ms, 1000ms, 2000ms
-    const delay = 500 * 2 ** (attempt - 1);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+  } catch (error) {
+    if (signal.aborted) {
+      if (signal.reason === deadline.reason && deadline.aborted)
+        throw new ApiError('TIMEOUT', `Request timed out after ${timeoutMs}ms`);
+      throw new ApiError('ABORTED', 'Request was cancelled');
+    }
+    throw error;
   }
-  throw lastError;
 }
 
 // Helper to build query string with proper encoding

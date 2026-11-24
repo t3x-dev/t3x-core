@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  getSessionReadEpoch,
+  getSessionUserId,
+  subscribeSessionReadInvalidation,
+  subscribeSessionUser,
+} from '@/infrastructure/session';
 
 interface UseQueryOptions<T> {
   queryKey: unknown[];
@@ -20,6 +26,7 @@ interface UseQueryResult<T> {
 const queryCache = new Map<string, { data: unknown; timestamp: number }>();
 const QUERY_CACHE_MAX_SIZE = 200;
 const STALE_CLEANUP_MS = 60_000; // Prune entries older than 60s
+let cacheSubscribed = false;
 
 function getCacheKey(queryKey: unknown[]): string {
   return JSON.stringify(queryKey);
@@ -36,7 +43,8 @@ export function useQuery<T>({
   enabled = true,
   staleTime = 30000,
 }: UseQueryOptions<T>): UseQueryResult<T> {
-  const cacheKey = getCacheKey(queryKey);
+  const userId = useSyncExternalStore(subscribeSessionUser, getSessionUserId, () => null);
+  const cacheKey = getCacheKey([...queryKey, userId]);
   const [snapshot, setSnapshot] = useState<QuerySnapshot<T>>();
   const mountedRef = useRef(false);
   const requestRef = useRef(0);
@@ -53,10 +61,12 @@ export function useQuery<T>({
       return;
     controllerRef.current?.abort();
     const request = ++requestRef.current;
+    const epoch = getSessionReadEpoch();
     const isCurrent = () =>
       mountedRef.current &&
       enabledRef.current &&
       activeKeyRef.current === cacheKey &&
+      getSessionUserId() === userId &&
       requestRef.current === request;
     const cached = queryCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < staleTime) {
@@ -75,6 +85,8 @@ export function useQuery<T>({
     try {
       const result = await queryFnRef.current(controller.signal);
       if (!isCurrent()) return;
+      if (getSessionReadEpoch() !== epoch)
+        throw new Error('Your access changed. Refresh to load this data.');
       setSnapshot({ key: cacheKey, data: result, status: 'success', error: null });
       const now = Date.now();
       if (queryCache.size >= QUERY_CACHE_MAX_SIZE) {
@@ -89,16 +101,33 @@ export function useQuery<T>({
       queryCache.set(cacheKey, { data: result, timestamp: now });
     } catch (err) {
       if (!isCurrent()) return;
+      const code = err instanceof Error && 'code' in err ? err.code : undefined;
+      const denied =
+        getSessionReadEpoch() !== epoch ||
+        code === 'UNAUTHORIZED' ||
+        code === 'FORBIDDEN' ||
+        code === 'SESSION_NOT_CURRENT';
+      if (denied) queryCache.delete(cacheKey);
       setSnapshot((current) => ({
         key: cacheKey,
-        data: current?.key === cacheKey ? current.data : null,
+        data: !denied && current?.key === cacheKey ? current.data : null,
         status: 'error',
         error: err instanceof Error ? err : new Error(String(err)),
       }));
     }
-  }, [cacheKey, enabled, staleTime]);
+  }, [cacheKey, enabled, staleTime, userId]);
 
   useEffect(() => {
+    if (!cacheSubscribed) {
+      cacheSubscribed = true;
+      subscribeSessionReadInvalidation(clearQueryCache);
+      let userId = getSessionUserId();
+      subscribeSessionUser(() => {
+        const nextUser = getSessionUserId();
+        if (nextUser !== userId) clearQueryCache();
+        userId = nextUser;
+      });
+    }
     mountedRef.current = true;
     if (enabled) void fetchData();
     else setSnapshot(undefined);

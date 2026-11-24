@@ -79,6 +79,7 @@ it.each([20, 200])('shares the idle first page for %i accessible repositories', 
   expect(fetch).not.toHaveBeenCalled();
   expect(runIdle).toBeDefined();
   await act(async () => runIdle?.({ didTimeout: false, timeRemaining: () => 50 }));
+  await waitFor(() => expect(readCachedRepositoryDirectoryPage('idle-reader')).toEqual(page));
   const directory = renderHook(() =>
     useProjects(20, undefined, 'on-demand', { directoryUserId: 'idle-reader' })
   );
@@ -86,4 +87,20 @@ it.each([20, 200])('shares the idle first page for %i accessible repositories', 
   expect(directory.result.current.hasMore).toBe(total > 20);
   expect(fetch).toHaveBeenCalledTimes(1);
   prefetch.unmount();
+});
+
+it('cancels an adopted first-page request when leaving the directory', async () => {
+  account('leaving-reader');
+  const response = deferred<Response>();
+  const fetch = vi.fn((_url: string, _options: RequestInit) => response.promise);
+  vi.stubGlobal('fetch', fetch);
+  const directory = renderHook(() =>
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'leaving-reader' })
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  const signal = fetch.mock.calls[0]?.[1]?.signal;
+  directory.unmount();
+  expect(signal?.aborted).toBe(true);
+  await act(async () => response.resolve(Response.json({ success: true, data: firstPage })));
+  expect(readCachedRepositoryDirectoryPage('leaving-reader')).toBeUndefined();
 });
