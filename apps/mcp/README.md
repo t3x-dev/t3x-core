@@ -330,6 +330,20 @@ a new request ID, which starts a separate execution.
 
 ### Authenticated core qualification
 
+Build the current checkout and check a running authenticated API before
+qualification. Use a test credential. The optional tool names are checked
+against the selected profile, which defaults to `read-only` and must expose
+`t3x_context`. Set `T3X_API_URL` and `T3X_API_KEY` in the environment.
+
+```bash
+pnpm exec turbo run build --filter=@t3x-dev/mcp
+node tools/mcp-preflight.mjs t3x_resolve_repository
+```
+
+The preflight reads credential context and tool definitions over stdio. Follow
+the [operability standard](docs/operability.md#qualification-prerequisites-and-coverage)
+to check the effective database, fixture configuration, and scenario dependencies.
+
 Issue an Agent credential in Web Settings → API Tokens for an explicit
 project. The form defaults to seven days and lets you select Decision and
 Commit scopes independently. For human confirmation, sign in to Web and open
