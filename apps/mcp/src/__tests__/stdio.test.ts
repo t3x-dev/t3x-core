@@ -101,9 +101,13 @@ describe('apps/mcp stdio subprocess smoke', () => {
     'enforces a read-only business profile for direct calls, resources, and prompts',
     async () => {
       const requested: string[] = [];
+      const requestIds: string[] = [];
       const api = createServer((request, response) => {
         const url = new URL(request.url ?? '/', 'http://fixture.test');
         requested.push(url.pathname + url.search);
+        const requestId = String(request.headers['x-request-id'] ?? '');
+        requestIds.push(requestId);
+        response.setHeader('X-Request-Id', requestId);
         response.setHeader('Content-Type', 'application/json');
         if (request.headers.authorization !== 'Bearer fixture-valid') {
           response.statusCode = 401;
@@ -139,7 +143,14 @@ describe('apps/mcp stdio subprocess smoke', () => {
         T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
       };
       try {
-        const { client } = await connectConfiguredClient({ ...base, T3X_API_KEY: 'fixture-valid' });
+        const { client, transport } = await connectConfiguredClient({
+          ...base,
+          T3X_API_KEY: 'fixture-valid',
+        });
+        let stderr = '';
+        transport.stderr?.on('data', (chunk) => {
+          stderr += chunk.toString();
+        });
         openClients.push(client);
         const { tools } = await client.listTools();
         expect(tools.map((tool) => tool.name).sort()).toEqual([
@@ -188,6 +199,30 @@ describe('apps/mcp stdio subprocess smoke', () => {
         expect(requested).toHaveLength(2);
         expect(requested[0]).toBe('/api/v1/auth/me/credential');
         expect(requested[1]).toContain('initialize_main=0');
+        expect(requestIds[0]).toMatch(/^[a-f0-9-]{36}$/);
+        expect(requestIds[1]).not.toBe(requestIds[0]);
+        await expect.poll(() => stderr.includes('tool.finished')).toBe(true);
+        const events = stderr
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line));
+        const call = events.find(
+          (event) =>
+            event.tool === 't3x_query' &&
+            event.event === 'tool.finished' &&
+            event.outcome === 'success'
+        );
+        expect(call).toMatchObject({
+          component: 'mcp',
+          action: 'branches',
+          call_id: expect.any(String),
+        });
+        expect(
+          events
+            .filter((event) => event.call_id === call.call_id && event.event === 'api.finished')
+            .map((event) => event.http_request_id)
+        ).toEqual(requestIds);
+        expect(stderr).not.toContain('fixture-valid');
         const resource = await client.readResource({ uri: 't3x://projects/proj_fixture' });
         expect(resource.contents).toHaveLength(1);
         expect(requested.slice(2)).toEqual([
@@ -206,7 +241,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
         });
         expect(denied.isError).toBe(true);
         expect(parseTextResult(denied as Parameters<typeof parseTextResult>[0])).toMatchObject({
-          error: { status: 401 },
+          error: { status: 401, call_id: expect.any(String), http_request_id: requestIds.at(-1) },
         });
         expect(requested).toHaveLength(5);
       } finally {

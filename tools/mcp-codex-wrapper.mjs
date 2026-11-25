@@ -1,92 +1,22 @@
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync } from 'node:fs';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(scriptDir, '..');
-const logDir = '/tmp/t3x-mcp-debug';
-const logPath = path.join(logDir, 'codex-wrapper.log');
-
-mkdirSync(logDir, { recursive: true });
-
-function log(line) {
-  appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`);
+function diagnostic(event, fields = {}) {
+  console.error(
+    JSON.stringify({ component: 'mcp', timestamp: new Date().toISOString(), event, ...fields })
+  );
 }
 
-const childEnv = { ...process.env };
-const childArgs = ['apps/mcp/dist/index.js'];
-
-log(
-  JSON.stringify({
-    event: 'wrapper_start',
-    pid: process.pid,
-    ppid: process.ppid,
-    cwd: root,
-    argv: process.argv,
-    childArgs,
-    env: {
-      T3X_MCP_BACKEND: childEnv.T3X_MCP_BACKEND ?? null,
-      T3X_API_URL: childEnv.T3X_API_URL ?? null,
-      T3X_TOOLSETS: childEnv.T3X_TOOLSETS ?? null,
-      apiKeyConfigured: Boolean(childEnv.T3X_API_KEY),
-      HOME: childEnv.HOME ?? null,
-      PATH: childEnv.PATH ?? null,
-    },
-  })
-);
-
-const child = spawn(process.execPath, childArgs, {
-  cwd: root,
-  env: childEnv,
+const child = spawn(process.execPath, ['apps/mcp/dist/index.js'], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
   stdio: 'inherit',
 });
 
-child.on('spawn', () => {
-  log(JSON.stringify({ event: 'child_spawn', pid: child.pid }));
+child.once('error', () => diagnostic('process.launch_failed'));
+child.once('close', (code, signal) => {
+  diagnostic('process.exited', { exit_code: code, signal });
+  process.exitCode = code ?? 1;
 });
-
-child.on('exit', (code, signal) => {
-  log(JSON.stringify({ event: 'child_exit', code, signal }));
-});
-
-child.on('error', (error) => {
-  log(
-    JSON.stringify({
-      event: 'child_error',
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    })
-  );
-});
-
-process.on('uncaughtException', (error) => {
-  log(
-    JSON.stringify({
-      event: 'wrapper_uncaught_exception',
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    })
-  );
-  process.exitCode = 1;
-});
-
-process.on('unhandledRejection', (reason) => {
-  log(
-    JSON.stringify({
-      event: 'wrapper_unhandled_rejection',
-      reason: String(reason),
-    })
-  );
-  process.exitCode = 1;
-});
-
-process.on('SIGINT', () => {
-  log(JSON.stringify({ event: 'wrapper_sigint' }));
-});
-
-process.on('SIGTERM', () => {
-  log(JSON.stringify({ event: 'wrapper_sigterm' }));
-});
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => child.kill(signal));
+}

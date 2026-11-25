@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { createClient, type T3xClient } from '@t3x-dev/api-client';
+import { mcpFetch } from './diagnostics.js';
 
 type FileConfig = {
   api_url?: string;
@@ -53,7 +54,7 @@ export function getApiClient(): T3xClient {
     headers.Authorization = `Bearer ${apiKey}`;
   }
 
-  return createClient({ baseUrl: apiUrl, headers });
+  return createClient({ baseUrl: apiUrl, headers, fetch: mcpFetch });
 }
 
 export function unwrapListPayload<T>(result: T, key: string): T {

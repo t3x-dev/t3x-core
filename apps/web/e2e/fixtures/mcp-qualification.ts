@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { type APIRequestContext, expect, type Page } from '@playwright/test';
+import { createInterface } from 'node:readline';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 import { API_BASE, API_ORIGIN } from './api-helpers';
 
 const root = resolve(process.cwd(), '../..');
@@ -62,29 +63,82 @@ export function account(prefix: string): FixtureAccount {
 
 export function mcpClient(token: string, profile = capabilities) {
   const client = new Client({ name: 't3x-mcp-core-qualification', version: '1.0.0' });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['tools/mcp-codex-wrapper.mjs'],
+    cwd: root,
+    stderr: 'pipe',
+    env: {
+      T3X_MCP_BACKEND: 'api',
+      T3X_API_URL: `${API_ORIGIN}/api`,
+      T3X_API_KEY: token,
+      T3X_CONFIG_PATH: '/dev/null',
+      T3X_MCP_CAPABILITIES: profile,
+    },
+  });
+  const stderr = createInterface({ input: transport.stderr });
+  const events: Array<Record<string, unknown>> = [];
+  stderr.on('line', (line) => {
+    const event = diagnosticEvent(line);
+    if (!event) return;
+    if (events.length === 300) events.shift();
+    events.push(event);
+  });
   return {
-    close: () => client.close(),
-    connect: () =>
-      client.connect(
-        new StdioClientTransport({
-          command: process.execPath,
-          args: ['apps/mcp/dist/index.js'],
-          cwd: root,
-          stderr: 'pipe',
-          env: {
-            T3X_MCP_BACKEND: 'api',
-            T3X_API_URL: `${API_ORIGIN}/api`,
-            T3X_API_KEY: token,
-            T3X_CONFIG_PATH: '/dev/null',
-            T3X_MCP_CAPABILITIES: profile,
-          },
-        })
-      ),
+    async close() {
+      try {
+        await client.close();
+      } finally {
+        stderr.close();
+        await test.info().attach('MCP diagnostics', {
+          contentType: 'application/json',
+          body: JSON.stringify({ profile, events }),
+        });
+      }
+    },
+    connect: () => client.connect(transport),
     list: () => client.listTools() as Promise<{ tools: Array<{ name: string }> }>,
     call: (name: string, args: Record<string, unknown>) =>
       client.callTool({ name, arguments: args }) as Promise<ToolWireResult>,
     readResource: (uri: string) => client.readResource({ uri }),
   };
+}
+
+function diagnosticEvent(line: string): Record<string, unknown> | undefined {
+  if (line.length > 1024 || !line.startsWith('{')) return;
+  let value: Record<string, unknown>;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const { component, event } = value;
+  if (component !== 'mcp') return;
+  if (event === 'process.exited' || event === 'process.launch_failed') {
+    return {
+      event,
+      exit_code: Number.isInteger(value.exit_code) ? value.exit_code : undefined,
+      signal: typeof value.signal === 'string' && /^SIG[A-Z0-9]{1,12}$/.test(value.signal) ? value.signal : undefined,
+    };
+  }
+  if (event !== 'tool.finished' && event !== 'api.finished') return;
+  const fields: Record<string, unknown> = { event };
+  for (const [key, pattern] of Object.entries({
+    timestamp: /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
+    call_id: /^[a-f0-9-]{36}$/,
+    http_request_id: /^[a-f0-9-]{36}$/,
+    tool: /^[a-z_]{1,80}$/,
+    action: /^[a-z_]{1,64}$/,
+    outcome: /^(?:success|error)$/,
+    error_code: /^[A-Z][A-Z0-9_]{0,95}$/,
+  })) {
+    const item = value[key];
+    if (typeof item === 'string' && pattern.test(item)) fields[key] = item;
+  }
+  for (const key of ['http_status', 'duration_ms']) {
+    if (Number.isInteger(value[key])) fields[key] = value[key];
+  }
+  return fields;
 }
 
 export type Mcp = ReturnType<typeof mcpClient>;
