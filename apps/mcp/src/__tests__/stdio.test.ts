@@ -288,6 +288,34 @@ describe('apps/mcp stdio subprocess smoke', () => {
               },
             })
           );
+        } else if (request.method === 'POST' && request.url?.endsWith('/authoring/reviews')) {
+          response.writeHead(409).end(
+            JSON.stringify({
+              success: false,
+              error: {
+                code: 'CONFLICT',
+                message: 'Review is stale.',
+                details: { protocol_code: 'TRANSITION_REVIEW_STALE' },
+              },
+            })
+          );
+        } else if (request.url === '/api/v1/runs/failed-run') {
+          response.end(
+            JSON.stringify({
+              success: true,
+              data: {
+                runId: 'failed-run',
+                projectId: receipt.project_id,
+                runnerRunId: null,
+                commitRef: null,
+                leafId: null,
+                status: 'failed',
+                createdAt: '2026-11-25',
+                updatedAt: '2026-11-25',
+                resultJson: null,
+              },
+            })
+          );
         } else if (request.method === 'POST') {
           for await (const _chunk of request) {
             // Wait for the complete request before simulating loss of the response.
@@ -308,7 +336,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
       try {
         const { client } = await connectConfiguredClient({
           T3X_MCP_BACKEND: 'api',
-          T3X_MCP_CAPABILITIES: 'sources:ingest',
+          T3X_MCP_CAPABILITIES: 'sources:ingest,transitions:prepare,runs:repository',
           T3X_API_KEY: 'fixture',
           T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
         });
@@ -357,6 +385,40 @@ describe('apps/mcp stdio subprocess smoke', () => {
         await rejection;
         await closed;
         expect(writes).toBe(1);
+
+        const stale = await client.callTool({
+          name: 't3x_draft_review',
+          arguments: {
+            action: 'prepare',
+            project_id: receipt.project_id,
+            workspace_id: 'fixture-workspace',
+            request_id: 'fixture-review',
+            expected_workspace_revision: 1,
+            expected_revision: 0,
+            expected_ref_head: null,
+          },
+        });
+        expect(stale.isError).toBe(true);
+        const staleError = parseTextResult(stale as Parameters<typeof parseTextResult>[0]).error;
+        expect(staleError).toMatchObject({
+          code: 'CONFLICT',
+          next_action: expect.stringContaining('fresh Review'),
+        });
+        expect(staleError).not.toHaveProperty('write_outcome');
+
+        const failedRun = await client.callTool({
+          name: 't3x_repository_runs',
+          arguments: {
+            action: 'read',
+            project_id: receipt.project_id,
+            run_id: 'failed-run',
+          },
+        });
+        expect(failedRun.isError).not.toBe(true);
+        expect(parseTextResult(failedRun as Parameters<typeof parseTextResult>[0])).toMatchObject({
+          status: 'failed',
+          run_id: 'failed-run',
+        });
       } finally {
         api.closeAllConnections();
         await new Promise<void>((resolve) => api.close(() => resolve()));

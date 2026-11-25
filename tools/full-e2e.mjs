@@ -23,12 +23,19 @@ const skipBuild = runnerArgs.includes('--skip-build');
 const keepData = runnerArgs.includes('--keep-data') || process.env.T3X_E2E_KEEP_DATA === '1';
 const authEnabled = runnerArgs.includes('--auth-enabled');
 const allowExternal = process.env.T3X_E2E_ALLOW_EXTERNAL === '1';
+const isolatedMcp = process.env.T3X_E2E_MCP_ISOLATED === '1';
 const unknownArgs = runnerArgs.filter(
   (arg) => !['--skip-build', '--keep-data', '--auth-enabled'].includes(arg)
 );
 
 if (unknownArgs.length > 0) {
   throw new Error(`Unknown full E2E runner argument(s): ${unknownArgs.join(', ')}`);
+}
+
+if (isolatedMcp && (!authEnabled || process.env.DATABASE_URL || process.env.T3X_E2E_DATA_DIR)) {
+  throw new Error(
+    'Isolated MCP qualification requires authentication and a fresh embedded database.'
+  );
 }
 
 const apiPort = process.env.T3X_E2E_API_PORT ?? '8100';
@@ -141,14 +148,28 @@ try {
   const api = startLoggedProcess(
     'api',
     'node',
-    ['tools/dev-package-runner.mjs', 'api', 'node', 'apps/api/dist/index.js'],
+    [
+      path.join(repoRoot, 'tools/dev-package-runner.mjs'),
+      'api',
+      'node',
+      path.join(repoRoot, 'apps/api/dist/index.js'),
+    ],
     {
       ...runtimeEnv,
       PORT: apiPort,
-    }
+    },
+    isolatedMcp ? dataDir : repoRoot
   );
   children.push(api);
   await waitForUrl(`${apiUrl}/health`, api, 90_000);
+  if (isolatedMcp) {
+    const anonymous = await fetch(`${apiUrl}/api/v1/projects`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    await anonymous.body?.cancel();
+    if (anonymous.status !== 401)
+      throw new Error('MCP qualification API did not require credentials.');
+  }
 
   const web = startLoggedProcess('webui', 'pnpm', ['--filter', 't3x-webui', 'start'], {
     ...runtimeEnv,
@@ -274,11 +295,11 @@ async function waitForUrl(url, child, timeoutMs) {
   );
 }
 
-function startLoggedProcess(label, command, args, env) {
+function startLoggedProcess(label, command, args, env, cwd = repoRoot) {
   const logPath = path.join(artifactDir, `${label}.log`);
   const log = fs.createWriteStream(logPath, { flags: 'w' });
   const child = spawn(command, args, {
-    cwd: repoRoot,
+    cwd,
     detached: process.platform !== 'win32',
     env,
     shell: process.platform === 'win32',

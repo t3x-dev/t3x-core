@@ -78,6 +78,11 @@ export function mcpClient(token: string, profile = capabilities) {
   });
   const stderr = createInterface({ input: transport.stderr });
   const events: Array<Record<string, unknown>> = [];
+  let protocolVersion: string | undefined;
+  transport.onmessage = (message: { result?: { protocolVersion?: unknown } }) => {
+    const version = message.result?.protocolVersion;
+    if (typeof version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(version)) protocolVersion ??= version;
+  };
   stderr.on('line', (line) => {
     const event = diagnosticEvent(line);
     if (!event) return;
@@ -92,7 +97,7 @@ export function mcpClient(token: string, profile = capabilities) {
         stderr.close();
         await test.info().attach('MCP diagnostics', {
           contentType: 'application/json',
-          body: JSON.stringify({ profile, events }),
+          body: JSON.stringify({ profile, protocolVersion, events }),
         });
       }
     },
