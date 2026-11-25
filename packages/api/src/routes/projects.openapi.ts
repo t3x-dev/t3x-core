@@ -135,6 +135,7 @@ const listProjectsRoute = createRoute({
   request: {
     query: PaginationQuerySchema.extend({
       cursor: z.string().optional(),
+      include_counts: z.literal('false').optional(),
       namespace: NamespaceSlugSchema.optional(),
       q: z.string().trim().max(200).optional(),
       visibility: z.enum(['private', 'unlisted', 'public']).optional(),
@@ -155,9 +156,14 @@ const listProjectsRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(
             z.union([
-              CursorPageResponseSchema(ProjectWithCountsSchema).extend({
-                status: z.literal('deleted').optional(),
-              }),
+              CursorPageResponseSchema(
+                ProjectWithCountsSchema.partial({
+                  conversations_count: true,
+                  commits_count: true,
+                  branches_count: true,
+                  outputs_count: true,
+                })
+              ).extend({ status: z.literal('deleted').optional() }),
               ListProjectsResponseSchema,
             ])
           ),
@@ -188,6 +194,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     limit,
     offset,
     cursor,
+    include_counts,
     namespace: namespaceSlug,
     status,
     q,
@@ -206,11 +213,14 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       createdAt: Date;
       deletedAt: Date | null;
       metadataJson: string | null;
-    }[]
+    }[],
+    includeCounts: boolean
   ) => {
     const projectIds = page.map((project) => project.projectId);
     const [detailsById, actionsById] = await Promise.all([
-      timeRepositoryRead(c, 'list_metadata', () => findProjectListDetails(db, projectIds)),
+      timeRepositoryRead(c, 'list_metadata', () =>
+        findProjectListDetails(db, projectIds, includeCounts)
+      ),
       timeRepositoryRead(c, 'list_permissions', () =>
         listAuthorizedProjectActionsForPage(c, db, projectIds, {
           includeDeleted: status === 'deleted',
@@ -240,10 +250,12 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         visibility: p.visibility,
         created_at: p.createdAt.toISOString(),
         ...projectMetadataFields(p.metadataJson),
-        conversations_count: counts?.conversationsCount ?? 0,
-        commits_count: counts?.commitsCount ?? 0,
-        branches_count: counts?.branchesCount ?? 0,
-        outputs_count: counts?.outputsCount ?? 0,
+        ...(includeCounts && {
+          conversations_count: counts?.conversationsCount ?? 0,
+          commits_count: counts?.commitsCount ?? 0,
+          branches_count: counts?.branchesCount ?? 0,
+          outputs_count: counts?.outputsCount ?? 0,
+        }),
       };
     });
   };
@@ -292,7 +304,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
           limit,
         })
       );
-      const apiProjects = await enrichProjects(db, result.items);
+      const apiProjects = await enrichProjects(db, result.items, include_counts !== 'false');
       return c.json(
         {
           success: true as const,
@@ -316,13 +328,20 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       })
     );
 
-    const apiProjects = await enrichProjects(db, projects);
+    const apiProjects = await enrichProjects(db, projects, true);
+    const countedProjects = apiProjects.map((project) => ({
+      ...project,
+      conversations_count: project.conversations_count ?? 0,
+      commits_count: project.commits_count ?? 0,
+      branches_count: project.branches_count ?? 0,
+      outputs_count: project.outputs_count ?? 0,
+    }));
 
     return c.json(
       {
         success: true as const,
         data: {
-          projects: apiProjects,
+          projects: countedProjects,
           limit,
           offset,
           ...(status === 'deleted' ? { status: 'deleted' as const } : {}),

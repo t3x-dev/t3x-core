@@ -344,7 +344,11 @@ export function ProjectStateTab({
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
   const loadedSnapshotScope = useRef('');
-  const initialBranchRead = useRef<{ scope: string; promise: Promise<ApiCommit[]> } | null>(null);
+  const initialBranchRead = useRef<{
+    scope: string;
+    promise: Promise<ApiCommit[]>;
+    fromDirectory: boolean;
+  } | null>(null);
   const waitingForBranch =
     snapshotTargetHead === undefined &&
     !inspectedHeadByBranchRef.current[branchScope] &&
@@ -352,6 +356,11 @@ export function ProjectStateTab({
 
   useEffect(() => {
     if (initialBranchRead.current?.scope !== selectionScope) initialBranchRead.current = null;
+    if (initialBranchRead.current?.fromDirectory && !directoryHead) {
+      initialBranchRead.current = null;
+      loadedSnapshotScope.current = '';
+      delete inspectedHeadByBranchRef.current[branchScope];
+    }
     if (!snapshotEnabled) return;
 
     const selectedHead =
@@ -364,6 +373,7 @@ export function ProjectStateTab({
       initialBranchRead.current = {
         scope: selectionScope,
         promise: directoryHead ?? loadCommits(projectId, branchFocus, 1),
+        fromDirectory: Boolean(directoryHead),
       };
     }
     const initialRead = initialBranchRead.current?.promise;
@@ -421,7 +431,8 @@ export function ProjectStateTab({
           throw new Error('Commit response does not match the selected project and branch.');
         }
         if (!cancelled) {
-          if (!headCommit && initialRead) initialBranchRead.current = null;
+          if (!headCommit && initialRead && initialRead !== directoryHead)
+            initialBranchRead.current = null;
           if (headCommit && !focusedCommitHash && !inspectedHeadByBranchRef.current[branchScope]) {
             inspectedHeadByBranchRef.current[branchScope] = headCommit.hash;
           }

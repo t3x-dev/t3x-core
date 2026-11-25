@@ -241,6 +241,19 @@ describe('project-scoped repository information', () => {
     expect(new Set([...page.items, ...nextPage.items].map((item) => item.project_id))).toEqual(
       new Set([first.project_id, second.project_id])
     );
+    const lean = await appFor().request(`${path}&include_counts=false`);
+    expect(lean.status).toBe(200);
+    const leanPage = (await lean.json()).data;
+    expect(leanPage.next_cursor).toBe(page.next_cursor);
+    expect(leanPage.items[0]).toMatchObject({
+      project_id: page.items[0].project_id,
+      can_edit: true,
+      canonical_path: page.items[0].canonical_path,
+    });
+    expect(leanPage.items[0]).not.toHaveProperty('commits_count');
+    expect(page.items[0]).toHaveProperty('commits_count', 0);
+    const denied = await appFor('profile-outsider').request(`${path}&include_counts=false`);
+    expect(denied.status).toBe(403);
   });
 
   it('filters accessible repository pages by visibility and any selected exact tag', async () => {

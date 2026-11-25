@@ -897,6 +897,7 @@ describe('ProjectStateTab', () => {
           directoryStateEntry: {
             project: { id: 'proj_test' } as ProjectSummary,
             userId: null,
+            readEpoch: 0,
             expiresAt: Date.now() + 15_000,
             head: Promise.resolve([PRD_COMMIT]),
           },
@@ -911,6 +912,35 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadCommit).not.toHaveBeenCalledWith(PRD_COMMIT.hash, 'proj_test');
   });
 
+  it('reuses a confirmed empty directory HEAD while branch metadata catches up', async () => {
+    const head = deferred<ApiCommit[]>();
+    const directoryStateEntry = {
+      project: { id: 'proj_test' } as ProjectSummary,
+      userId: null,
+      readEpoch: 0,
+      expiresAt: Date.now() + 15_000,
+      head: head.promise,
+    };
+    const state = () => (
+      <RepositoryAddressContext.Provider
+        value={{ current: null, retry: () => {}, directoryStateEntry }}
+      >
+        <ProjectStateTab initialView="structure" projectId="proj_test" projectName="Test Project" />
+      </RepositoryAddressContext.Provider>
+    );
+    hookMocks.branchesLoading = true;
+    const view = render(state());
+    expect(screen.queryByText('No commit on this branch')).not.toBeInTheDocument();
+    await act(async () => head.resolve([]));
+    expect(await screen.findByText('No commit on this branch')).toBeVisible();
+    hookMocks.branchesLoading = false;
+    hookMocks.branchHeads = { main: null };
+    view.rerender(state());
+    expect(screen.getByText('No commit on this branch')).toBeVisible();
+    expect(hookMocks.loadCommits).not.toHaveBeenCalled();
+    expect(hookMocks.loadCommit).not.toHaveBeenCalled();
+  });
+
   it('uses the registered branch head if it changed during directory navigation', async () => {
     const latest = { ...PRD_COMMIT, hash: 'sha256:updated-at-open', message: 'Updated at open' };
     hookMocks.branchHeads = { main: latest.hash };
@@ -923,6 +953,7 @@ describe('ProjectStateTab', () => {
           directoryStateEntry: {
             project: { id: 'proj_test' } as ProjectSummary,
             userId: null,
+            readEpoch: 0,
             expiresAt: Date.now() + 15_000,
             head: Promise.resolve([PRD_COMMIT]),
           },

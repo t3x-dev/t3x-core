@@ -105,6 +105,8 @@ export function DiscoverHeader({
     : owner
       ? `/${encodeURIComponent(owner)}`
       : '/';
+  const prefetchNamespace =
+    owner && !repositoriesNavigation ? () => prefetchRepositoryDirectoryPage(owner) : undefined;
   const homeHref = authDisabled ? '/t3x-dev' : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
@@ -155,6 +157,16 @@ export function DiscoverHeader({
               <Link
                 className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
                 href={ownerHref}
+                onPointerEnter={projectName ? prefetchNamespace : undefined}
+                onFocus={projectName ? prefetchNamespace : undefined}
+                onNavigate={
+                  projectName && prefetchNamespace
+                    ? () => {
+                        beginNavigationTiming('repositories');
+                        prefetchNamespace();
+                      }
+                    : undefined
+                }
               >
                 {owner && !repositoriesNavigation ? (
                   <OwnerIcon aria-hidden="true" />
@@ -217,9 +229,13 @@ export function DiscoverHeader({
               href="/repositories"
               onNavigate={() => beginNavigationTiming('repositories')}
               aria-current={repositoriesNavigation ? 'page' : undefined}
-              onPointerEnter={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
-              onFocus={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
-              onPointerDown={repositoriesNavigation ? undefined : prefetchRepositoryDirectoryPage}
+              onPointerEnter={
+                repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()
+              }
+              onFocus={repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()}
+              onPointerDown={
+                repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()
+              }
             >
               Your repositories
               <NavigationFeedback />
@@ -271,6 +287,24 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tab.href}
+                    onPointerEnter={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? prefetchNamespace
+                        : undefined
+                    }
+                    onFocus={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? prefetchNamespace
+                        : undefined
+                    }
+                    onNavigate={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? () => {
+                            beginNavigationTiming('repositories');
+                            prefetchNamespace?.();
+                          }
+                        : undefined
+                    }
                     scroll={false}
                     className={styles.tab}
                     aria-current={namespaceTab === tab.id ? 'page' : undefined}
