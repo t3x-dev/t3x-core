@@ -1,11 +1,17 @@
 'use client';
 import type { StudioPublishInput } from '@t3x-dev/api-client';
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 import { publishStudioSchema } from '@/infrastructure/schemaStudio';
+import { invalidateStudioPreviews, StudioPreviewCacheContext } from './studioPreviewCache';
 
 export function usePublishStudioSchema(projectId: string, workspaceId: string) {
+  const cache = useContext(StudioPreviewCacheContext);
   return useCallback(
-    (input: StudioPublishInput) => publishStudioSchema(projectId, workspaceId, input),
-    [projectId, workspaceId]
+    async (input: StudioPublishInput) => {
+      const published = await publishStudioSchema(projectId, workspaceId, input);
+      if (cache) invalidateStudioPreviews(cache, workspaceId);
+      return published;
+    },
+    [cache, projectId, workspaceId]
   );
 }

@@ -711,7 +711,12 @@ export function SchemaStudioExperience({
       ? { workspaceId: persistedTarget.id }
       : {}),
   };
-  const basePreview = useStudioPreview(projectId, previewInput, persistedTarget?.revision);
+  const basePreview = useStudioPreview(
+    projectId,
+    previewInput,
+    persistedTarget?.revision,
+    persistedTarget?.targetBranch
+  );
   const hasLocalContribution = contributionHasContent(localContribution);
   const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef || !!schemaDefinition;
   const localPreview = useStudioPreview(
@@ -730,7 +735,8 @@ export function SchemaStudioExperience({
               : { localContribution }),
         }
       : { candidateIds: [] },
-    persistedTarget?.revision
+    persistedTarget?.revision,
+    persistedTarget?.targetBranch
   );
   const preview = hasSchemaEdit ? localPreview : basePreview;
   const data = preview.data;
