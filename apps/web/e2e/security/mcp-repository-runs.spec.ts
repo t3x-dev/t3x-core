@@ -109,7 +109,7 @@ test('read saved Runs and dispatch one configured workflow per authorized reques
     expect((await viewer.call(tool, { ...list, action: 'trigger' })).isError).toBe(true);
     expect((await agent.call(tool, { action: 'list' })).isError).toBe(true);
     const trigger = 't3x_trigger_repository_run';
-    expect((await agent.call(trigger, {})).isError).toBe(true);
+    await expect(agent.call(trigger, {})).rejects.toMatchObject({ code: -32602 });
     const project = 'configured_run_fixture';
     const commit = async (id: string) =>
       (

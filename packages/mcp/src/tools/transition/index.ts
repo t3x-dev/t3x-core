@@ -8,37 +8,22 @@ import {
   type TransitionSourceMaterialSelector,
 } from '@t3x-dev/api-client';
 import { getApiClient, isApiBackend } from '../../backend.js';
-import { fail, ok, type ToolDef, type ToolHandler, type ToolResult } from '../types.js';
+import {
+  apiToolError,
+  ok,
+  type ToolDef,
+  type ToolHandler,
+  type ToolResult,
+  toolError,
+} from '../types.js';
 
 export const API_BACKEND_REQUIRED = 'API_BACKEND_REQUIRED' as const;
-
-function errorResult(
-  code: string,
-  message: string,
-  status?: number,
-  details?: Record<string, unknown>
-): ToolResult {
-  return fail(
-    JSON.stringify(
-      {
-        error: {
-          code,
-          message,
-          ...(status === undefined ? {} : { status }),
-          ...(details === undefined ? {} : { details }),
-        },
-      },
-      null,
-      2
-    )
-  );
-}
 
 export async function withTransitionApi(
   action: (client: T3xClient) => Promise<unknown>
 ): Promise<ToolResult> {
   if (!isApiBackend()) {
-    return errorResult(
+    return toolError(
       API_BACKEND_REQUIRED,
       'Transition tools require T3X_MCP_BACKEND=api so authority stays at the API boundary.'
     );
@@ -48,7 +33,7 @@ export async function withTransitionApi(
     return ok(await action(getApiClient()));
   } catch (error) {
     if (error instanceof T3xApiError) {
-      return errorResult(error.code, error.message, error.status, error.details);
+      return apiToolError(error);
     }
     throw error;
   }

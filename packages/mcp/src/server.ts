@@ -18,11 +18,13 @@ import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  ErrorCode,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  McpError,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { T3xApiError } from '@t3x-dev/api-client';
@@ -70,7 +72,7 @@ import { sourceArtifactDef, sourceArtifactHandler } from './tools/source-artifac
 import { sourceContextDef, sourceContextHandler } from './tools/source-context.js';
 import { sourceIngestionDef, sourceIngestionHandler } from './tools/source-ingestion.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
-import type { ToolDef, ToolHandler } from './tools/types.js';
+import { apiToolError, fail, type ToolDef, type ToolHandler, toolError } from './tools/types.js';
 import { workspaceCandidateDef, workspaceCandidateHandler } from './tools/workspace-candidate.js';
 import {
   workspaceValidationDef,
@@ -294,21 +296,17 @@ export function createMcpServer(options: McpServerOptions) {
     const { name, arguments: args } = request.params;
     const handler = handlers.get(name);
 
-    const errorResult = (text: string) =>
-      ({ content: [{ type: 'text' as const, text }], isError: true }) as unknown as Record<
-        string,
-        unknown
-      >;
-
     if (!handler) {
-      return errorResult(`Unknown tool: ${name}`);
+      throw new McpError(ErrorCode.InvalidParams, 'Unknown tool.');
     }
 
     try {
       const input = args ?? {};
       if (exposure) {
         if (!exposure.allows(name, input)) {
-          return errorResult('Action is unavailable in T3X_MCP_CAPABILITIES.');
+          return {
+            ...toolError('ACTION_UNAVAILABLE', 'Action is unavailable in T3X_MCP_CAPABILITIES.'),
+          };
         }
         const identifiers = [
           'id',
@@ -330,26 +328,32 @@ export function createMcpServer(options: McpServerOptions) {
             return !(workspace ? isSafeWorkspaceIdentifier : isSafeBusinessIdentifier)(input[key]);
           })
         ) {
-          return errorResult('Invalid identifier in business tool arguments.');
+          return {
+            ...toolError('INVALID_ARGUMENT', 'Invalid identifier in business tool arguments.'),
+          };
         }
         if (name !== contextDef.name) await authenticatedApi();
       }
-      return (await handler(
+      const result = await handler(
         input,
         exposure && {
           skipMainBranchInitialization: true,
         }
-      )) as unknown as Record<string, unknown>;
-    } catch (error: unknown) {
-      if (exposure && error instanceof T3xApiError) {
-        return errorResult(
-          JSON.stringify({
-            error: { code: error.code, status: error.status, message: error.message },
-          })
-        );
+      );
+      if (exposure && result.isError && !result.content[0]?.text.startsWith('{')) {
+        return {
+          ...toolError(
+            'TOOL_ERROR',
+            result.content[0]?.text ?? 'The tool could not complete the operation.'
+          ),
+        };
       }
-      const message = formatErrorMessage(error);
-      return errorResult(`Error: ${message}`);
+      return { ...result };
+    } catch (error: unknown) {
+      if (error instanceof T3xApiError) return { ...apiToolError(error) };
+      return exposure
+        ? { ...toolError('INTERNAL_ERROR', 'The tool could not complete the operation.') }
+        : { ...fail(`Error: ${formatErrorMessage(error)}`) };
     }
   });
 

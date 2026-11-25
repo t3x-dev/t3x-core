@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { T3xApiError } from '@t3x-dev/api-client';
 import { getApiClient, isApiBackend } from '../backend.js';
-import { fail, ok, type ToolDef, type ToolHandler } from './types.js';
+import { apiToolError, fail, ok, type ToolDef, type ToolHandler } from './types.js';
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
@@ -122,7 +122,7 @@ export const committedStateHandler: ToolHandler = async ({
     return ok(artifact);
   } catch (error) {
     if (error instanceof T3xApiError) {
-      return errorResult(error.code, error.message, error.status);
+      return apiToolError(error);
     }
     throw error;
   }

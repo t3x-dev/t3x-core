@@ -280,5 +280,10 @@ export async function invoke<T>(
 }
 
 export async function denied(client: Mcp, tool: string, args: Record<string, unknown>) {
-  expect((await client.call(tool, args)).isError, tool).toBe(true);
+  const result = await client.call(tool, args).catch((error: unknown) => {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== -32602 ||
+      !error.message.includes('Unknown tool.')) throw error;
+    return { isError: true };
+  });
+  expect(result.isError, tool).toBe(true);
 }

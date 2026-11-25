@@ -230,7 +230,8 @@ export class T3xApiError extends Error {
     public code: string,
     message: string,
     public status: number,
-    public details?: Record<string, unknown>
+    public details?: Record<string, unknown>,
+    public requestId?: string
   ) {
     super(message);
     this.name = 'T3xApiError';
@@ -376,11 +377,31 @@ export class T3xClient {
       signal: options?.signal,
     });
 
-    const data = (await response.json()) as ApiResponse<T>;
+    const requestId = response.headers?.get('X-Request-Id') ?? undefined;
+    const data = (await response.json().catch((error: unknown) => {
+      if (!(error instanceof SyntaxError)) throw error;
+      return undefined;
+    })) as ApiResponse<T> | undefined;
 
-    if (!response.ok || !data.success) {
-      const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
-      throw new T3xApiError(error.code, error.message, response.status, error.details);
+    if (
+      data?.success === false &&
+      typeof data.error?.code === 'string' &&
+      typeof data.error.message === 'string'
+    ) {
+      const { code, message, details } = data.error;
+      throw new T3xApiError(code, message, response.status, details, requestId);
+    }
+    if (data?.success === true && !response.ok) {
+      throw new T3xApiError('UNKNOWN', 'Unknown error', response.status, undefined, requestId);
+    }
+    if (data?.success !== true) {
+      throw new T3xApiError(
+        response.ok ? 'INVALID_RESPONSE' : 'UPSTREAM_HTTP_ERROR',
+        'API returned an unexpected response.',
+        response.status,
+        undefined,
+        requestId
+      );
     }
 
     const payload = (data as ApiSuccessResponse<T>).data;
@@ -393,7 +414,8 @@ export class T3xClient {
           'INVALID_RESPONSE',
           'API response did not match the client runtime schema',
           response.status,
-          { issues: error.issues }
+          { issues: error.issues },
+          requestId
         );
       }
       throw error;

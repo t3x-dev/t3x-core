@@ -166,7 +166,9 @@ describe('apps/mcp stdio subprocess smoke', () => {
             })
           ).isError
         ).toBe(true);
-        expect((await client.callTool({ name: 't3x_commit', arguments: {} })).isError).toBe(true);
+        await expect(client.callTool({ name: 't3x_commit', arguments: {} })).rejects.toMatchObject({
+          code: -32602,
+        });
         await expect(
           client.readResource({ uri: 't3x://conversations/conv_fixture' })
         ).rejects.toThrow('unavailable');
