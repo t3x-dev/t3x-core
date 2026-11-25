@@ -141,7 +141,10 @@ function RepositoryLayoutContent({
     query.get('reviewPane') !== 'checks';
   const viewNeedsData = ['', '/state', '/schemas'].includes(viewSuffix) || liveWorkspace;
   const earlySchemaRead =
-    viewSuffix === '/schemas' && !address?.redirect && !query.has('candidate');
+    viewSuffix === '/schemas' &&
+    !address?.redirect &&
+    !query.has('candidate') &&
+    query.get('schemaView') !== 'review';
   const view = viewSuffix.slice(1);
   const hasProjectTab = !view || PROJECT_TABS.some((tab) => getProjectTabSegment(tab.id) === view);
   const navigationProject =
