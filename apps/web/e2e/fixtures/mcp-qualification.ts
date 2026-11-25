@@ -61,7 +61,7 @@ export function account(prefix: string): FixtureAccount {
   };
 }
 
-export function mcpClient(token: string, profile = capabilities) {
+export function mcpClient(token: string, profile = capabilities, apiOrigin = API_ORIGIN) {
   const client = new Client({ name: 't3x-mcp-core-qualification', version: '1.0.0' });
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -70,7 +70,7 @@ export function mcpClient(token: string, profile = capabilities) {
     stderr: 'pipe',
     env: {
       T3X_MCP_BACKEND: 'api',
-      T3X_API_URL: `${API_ORIGIN}/api`,
+      T3X_API_URL: `${apiOrigin}/api`,
       T3X_API_KEY: token,
       T3X_CONFIG_PATH: '/dev/null',
       T3X_MCP_CAPABILITIES: profile,
@@ -132,7 +132,7 @@ function diagnosticEvent(line: string): Record<string, unknown> | undefined {
     timestamp: /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
     call_id: /^[a-f0-9-]{36}$/,
     http_request_id: /^[a-f0-9-]{36}$/,
-    tool: /^[a-z_]{1,80}$/,
+    tool: /^[a-z][a-z0-9_]{0,79}$/,
     action: /^[a-z_]{1,64}$/,
     outcome: /^(?:success|error)$/,
     error_code: /^[A-Z][A-Z0-9_]{0,95}$/,

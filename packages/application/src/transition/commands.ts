@@ -9,6 +9,7 @@ import {
 } from '@t3x-dev/core';
 import {
   CORE_PREDICATE_TYPES,
+  compareCanonicalValues,
   type Effect,
   EffectClaimFalseError,
   type MutationDriverRegistry,
@@ -396,7 +397,7 @@ function subjectDescriptors(
     result: graph.effect.result,
     proposal: describeTransitionObject(graph.proposal),
   } as const;
-  return [...new Set(roles)].sort(comparePortable).map((role) => byRole[role]);
+  return [...new Set(roles)].map((role) => ({ ...byRole[role] })).sort(compareCanonicalValues);
 }
 
 function assertExternalPredicate(
@@ -470,7 +471,7 @@ function createExternalStatement(input: {
   return parseStatement({
     schema: 't3x/statement/v1',
     subjects: subjectDescriptors(input.graph, input.draft.subjects),
-    actor: input.actor,
+    actor: { kind: input.actor.kind, id: input.actor.id },
     predicateType: input.draft.predicateType,
     predicate: input.draft.predicate,
   });

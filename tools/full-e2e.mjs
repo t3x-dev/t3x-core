@@ -149,6 +149,10 @@ try {
   children.push(runner);
   await waitForUrl(`${runnerUrl}/health`, runner, 90_000);
 
+  const apiEntry =
+    isolatedMcp && runtimeEnv.T3X_E2E_MCP_PHASE === 'transition-statement'
+      ? 'tools/fixtures/mcp-statement-api.mjs'
+      : 'apps/api/dist/index.js';
   const api = startLoggedProcess(
     'api',
     'node',
@@ -156,7 +160,7 @@ try {
       path.join(repoRoot, 'tools/dev-package-runner.mjs'),
       'api',
       'node',
-      path.join(repoRoot, 'apps/api/dist/index.js'),
+      path.join(repoRoot, apiEntry),
     ],
     {
       ...runtimeEnv,
@@ -175,11 +179,12 @@ try {
       throw new Error('MCP qualification API did not require credentials.');
   }
 
-  const web = startLoggedProcess('webui', 'pnpm', ['--filter', 't3x-webui', 'start'], {
-    ...runtimeEnv,
-    HOSTNAME: '127.0.0.1',
-    PORT: webPort,
-  });
+  const web = startLoggedProcess(
+    'webui',
+    'pnpm',
+    ['--filter', 't3x-webui', 'start', '--hostname', '127.0.0.1'],
+    { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+  );
   children.push(web);
   await waitForUrl(webUrl, web, 90_000);
 

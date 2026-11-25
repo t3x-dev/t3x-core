@@ -1384,14 +1384,18 @@ it('SE-011 the compatibility Workspace Review freezes the same complete contract
   const document = currentComposition(workspaceAuthoringState(draft.workspace_state).ledger) as {
     content: { trees: unknown[]; relations: unknown[] };
   };
+  const agent = { kind: 'agent' as const, id: 'agent:compatibility-review' };
+  const delegated = { ...agent, delegator: reviewer };
   const reviewed = await reviewWorkspaceTransition(db, {
     projectId,
     workspaceId: id,
-    actor: reviewer,
+    actor: delegated,
     expectedRevision: draft.revision,
     content: document.content as never,
   });
   const graph = await resolveTransitionProposalGraph(db, projectId, reviewed.transitionId);
+  expect(graph.proposal.actor).toEqual(agent);
+  expect(graph.membership.actor).toEqual(agent);
   expect(JSON.parse(graph.preparation!.canonicalJson).schemaReview.draftContent).toEqual(document);
   await decideWorkspaceTransition(db, {
     projectId,

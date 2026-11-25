@@ -5,25 +5,33 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const apiCore = [
-  'context',
-  'repositories',
-  'state',
-  'workspace',
-  'schemas',
-  'transitions',
-  'delivery',
-];
+const apiCore = ['context', 'repositories', 'state', 'workspace', 'schemas', 'transitions'];
 const directCore = 'isolated API credentials and real stdio';
 const webCore = 'Web-issued Agent credential and trusted Web confirmation';
 
 export const phases = [
-  ['api', 'core-loop', apiCore, directCore],
+  [
+    'write-recovery',
+    'write-recovery',
+    ['context', 'sources'],
+    null,
+    'loopback response-loss proxy',
+  ],
+  ['api', 'core-loop', [...apiCore, 'delivery'], directCore],
   ['web', 'core-loop', apiCore, webCore],
   ['restore', 'core-loop', ['state', 'workspace', 'transitions'], directCore],
   ['presentation', 'core-loop', ['state', 'workspace'], directCore],
   ['repositories', 'repository-creation', ['repositories', 'schemas']],
   ['workspace-candidate', 'candidate-publication', ['workspace', 'sources', 'transitions']],
+  ['workspace-reconciliation', 'workspace-reconciliation', ['workspace', 'transitions']],
+  ['transition-authority', 'transition-authority', ['transitions']],
+  [
+    'transition-statement',
+    'transition-authority',
+    ['transitions'],
+    null,
+    'local API predicate allowlist',
+  ],
   ['schema-authoring', 'schema-authoring', ['schemas', 'workspace', 'transitions']],
   ['source-context', 'source-context', ['sources']],
   ['source-ingestion', 'source-ingestion', ['sources']],
@@ -32,6 +40,22 @@ export const phases = [
     'proposal-generation',
     ['sources', 'workspace', 'transitions'],
     null,
+    'loopback model',
+  ],
+  [
+    'journey',
+    'journey',
+    [
+      'context',
+      'repositories',
+      'sources',
+      'workspace',
+      'schemas',
+      'transitions',
+      'state',
+      'delivery',
+    ],
+    'Web-authorized MCP Source to Commit and preview rollback',
     'loopback model',
   ],
   ['source-artifact', 'source-artifact', ['sources', 'state', 'transitions']],
@@ -43,6 +67,13 @@ export const phases = [
     null,
     'missing OCI runtime fixture',
   ],
+  [
+    'workspace-validation-oci',
+    'workspace-validation',
+    ['runs', 'workspace'],
+    'pin an authoring Draft validation and restrict its evidence to the Workspace owner',
+    'real OCI runtime and pinned ESPHome image',
+  ],
   ['repository-runs', 'repository-runs', ['runs'], null, 'loopback workflow webhook'],
 ].map(([name, spec, capabilities, scenario, dependency]) => ({
   name,
@@ -50,7 +81,7 @@ export const phases = [
   capabilities,
   ...(scenario ? { scenario } : {}),
   credentials:
-    name === 'web'
+    name === 'web' || name === 'journey'
       ? 'Web-issued Agent fixture and signed-in Web user'
       : ['schema-authoring', 'workspace-candidate'].includes(name)
         ? 'fixture API credentials and signed-in Web user'
@@ -203,7 +234,7 @@ async function qualify(selected) {
     const index = phases.indexOf(phase);
     const artifactDir = path.join(output, phase.name);
     const phaseEnv = { ...env, T3X_E2E_MCP_PHASE: phase.name, T3X_E2E_ARTIFACT_DIR: artifactDir };
-    if (phase.name === 'proposal-generation') {
+    if (phase.dependencies === 'loopback model') {
       Object.assign(phaseEnv, {
         T3X_E2E_F3_MODEL_PORT: '8373',
         T3X_E2E_ALLOW_EXTERNAL: '1',

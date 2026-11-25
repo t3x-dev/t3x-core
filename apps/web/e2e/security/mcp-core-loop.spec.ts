@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import type { CommitHistoryProjectionV2, StoredRepositoryCommit } from '@t3x-dev/api-client';
 import { expect, type Page, test } from '@playwright/test';
+import { load as loadYaml } from 'js-yaml';
 import {
   account,
   type ApiCall,
@@ -101,6 +103,17 @@ async function qualifyCore(input: {
     mcpClient(agent.key, 'delivery:rollback'),
     mcpClient(input.outsiderSession, 'delivery:deploy,delivery:rollback,state:restore'),
   ];
+  const revokeAgent = async () => {
+    if (input.web) {
+      await revokeBrowser(input.web);
+    } else {
+      await input.actor('DELETE', `/api-keys/${agent.id}`);
+    }
+    const revoked = await machine.call('t3x_context', {});
+    expect(revoked.isError).toBe(true);
+    expect(JSON.parse(revoked.content[0]?.text ?? '{}')).toMatchObject({ error: { status: 401 } });
+    await input.actor('DELETE', `/api-keys/${otherKey.id}`);
+  };
   try {
     await Promise.all(
       [
@@ -355,22 +368,53 @@ async function qualifyCore(input: {
       commit_digest: committed.commit_digest,
     });
     expect(state.value).toMatchObject({ prd: valid });
-    const artifact = await invoke<{ content: string; byteDigest: string; byteLength: number }>(
-      machine,
-      't3x_committed_state',
-      {
-        action: 'export',
+    for (const format of ['json', 'yaml'] as const) {
+      const artifact = await invoke<{ content: string; byteDigest: string; byteLength: number }>(
+        readonly,
+        't3x_committed_state',
+        {
+          action: 'export',
+          project_id,
+          commit_digest: committed.commit_digest,
+          state_digest: state.sourceState.digest,
+          format,
+        }
+      );
+      expect(format === 'json' ? JSON.parse(artifact.content) : loadYaml(artifact.content)).toEqual(
+        state.value
+      );
+      expect(artifact.byteLength).toBe(Buffer.byteLength(artifact.content, 'utf8'));
+      expect(artifact.byteDigest).toBe(
+        `sha256:${createHash('sha256').update(artifact.content, 'utf8').digest('hex')}`
+      );
+    }
+    const pinnedCommit = await invoke<{ commit: StoredRepositoryCommit }>(readonly, 't3x_query', {
+      target: 'commit',
+      project_id,
+      id: committed.commit_digest,
+    });
+    expect(pinnedCommit.commit).toMatchObject({
+      digest: committed.commit_digest,
+      object: { result: state.sourceState },
+    });
+    const commitUri = `t3x://projects/${project_id}/commits/${committed.commit_digest}`;
+    const resource = await readonly.readResource(commitUri);
+    expect(resource.contents[0].uri).toBe(commitUri);
+    expect(JSON.parse(resource.contents[0].text)).toEqual({ kind: 'commit', ...pinnedCommit });
+    const history = await invoke<CommitHistoryProjectionV2[]>(readonly, 't3x_query', {
+      target: 'commits',
+      project_id,
+    });
+    expect(history.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([initialCommit, committed.commit_digest])
+    );
+    expect(
+      await invoke(readonly, 't3x_diff', {
         project_id,
-        commit_digest: committed.commit_digest,
-        state_digest: state.sourceState.digest,
-        format: 'json',
-      }
-    );
-    expect(JSON.parse(artifact.content)).toEqual(state.value);
-    expect(artifact.byteLength).toBe(Buffer.byteLength(artifact.content, 'utf8'));
-    expect(artifact.byteDigest).toBe(
-      `sha256:${createHash('sha256').update(artifact.content, 'utf8').digest('hex')}`
-    );
+        base: initialCommit,
+        target: committed.commit_digest,
+      })
+    ).toMatchObject({ base: { digest: initialCommit }, target: { digest: committed.commit_digest } });
     const result = await invoke(machine, 't3x_commit_result', {
       project_id,
       transition_id: review.view.transition_id,
@@ -380,6 +424,10 @@ async function qualifyCore(input: {
       commit: { digest: committed.commit_digest },
       branch: { head_commit_hash: committed.commit_digest },
     });
+    if (input.web) {
+      await revokeAgent();
+      return;
+    }
     if (qualificationPhase === 'presentation') {
       const presentationRef = 'presentation-history';
       await input.actor('POST', '/branches', {
@@ -788,15 +836,7 @@ async function qualifyCore(input: {
       commit: { digest: committed.commit_digest },
       branch: { head_commit_hash: advanced.commit_digest },
     });
-    if (input.web) {
-      await revokeBrowser(input.web);
-    } else {
-      await input.actor('DELETE', `/api-keys/${agent.id}`);
-    }
-    const revoked = await machine.call('t3x_context', {});
-    expect(revoked.isError).toBe(true);
-    expect(JSON.parse(revoked.content[0]?.text ?? '{}')).toMatchObject({ error: { status: 401 } });
-    await input.actor('DELETE', `/api-keys/${otherKey.id}`);
+    await revokeAgent();
   } finally {
     await Promise.allSettled(
       [

@@ -64,9 +64,9 @@ async function seedCandidates(
     ],
     { cwd: resolve(process.cwd(), '../..'), timeout: 40_000 }
   );
-  const pair = stdout.trim().split('\n').at(-1) ?? '';
-  expect(pair).toMatch(/^trn_[0-9a-f]{32},trn_[0-9a-f]{32}$/);
-  return pair.split(',');
+  const pair = stdout.match(/^(trn_[0-9a-f]{32}),(trn_[0-9a-f]{32})$/m);
+  if (!pair) throw new Error('The candidate fixture did not return two Transition IDs.');
+  return pair.slice(1);
 }
 
 // Keep the test credential out of automatic browser artifacts.

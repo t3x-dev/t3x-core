@@ -25,7 +25,7 @@ test.skip(
 test('read saved Runs and dispatch one configured workflow per authorized request', async ({
   request,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const { actor, session } = await registerDirect(request, account('repoowner'));
   const reader = await registerDirect(request, account('reporeader'));
   const { id: readerId } = await reader.actor<{ id: string }>('GET', '/auth/me');
@@ -132,6 +132,7 @@ test('read saved Runs and dispatch one configured workflow per authorized reques
     const input = { project_id: project, request_id: 'first-run', commit_digest: digest };
     const calls: Array<{
       run_id: string;
+      project_id: string;
       runner_run_id: string;
       callback_url: string;
       commit_ref: string;
@@ -144,7 +145,7 @@ test('read saved Runs and dispatch one configured workflow per authorized reques
       let body = '';
       for await (const chunk of req) body += chunk;
       calls.push(JSON.parse(body));
-      res.writeHead(503).end();
+      res.writeHead(204).end();
     });
     try {
       webhook.listen(Number(new URL(process.env.N8N_WEBHOOK_URL!).port), '127.0.0.1');
@@ -186,23 +187,79 @@ test('read saved Runs and dispatch one configured workflow per authorized reques
           })
         ).status()
       ).toBe(401);
+      const output = { checked_commit: callback.commit_ref, finding_count: 0 };
       const ack = await request.post(callback.callback_url, {
         data: {
           run_id: one.run_id,
           runner_run_id: callback.runner_run_id,
-          output: { fixture: true },
+          output,
         },
       });
       expect(ack.ok()).toBe(true);
+      const exactRun = { action: 'read', project_id: project, run_id: one.run_id };
       await expect
-        .poll(async () => (await invoke<{ status: string }>(editor, trigger, input)).status, {
+        .poll(() => invoke(viewer, tool, exactRun), {
           timeout: 20000,
         })
-        .toMatch(/^(completed|failed)$/);
+        .toMatchObject({
+          run_id: one.run_id,
+          runner_run_id: callback.runner_run_id,
+          project_id: project,
+          commit_ref: digest,
+          status: 'completed',
+          result: {
+            run_report: {
+              trace: { run_id: one.run_id, project_id: project, status: 'completed', output },
+              eval_result: { passed: true, violations: [] },
+            },
+            evidence_pack: { n8n_output: output },
+          },
+        });
+      expect(await invoke(editor, trigger, input)).toMatchObject({
+        run_id: one.run_id,
+        status: 'completed',
+      });
       expect(calls).toHaveLength(1);
+
+      const failed = await invoke<{ run_id: string }>(editor, trigger, {
+        ...input,
+        request_id: 'failed-run',
+      });
+      expect(failed.run_id).not.toBe(one.run_id);
+      await expect.poll(() => calls.length).toBe(2);
+      const failedCallback = calls[1]!;
+      expect(failedCallback).toMatchObject({
+        run_id: failed.run_id,
+        project_id: project,
+        commit_ref: digest,
+      });
+      const failedAck = await request.post(failedCallback.callback_url, {
+        data: {
+          run_id: failed.run_id,
+          runner_run_id: failedCallback.runner_run_id,
+          error: 'Fixture workflow could not evaluate the Commit.',
+        },
+      });
+      expect(failedAck.ok()).toBe(true);
+      await expect
+        .poll(() => invoke(viewer, tool, { ...exactRun, run_id: failed.run_id }), {
+          timeout: 20000,
+        })
+        .toMatchObject({
+          run_id: failed.run_id,
+          commit_ref: digest,
+          status: 'failed',
+          result: {
+            run_report: {
+              trace: { status: 'failed', error: { code: 'N8N_ERROR' } },
+              eval_result: { passed: false },
+            },
+          },
+        });
+
       await actor('DELETE', `/runs/${one.run_id}`);
       await rejected(editor, input, 409);
-      expect(calls).toHaveLength(1);
+      expect(calls).toHaveLength(2);
     } finally {
       webhook.close();
       await Promise.allSettled([editor.close(), readOnlyUser.close()]);

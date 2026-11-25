@@ -386,14 +386,21 @@ Select other phases by their names in the plan:
 node tools/mcp-qualification.mjs --run repositories workspace-candidate schema-authoring
 node tools/mcp-qualification.mjs --run source-context source-ingestion proposal-generation source-artifact
 node tools/mcp-qualification.mjs --run commit-validation workspace-validation repository-runs
+node tools/mcp-qualification.mjs --run write-recovery workspace-reconciliation transition-authority transition-statement
+node tools/mcp-qualification.mjs --run journey workspace-validation-oci
 ```
 
-Proposal Generation uses a deterministic OpenAI-compatible server on loopback.
+Proposal Generation and the Web-authorized journey use a deterministic
+OpenAI-compatible server on loopback. The journey follows a Source-backed change
+through a fixed Web Review, exact Commit read-back, and built-in preview rollback.
 The exact-source phase verifies byte preservation and parsed attachment
 reads. Commit validation checks persisted findings and separate read and
-trigger permissions. Workspace validation simulates a missing OCI runtime.
-Repository Runs uses a loopback workflow webhook to verify dispatch and
-read-back. The report identifies these fixtures for each phase.
+trigger permissions. `workspace-validation` simulates a missing OCI runtime.
+`workspace-validation-oci` requires Docker or Podman and the pinned ESPHome
+image. Repository Runs uses a loopback workflow webhook and signed Runner
+callbacks to verify both `completed` and `failed` records. The Statement phase
+uses an isolated API instance with one explicitly allowed fixture predicate.
+The report identifies these dependencies for each phase.
 
 ### Resources
 

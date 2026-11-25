@@ -58,7 +58,8 @@ test('qualification excludes inherited service credentials and database configur
 });
 
 test('a zero exit code cannot qualify skipped, empty or missing reports', () => {
-  const [phase] = phases;
+  const phase = phases.find(({ name }) => name === 'api');
+  assert.ok(phase?.scenario);
   const report = (...statuses) => ({
     suites: [
       {

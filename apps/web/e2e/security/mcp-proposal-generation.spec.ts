@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
-import type { ProposeTransitionResult, SourceIngestionReceipt, Turn } from '@t3x-dev/api-client';
 import { expect, test } from '@playwright/test';
+import type { ProposeTransitionResult, SourceIngestionReceipt, Turn } from '@t3x-dev/api-client';
 import {
   account,
   authoringScopes,
@@ -12,81 +11,15 @@ import {
   type PreparedReview,
   registerDirect,
 } from '../fixtures/mcp-qualification';
+import {
+  extractionQuote,
+  extractionTurn,
+  localModel,
+  original,
+  quotation,
+} from '../fixtures/mcp-qualification-model';
 
 const tool = 't3x_generate_proposal';
-const quotation = 'Traceable Source title';
-const original = `Use this exact product title: ${quotation}.`;
-
-interface ModelPrompt {
-  sources: Array<{ sourceIndex: number; content: string }>;
-}
-
-async function localModel(port: number) {
-  let calls = 0;
-  const server = createServer(async (request, response) => {
-    if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
-      response.writeHead(404).end();
-      return;
-    }
-    if (request.headers.authorization !== 'Bearer t3x-local-fixture-only') {
-      response.writeHead(401).end();
-      return;
-    }
-    calls++;
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(chunk);
-      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      const prompt = JSON.parse(
-        body.messages.findLast(({ role }: { role: string }) => role === 'user').content
-      ) as ModelPrompt;
-      const source = prompt.sources.find(({ content }) => content === original);
-      if (!source) throw new Error('The actual Wire prompt omitted the selected original turn.');
-      const pointer = {
-        sourceIndex: source.sourceIndex,
-        locator: { scheme: 't3x.text-quote/v1', value: { quote: quotation, occurrence: 0 } },
-      };
-      const draft = {
-        schema: 't3x.dev/proposal-generation-draft/v1',
-        version: 1,
-        posture: 'guided',
-        intent: { mode: 'stated', value: quotation, evidencePointers: [pointer] },
-        rationale: { mode: 'unspecified' },
-        changes: [
-          {
-            id: 'source-title',
-            operations: [{ set: { path: 'prd/title', value: quotation } }],
-            claimedOrigin: 'source_backed',
-            evidencePointers: [pointer],
-            basisPointers: [],
-            assumptions: [],
-            reason: 'The original user turn supplies the title verbatim.',
-            challenges: [],
-          },
-        ],
-        warnings: [],
-      };
-      response.writeHead(200, { 'Content-Type': 'application/json' }).end(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(draft) } }],
-          usage: { prompt_tokens: 12, completion_tokens: 10 },
-        })
-      );
-    } catch {
-      response
-        .writeHead(400, { 'Content-Type': 'application/json' })
-        .end('{"error":"Invalid local model fixture prompt"}');
-    }
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => resolve());
-  });
-  return {
-    calls: () => calls,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  };
-}
 
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 test.skip(
@@ -298,5 +231,141 @@ test('generate a governed candidate through stdio and apply it independently to 
     });
   } finally {
     await Promise.allSettled([agent.close(), human.close(), model.close()]);
+  }
+});
+
+test('extract a compatibility proposal from one immutable Source turn through stdio', async ({
+  request,
+}) => {
+  test.skip(
+    process.env.T3X_E2E_MCP_PHASE !== 'proposal-generation',
+    'Requires the proposal-generation phase.'
+  );
+  test.setTimeout(120000);
+  const port = Number(process.env.T3X_E2E_F3_MODEL_PORT);
+  expect(Number.isInteger(port) && port > 0).toBe(true);
+  expect(process.env.OPENAI_BASE_URL).toBe(`http://127.0.0.1:${port}/v1`);
+  expect(process.env.OPENAI_API_KEY === 't3x-local-fixture-only').toBe(true);
+
+  const { actor } = await registerDirect(request, account('extraction'));
+  const { project_id } = await actor<{ project_id: string }>('POST', '/projects', {
+    name: 'Compatibility Extraction Fixture',
+  });
+  const { conversation_id } = await actor<{ conversation_id: string }>('POST', '/conversations', {
+    project_id,
+    title: 'Exact compatibility Source',
+  });
+  const turn = await actor<Turn>('POST', '/turns', {
+    project_id,
+    conversation_id,
+    role: 'user',
+    content: extractionTurn,
+  });
+  const workspace_id = 'compatibility-extraction';
+  const path = `/projects/${project_id}/workspaces/${workspace_id}`;
+  const { workspace } = await actor<{ workspace: { revision: number } }>('PATCH', path, {
+    workspace: {
+      id: workspace_id,
+      title: 'Compatibility extraction',
+      targetBranch: 'main',
+      status: 'draft',
+    },
+  });
+  const key = await mintDirect(actor, project_id, authoringScopes);
+  const agent = mcpClient(
+    key.key,
+    'workspace,sources:write,transitions,transitions:prepare,transitions:verify'
+  );
+  const model = await localModel(port);
+
+  try {
+    await agent.connect();
+    const scope = { project_id, workspace_id };
+    const input = {
+      ...scope,
+      source_thread_id: conversation_id,
+      turn_hashes: [turn.turn_hash],
+      if_revision: workspace.revision,
+      provider: 'openai',
+    };
+    const wrongTurn = await agent.call('t3x_extract', {
+      ...input,
+      turn_hashes: [`sha256:${'0'.repeat(64)}`],
+    });
+    expect(wrongTurn.isError).toBe(true);
+    expect(JSON.parse(wrongTurn.content[0]?.text ?? '{}')).toMatchObject({
+      error: { code: 'INVALID_REQUEST', status: 400 },
+    });
+    expect(model.calls()).toBe(0);
+    const extracted = await invoke<{
+      candidate_id: string;
+      workspace: { revision: number };
+    }>(agent, 't3x_extract', input);
+    expect(extracted).toMatchObject({
+      candidate_id: expect.stringMatching(/^candidate:[0-9a-f]{64}$/),
+      workspace: { revision: workspace.revision + 1 },
+      proposal: {
+        schema: 't3x.dev/workspace-extraction-proposal/v1',
+        mode: 'bootstrap',
+        sourceSelector: { type: 'conversation', id: conversation_id, turnHashes: [turn.turn_hash] },
+        baseCommitHash: null,
+        actor: { kind: 'agent', id: `agent:api-key:${key.id}` },
+        operations: expect.arrayContaining([
+          expect.objectContaining({
+            populate: { path: 'device', values: { name: extractionQuote } },
+            source: expect.objectContaining({
+              turn_ref: { turn_hash: turn.turn_hash, quote: extractionQuote },
+            }),
+          }),
+        ]),
+      },
+    });
+    expect(model.calls()).toBe(1);
+    const response = await agent.call('propose_transition', {
+      ...scope,
+      kind: 'structured_yops',
+      extraction_candidate_id: extracted.candidate_id,
+      if_revision: extracted.workspace.revision,
+      request_id: randomUUID(),
+    });
+    const proposed = JSON.parse(response.content[0]?.text ?? '{}') as ProposeTransitionResult & {
+      error?: { message?: string; code?: string };
+    };
+    expect(response.isError, proposed.error?.message).toBeFalsy();
+    const expectedActor = { kind: 'agent', id: `agent:api-key:${key.id}` };
+    expect(proposed.view.transition.claims.actor).toEqual(expectedActor);
+    expect(proposed.view.transition.change.operations).toEqual([
+      { define: { path: 'device' } },
+      { assert: { path: 'device', equals: {} } },
+      { set: { path: 'device', value: { name: extractionQuote } } },
+    ]);
+    expect(await actor('GET', `${path}/extraction-transition`)).toMatchObject({
+      candidate_id: extracted.candidate_id,
+      transition_id: proposed.transition_id,
+      workspace_revision: extracted.workspace.revision,
+    });
+    const verified = await invoke<ProposeTransitionResult>(agent, 'verify_transition', {
+      project_id,
+      transition_id: proposed.transition_id,
+      request_id: randomUUID(),
+    });
+    expect(verified.view.transition.checks.replay.outcomes).toEqual(['verified']);
+    expect(verified.view.precondition.ref_head).toBeNull();
+    const operations = [{ set: { path: 'device/name', value: 'Explicit fixture name' } }];
+    const direct = await invoke<ProposeTransitionResult>(agent, 't3x_edit', {
+      ...scope,
+      mode: 'proposal',
+      if_revision: extracted.workspace.revision,
+      request_id: randomUUID(),
+      operations,
+    });
+    expect(direct.view).toMatchObject({
+      precondition: { ref_head: null, workspace_revision: extracted.workspace.revision },
+      transition: { change: { operations } },
+    });
+    expect(direct.view.transition.claims.actor).toEqual(expectedActor);
+    expect(model.calls()).toBe(1);
+  } finally {
+    await Promise.allSettled([agent.close(), model.close()]);
   }
 });
