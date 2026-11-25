@@ -10,6 +10,7 @@ export interface McpDiagnostic {
   duration_ms: number;
   outcome: 'success' | 'error';
   error_code?: string;
+  write_outcome?: 'unconfirmed';
   http_request_id?: string;
   http_status?: number;
 }
@@ -85,6 +86,10 @@ export async function trackToolCall(
     const result = await execute();
     const payload = result.isError ? readError(result) : undefined;
     const code = payload?.error.code;
+    const unconfirmed =
+      payload &&
+      context.writeAttempted &&
+      (unresolvedCodes.has(payload.error.code) || (payload.error.status ?? 0) >= 500);
     diagnostic({
       event: 'tool.finished',
       call_id,
@@ -93,13 +98,11 @@ export async function trackToolCall(
       duration_ms: Math.round(performance.now() - start),
       outcome: result.isError ? 'error' : 'success',
       ...(code && /^[A-Z][A-Z0-9_]{0,95}$/.test(code) ? { error_code: code } : {}),
+      ...(unconfirmed ? { write_outcome: 'unconfirmed' } : {}),
     });
     if (!payload) return result;
     payload.error.call_id = call_id;
-    if (
-      context.writeAttempted &&
-      (unresolvedCodes.has(payload.error.code) || (payload.error.status ?? 0) >= 500)
-    ) {
+    if (unconfirmed) {
       payload.error.write_outcome = 'unconfirmed';
       payload.error.next_action =
         'Read back the authorized result or receipt before retrying the write.';

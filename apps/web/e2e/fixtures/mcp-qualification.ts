@@ -143,6 +143,9 @@ function diagnosticEvent(line: string): Record<string, unknown> | undefined {
   for (const key of ['http_status', 'duration_ms']) {
     if (Number.isInteger(value[key])) fields[key] = value[key];
   }
+  if (event === 'tool.finished' && value.write_outcome === 'unconfirmed') {
+    fields.write_outcome = 'unconfirmed';
+  }
   return fields;
 }
 

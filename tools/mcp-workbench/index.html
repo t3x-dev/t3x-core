@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>MCP Qualification Workbench · T3X</title>
+  <script src="workbench.js" defer></script>
+  <style>
+    :root {
+      font: 15px/1.5 Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      color: #192631; background: #f7f9fa;
+      --muted: #4f6070; --line: #dce4e9; --surface: #fff; --accent: #195b8b;
+      --good: #236047; --good-bg: #e7f4eb; --bad: #962d3c; --bad-bg: #faedf0;
+      --warn: #795015; --warn-bg: #fff2d9; --idle: #516070; --idle-bg: #edf1f5;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; }
+    h1, h2, h3, p, dl { margin: 0; }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.15; letter-spacing: -.035em; }
+    h2 { font-size: 1.15rem; letter-spacing: -.015em; }
+    h3 { font-size: .95rem; }
+    code { font: .88em/1.5 ui-monospace, "SF Mono", monospace; overflow-wrap: anywhere; }
+    button, select { font: inherit; color: inherit; }
+    button, select, summary { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    ::selection { background: #d8ebfa; }
+    .page { width: min(1200px, calc(100% - 64px)); margin-inline: auto; }
+    header { border-bottom: 1px solid var(--line); background: var(--surface); }
+    .top { display: flex; align-items: center; justify-content: space-between; min-height: 68px; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 620; }
+    .brand strong { background: #233c50; color: white; padding: 4px 8px; border-radius: 5px; font-size: .9rem; letter-spacing: .03em; }
+    .button, select { border: 1px solid #c8d4dc; border-radius: 6px; background: white; padding: 7px 12px; font-weight: 600; }
+    .button:hover, select:hover { background: #edf4f8; }
+    .primary { color: #fff; background: #244d69; border-color: #244d69; }
+    .primary:hover { background: #193b54; }
+    .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    main { padding: 36px 0 56px; }
+    .intro, .section-title { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .intro { align-items: flex-start; }
+    .subtle, .label { color: var(--muted); }
+    .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: .87rem; }
+    .notice { margin-top: 16px; color: var(--warn); background: var(--warn-bg); padding: 10px 14px; border-radius: 6px; }
+    .empty { padding: clamp(24px, 5vw, 48px); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    .empty p { max-width: 57ch; margin-block: 12px 24px; }
+    .empty code { color: var(--accent); }
+    .overview { margin: 24px 0 32px; padding: 17px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+    .segments { display: flex; gap: 3px; height: 7px; border-radius: 4px; overflow: hidden; background: var(--idle-bg); }
+    .segments span { min-width: 4px; background: var(--tone); }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; color: var(--muted); font-size: .91rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend strong, .count { font-variant-numeric: tabular-nums; color: #263743; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); }
+    .passed { --tone: #38815f; --ink: var(--good); --wash: var(--good-bg); }
+    .failed { --tone: #a84754; --ink: var(--bad); --wash: var(--bad-bg); }
+    .blocked, .cancelled { --tone: #b97725; --ink: var(--warn); --wash: var(--warn-bg); }
+    .not-run { --tone: #aebcca; --ink: var(--idle); --wash: var(--idle-bg); }
+    .layout { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 2.2fr); gap: 32px; align-items: start; }
+    .section-title { min-height: 40px; margin-bottom: 9px; }
+    .section-title small { font-size: .83rem; color: var(--muted); }
+    .coverage, .phase-list { border-top: 1px solid var(--line); }
+    .coverage button { display: flex; width: 100%; justify-content: space-between; gap: 8px; text-align: left; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+    .coverage button:hover, .coverage button[aria-pressed="true"] { background: #e8f0f6; }
+    .coverage button[aria-pressed="true"] { font-weight: 650; color: #164f76; }
+    .count { white-space: nowrap; color: var(--muted); font-size: .86rem; }
+    details { min-width: 0; }
+    .phase { border-bottom: 1px solid var(--line); }
+    summary { list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    .phase > summary { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 10px; }
+    summary:hover { background: #edf3f7; }
+    .chevron { width: 7px; height: 7px; border: solid #5b6b78; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); }
+    details[open] > summary > .chevron { transform: rotate(45deg); }
+    .label { display: block; font-size: .83rem; overflow-wrap: anywhere; }
+    .phase-name { font-weight: 630; }
+    .status { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; background: var(--wash); color: var(--ink); font-size: .8rem; font-weight: 620; white-space: nowrap; }
+    .body { background: white; padding: 13px 16px 17px; border-top: 1px solid var(--line); font-size: .91rem; }
+    .body > * + * { margin-top: 13px; }
+    .details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; }
+    dt { color: var(--muted); }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .case, .call summary { display: flex; align-items: start; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .call summary { flex-wrap: wrap; }
+    .call .details { padding: 8px 0; }
+    .call .label { display: inline; }
+    .call-list { margin-top: 8px; }
+    .empty-list { padding: 16px 10px; color: var(--muted); }
+    #feedback { color: var(--muted); font-size: .88rem; margin-bottom: 12px; }
+    #feedback:empty { display: none; }
+    @media (max-width: 750px) {
+      .page { width: calc(100% - 32px); }
+      main { padding-top: 24px; }
+      .layout { grid-template-columns: 1fr; gap: 24px; }
+      .intro { flex-wrap: wrap; }
+      .coverage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 8px; }
+    }
+    @media (max-width: 410px) {
+      .brand span { font-size: .88rem; }
+      .top > .button { font-size: .86rem; }
+      .coverage { grid-template-columns: 1fr; }
+      .details { grid-template-columns: 1fr; gap: 2px; }
+      dd + dt { margin-top: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="page top">
+      <div class="brand"><strong>T3X</strong><span>MCP qualification</span></div>
+      <button type="button" class="button primary" id="open-folder" hidden>Open report folder</button>
+      <input type="file" id="folder" webkitdirectory multiple hidden aria-label="Report folder">
+    </div>
+  </header>
+  <main class="page">
+    <p id="feedback" role="status"></p>
+    <section class="empty" id="empty">
+      <h1>Qualification workbench</h1>
+      <p class="subtle">Review which phases ran, where they stopped, and the request IDs behind a failure. Open the folder that holds <code>qualification.json</code>.</p>
+      <div class="actions">
+        <button type="button" class="button primary" id="empty-open">Open report folder</button>
+        <button type="button" class="button" id="example">View example</button>
+      </div>
+    </section>
+    <section id="report" hidden>
+      <div class="intro">
+        <div>
+          <h1 id="report-title" tabindex="-1">Qualification report</h1>
+          <div class="meta" id="meta"></div>
+        </div>
+        <button type="button" class="button" id="copy">Copy summary</button>
+      </div>
+      <p class="notice" id="notice" hidden></p>
+      <div class="overview" aria-label="Run phase outcomes">
+        <div class="segments" id="segments" aria-hidden="true"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="layout">
+        <section>
+          <div class="section-title"><h2>Capability coverage</h2><small>Passed / planned</small></div>
+          <div class="coverage" id="coverage"></div>
+        </section>
+        <section>
+          <div class="section-title">
+            <h2 id="phase-heading">Phases</h2>
+            <label><span hidden>Filter phases by outcome</span><select id="filter" aria-label="Phase outcome">
+              <option value="all">All phases</option>
+              <option value="attention">Needs attention</option>
+              <option value="passed">Passed</option>
+              <option value="not-run">Not run</option>
+            </select></label>
+          </div>
+          <div class="phase-list" id="phases"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -54,6 +54,8 @@ Reserve stdio `stdout` for protocol messages. Write structured MCP diagnostics t
 
 Use field allowlists for logs, assertions, and exported reports. Exclude credentials, cookies, private source or artifact content, and raw request or response bodies. Keep sanitized stack traces and detailed diagnostics in access-controlled logs with bounded retention. Preserve the existing artifact restrictions for credential issuance, including disabled Playwright traces, automatic screenshots, and video. [API request IDs](../../../packages/api/src/middleware/request-id.ts) · [API logging](../../../packages/api/src/middleware/logger.ts) · [Credential test settings](../../web/e2e/security/mcp-core-loop.spec.ts)
 
+The tool completion event carries `write_outcome: "unconfirmed"` when the tool error carries the same value. The qualification workbench displays this per call. Use a separate authorized read or receipt to establish the final business outcome.
+
 ## Agent reporting
 
 The host reports an unexpected failure, an unconfirmed write, or a required human action while the task is active. Reuse the existing tool result with `isError: true` and the readable `content[0].text`. The text can include `call_id`, `write_outcome`, and `next_action`. Include the operation, what has been confirmed, a safe reference, and the next action. For example, after losing a Commit response, report that the result is being checked and then update the user with the exact Commit or the remaining uncertainty.

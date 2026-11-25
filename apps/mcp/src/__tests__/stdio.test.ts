@@ -334,13 +334,17 @@ describe('apps/mcp stdio subprocess smoke', () => {
       api.listen(0, '127.0.0.1');
       await once(api, 'listening');
       try {
-        const { client } = await connectConfiguredClient({
+        const { client, transport } = await connectConfiguredClient({
           T3X_MCP_BACKEND: 'api',
           T3X_MCP_CAPABILITIES: 'sources:ingest,transitions:prepare,runs:repository',
           T3X_API_KEY: 'fixture',
           T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
         });
         openClients.push(client);
+        let stderr = '';
+        transport.stderr?.on('data', (chunk) => {
+          stderr += chunk.toString();
+        });
         const call = {
           name: 't3x_ingest_source',
           arguments: {
@@ -360,6 +364,15 @@ describe('apps/mcp stdio subprocess smoke', () => {
             next_action: expect.stringContaining('before retrying the write'),
           },
         });
+        await expect.poll(() => stderr).toContain('"write_outcome":"unconfirmed"');
+        const writeEvent = stderr
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+          .find((event) => event.write_outcome === 'unconfirmed');
+        expect(writeEvent.call_id).toEqual(
+          parseTextResult(result as Parameters<typeof parseTextResult>[0]).error.call_id
+        );
         const args = {
           project_id: receipt.project_id,
           request_id: receipt.request_id,

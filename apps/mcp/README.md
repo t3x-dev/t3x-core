@@ -357,6 +357,11 @@ database for each phase, and writes `qualification.json` with individual
 scenario outcomes and evidence paths. The report identifies fixture-backed
 dependencies. A skipped or empty phase cannot qualify its scenarios.
 
+Open the [qualification workbench](../../tools/mcp-workbench/index.html) in a
+browser and select the complete report folder. It reads the phase outcomes and
+sanitized MCP diagnostics locally. The overview supports a copyable summary,
+and each phase shows the recorded call and API request IDs when available.
+
 Issue an Agent credential in Web Settings → API Tokens for an explicit
 project. The form defaults to seven days and lets you select Decision and
 Commit scopes independently. For human confirmation, sign in to Web and open
