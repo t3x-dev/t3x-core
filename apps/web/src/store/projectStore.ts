@@ -42,6 +42,7 @@ export interface ProjectSummary {
 export interface DirectoryStateEntry {
   project: ProjectSummary;
   userId: string | null;
+  readEpoch: number;
   expiresAt: number;
   head: Promise<ApiCommit[]>;
 }

@@ -5,7 +5,7 @@
  * components do not import `@/infrastructure/*` directly.
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
@@ -63,6 +63,7 @@ export function useProjects(
     tags,
     enabled = true,
     directoryUserId,
+    deferCounts = false,
   }: {
     search?: string;
     tagSearch?: string;
@@ -71,6 +72,7 @@ export function useProjects(
     tags?: string[];
     enabled?: boolean;
     directoryUserId?: string;
+    deferCounts?: boolean;
   } = {}
 ): UseProjectsResult {
   const epoch = useSyncExternalStore(
@@ -78,31 +80,47 @@ export function useProjects(
     getSessionReadEpoch,
     () => 0
   );
-  const [projectsEpoch, setProjectsEpoch] = useState(getSessionReadEpoch);
-  const [initialPage] = useState(() =>
-    directoryUserId ? readCachedRepositoryDirectoryPage(directoryUserId) : undefined
+  const q = search?.trim() || undefined;
+  const tag_query = tagSearch?.trim() || undefined;
+  const filters = useMemo(
+    () =>
+      q || tag_query || editableOnly || visibility || tags?.length
+        ? { q, tag_query, editable: editableOnly ? (true as const) : undefined, visibility, tags }
+        : undefined,
+    [q, tag_query, editableOnly, visibility, tags]
   );
-  const [projects, setProjects] = useState<Project[]>(initialPage?.items ?? []);
+  const directoryScope = useMemo(
+    () => ({
+      namespace: namespaceSlug,
+      limit,
+      filters: deferCounts ? { ...filters, include_counts: false as const } : filters,
+    }),
+    [namespaceSlug, limit, filters, deferCounts]
+  );
+  const scopeKey = JSON.stringify([mode, directoryUserId, directoryScope]);
+  const cached =
+    enabled && directoryUserId
+      ? readCachedRepositoryDirectoryPage(directoryUserId, directoryScope)
+      : undefined;
+  const [projectsEpoch, setProjectsEpoch] = useState(getSessionReadEpoch);
+  const [projectsScope, setProjectsScope] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(initialPage?.next_cursor ?? null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const activePage = useRef<AbortController | undefined>(undefined);
   const nextPageRequest = useRef<number | null>(null);
-  const q = search?.trim() || undefined;
-  const tag_query = tagSearch?.trim() || undefined;
   const fetchPage = useCallback(
     (cursor: string, signal: AbortSignal) =>
       listProjectPage(
         limit,
         cursor,
         namespaceSlug,
-        q || tag_query || editableOnly || visibility || tags?.length
-          ? { q, tag_query, editable: editableOnly || undefined, visibility, tags }
-          : undefined,
+        cursor ? filters : directoryScope.filters,
         signal
       ),
-    [limit, namespaceSlug, q, tag_query, editableOnly, visibility, tags]
+    [limit, namespaceSlug, filters, directoryScope]
   );
 
   const refreshFirstPage = useCallback(
@@ -117,7 +135,7 @@ export function useProjects(
       try {
         if (mode === 'on-demand') {
           const data = directoryUserId
-            ? await loadRepositoryDirectoryPage(directoryUserId, force)
+            ? await loadRepositoryDirectoryPage(directoryUserId, force, false, directoryScope)
             : await fetchPage('', controller.signal);
           if (
             requestId !== requestIdRef.current ||
@@ -126,6 +144,7 @@ export function useProjects(
             return;
           if (readEpoch !== getSessionReadEpoch()) return;
           setProjectsEpoch(readEpoch);
+          setProjectsScope(scopeKey);
           setProjects(data.items);
           setNextCursor(data.next_cursor);
           setError(null);
@@ -145,6 +164,7 @@ export function useProjects(
           offset += rows.length;
         }
         setProjectsEpoch(readEpoch);
+        setProjectsScope(scopeKey);
         setProjects([...collected.values()]);
         setError(null);
       } catch (err) {
@@ -161,7 +181,7 @@ export function useProjects(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [limit, namespaceSlug, mode, enabled, fetchPage, directoryUserId]
+    [limit, namespaceSlug, mode, enabled, fetchPage, directoryUserId, directoryScope, scopeKey]
   );
   const refresh = useCallback(() => refreshFirstPage(true), [refreshFirstPage]);
 
@@ -170,6 +190,7 @@ export function useProjects(
     const readEpoch = getSessionReadEpoch();
     if (
       projectsEpoch !== readEpoch ||
+      projectsScope !== scopeKey ||
       !enabled ||
       !nextCursor ||
       loading ||
@@ -211,13 +232,9 @@ export function useProjects(
         setLoading(false);
       }
     }
-  }, [enabled, fetchPage, nextCursor, loading, projectsEpoch]);
+  }, [enabled, fetchPage, nextCursor, loading, projectsEpoch, projectsScope, scopeKey]);
 
   useEffect(() => {
-    if (!directoryUserId) {
-      setProjects([]);
-      setNextCursor(null);
-    }
     setError(null);
     setLoading(enabled);
     if (enabled && (q || tag_query || visibility || tags?.length)) {
@@ -230,9 +247,10 @@ export function useProjects(
       clearTimeout(searchTimer);
       requestIdRef.current += 1;
       activePage.current?.abort();
-      if (directoryUserId) cancelRepositoryDirectoryRead(directoryUserId);
+      if (enabled && directoryUserId)
+        cancelRepositoryDirectoryRead(directoryUserId, directoryScope);
     };
-  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId, visibility, tags]);
+  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId, directoryScope, visibility, tags]);
 
   useEffect(() => {
     const restored = () => {
@@ -298,12 +316,16 @@ export function useProjects(
   }, []);
 
   const invalidated = projectsEpoch !== epoch;
+  const matchesScope = projectsScope === scopeKey;
   return {
-    projects: invalidated ? [] : projects,
-    loading,
+    projects: !enabled || invalidated ? [] : matchesScope ? projects : (cached?.items ?? []),
+    loading: enabled && (loading || (!matchesScope && !cached && !error)),
     error: invalidated ? (error ?? 'Your access changed. Refresh to load this data.') : error,
     refresh,
-    hasMore: !invalidated && nextCursor !== null,
+    hasMore:
+      enabled &&
+      !invalidated &&
+      (matchesScope ? nextCursor !== null : Boolean(cached?.next_cursor)),
     loadMore,
     remove,
     create,

@@ -96,7 +96,7 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: (...args: unknown[]) => {
+  useProjects: (...args: [unknown, unknown, unknown, { enabled?: boolean }]) => {
     useProjectsArgs(...args);
     return {
       create: createProject,
@@ -104,7 +104,7 @@ vi.mock('@/hooks/projects/useProjects', () => ({
       hasMore: hookHasMore,
       loadMore,
       loading: hookLoading,
-      projects: hookProjects,
+      projects: args[3].enabled === false ? [] : hookProjects,
       refresh: refreshProjects,
       remove: removeProject,
       rename: renameProject,
@@ -302,8 +302,10 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage scope="accessible" />);
 
-    expect(useProjectsArgs).toHaveBeenLastCalledWith(20, undefined, 'on-demand', {
+    expect(useProjectsArgs).toHaveBeenCalledWith(20, undefined, 'on-demand', {
       directoryUserId: undefined,
+      deferCounts: true,
+      enabled: true,
     });
     expect(screen.getByRole('heading', { name: /^Your repositories/ })).toBeInTheDocument();
     expect(screen.getByText('Owner: test-a3')).toBeInTheDocument();

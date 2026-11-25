@@ -10,10 +10,12 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { postLogout } from '@/infrastructure/auth';
 import {
   clearSession as clearSessionInfra,
+  getSessionReadEpoch,
   getSessionUserId,
   getSessionUser as getSessionUserInfra,
   type SessionUser,
   setSessionUser as setSessionUserInfra,
+  subscribeSessionReadInvalidation,
   subscribeSessionUser,
 } from '@/infrastructure/session';
 
@@ -35,4 +37,8 @@ export function useSession() {
 
 export function useSessionUserId() {
   return useSyncExternalStore(subscribeSessionUser, getSessionUserId, () => null);
+}
+
+export function useSessionReadEpoch() {
+  return useSyncExternalStore(subscribeSessionReadInvalidation, getSessionReadEpoch, () => 0);
 }

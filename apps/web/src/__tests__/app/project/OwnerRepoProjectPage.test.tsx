@@ -333,6 +333,7 @@ it('starts project details from the directory selection and waits for matching a
         canonical_path: '/alice/Repo',
       } as ProjectSummary,
       userId: null,
+      readEpoch: 0,
       expiresAt: Date.now() + 15_000,
       head: Promise.resolve([]),
     },
