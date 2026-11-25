@@ -17,6 +17,15 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
+export async function schemaDocumentAuthorization(
+  headers: Headers,
+  _signal: AbortSignal
+): Promise<string | null | undefined> {
+  const token = readCookie(headers.get('cookie'), SESSION_COOKIE);
+  if (token) return token;
+  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') return null;
+}
+
 function sessionCookie(value: string, maxAge = SESSION_MAX_AGE_SECONDS): string {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   return `${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure}`;

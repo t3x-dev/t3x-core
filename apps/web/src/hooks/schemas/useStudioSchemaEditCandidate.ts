@@ -25,7 +25,8 @@ export function useStudioSchemaEditCandidate(
   workspaceId: string,
   workspaceRevision?: number,
   confirmedEmpty = false,
-  previewBranch?: string
+  previewBranch?: string,
+  initial?: StudioSchemaEditCandidateRead
 ) {
   const sessionId = useRef(getSessionUser()?.id ?? null);
   const sameSession = () => (getSessionUser()?.id ?? null) === sessionId.current;
@@ -142,13 +143,14 @@ export function useStudioSchemaEditCandidate(
     ++epoch.current;
     setResult(undefined);
     setPendingKey(null);
-    if (!confirmedEmpty) void refresh();
+    if (initial) setResult({ key, candidate: initial, readEpoch: getSessionReadEpoch() });
+    else if (!confirmedEmpty) void refresh();
     return () => {
       mounted.current = false;
       ++epoch.current;
       ++readRequest.current;
     };
-  }, [refresh, confirmedEmpty]);
+  }, [refresh, confirmedEmpty, initial, key]);
 
   useEffect(() => {
     const updated = (event: Event) => {
@@ -187,11 +189,12 @@ export function useStudioSchemaEditCandidate(
   const current = result?.key === key ? result : undefined;
   const accessChanged = current?.readEpoch !== undefined && current.readEpoch !== readEpoch;
   return {
-    candidate: accessChanged ? null : current ? current.candidate : (reusable ?? null),
+    candidate: accessChanged ? null : current ? current.candidate : (initial ?? reusable ?? null),
     error: accessChanged
       ? 'Session access changed. Reload the Schema before editing.'
       : current?.error,
-    loading: Boolean(projectId && workspaceId) && !confirmedEmpty && !current && !reusable,
+    loading:
+      Boolean(projectId && workspaceId) && !confirmedEmpty && !current && !initial && !reusable,
     pending: pendingKey === key,
     refresh,
     save: (input: SaveStudioSchemaEditCandidateInput) => {

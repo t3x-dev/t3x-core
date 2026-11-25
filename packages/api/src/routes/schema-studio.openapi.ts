@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AddStudioCandidateSchema,
+  RepositorySchemaStartupSchema,
   SaveStudioSchemaEditCandidateInputSchema,
   SchemaNodeProvenanceSchema,
   StudioAdoptResultSchema,
@@ -25,13 +26,16 @@ import {
   addSchemaStudioCandidate,
   ConflictError,
   DraftAuthoringConflictError,
+  findBranchByName,
+  findSchemaStartupWorkspace,
   findWorkspaceDraft,
   findWorkspaceDraftForOwner,
-  findYSchemaCompositionSnapshot,
+  getRepositoryAddress,
   getTransitionRefHead,
   listSchemaStudioCandidates,
   listYSchemaCatalogReleases,
   removeSchemaStudioCandidate,
+  resolveRepositoryProject,
   saveYSchemaCompositionSnapshot,
   transactWorkspaceAuthoring,
   upsertWorkspaceDraft,
@@ -41,7 +45,12 @@ import type { Context } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess, getProjectAccessPrincipal } from '../lib/project-access';
+import {
+  assertProjectAccess,
+  assertProjectReadWithEditPermission,
+  getProjectAccessPrincipal,
+  getUserId,
+} from '../lib/project-access';
 import { markRepositoryReadOutcome, timeRepositoryRead } from '../lib/repository-read-timing';
 import { saveStudioEditCandidate } from '../lib/schema-edit-candidate-save';
 import { readReleaseNodeProvenance } from '../lib/schema-node-provenance';
@@ -49,7 +58,7 @@ import { projectStudioCandidate, resolveStudioSource } from '../lib/schema-studi
 import {
   compileStudioSelection,
   previewStudio,
-  readStudioComposition,
+  readStudioCompositionSnapshot,
   StudioError,
   workspaceStudioSelection,
 } from '../lib/schema-studio-preview';
@@ -301,13 +310,31 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
   const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  try {
+    const { previewWorkspaceRevision } = c.req.valid('query');
+    const data = await readSchemaEditCandidate(c, db, projectId, draft, previewWorkspaceRevision);
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ success: true as const, data }, 200);
+  } catch (error) {
+    if (error instanceof StudioError) return errorResponse(c, error.code, error.message);
+    throw error;
+  }
+});
+
+async function readSchemaEditCandidate(
+  c: Context,
+  db: AnyDB,
+  projectId: string,
+  draft: Awaited<ReturnType<typeof findWorkspaceDraft>>,
+  previewWorkspaceRevision?: number
+) {
+  const workspaceId = draft?.workspace_id ?? draft?.id;
   const stored = draft?.workspace_state?.schemaEditCandidate;
-  if (!draft || !stored)
-    return errorResponse(c, 'NOT_FOUND', 'No Schema edit candidate exists for this Workspace.');
+  if (!draft || !workspaceId || !stored)
+    throw new StudioError('NOT_FOUND', 'No Schema edit candidate exists for this Workspace.');
   const candidate = parseWorkspaceSchemaEditCandidate(stored);
-  const { previewWorkspaceRevision } = c.req.valid('query');
   if (previewWorkspaceRevision !== undefined && previewWorkspaceRevision !== draft.revision)
-    return errorResponse(c, 'CONFLICT', 'The Workspace changed. Refresh it before editing.');
+    throw new StudioError('CONFLICT', 'The Workspace changed. Refresh it before editing.');
   for (const source of candidate.baseSources) {
     const available = await resolveStudioSource(c, db, {
       sourceProjectId: source.projectId,
@@ -316,35 +343,21 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
       artifactHash: source.hash,
     });
     if (!available)
-      return errorResponse(c, 'NOT_FOUND', 'A Schema edit source is no longer available.');
+      throw new StudioError('NOT_FOUND', 'A Schema edit source is no longer available.');
   }
-  c.header('Cache-Control', 'private, no-store');
-  let baseDefinition: Record<string, unknown> | undefined;
-  let composition: Record<string, string> | undefined;
-  if (candidate.authoringDraft?.base.kind === 'composition') {
-    const base = candidate.authoringDraft.base;
-    const snapshot = await findYSchemaCompositionSnapshot(db, {
-      project_id: projectId,
-      composition_id: base.compositionId,
-      composition_revision: base.compositionRevision,
-      compiled_schema_hash: base.schemaHash,
-    });
-    if (
-      !snapshot ||
-      snapshot.compositionHash !== base.compositionHash ||
-      (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
-        base.schemaHash
-    )
-      return errorResponse(c, 'CONFLICT', 'The exact saved Schema Base is unavailable.');
-    baseDefinition = { ...normalizeYSchemaObject(snapshot.schemaJson) };
-    composition = (snapshot.manifestJson as { studioComposition?: Record<string, string> })
-      .studioComposition;
-  }
+  const authoredBase = candidate.authoringDraft?.base;
+  const loadedComposition =
+    authoredBase?.kind === 'composition'
+      ? await readStudioCompositionSnapshot(db, projectId, authoredBase)
+      : undefined;
+  const baseDefinition = loadedComposition
+    ? { ...normalizeYSchemaObject(loadedComposition.snapshot.schemaJson) }
+    : undefined;
+  const composition = loadedComposition?.composition;
   const binding = (
     draft.workspace_state?.schemaBindings as { schemaHash?: string }[] | undefined
   )?.[0];
   const bindingHash = binding?.schemaHash;
-  const authoredBase = candidate.authoringDraft?.base;
   const alreadyApplied = bindingHash && candidate.authoringDraft?.resultSchemaHash === bindingHash;
   let draftPreview: z.input<typeof StudioSchemaEditCandidateReadSchema>['draftPreview'];
   if (previewWorkspaceRevision !== undefined && !alreadyApplied) {
@@ -373,7 +386,7 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
       const input = { candidateIds, workspaceId, ...(candidateIds.length ? { composition } : {}) };
       const read = (options: StudioPreviewInput) =>
         timeRepositoryRead(c, 'schema_preview', () =>
-          previewStudio(c, db, projectId, options, undefined, draft)
+          previewStudio(c, db, projectId, options, undefined, draft, loadedComposition)
         ).catch((error: unknown) => {
           if (!(error instanceof StudioError)) throw error;
           return undefined;
@@ -388,19 +401,138 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
       if (saved) draftPreview = { candidateIds, base, saved };
     }
   }
-  return c.json(
-    {
-      success: true as const,
-      data: StudioSchemaEditCandidateReadSchema.parse({
-        ...candidate,
-        baseDefinition,
-        composition,
-        draftPreview,
-      }),
+  return StudioSchemaEditCandidateReadSchema.parse({
+    ...candidate,
+    baseDefinition,
+    composition,
+    draftPreview,
+  });
+}
+
+const schemaStartupRoute = createRoute({
+  method: 'get',
+  path: '/v1/repositories/{owner}/{name}/schema-startup',
+  tags: ['YSchema'],
+  summary: 'Read the authorized initial editor for a repository branch',
+  request: {
+    params: z.object({ owner: z.string().min(1), name: z.string().min(1) }),
+    query: z.object({ branch: z.string().min(1), workspace: z.string().min(1).optional() }),
+  },
+  responses: {
+    200: {
+      description: 'Authorized repository address and current Workspace Schema',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(RepositorySchemaStartupSchema) },
+      },
     },
-    200
-  );
+    ...errors,
+  },
 });
+
+schemaStudioRoutes.openapi(schemaStartupRoute, async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  const { owner, name } = c.req.valid('param');
+  const { branch, workspace } = c.req.valid('query');
+  const db = await getDB();
+  const repository = await resolveRepositoryProject(db, owner, name);
+  if (!repository) return errorResponse(c, 'NOT_FOUND', 'Repository not found');
+  const access = await timeRepositoryRead(c, 'project_access', () =>
+    assertProjectReadWithEditPermission(c, db, repository.projectId)
+  );
+  if (access instanceof Response) return access;
+  const project = access.project;
+  const workspaceOwner = workspaceOwnerFromContext(c);
+  const [resolved, draft, selectedBranch] = await Promise.all([
+    getRepositoryAddress(db, project),
+    workspaceOwner || isAuthenticationDisabled()
+      ? timeRepositoryRead(c, 'owned_workspace', () =>
+          findSchemaStartupWorkspace(db, project.projectId, branch, workspace, workspaceOwner)
+        )
+      : null,
+    findBranchByName(db, project.projectId, branch),
+  ]);
+  const address = {
+    ...resolved,
+    project_id: project.projectId,
+    name: project.name,
+    redirect: resolved.canonical_path !== null && resolved.canonical_path !== `/${owner}/${name}`,
+  };
+  const state =
+    address.canonical_path && !address.redirect && selectedBranch && draft?.workspace_state;
+  const target =
+    draft && state && state.targetBranch === branch && state.status !== 'committed' ? draft : null;
+  const [definition, pending] = await Promise.all([
+    target ? readSchemaStartupDefinition(c, db, project.projectId, target) : undefined,
+    target && state && state.schemaPending !== undefined
+      ? timeRepositoryRead(c, 'pending_schema', () =>
+          readPendingWorkspaceSchema(c, db, project.projectId, target)
+        )
+      : undefined,
+  ]);
+  const {
+    assistantSchemaSettings: _settings,
+    schemaEditCandidate: _candidate,
+    schemaPending: _pending,
+    ...workspaceState
+  } = state || {};
+  const data = RepositorySchemaStartupSchema.parse({
+    userId: getUserId(c) ?? null,
+    address,
+    project: {
+      ...address,
+      created_at: project.createdAt.toISOString(),
+      visibility: project.visibility ?? 'private',
+      can_edit: access.canEdit === true,
+    },
+    branch: selectedBranch
+      ? { name: selectedBranch.name, headCommitHash: selectedBranch.headCommitHash }
+      : null,
+    workspace:
+      target && state
+        ? {
+            ...workspaceState,
+            id: target.workspace_id,
+            projectId: project.projectId,
+            targetBranch: branch,
+            revision: target.revision,
+            schemaActivity: {
+              hasEditCandidate: Boolean(state.schemaEditCandidate),
+              hasPendingTask: state.schemaPending !== undefined,
+            },
+          }
+        : null,
+    ...definition,
+    pending,
+  });
+  return c.json({ success: true as const, data }, 200);
+});
+
+async function readSchemaStartupDefinition(
+  c: Context,
+  db: AnyDB,
+  projectId: string,
+  draft: NonNullable<Awaited<ReturnType<typeof findWorkspaceDraft>>>
+) {
+  const state = draft.workspace_state;
+  const workspaceId = draft.workspace_id;
+  if (!state || !workspaceId) return;
+  try {
+    const candidate = state.schemaEditCandidate
+      ? await readSchemaEditCandidate(c, db, projectId, draft, draft.revision)
+      : undefined;
+    const binding = Array.isArray(state.schemaBindings) ? state.schemaBindings[0] : undefined;
+    const boundPreview =
+      binding && (!candidate || candidate.authoringDraft?.resultSchemaHash === binding.schemaHash)
+        ? await timeRepositoryRead(c, 'schema_preview', () =>
+            previewStudio(c, db, projectId, { candidateIds: [], workspaceId }, undefined, draft)
+          )
+        : undefined;
+    return { candidate, boundPreview };
+  } catch (error) {
+    if (!(error instanceof StudioError)) throw error;
+    // Let the editor report unavailable sources or a changed draft through its existing reads.
+  }
+}
 
 schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
   const db = await getDB();
@@ -430,7 +562,7 @@ schemaStudioRoutes.openapi(saveSchemaEditCandidateRoute, async (c) => {
         ? parseWorkspaceSchemaEditCandidate(stored).authoringDraft?.base
         : undefined;
       if (base?.kind === 'composition')
-        composition = await readStudioComposition(db, projectId, base);
+        composition = (await readStudioCompositionSnapshot(db, projectId, base)).composition;
     }
     const boundDraft = !input.candidateIds.length
       ? await findWorkspaceDraft(db, projectId, workspaceId)

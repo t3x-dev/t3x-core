@@ -367,7 +367,8 @@ export async function previewStudio(
   projectId: string,
   input: StudioPreviewInput,
   confirmedChange?: AssistantSchemaSettingsInput,
-  loadedDraft?: NonNullable<Awaited<ReturnType<typeof findWorkspaceDraft>>>
+  loadedDraft?: NonNullable<Awaited<ReturnType<typeof findWorkspaceDraft>>>,
+  loadedComposition?: Awaited<ReturnType<typeof readStudioCompositionSnapshot>>
 ) {
   const workspaceId = input.workspaceId;
   const draft = workspaceId
@@ -405,7 +406,8 @@ export async function previewStudio(
   }
   const recoveredComposition =
     editCandidate?.authoringDraft?.base.kind === 'composition'
-      ? await readStudioComposition(db, projectId, editCandidate.authoringDraft.base)
+      ? (loadedComposition ??
+        (await readStudioCompositionSnapshot(db, projectId, editCandidate.authoringDraft.base)))
       : undefined;
   if (!input.candidateIds.length && !draft?.workspace_state)
     throw new StudioError('NOT_FOUND', 'A saved Workspace is required.');
@@ -435,7 +437,7 @@ export async function previewStudio(
       editCandidate
         ? { id: editCandidate.candidateId, revision: editCandidate.revision }
         : undefined,
-      recoveredComposition ?? input.composition
+      recoveredComposition?.composition ?? input.composition
     ));
   if (editCandidate && !sameStudioSources(editCandidate.baseSources, selected.sources))
     throw new StudioError(
@@ -503,21 +505,9 @@ export async function previewStudio(
       );
     try {
       const authoring = editCandidate?.authoringDraft;
-      if (authoring?.base.kind === 'composition') {
+      if (authoring?.base.kind === 'composition' && recoveredComposition) {
+        const { snapshot } = recoveredComposition;
         const base = authoring.base;
-        const snapshot = await findYSchemaCompositionSnapshot(db, {
-          project_id: projectId,
-          composition_id: base.compositionId,
-          composition_revision: base.compositionRevision,
-          compiled_schema_hash: base.schemaHash,
-        });
-        if (
-          !snapshot ||
-          snapshot.compositionHash !== base.compositionHash ||
-          (await sha256CompositionValue(normalizeYSchemaObject(snapshot.schemaJson))) !==
-            base.schemaHash
-        )
-          throw new StudioError('CONFLICT', 'The exact Schema edit Base snapshot is unavailable.');
         selected = {
           ...selected,
           schema: normalizeYSchemaObject(snapshot.schemaJson),
@@ -914,7 +904,7 @@ function sameStudioSources(
 }
 
 /** Resolve only the exact frozen snapshot belonging to this candidate. */
-export async function readStudioComposition(
+export async function readStudioCompositionSnapshot(
   db: AnyDB,
   projectId: string,
   base: {
@@ -954,5 +944,5 @@ export async function readStudioComposition(
         'The saved composition decisions failed integrity verification.'
       );
   }
-  return manifest.studioComposition;
+  return { snapshot, composition: manifest.studioComposition };
 }

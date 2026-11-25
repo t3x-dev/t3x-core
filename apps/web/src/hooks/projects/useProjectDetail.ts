@@ -8,13 +8,18 @@ import type { ProjectDetail } from '@/infrastructure/types';
 import { fetchProject } from '@/queries/project';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
-export function useProjectDetail(projectId: string | null, deferStats = false) {
+export function useProjectDetail(
+  projectId: string | null,
+  deferStats = false,
+  initialProject?: ProjectSummary
+) {
   const userId = useSessionUserId();
   const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify([userId, projectId, attempt]);
   const [statsRequest, setStatsRequest] = useState<{ key: string; attempt: number }>();
   const statsAttempt = statsRequest?.key === key ? statsRequest.attempt : 0;
   const [fullDetailKey, setFullDetailKey] = useState<string>();
+  const initial = attempt === 0 ? initialProject : undefined;
   const includeStats = !deferStats || fullDetailKey === key || statsAttempt > 0;
   const [result, setResult] = useState<{
     key: string;
@@ -33,7 +38,7 @@ export function useProjectDetail(projectId: string | null, deferStats = false) {
   }, [key]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || initial) return;
     if (includeStats) {
       setFullDetailKey(key);
       setResult((current) =>
@@ -67,7 +72,7 @@ export function useProjectDetail(projectId: string | null, deferStats = false) {
     return () => {
       active = false;
     };
-  }, [includeStats, key, projectId, statsAttempt, userId]);
+  }, [includeStats, initial, key, projectId, statsAttempt, userId]);
 
   const updateDetail = useCallback(
     (patch: Partial<ProjectDetail>) => {
@@ -87,9 +92,9 @@ export function useProjectDetail(projectId: string | null, deferStats = false) {
   return {
     detail: current?.detail ?? null,
     updateDetail,
-    project: current?.project ?? null,
+    project: current?.project ?? (!current ? initial : undefined) ?? null,
     error: current?.error ?? null,
-    loading: Boolean(projectId && !current),
+    loading: Boolean(projectId && !current && !initial),
     retry: () => setAttempt((value) => value + 1),
     hasStats: current?.hasStats === true,
     statsLoading: Boolean(
@@ -105,9 +110,13 @@ export const ProjectDetailContext = createContext<{
   detail: ReturnType<typeof useProjectDetail>;
 } | null>(null);
 
-export function useRepositoryProjectDetail(projectId: string | null, deferStats = false) {
+export function useRepositoryProjectDetail(
+  projectId: string | null,
+  deferStats = false,
+  initialProject?: ProjectSummary
+) {
   const shared = useContext(ProjectDetailContext);
   const detail = shared && shared.projectId === projectId ? shared.detail : undefined;
-  const local = useProjectDetail(detail ? null : projectId, deferStats);
+  const local = useProjectDetail(detail ? null : projectId, deferStats, initialProject);
   return detail ?? local;
 }

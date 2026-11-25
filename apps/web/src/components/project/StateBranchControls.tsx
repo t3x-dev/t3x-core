@@ -26,6 +26,8 @@ interface StateBranchControlsProps {
   headCommitHash: string | null;
   sourceCommitHash?: string;
   onBranchChange: (branch: string) => void;
+  onOpen?: () => void;
+  loading?: boolean;
   onCreateBranch?: (name: string, fromBranch: string) => Promise<void>;
   showCreate?: boolean;
   requestCreateNavigation?: (create: () => void) => void;
@@ -39,6 +41,8 @@ export function StateBranchControls({
   headCommitHash,
   sourceCommitHash,
   onBranchChange,
+  onOpen,
+  loading = false,
   onCreateBranch,
   canCreateFromSearch: allowSearchCreation = true,
   showCreate = true,
@@ -148,7 +152,13 @@ export function StateBranchControls({
 
   const control = (
     <div className="flex min-w-0 items-center gap-2">
-      <Popover onOpenChange={setOpen} open={open}>
+      <Popover
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) onOpen?.();
+        }}
+        open={open}
+      >
         <PopoverTrigger asChild>
           <button
             aria-label={branch ? `Switch branches/tags, current branch ${branch}` : 'Select branch'}
@@ -186,6 +196,7 @@ export function StateBranchControls({
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <div className={navigationStyles.heading}>
+            {loading && <output>Loading branches…</output>}
             <span>
               <GitFork aria-hidden="true" />
             </span>

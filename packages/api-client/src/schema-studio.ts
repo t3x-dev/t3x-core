@@ -553,6 +553,32 @@ export const StudioSchemaEditCandidateReadSchema = StudioSchemaEditCandidateSche
     .optional(),
 });
 
+const SchemaStartupAddressSchema = z.object({
+  project_id: z.string(),
+  name: z.string(),
+  namespace: z.string().nullable(),
+  canonical_path: z.string().nullable(),
+  path_status: z.enum(['ready', 'pending_migration']),
+  redirect: z.boolean(),
+});
+
+export const RepositorySchemaStartupSchema = z.object({
+  userId: z.string().nullable(),
+  address: SchemaStartupAddressSchema,
+  project: SchemaStartupAddressSchema.extend({
+    created_at: z.string(),
+    visibility: z.enum(['public', 'unlisted', 'private']),
+    can_edit: z.boolean(),
+  }),
+  branch: z.object({ name: z.string(), headCommitHash: z.string().nullable() }).nullable(),
+  workspace: z.record(z.string(), z.unknown()).nullable(),
+  candidate: StudioSchemaEditCandidateReadSchema.optional(),
+  boundPreview: StudioPreviewSchema.optional(),
+  pending: WorkspaceSchemaPendingViewSchema.optional(),
+});
+
+export type RepositorySchemaStartup = z.infer<typeof RepositorySchemaStartupSchema>;
+
 export type StudioSchemaEditCandidateRead = z.infer<typeof StudioSchemaEditCandidateReadSchema>;
 
 export const StudioSchemaEditCandidateSaveResultSchema = z.object({
