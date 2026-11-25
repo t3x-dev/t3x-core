@@ -5,8 +5,8 @@ import {
   type StudioApplyInput,
   StudioCandidateListSchema,
   StudioCandidateSchema,
+  StudioSchemaEditCandidateReadSchema,
   StudioSchemaEditCandidateSaveResultSchema,
-  StudioSchemaEditCandidateSchema,
   WorkspaceSchemaPendingViewSchema,
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
@@ -98,10 +98,19 @@ export async function removeStudioCandidate(projectId: string, id: string) {
 const schemaEditPath = (projectId: string, workspaceId: string) =>
   `${API_V1}/projects/${encodeURIComponent(projectId)}/schema-studio/edit-candidates/${encodeURIComponent(workspaceId)}`;
 
-export async function readStudioSchemaEditCandidate(projectId: string, workspaceId: string) {
-  const response = await fetchWithTimeout(schemaEditPath(projectId, workspaceId));
+export async function readStudioSchemaEditCandidate(
+  projectId: string,
+  workspaceId: string,
+  previewWorkspaceRevision?: number
+) {
+  const url = schemaEditPath(projectId, workspaceId);
+  const response = await fetchWithTimeout(
+    previewWorkspaceRevision === undefined
+      ? url
+      : `${url}?previewWorkspaceRevision=${previewWorkspaceRevision}`
+  );
   if (response.status === 404) return null;
-  return StudioSchemaEditCandidateSchema.parse(await handleResponse(response));
+  return StudioSchemaEditCandidateReadSchema.parse(await handleResponse(response));
 }
 
 export async function saveStudioSchemaEditCandidate(

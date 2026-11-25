@@ -240,3 +240,22 @@ it('does not repopulate a cached Workspace from a read invalidated by a draft wr
   expect(read).toHaveBeenCalledOnce();
   expect(cache.snapshots.size).toBe(0);
 });
+
+it('uses a supplied saved draft preview without issuing a separate preview request', () => {
+  const read = vi.mocked(previewStudioSelection).mockReset();
+  const preview = {
+    schemaHash: 'saved-draft',
+    workspace: { id: 'docs', revision: 8 },
+    freshness: { candidateId: 'candidate', candidateRevision: 2 },
+  } as never;
+  const input = {
+    candidateIds: [],
+    workspaceId: 'docs',
+    schemaEditCandidate: { candidateId: 'candidate', revision: 2 },
+  };
+  const { result } = renderHook(() => useStudioPreview('p', input, 8, 'main', preview));
+  expect(result.current.data).toBe(preview);
+  expect(result.current.loading).toBe(false);
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(read).not.toHaveBeenCalled();
+});

@@ -320,11 +320,9 @@ it('starts the exact bound Schema while the repository page and branch list are 
 it('starts project details from the directory selection and waits for matching address access', async () => {
   mocks.query = '';
   let resolveAddress!: (value: unknown) => void;
-  mocks.resolve.mockReturnValueOnce(
-    new Promise((resolve) => {
-      resolveAddress = resolve;
-    })
-  );
+  const address = new Promise((resolve) => {
+    resolveAddress = resolve;
+  }) as NonNullable<ReturnType<typeof useProjectStore.getState>['directoryStateEntry']>['address'];
   useProjectStore.setState({
     directoryStateEntry: {
       project: {
@@ -336,9 +334,11 @@ it('starts project details from the directory selection and waits for matching a
       readEpoch: 0,
       expiresAt: Date.now() + 15_000,
       head: Promise.resolve([]),
+      address,
     },
   });
   render(<OwnerRepoProjectPage />);
+  expect(mocks.resolve).not.toHaveBeenCalled();
   expect(screen.getByRole('heading', { name: 'Directory summary' })).toBeInTheDocument();
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
   expect(mocks.fetchProject).toHaveBeenCalledExactlyOnceWith('proj_outside_list');

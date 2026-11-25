@@ -2,26 +2,50 @@
 
 import type {
   SaveStudioSchemaEditCandidateInput,
-  StudioSchemaEditCandidate,
+  StudioSchemaEditCandidateRead,
 } from '@t3x-dev/api-client';
 import { canonicalJson } from '@t3x-dev/yops';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useSessionReadEpoch } from '@/hooks/shared/useSession';
+import { ApiError } from '@/infrastructure/core';
 import {
   readStudioSchemaEditCandidate,
   saveStudioSchemaEditCandidate,
 } from '@/infrastructure/schemaStudio';
-import { getSessionUser } from '@/infrastructure/session';
+import { getSessionReadEpoch, getSessionUser } from '@/infrastructure/session';
 import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
+import { invalidateStudioPreviews, StudioPreviewCacheContext } from './studioPreviewCache';
+
+const DRAFT_PREVIEW_TTL = 30_000;
+const MAX_DRAFT_PREVIEWS = 8;
+
+function draftCacheKey(scope: string, readEpoch: number) {
+  return JSON.stringify([scope, readEpoch]);
+}
 
 export function useStudioSchemaEditCandidate(
   projectId: string,
   workspaceId: string,
   workspaceRevision?: number,
-  confirmedEmpty = false
+  confirmedEmpty = false,
+  previewBranch?: string
 ) {
   const sessionId = useRef(getSessionUser()?.id ?? null);
   const sameSession = () => (getSessionUser()?.id ?? null) === sessionId.current;
-  const key = `${projectId}:${workspaceId}:${workspaceRevision ?? 'unknown'}`;
+  const readEpoch = useSessionReadEpoch();
+  const key = JSON.stringify([
+    sessionId.current,
+    projectId,
+    workspaceId,
+    workspaceRevision,
+    previewBranch,
+  ]);
+  const cache = useContext(StudioPreviewCacheContext);
+  const previewRevision = previewBranch ? workspaceRevision : undefined;
+  const snapshot =
+    previewRevision !== undefined ? cache?.drafts.get(draftCacheKey(key, readEpoch)) : undefined;
+  const reusable =
+    !confirmedEmpty && snapshot && snapshot.expiresAt > Date.now() ? snapshot.data : undefined;
   const epoch = useRef(0);
   const activeKey = useRef(key);
   activeKey.current = key;
@@ -42,7 +66,8 @@ export function useStudioSchemaEditCandidate(
   >(undefined);
   const [result, setResult] = useState<{
     key: string;
-    candidate: StudioSchemaEditCandidate | null;
+    candidate: StudioSchemaEditCandidateRead | null;
+    readEpoch?: number;
     error?: string;
   }>();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -64,6 +89,8 @@ export function useStudioSchemaEditCandidate(
       return;
     const current = epoch.current;
     const token = ++readRequest.current;
+    const startedReadEpoch = getSessionReadEpoch();
+    const cacheKey = draftCacheKey(key, startedReadEpoch);
     const isCurrent = () =>
       mounted.current &&
       activeKey.current === key &&
@@ -71,17 +98,68 @@ export function useStudioSchemaEditCandidate(
       sameSession() &&
       token === readRequest.current;
     try {
-      const candidate = await readStudioSchemaEditCandidate(projectId, workspaceId);
-      if (isCurrent()) setResult({ key, candidate });
+      let request = previewRevision === undefined ? undefined : cache?.draftRequests.get(cacheKey);
+      if (!request) {
+        request =
+          previewRevision === undefined
+            ? readStudioSchemaEditCandidate(projectId, workspaceId)
+            : readStudioSchemaEditCandidate(projectId, workspaceId, previewRevision);
+        if (cache && previewRevision !== undefined) {
+          cache.draftRequests.set(cacheKey, request);
+          const clear = () => {
+            if (cache.draftRequests.get(cacheKey) === request) cache.draftRequests.delete(cacheKey);
+          };
+          void request.then(clear, clear);
+        }
+      }
+      const candidate = await request;
+      if (!isCurrent()) return;
+      if (previewRevision !== undefined && startedReadEpoch !== getSessionReadEpoch())
+        throw new Error('Session access changed. Reload the Schema before editing.');
+      const draft = candidate?.draftPreview?.saved;
+      if (
+        candidate &&
+        draft &&
+        (draft.workspace?.id !== workspaceId ||
+          draft.workspace.revision !== previewRevision ||
+          draft.freshness.candidateId !== candidate.candidateId ||
+          draft.freshness.candidateRevision !== candidate.revision)
+      )
+        throw new Error('The saved Schema draft changed. Reload it before editing.');
+      if (cache && previewRevision !== undefined) {
+        if (candidate && draft) {
+          if (cache.drafts.size >= MAX_DRAFT_PREVIEWS && !cache.drafts.has(cacheKey)) {
+            const oldest = cache.drafts.keys().next().value;
+            if (oldest !== undefined) cache.drafts.delete(oldest);
+          }
+          cache.drafts.set(cacheKey, {
+            data: candidate,
+            expiresAt: Date.now() + DRAFT_PREVIEW_TTL,
+          });
+        } else cache.drafts.delete(cacheKey);
+      }
+      setResult({
+        key,
+        candidate,
+        readEpoch: previewRevision === undefined ? undefined : startedReadEpoch,
+      });
     } catch (error) {
-      if (isCurrent())
+      if (isCurrent()) {
+        cache?.drafts.delete(cacheKey);
+        if (
+          cache &&
+          error instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN'].includes(error.code)
+        )
+          invalidateStudioPreviews(cache);
         setResult({
           key,
           candidate: null,
           error: error instanceof Error ? error.message : 'Schema edit candidate unavailable',
         });
+      }
     }
-  }, [key, projectId, workspaceId]);
+  }, [cache, key, previewRevision, projectId, workspaceId]);
 
   useEffect(() => {
     mounted.current = true;
@@ -131,10 +209,13 @@ export function useStudioSchemaEditCandidate(
   }, [projectId, workspaceId, refresh, confirmedEmpty]);
 
   const current = result?.key === key ? result : undefined;
+  const accessChanged = current?.readEpoch !== undefined && current.readEpoch !== readEpoch;
   return {
-    candidate: current?.candidate ?? null,
-    error: current?.error,
-    loading: Boolean(projectId && workspaceId) && !confirmedEmpty && !current,
+    candidate: accessChanged ? null : current ? current.candidate : (reusable ?? null),
+    error: accessChanged
+      ? 'Session access changed. Reload the Schema before editing.'
+      : current?.error,
+    loading: Boolean(projectId && workspaceId) && !confirmedEmpty && !current && !reusable,
     pending: pendingKey === key,
     refresh,
     save: (input: SaveStudioSchemaEditCandidateInput) => {

@@ -129,6 +129,21 @@ it('retains a whole Release origin through edits and recovers only a matching le
   });
   expect(preview.status, JSON.stringify(preview.body)).toBe(200);
   const result = preview.body.data;
+  const before = await findWorkspaceDraft(db, project, workspaceId);
+  const combined = await request(
+    `edit-candidates/${workspaceId}?previewWorkspaceRevision=${result.workspace.revision}`
+  );
+  expect(combined.status, JSON.stringify(combined.body)).toBe(200);
+  expect(combined.body.data.draftPreview).toMatchObject({
+    candidateIds: [a],
+    base: { schema: initial.schema },
+    saved: { schema: result.schema, reviewHash: result.reviewHash, freshness: result.freshness },
+  });
+  const stale = await request(
+    `edit-candidates/${workspaceId}?previewWorkspaceRevision=${result.workspace.revision - 1}`
+  );
+  expect(stale.status).toBe(409);
+  expect(await findWorkspaceDraft(db, project, workspaceId)).toEqual(before);
   expect(result.origins.checklist).toMatchObject({
     kind: 'derived',
     sources: [{ kind: 'module', source: initial.sources[0] }, { kind: 'local' }],

@@ -366,13 +366,15 @@ export async function previewStudio(
   db: AnyDB,
   projectId: string,
   input: StudioPreviewInput,
-  confirmedChange?: AssistantSchemaSettingsInput
+  confirmedChange?: AssistantSchemaSettingsInput,
+  loadedDraft?: NonNullable<Awaited<ReturnType<typeof findWorkspaceDraft>>>
 ) {
   const workspaceId = input.workspaceId;
   const draft = workspaceId
-    ? await timeRepositoryRead(c, 'schema_workspace', () =>
+    ? (loadedDraft ??
+      (await timeRepositoryRead(c, 'schema_workspace', () =>
         findWorkspaceDraft(db, projectId, workspaceId)
-      )
+      )))
     : null;
   let editCandidate: WorkspaceSchemaEditCandidate | null = null;
   if (input.schemaEditCandidate) {
