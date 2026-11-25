@@ -3,11 +3,17 @@
 import { useCallback } from 'react';
 import type { LocalProviderStatus, ProviderInfo, RoleAssignment } from '@/infrastructure';
 import { fetchLocalProviderStatus } from '@/queries/providerStatus';
-import { fetchProviderRoles, fetchProviders } from '@/queries/providers';
+import {
+  fetchProjectProviderConfig,
+  fetchProviderRoles,
+  fetchProviders,
+} from '@/queries/providers';
 
 export interface UseProvidersSettingsDataResult {
   fetchProvidersWithRoles: () => Promise<[ProviderInfo[], RoleAssignment[]]>;
   fetchProviderStatus: (providerId: string) => Promise<LocalProviderStatus>;
+  fetchProjectProviderSettings: typeof fetchProjectProviderConfig;
+  fetchProviders: typeof fetchProviders;
 }
 
 export function useProvidersSettingsData(): UseProvidersSettingsDataResult {
@@ -22,5 +28,10 @@ export function useProvidersSettingsData(): UseProvidersSettingsDataResult {
     []
   );
 
-  return { fetchProvidersWithRoles, fetchProviderStatus };
+  return {
+    fetchProvidersWithRoles,
+    fetchProviderStatus,
+    fetchProjectProviderSettings: fetchProjectProviderConfig,
+    fetchProviders,
+  };
 }

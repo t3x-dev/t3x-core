@@ -192,8 +192,9 @@ async function afterRepositoryWrite<T>(write: Promise<T>): Promise<T> {
   return result;
 }
 
-export async function getProject(projectId: string): Promise<ProjectDetail> {
-  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
+export async function getProject(projectId: string, includeStats = true): Promise<ProjectDetail> {
+  const query = includeStats ? '' : '?include_stats=false';
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}${query}`);
   return handleResponse<ProjectDetail>(res);
 }
 

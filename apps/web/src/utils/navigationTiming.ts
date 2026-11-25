@@ -1,5 +1,5 @@
-type NavigationSurface = 'repositories' | 'state' | 'schemas' | 'workspaces';
-type NavigationPhase = 'click' | 'shell' | 'ready';
+type NavigationSurface = 'repositories' | 'state' | 'schemas' | 'workspaces' | 'settings';
+type NavigationPhase = 'click' | 'shell' | 'address' | 'data' | 'ready';
 const navigationWindowMs = 15_000;
 let active:
   | { id: string; surface: NavigationSurface; startedAt: number; phases: Set<NavigationPhase> }
@@ -23,11 +23,16 @@ export function beginNavigationTiming(surface: string) {
     surface !== 'repositories' &&
     surface !== 'state' &&
     surface !== 'schemas' &&
-    surface !== 'workspaces'
+    surface !== 'workspaces' &&
+    surface !== 'settings'
   )
     return;
   active = { id: crypto.randomUUID(), surface, startedAt: performance.now(), phases: new Set() };
   markNavigationTiming(surface, 'click');
+}
+
+export function ensureSettingsNavigationTiming() {
+  if (activeNavigation()?.surface !== 'settings') beginNavigationTiming('settings');
 }
 
 export function markNavigationTiming(surface: NavigationSurface, phase: NavigationPhase) {
