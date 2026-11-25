@@ -328,9 +328,23 @@ export async function invoke<T>(
   tool: string,
   args: Record<string, unknown>
 ): Promise<T> {
-  const result = await client.call(tool, args);
-  expect(result.isError, `${tool}: ${result.content[0]?.text ?? 'missing result'}`).not.toBe(true);
-  return JSON.parse(result.content[0]?.text ?? '{}') as T;
+  const result = await client.call(tool, args).catch(() => {
+    throw new Error(`${tool}: MCP call interrupted. See the attached process diagnostics.`);
+  });
+  let payload: { error?: { code?: unknown; call_id?: unknown; write_outcome?: unknown } };
+  try {
+    payload = JSON.parse(result.content[0]?.text ?? '');
+  } catch {
+    throw new Error(`${tool}: MCP returned a result without readable JSON. See the attached diagnostics.`);
+  }
+  if (result.isError) {
+    const { code, call_id, write_outcome } = payload?.error ?? {};
+    const reason = typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,95}$/.test(code) ? code : 'TOOL_ERROR';
+    const reference = typeof call_id === 'string' && /^[a-f0-9-]{36}$/.test(call_id) ? ` Call ${call_id}.` : '';
+    const outcome = write_outcome === 'unconfirmed' ? ' Write result unconfirmed. Read back the authorized result before retrying.' : '';
+    throw new Error(`${tool}: ${reason}.${reference}${outcome}`);
+  }
+  return payload as T;
 }
 
 export async function denied(client: Mcp, tool: string, args: Record<string, unknown>) {

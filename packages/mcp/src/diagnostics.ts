@@ -21,6 +21,8 @@ interface ToolErrorText {
     call_id?: string;
     status?: number;
     write_outcome?: 'unconfirmed';
+    next_action?: string;
+    details?: { protocol_code?: string };
   };
 }
 
@@ -99,6 +101,20 @@ export async function trackToolCall(
       (unresolvedCodes.has(payload.error.code) || (payload.error.status ?? 0) >= 500)
     ) {
       payload.error.write_outcome = 'unconfirmed';
+      payload.error.next_action =
+        'Read back the authorized result or receipt before retrying the write.';
+    } else if (payload.error.status === 401) {
+      payload.error.next_action = 'Ask the authorized person to check the configured credential.';
+    } else if (payload.error.status === 403) {
+      payload.error.next_action =
+        'Check the credential scope and applicable resource or ref policy.';
+    } else if (
+      ['TRANSITION_REVIEW_STALE', 'REVIEW_SNAPSHOT_STALE'].some(
+        (code) => code === payload.error.code || code === payload.error.details?.protocol_code
+      )
+    ) {
+      payload.error.next_action =
+        'Read the current Draft revisions and ref head, then prepare a fresh Review.';
     }
     return {
       ...result,

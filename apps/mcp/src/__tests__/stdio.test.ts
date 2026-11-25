@@ -154,6 +154,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
         });
         openClients.push(client);
         const { tools } = await client.listTools();
+        expect(client.getInstructions()).toContain('Tell the user');
         expect(tools.map((tool) => tool.name).sort()).toEqual([
           't3x_committed_state',
           't3x_context',
@@ -242,7 +243,12 @@ describe('apps/mcp stdio subprocess smoke', () => {
         });
         expect(denied.isError).toBe(true);
         expect(parseTextResult(denied as Parameters<typeof parseTextResult>[0])).toMatchObject({
-          error: { status: 401, call_id: expect.any(String), http_request_id: requestIds.at(-1) },
+          error: {
+            status: 401,
+            call_id: expect.any(String),
+            http_request_id: requestIds.at(-1),
+            next_action: expect.stringContaining('configured credential'),
+          },
         });
         expect(requested).toHaveLength(5);
       } finally {
@@ -323,6 +329,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
             code: 'UPSTREAM_UNAVAILABLE',
             write_outcome: 'unconfirmed',
             call_id: expect.any(String),
+            next_action: expect.stringContaining('before retrying the write'),
           },
         });
         const args = {

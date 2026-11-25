@@ -2,7 +2,7 @@
 
 This document defines the target requirements for diagnosing failures, recovering interrupted operations, and qualifying the nine groups in the [business capability inventory](business-capabilities.md). The initial scope is the local stdio entry point with an authentication-enabled T3X API.
 
-The current TypeScript SDK v1 implements protocol revisions through `2025-11-25`. T3X already returns tool errors, logs API requests, persists recovery records for selected writes, and runs MCP qualification scenarios in separate phases. The tool error format varies, the API client does not expose the HTTP request ID on errors, and the qualification client pipes MCP `stderr` without collecting it in reports. Consistent error mapping, cross-layer correlation, and host reporting are requirements to implement and verify. [MCP SDK v1](https://ts.sdk.modelcontextprotocol.io/) · [Tool dispatch](../../../packages/mcp/src/server.ts) · [API client](../../../packages/api-client/src/client.ts) · [Qualification client](../../web/e2e/fixtures/mcp-qualification.ts)
+The current TypeScript SDK v1 implements protocol revisions through `2025-11-25`. The stdio entry point correlates tool calls and downstream HTTP requests and includes safe references in tool errors. The qualification client collects selected `stderr` events. Recovery guarantees apply to each command's documented contract. Full business coverage and third-party host behavior require separate qualification. [MCP SDK v1](https://ts.sdk.modelcontextprotocol.io/) · [Tool dispatch](../../../packages/mcp/src/server.ts) · [API client](../../../packages/api-client/src/client.ts) · [Qualification client](../../web/e2e/fixtures/mcp-qualification.ts)
 
 ## Ownership
 
@@ -56,7 +56,7 @@ Use field allowlists for logs, assertions, and exported reports. Exclude credent
 
 ## Agent reporting
 
-The host reports an unexpected failure, an unconfirmed write, or a required human action while the task is active. Include the operation, what has been confirmed, a safe reference, and the next action. For example, after losing a Commit response, report that the result is being checked and then update the user with the exact Commit or the remaining uncertainty.
+The host reports an unexpected failure, an unconfirmed write, or a required human action while the task is active. Reuse the existing tool result with `isError: true` and the readable `content[0].text`. The text can include `call_id`, `write_outcome`, and `next_action`. Include the operation, what has been confirmed, a safe reference, and the next action. For example, after losing a Commit response, report that the result is being checked and then update the user with the exact Commit or the remaining uncertainty.
 
 The host records recovered errors and expected negative outcomes in the final summary when they affect the task or its evidence. In qualification, an expected denial passes when the reason and relevant unchanged state match the scenario. Record unexpected failures and continue with independent scenarios when their prerequisites still hold. Validate the behavior of each supported third-party host before promising equivalent user reporting.
 
