@@ -18,11 +18,13 @@ import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  ErrorCode,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  McpError,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { T3xApiError } from '@t3x-dev/api-client';
@@ -33,6 +35,7 @@ import {
   isSafeWorkspaceIdentifier,
   type McpCapability,
 } from './business-capabilities.js';
+import { type McpDiagnostic, McpRequestError, trackToolCall } from './diagnostics.js';
 import { getPrompt, PROMPT_DEFS } from './prompts/index.js';
 import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 // Advanced tools
@@ -70,7 +73,14 @@ import { sourceArtifactDef, sourceArtifactHandler } from './tools/source-artifac
 import { sourceContextDef, sourceContextHandler } from './tools/source-context.js';
 import { sourceIngestionDef, sourceIngestionHandler } from './tools/source-ingestion.js';
 import { TRANSITION_TOOLS } from './tools/transition/index.js';
-import type { ToolDef, ToolHandler } from './tools/types.js';
+import {
+  apiToolError,
+  fail,
+  type ToolDef,
+  type ToolHandler,
+  type ToolResult,
+  toolError,
+} from './tools/types.js';
 import { workspaceCandidateDef, workspaceCandidateHandler } from './tools/workspace-candidate.js';
 import {
   workspaceValidationDef,
@@ -180,11 +190,15 @@ Transition lifecycle (only if the opt-in transition toolset and API backend are 
 
 t3x_generate creates validated outputs from committed state.`;
 
+const BUSINESS_INSTRUCTIONS = `Use the advertised T3X tools and their enabled actions. The API authorizes each request.
+When a tool returns isError, read the message, diagnostic reference, and any next action in its text response. Tell the user when an unexpected error blocks the task, a write's outcome is unconfirmed, or an authorized person must act. Include the failed operation, what is known, and the next action. Use the existing authorized reads to confirm an interrupted write before retrying. Read Run and Delivery statuses and Review findings even when the tool call succeeds.`;
+
 // ── Factory ──
 
 export interface McpServerOptions {
   toolsets: McpToolset[];
   capabilities?: readonly McpCapability[];
+  onDiagnostic?: (event: McpDiagnostic) => void;
 }
 
 export function createMcpServer(options: McpServerOptions) {
@@ -223,19 +237,14 @@ export function createMcpServer(options: McpServerOptions) {
 
   // 2. Build tool definitions array and handlers map
   const tools: ToolDef[] = activeEntries.map((e) => e.def);
-  const handlers = new Map<string, ToolHandler>();
-  for (const entry of activeEntries) {
-    handlers.set(entry.def.name, entry.handler);
-  }
+  const entries = new Map(activeEntries.map((entry) => [entry.def.name, entry]));
 
   // 3. Create the MCP server
   const server = new Server(
     { name: 't3x-mcp', version: packageJson.version ?? '0.0.0' },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: exposure
-        ? 'Use the advertised T3X tools and their enabled actions. The API authorizes each request.'
-        : SERVER_INSTRUCTIONS,
+      instructions: exposure ? BUSINESS_INSTRUCTIONS : SERVER_INSTRUCTIONS,
     }
   );
 
@@ -290,67 +299,89 @@ export function createMcpServer(options: McpServerOptions) {
   });
 
   // 7. Register CallTool handler
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
-    const handler = handlers.get(name);
+    const entry = entries.get(name);
 
-    const errorResult = (text: string) =>
-      ({ content: [{ type: 'text' as const, text }], isError: true }) as unknown as Record<
-        string,
-        unknown
-      >;
-
-    if (!handler) {
-      return errorResult(`Unknown tool: ${name}`);
+    if (!entry) {
+      throw new McpError(ErrorCode.InvalidParams, 'Unknown tool.');
     }
 
-    try {
-      const input = args ?? {};
-      if (exposure) {
-        if (!exposure.allows(name, input)) {
-          return errorResult('Action is unavailable in T3X_MCP_CAPABILITIES.');
+    const input = args ?? {};
+    const execute = async (): Promise<ToolResult> => {
+      try {
+        if (exposure) {
+          if (!exposure.allows(name, input)) {
+            return {
+              ...toolError('ACTION_UNAVAILABLE', 'Action is unavailable in T3X_MCP_CAPABILITIES.'),
+            };
+          }
+          const identifiers = [
+            'id',
+            'project_id',
+            'workspace_id',
+            'pin_id',
+            'transition_id',
+            'source_thread_id',
+            'snapshot_id',
+          ];
+          if (
+            identifiers.some((key) => {
+              if (!Object.hasOwn(input, key)) return false;
+              const workspace =
+                key === 'workspace_id' ||
+                (key === 'id' &&
+                  name === 't3x_query' &&
+                  (input.target === 'workspace' || input.target === 'workspace_activity'));
+              return !(workspace ? isSafeWorkspaceIdentifier : isSafeBusinessIdentifier)(
+                input[key]
+              );
+            })
+          ) {
+            return {
+              ...toolError('INVALID_ARGUMENT', 'Invalid identifier in business tool arguments.'),
+            };
+          }
+          if (name !== contextDef.name) await authenticatedApi();
         }
-        const identifiers = [
-          'id',
-          'project_id',
-          'workspace_id',
-          'pin_id',
-          'transition_id',
-          'source_thread_id',
-          'snapshot_id',
-        ];
-        if (
-          identifiers.some((key) => {
-            if (!Object.hasOwn(input, key)) return false;
-            const workspace =
-              key === 'workspace_id' ||
-              (key === 'id' &&
-                name === 't3x_query' &&
-                (input.target === 'workspace' || input.target === 'workspace_activity'));
-            return !(workspace ? isSafeWorkspaceIdentifier : isSafeBusinessIdentifier)(input[key]);
-          })
-        ) {
-          return errorResult('Invalid identifier in business tool arguments.');
-        }
-        if (name !== contextDef.name) await authenticatedApi();
-      }
-      return (await handler(
-        input,
-        exposure && {
-          skipMainBranchInitialization: true,
-        }
-      )) as unknown as Record<string, unknown>;
-    } catch (error: unknown) {
-      if (exposure && error instanceof T3xApiError) {
-        return errorResult(
-          JSON.stringify({
-            error: { code: error.code, status: error.status, message: error.message },
-          })
+        const result = await entry.handler(
+          input,
+          exposure && {
+            skipMainBranchInitialization: true,
+          }
         );
+        if (exposure && result.isError && !result.content[0]?.text.startsWith('{')) {
+          return {
+            ...toolError(
+              'TOOL_ERROR',
+              result.content[0]?.text ?? 'The tool could not complete the operation.'
+            ),
+          };
+        }
+        return { ...result };
+      } catch (error: unknown) {
+        if (error instanceof T3xApiError) return { ...apiToolError(error) };
+        if (error instanceof McpRequestError) {
+          return fail(
+            JSON.stringify({
+              error: {
+                code: error.code,
+                message: error.message,
+                http_request_id: error.httpRequestId,
+              },
+            })
+          );
+        }
+        return exposure
+          ? { ...toolError('INTERNAL_ERROR', 'The tool could not complete the operation.') }
+          : { ...fail(`Error: ${formatErrorMessage(error)}`) };
       }
-      const message = formatErrorMessage(error);
-      return errorResult(`Error: ${message}`);
-    }
+    };
+    return {
+      ...(options.onDiagnostic
+        ? await trackToolCall(entry.def, input, options.onDiagnostic, extra.signal, execute)
+        : await execute()),
+    };
   });
 
   return { server, tools };

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Project, RepositoryWorkspaceEnvelope } from '@t3x-dev/api-client';
 import { expect, test } from '@playwright/test';
 import {
   account,
@@ -68,6 +69,13 @@ test('MCP creates a repository, pins a branch Workspace and validates against an
     expect(canonical_path.toLowerCase()).toBe(
       `/${identity.namespace}/${projectArgs.name}`.toLowerCase()
     );
+    const project = await invoke<Project>(human, 't3x_query', { target: 'project', id: project_id });
+    expect(project).toMatchObject({ project_id, canonical_path, name: projectArgs.name });
+    expect(await invoke(human, 't3x_query', { target: 'projects' })).toEqual(
+      expect.arrayContaining([expect.objectContaining({ project_id, canonical_path })])
+    );
+    const projectResource = await human.readResource(`t3x://projects/${project_id}`);
+    expect(JSON.parse(projectResource.contents[0].text)).toEqual({ kind: 'project', ...project });
     const projectUrl = `/projects/${project_id}`;
     const agent = await mintDirect(actor, project_id, authoringScopes);
     const machine = mcpClient(agent.key, 'repositories:write');
@@ -187,14 +195,29 @@ test('MCP creates a repository, pins a branch Workspace and validates against an
     expect(JSON.parse(conflict.content[0]?.text ?? '{}')).toMatchObject({ error: { status: 409 } });
 
     const forkWorkspace = { project_id, id: `workspace_branch:${encodeURIComponent(fork.name)}` };
-    expect(
-      await invoke(human, 't3x_query', { target: 'workspace', ...forkWorkspace })
-    ).toMatchObject({
+    const workspace = await invoke<RepositoryWorkspaceEnvelope>(human, 't3x_query', {
+      target: 'workspace',
+      ...forkWorkspace,
+    });
+    expect(workspace).toMatchObject({
       workspace: {
+        id: forkWorkspace.id,
         baseCommitHash: historical.commit_digest,
         targetBranch: fork.name,
         schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2' }],
       },
+    });
+    expect(await invoke(human, 't3x_query', { target: 'workspaces', project_id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: forkWorkspace.id, baseCommitHash: historical.commit_digest }),
+      ])
+    );
+    const workspaceResource = await human.readResource(
+      `t3x://projects/${project_id}/workspaces/${encodeURIComponent(forkWorkspace.id)}`
+    );
+    expect(JSON.parse(workspaceResource.contents[0].text)).toEqual({
+      kind: 'workspace',
+      ...workspace,
     });
     expect(
       await invoke(human, 't3x_query', {

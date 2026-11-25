@@ -5,7 +5,7 @@ import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 // Load .env from monorepo root so NEXT_PUBLIC_* vars are available in local dev
 const rootEnvPath = path.resolve(__dirname, '../../.env');
-if (fs.existsSync(rootEnvPath)) {
+if (process.env.T3X_E2E_MCP_ISOLATED !== '1' && fs.existsSync(rootEnvPath)) {
   for (const line of fs.readFileSync(rootEnvPath, 'utf8').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;

@@ -23,12 +23,19 @@ const skipBuild = runnerArgs.includes('--skip-build');
 const keepData = runnerArgs.includes('--keep-data') || process.env.T3X_E2E_KEEP_DATA === '1';
 const authEnabled = runnerArgs.includes('--auth-enabled');
 const allowExternal = process.env.T3X_E2E_ALLOW_EXTERNAL === '1';
+const isolatedMcp = process.env.T3X_E2E_MCP_ISOLATED === '1';
 const unknownArgs = runnerArgs.filter(
   (arg) => !['--skip-build', '--keep-data', '--auth-enabled'].includes(arg)
 );
 
 if (unknownArgs.length > 0) {
   throw new Error(`Unknown full E2E runner argument(s): ${unknownArgs.join(', ')}`);
+}
+
+if (isolatedMcp && (!authEnabled || process.env.DATABASE_URL || process.env.T3X_E2E_DATA_DIR)) {
+  throw new Error(
+    'Isolated MCP qualification requires authentication and a fresh embedded database.'
+  );
 }
 
 const apiPort = process.env.T3X_E2E_API_PORT ?? '8100';
@@ -100,13 +107,17 @@ if (!allowExternal) {
 let testExitCode = 1;
 let status = 'failed';
 let caughtError = null;
+let interruptExitCode;
+let activeCommand;
+const interruption = new AbortController();
 
 const interrupt = (signal) => {
-  void stopChildren()
-    .catch((error) => console.error(`[full-e2e] Shutdown failed: ${error.message}`))
-    .finally(() => {
-      process.exitCode = signal === 'SIGINT' ? 130 : 143;
-    });
+  if (interruptExitCode !== undefined) return;
+  interruptExitCode = signal === 'SIGINT' ? 130 : 143;
+  interruption.abort(new Error(`Run cancelled by ${signal}.`));
+  void stopChildren().catch((error) =>
+    console.error(`[full-e2e] Shutdown failed: ${error.message}`)
+  );
 };
 process.once('SIGINT', () => interrupt('SIGINT'));
 process.once('SIGTERM', () => interrupt('SIGTERM'));
@@ -138,23 +149,42 @@ try {
   children.push(runner);
   await waitForUrl(`${runnerUrl}/health`, runner, 90_000);
 
+  const apiEntry =
+    isolatedMcp && runtimeEnv.T3X_E2E_MCP_PHASE === 'transition-statement'
+      ? 'tools/fixtures/mcp-statement-api.mjs'
+      : 'apps/api/dist/index.js';
   const api = startLoggedProcess(
     'api',
     'node',
-    ['tools/dev-package-runner.mjs', 'api', 'node', 'apps/api/dist/index.js'],
+    [
+      path.join(repoRoot, 'tools/dev-package-runner.mjs'),
+      'api',
+      'node',
+      path.join(repoRoot, apiEntry),
+    ],
     {
       ...runtimeEnv,
       PORT: apiPort,
-    }
+    },
+    isolatedMcp ? dataDir : repoRoot
   );
   children.push(api);
   await waitForUrl(`${apiUrl}/health`, api, 90_000);
+  if (isolatedMcp) {
+    const anonymous = await fetch(`${apiUrl}/api/v1/projects`, {
+      signal: AbortSignal.any([interruption.signal, AbortSignal.timeout(5000)]),
+    });
+    await anonymous.body?.cancel();
+    if (anonymous.status !== 401)
+      throw new Error('MCP qualification API did not require credentials.');
+  }
 
-  const web = startLoggedProcess('webui', 'pnpm', ['--filter', 't3x-webui', 'start'], {
-    ...runtimeEnv,
-    HOSTNAME: '127.0.0.1',
-    PORT: webPort,
-  });
+  const web = startLoggedProcess(
+    'webui',
+    'pnpm',
+    ['--filter', 't3x-webui', 'start', '--hostname', '127.0.0.1'],
+    { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+  );
   children.push(web);
   await waitForUrl(webUrl, web, 90_000);
 
@@ -190,9 +220,10 @@ try {
     schema_version: 1,
     started_at: startedAt,
     finished_at: new Date().toISOString(),
-    status,
+    status: interruptExitCode === undefined ? status : 'cancelled',
     auth_enabled: authEnabled,
     test_exit_code: testExitCode,
+    ...(interruptExitCode !== undefined && { interrupt_exit_code: interruptExitCode }),
     api_url: apiUrl,
     webui_url: webUrl,
     runner_url: runnerUrl,
@@ -213,11 +244,7 @@ try {
   );
 }
 
-if (caughtError) {
-  process.exitCode = 1;
-} else {
-  process.exitCode = testExitCode;
-}
+process.exitCode = interruptExitCode ?? (caughtError ? 1 : testExitCode);
 
 async function assertPortAvailable(port, label, envName) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -251,17 +278,19 @@ async function waitForUrl(url, child, timeoutMs) {
   let lastError = null;
 
   while (Date.now() < deadline) {
+    interruption.signal.throwIfAborted();
     if (child.exitCode !== null) {
       throw new Error(`${child.label} exited before ${url} became ready (code ${child.exitCode}).`);
     }
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: interruption.signal });
       if (response.ok || (response.status >= 300 && response.status < 400)) {
         console.log(`[full-e2e] ${child.label} ready at ${url}`);
         return;
       }
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
+      interruption.signal.throwIfAborted();
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -274,11 +303,12 @@ async function waitForUrl(url, child, timeoutMs) {
   );
 }
 
-function startLoggedProcess(label, command, args, env) {
+function startLoggedProcess(label, command, args, env, cwd = repoRoot) {
+  interruption.signal.throwIfAborted();
   const logPath = path.join(artifactDir, `${label}.log`);
   const log = fs.createWriteStream(logPath, { flags: 'w' });
   const child = spawn(command, args, {
-    cwd: repoRoot,
+    cwd,
     detached: process.platform !== 'win32',
     env,
     shell: process.platform === 'win32',
@@ -299,16 +329,20 @@ function startLoggedProcess(label, command, args, env) {
 }
 
 async function runCommand(command, args, env, { allowFailure = false } = {}) {
+  interruption.signal.throwIfAborted();
   console.log(`[full-e2e] Running: ${command} ${args.join(' ')}`);
   const code = await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
+      detached: process.platform !== 'win32',
       env,
       shell: process.platform === 'win32',
       stdio: 'inherit',
     });
+    activeCommand = child;
     child.once('error', reject);
     child.once('close', (exitCode, signal) => {
+      if (activeCommand === child && !interruption.signal.aborted) activeCommand = undefined;
       if (signal) {
         reject(new Error(`${command} terminated by ${signal}.`));
         return;
@@ -317,6 +351,7 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
     });
   });
 
+  interruption.signal.throwIfAborted();
   if (code !== 0 && !allowFailure) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${code}.`);
   }
@@ -324,6 +359,6 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
 }
 
 function stopChildren() {
-  stopping ??= stopProcessGroups(children);
+  stopping ??= stopProcessGroups(activeCommand ? [...children, activeCommand] : children);
   return stopping;
 }

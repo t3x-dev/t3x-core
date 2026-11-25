@@ -265,18 +265,17 @@ describe('createMcpServer', () => {
   it('returns unknown tool errors from the server call handler', async () => {
     const callTool = getCallToolHandler(['core']);
 
-    const result = await callTool({
-      method: 'tools/call',
-      jsonrpc: '2.0',
-      id: 3,
-      params: {
-        name: 't3x_create_leaf',
-        arguments: { commit_hash: 'sha256:commit1' },
-      },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Unknown tool: t3x_create_leaf');
+    await expect(
+      callTool({
+        method: 'tools/call',
+        jsonrpc: '2.0',
+        id: 3,
+        params: {
+          name: 't3x_create_leaf',
+          arguments: { commit_hash: 'sha256:commit1' },
+        },
+      })
+    ).rejects.toMatchObject({ code: -32602, message: expect.stringContaining('Unknown tool') });
   });
 
   it('formats nested database errors instead of returning an empty message', async () => {

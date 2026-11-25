@@ -8,6 +8,8 @@ The legacy stdio configuration uses `core`, `advanced`, and `transition`. Set `T
 
 The inventory starts from source at `ae7df1304` and includes the repository, State, Workspace and Transition tools described below. **Web Chat** means the assistant embedded in Workspace. Its capabilities and standalone Web screens are identified separately. Where an API exists, the gap is exposing it to the client and verifying the complete workflow. [Web business contracts](../../web/docs/business.md) · [Reliable Workspace](../../../docs/architecture/reliable-workspace-gate-1.md)
 
+See [MCP Operability and Qualification](operability.md) for the requirements for diagnostics, write recovery, Agent reporting, and full business qualification.
+
 ## Proposed tool groups
 
 | Group | Business capabilities | Exposure |

@@ -12,17 +12,20 @@ import {
 } from '../fixtures/mcp-qualification';
 
 const tool = 't3x_workspace_validation';
+const phase = process.env.T3X_E2E_MCP_PHASE;
+const realOci = phase === 'workspace-validation-oci';
 
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 test.skip(
   process.env.T3X_E2E_AUTH_ENABLED !== '1' ||
-    process.env.T3X_E2E_MCP_PHASE !== 'workspace-validation',
+    (phase !== 'workspace-validation' && !realOci),
   'Requires the isolated authentication-enabled MCP Workspace validation phase.'
 );
 
 test('pin an authoring Draft validation and restrict its evidence to the Workspace owner', async ({
   request,
 }) => {
+  if (realOci) test.setTimeout(150_000);
   const { actor, session } = await registerDirect(request, account('validateowner'));
   const other = await registerDirect(request, account('validateother'));
   const { id: otherId } = await other.actor<{ id: string }>('GET', '/auth/me');
@@ -51,7 +54,13 @@ test('pin an authoring Draft validation and restrict its evidence to the Workspa
     `${workspace}/validation-runs`,
     {}
   );
-  const document = { device: { esphome: { name: 'authored-device' } } };
+  const document = {
+    device: {
+      esp32: { board: 'esp32dev', framework: { type: 'arduino' } },
+      esphome: { name: 'authored-device' },
+      logger: { level: 'INFO' },
+    },
+  };
   const revision = await actor<{ workspaceRevision: number; compositionRevision: number }>(
     'POST',
     `${workspace}/authoring`,
@@ -100,7 +109,6 @@ test('pin an authoring Draft validation and restrict its evidence to the Workspa
         ...scope,
         subject_hash: `sha256:${hash}`,
         input_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
-        status: 'environment_required',
         result_json: {
           draft_revision: {
             workspace_revision: revision.workspaceRevision,
@@ -108,9 +116,32 @@ test('pin an authoring Draft validation and restrict its evidence to the Workspa
           },
         },
       },
-      steps: [expect.objectContaining({ error_code: 'OCI_RUNTIME_MISSING' })],
-      findings: [expect.objectContaining({ severity: 'error', code: 'OCI_RUNTIME_MISSING' })],
     });
+    if (realOci) {
+      expect(details).toMatchObject({
+        run: {
+          status: 'passed',
+          gate_status: 'ready',
+          provider: 'local-oci',
+          environment_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
+        steps: [
+          expect.objectContaining({
+            step_id: 'esphome-config',
+            status: 'passed',
+            exit_code: 0,
+            command_json: ['esphome', 'config', '/config/device.yaml'],
+          }),
+        ],
+        findings: [],
+      });
+    } else {
+      expect(details).toMatchObject({
+        run: { status: 'environment_required', gate_status: 'blocked' },
+        steps: [expect.objectContaining({ error_code: 'OCI_RUNTIME_MISSING' })],
+        findings: [expect.objectContaining({ severity: 'error', code: 'OCI_RUNTIME_MISSING' })],
+      });
+    }
     expect(details.run.result_json).not.toHaveProperty('private_workspace_owner');
     expect(details.run.subject_hash).not.toBe(legacy.run.subject_hash);
     await expect(

@@ -28,7 +28,7 @@ import type { TransitionActorRef, TransitionInspectionGraph } from '../transitio
 
 const REQUEST_DIGEST = `sha256:${'b'.repeat(64)}` as const;
 
-function transitionGraph(input?: { falseReplay?: boolean }): {
+function transitionGraph(input?: { falseReplay?: boolean; targetName?: string }): {
   base: State;
   result: State;
   effect: Effect;
@@ -37,7 +37,7 @@ function transitionGraph(input?: { falseReplay?: boolean }): {
   const base = createYOpsState({ name: 'before' });
   const valid = createYOpsEffect({
     base,
-    operations: [{ set: { path: 'name', value: 'after' } }],
+    operations: [{ set: { path: 'name', value: input?.targetName ?? 'after' } }],
     expectedBase: describeProtocolObject(base),
   });
   const result = input?.falseReplay
@@ -59,7 +59,7 @@ function transitionGraph(input?: { falseReplay?: boolean }): {
   return { base, result, effect, proposal };
 }
 
-function graph(input?: { falseReplay?: boolean }): TransitionInspectionGraph {
+function graph(input?: { falseReplay?: boolean; targetName?: string }): TransitionInspectionGraph {
   const subject = transitionGraph(input);
   return {
     membership: {
@@ -330,10 +330,11 @@ describe('transition commands', () => {
     expect(result.operationalResults).toEqual([]);
   });
 
-  it('issues external provider statements with the server configured issuer', async () => {
+  it('issues canonical external provider statements with the server configured issuer', async () => {
     const recorded: TransitionStatementRecordInput[] = [];
     const caller: TransitionActorRef = { kind: 'human', id: 'human:reviewer' };
     const providerIssuer: TransitionActorRef = { kind: 'service', id: 'service:support-verifier' };
+    const providerGraph = graph({ targetName: 'updated' });
     const provider: TransitionExternalStatementProvider = {
       source: 'provider:support',
       issuer: providerIssuer,
@@ -364,7 +365,7 @@ describe('transition commands', () => {
         }),
         findTransitionStatementsByRequest: vi.fn(async () => []),
         findTransitionVerificationReceipt: vi.fn(async () => null),
-        resolveTransitionProposalGraph: vi.fn(async () => graph()),
+        resolveTransitionProposalGraph: vi.fn(async () => providerGraph),
         recordTransitionVerification: vi.fn(async ({ statementInputs, receipt }) => {
           recorded.push(...statementInputs);
           return {
@@ -391,6 +392,10 @@ describe('transition commands', () => {
     expect(providerRecord).toBeDefined();
     expect(providerRecord?.issuer).toEqual(providerIssuer);
     expect(providerRecord?.statement.actor).toEqual(providerIssuer);
+    expect(providerRecord?.statement.subjects).toEqual([
+      describeProtocolObject(providerGraph.result),
+      describeProtocolObject(providerGraph.effect),
+    ]);
   });
 
   it('quarantines native provider statements issued as another actor', async () => {

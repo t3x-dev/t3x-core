@@ -439,7 +439,7 @@ export function buildWorkspaceYOpsProposalFromContext(
   const compiled = compileProposalDraft({
     draft: input.proposalDraft ?? createHumanProposalDraft({ why: input.why?.trim() || undefined }),
     effect,
-    actor: input.actor,
+    actor: { kind: input.actor.kind, id: input.actor.id },
   });
   if (!compiled.ok) {
     throw new TypeError(
@@ -503,7 +503,7 @@ async function prepareWorkspaceTransition(
   const compiled = compileProposalDraft({
     draft: createHumanProposalDraft({ why: input.why?.trim() || undefined }),
     effect,
-    actor: proposalActor,
+    actor: { kind: proposalActor.kind, id: proposalActor.id },
   });
   if (!compiled.ok) {
     throw new TypeError(

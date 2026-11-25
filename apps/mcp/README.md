@@ -330,92 +330,77 @@ a new request ID, which starts a separate execution.
 
 ### Authenticated core qualification
 
+Build the current checkout and check a running authenticated API before
+qualification. Use a test credential. The optional tool names are checked
+against the selected profile, which defaults to `read-only` and must expose
+`t3x_context`. Set `T3X_API_URL` and `T3X_API_KEY` in the environment.
+
+```bash
+pnpm exec turbo run build --filter=@t3x-dev/mcp
+node tools/mcp-preflight.mjs t3x_resolve_repository
+```
+
+The preflight reads credential context and tool definitions over stdio. Follow
+the [operability standard](docs/operability.md#qualification-prerequisites-and-coverage)
+to check the effective database, fixture configuration, and scenario dependencies.
+
+Use the qualification coordinator to review the phase plan or explicitly run
+any selection. An empty phase selection after `--run` runs all planned phases.
+
+```bash
+node tools/mcp-qualification.mjs --plan
+node tools/mcp-qualification.mjs --run api web
+```
+
+The coordinator builds the checkout, uses a fresh authenticated embedded
+database for each phase, and writes `qualification.json` with individual
+scenario outcomes and evidence paths. The report identifies fixture-backed
+dependencies. A skipped or empty phase cannot qualify its scenarios.
+
+Open the [qualification workbench](../../tools/mcp-workbench/index.html) in a
+browser and select the complete report folder. It reads the phase outcomes and
+sanitized MCP diagnostics locally. The overview supports a copyable summary,
+and each phase shows the recorded call and API request IDs when available.
+
 Issue an Agent credential in Web Settings → API Tokens for an explicit
 project. The form defaults to seven days and lets you select Decision and
 Commit scopes independently. For human confirmation, sign in to Web and open
 the exact Review snapshot; the Agent keeps its own credential.
 
-Build both MCP packages, then run each phase with a fresh isolated API and
-database so the phases have independent rate-limit counters:
+Run each core phase on its own fresh stack:
 
 ```bash
-T3X_E2E_MCP_PHASE=api T3X_E2E_ARTIFACT_DIR=test-results/mcp-core-api \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-core-loop.spec.ts
-T3X_E2E_MCP_PHASE=web T3X_E2E_ARTIFACT_DIR=test-results/mcp-core-web \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-core-loop.spec.ts
+node tools/mcp-qualification.mjs --run api web
+node tools/mcp-qualification.mjs --run restore presentation
 ```
 
-The first phase runs the stdio loop with API-issued fixture credentials. The
-second issues and revokes the Agent credential through Web and confirms a fixed
-Review in the signed-in Web session. Machine Decision runs only on a fixture
-ref with an explicit test policy.
+The API phase uses API-issued fixture credentials. The Web phase issues and
+revokes the Agent credential through Web and confirms a fixed Review in the
+signed-in Web session. Machine Decision uses a fixture ref with an explicit
+test policy. The restore and presentation phases verify historical Content
+restore and presentation revisions independently.
 
-Run repository and Schema registry, governed candidate publication, and Schema
-authoring qualification on their own fresh stacks:
+Select other phases by their names in the plan:
 
 ```bash
-T3X_E2E_MCP_PHASE=repositories T3X_E2E_ARTIFACT_DIR=test-results/mcp-repositories \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-repository-creation.spec.ts
-T3X_E2E_MCP_PHASE=workspace-candidate T3X_E2E_ARTIFACT_DIR=test-results/mcp-candidates \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-candidate-publication.spec.ts
-T3X_E2E_MCP_PHASE=schema-authoring T3X_E2E_ARTIFACT_DIR=test-results/mcp-schema-authoring \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-schema-authoring.spec.ts
-T3X_E2E_MCP_PHASE=source-context T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-context \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-context.spec.ts
-T3X_E2E_MCP_PHASE=source-ingestion T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-ingestion \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-ingestion.spec.ts
+node tools/mcp-qualification.mjs --run repositories workspace-candidate schema-authoring
+node tools/mcp-qualification.mjs --run source-context source-ingestion proposal-generation source-artifact
+node tools/mcp-qualification.mjs --run commit-validation workspace-validation repository-runs
+node tools/mcp-qualification.mjs --run write-recovery workspace-reconciliation transition-authority transition-statement
+node tools/mcp-qualification.mjs --run journey workspace-validation-oci
 ```
 
-The Proposal Generation test uses a deterministic OpenAI-compatible fixture
-that only listens on loopback. The key below is specific to this fixture:
-
-```bash
-T3X_E2E_MCP_PHASE=proposal-generation T3X_E2E_F3_MODEL_PORT=8373 T3X_E2E_ALLOW_EXTERNAL=1 \
-  OPENAI_BASE_URL=http://127.0.0.1:8373/v1 OPENAI_API_KEY=t3x-local-fixture-only \
-  ANTHROPIC_API_KEY='' GOOGLE_AI_STUDIO_KEY='' GOOGLE_API_KEY='' N8N_API_KEY='' \
-  T3X_E2E_ARTIFACT_DIR=test-results/mcp-proposal-generation \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-proposal-generation.spec.ts
-```
-
-The exact-source qualification checks the imported, edited, and reverted
-State against UTF-8 fixture bytes and reads the parsed form of a CSV attachment:
-
-```bash
-T3X_E2E_MCP_PHASE=source-artifact T3X_E2E_ARTIFACT_DIR=test-results/mcp-source-artifact \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-source-artifact.spec.ts
-```
-
-The Commit validation phase verifies persisted findings, historical Source
-references, and separate read and trigger permissions:
-
-```bash
-T3X_E2E_MCP_PHASE=commit-validation T3X_E2E_ARTIFACT_DIR=test-results/mcp-commit-validation \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-commit-validation.spec.ts
-```
-
-For exact Draft validation, simulate a missing OCI runtime with temporary
-executables to check the persisted failure reason without launching a container:
-
-```bash
-(
-  fixture_bin=$(mktemp -d)
-  trap 'rm -f "$fixture_bin/docker" "$fixture_bin/podman"; rmdir "$fixture_bin"' EXIT
-  printf '#!/bin/sh\nexit 127\n' > "$fixture_bin/docker"
-  cp "$fixture_bin/docker" "$fixture_bin/podman"
-  chmod +x "$fixture_bin/docker" "$fixture_bin/podman"
-  PATH="$fixture_bin:$PATH" T3X_E2E_MCP_PHASE=workspace-validation \
-    T3X_E2E_ARTIFACT_DIR=test-results/mcp-workspace-validation \
-    node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-workspace-validation.spec.ts
-)
-```
-
-The repository Runs phase reads seeded queued, running, completed, and failed
-records from the auth-enabled fixture:
-
-```bash
-T3X_E2E_MCP_PHASE=repository-runs T3X_E2E_ARTIFACT_DIR=test-results/mcp-repository-runs \
-  node tools/full-e2e.mjs --auth-enabled -- e2e/security/mcp-repository-runs.spec.ts
-```
+Proposal Generation and the Web-authorized journey use a deterministic
+OpenAI-compatible server on loopback. The journey follows a Source-backed change
+through a fixed Web Review, exact Commit read-back, and built-in preview rollback.
+The exact-source phase verifies byte preservation and parsed attachment
+reads. Commit validation checks persisted findings and separate read and
+trigger permissions. `workspace-validation` simulates a missing OCI runtime.
+`workspace-validation-oci` requires Docker or Podman and the pinned ESPHome
+image. Repository Runs uses a loopback workflow webhook and signed Runner
+callbacks to verify both `completed` and `failed` records. The Statement phase
+uses an isolated API instance with one explicitly allowed fixture predicate.
+The report identifies these dependencies for each phase.
 
 ### Resources
 

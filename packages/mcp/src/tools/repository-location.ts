@@ -1,6 +1,6 @@
 import { T3xApiError, type T3xClient } from '@t3x-dev/api-client';
 import { getApiClient, isApiBackend } from '../backend.js';
-import { fail, ok, type ToolDef, type ToolHandler } from './types.js';
+import { apiToolError, fail, ok, type ToolDef, type ToolHandler } from './types.js';
 
 const BRANCH_PAGE_SIZE = 100;
 
@@ -56,11 +56,7 @@ export const repositoryLocationHandler: ToolHandler = async ({ repository, ref }
     );
   } catch (error) {
     if (!(error instanceof T3xApiError)) throw error;
-    return fail(
-      JSON.stringify({
-        error: { code: error.code, message: error.message, status: error.status },
-      })
-    );
+    return apiToolError(error);
   }
 };
 
