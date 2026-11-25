@@ -107,13 +107,17 @@ if (!allowExternal) {
 let testExitCode = 1;
 let status = 'failed';
 let caughtError = null;
+let interruptExitCode;
+let activeCommand;
+const interruption = new AbortController();
 
 const interrupt = (signal) => {
-  void stopChildren()
-    .catch((error) => console.error(`[full-e2e] Shutdown failed: ${error.message}`))
-    .finally(() => {
-      process.exitCode = signal === 'SIGINT' ? 130 : 143;
-    });
+  if (interruptExitCode !== undefined) return;
+  interruptExitCode = signal === 'SIGINT' ? 130 : 143;
+  interruption.abort(new Error(`Run cancelled by ${signal}.`));
+  void stopChildren().catch((error) =>
+    console.error(`[full-e2e] Shutdown failed: ${error.message}`)
+  );
 };
 process.once('SIGINT', () => interrupt('SIGINT'));
 process.once('SIGTERM', () => interrupt('SIGTERM'));
@@ -164,7 +168,7 @@ try {
   await waitForUrl(`${apiUrl}/health`, api, 90_000);
   if (isolatedMcp) {
     const anonymous = await fetch(`${apiUrl}/api/v1/projects`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.any([interruption.signal, AbortSignal.timeout(5000)]),
     });
     await anonymous.body?.cancel();
     if (anonymous.status !== 401)
@@ -211,9 +215,10 @@ try {
     schema_version: 1,
     started_at: startedAt,
     finished_at: new Date().toISOString(),
-    status,
+    status: interruptExitCode === undefined ? status : 'cancelled',
     auth_enabled: authEnabled,
     test_exit_code: testExitCode,
+    ...(interruptExitCode !== undefined && { interrupt_exit_code: interruptExitCode }),
     api_url: apiUrl,
     webui_url: webUrl,
     runner_url: runnerUrl,
@@ -234,11 +239,7 @@ try {
   );
 }
 
-if (caughtError) {
-  process.exitCode = 1;
-} else {
-  process.exitCode = testExitCode;
-}
+process.exitCode = interruptExitCode ?? (caughtError ? 1 : testExitCode);
 
 async function assertPortAvailable(port, label, envName) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -272,17 +273,19 @@ async function waitForUrl(url, child, timeoutMs) {
   let lastError = null;
 
   while (Date.now() < deadline) {
+    interruption.signal.throwIfAborted();
     if (child.exitCode !== null) {
       throw new Error(`${child.label} exited before ${url} became ready (code ${child.exitCode}).`);
     }
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: interruption.signal });
       if (response.ok || (response.status >= 300 && response.status < 400)) {
         console.log(`[full-e2e] ${child.label} ready at ${url}`);
         return;
       }
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
+      interruption.signal.throwIfAborted();
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -296,6 +299,7 @@ async function waitForUrl(url, child, timeoutMs) {
 }
 
 function startLoggedProcess(label, command, args, env, cwd = repoRoot) {
+  interruption.signal.throwIfAborted();
   const logPath = path.join(artifactDir, `${label}.log`);
   const log = fs.createWriteStream(logPath, { flags: 'w' });
   const child = spawn(command, args, {
@@ -320,16 +324,20 @@ function startLoggedProcess(label, command, args, env, cwd = repoRoot) {
 }
 
 async function runCommand(command, args, env, { allowFailure = false } = {}) {
+  interruption.signal.throwIfAborted();
   console.log(`[full-e2e] Running: ${command} ${args.join(' ')}`);
   const code = await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
+      detached: process.platform !== 'win32',
       env,
       shell: process.platform === 'win32',
       stdio: 'inherit',
     });
+    activeCommand = child;
     child.once('error', reject);
     child.once('close', (exitCode, signal) => {
+      if (activeCommand === child && !interruption.signal.aborted) activeCommand = undefined;
       if (signal) {
         reject(new Error(`${command} terminated by ${signal}.`));
         return;
@@ -338,6 +346,7 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
     });
   });
 
+  interruption.signal.throwIfAborted();
   if (code !== 0 && !allowFailure) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${code}.`);
   }
@@ -345,6 +354,6 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
 }
 
 function stopChildren() {
-  stopping ??= stopProcessGroups(children);
+  stopping ??= stopProcessGroups(activeCommand ? [...children, activeCommand] : children);
   return stopping;
 }
