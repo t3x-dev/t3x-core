@@ -2,7 +2,7 @@
 
 T3X MCP server for AI agents.
 
-This package is the runnable stdio wrapper around `@t3x-dev/mcp-lib`.
+This package runs `@t3x-dev/mcp-lib` over stdio or Streamable HTTP.
 
 ## Preview status
 
@@ -21,7 +21,9 @@ The current MCP server exposes three protocol surfaces:
 
 ### Tools
 
-The default toolset is `core`. Enable `advanced` and `transition` through `T3X_TOOLSETS`.
+In stdio mode, the default toolset is `core`. Enable `advanced` and `transition`
+through `T3X_TOOLSETS`. Streamable HTTP uses an explicit
+[business capability allowlist](#business-capability-configuration).
 
 Core:
 
@@ -107,10 +109,10 @@ Statement set, and ref head are all resolved or checked at the API boundary.
 
 ### Business capability configuration
 
-Set `T3X_MCP_CAPABILITIES` to opt into an allowlist on the authenticated API
-backend. When set, it takes precedence over `T3X_TOOLSETS`. The legacy
-toolsets, resource aliases, and prompts remain available through the existing
-configuration when the capability variable is unset.
+Set `T3X_MCP_CAPABILITIES` to choose an allowlist on the authenticated API
+backend. Streamable HTTP requires it. In stdio mode it takes precedence over
+`T3X_TOOLSETS`. The legacy toolsets, resource aliases, and prompts remain
+available in stdio mode when the capability variable is unset.
 
 Set `T3X_MCP_BACKEND=api` and supply an API URL and credential for the target
 deployment. Each business tool or resource read checks the current credential
@@ -429,8 +431,8 @@ Prompts are user-facing workflow entries for MCP hosts. Agent guidance still mai
 
 ## Installation
 
-After this package is promoted and published, it can be added to an MCP host
-with the package binary:
+After this package is promoted and published, it can be added to a stdio MCP
+host with the package binary.
 
 ```json
 {
@@ -452,25 +454,29 @@ DB-backed provider credentials used by the T3X app. If you have already
 configured providers in WebUI/API settings, MCP reuses them automatically.
 Environment variables remain available as a local fallback.
 
-For local development inside this repo, the committed root `.mcp.json` already points at
-`apps/mcp/dist/index.js`, enables the Transition toolset, and defaults to the
-`api` backend so MCP follows the same persisted Workspace path as CLI and WebUI.
+For local stdio development, the root `.mcp.json` launches the built entry point
+through `tools/mcp-codex-wrapper.mjs`. It enables the Transition toolset and
+selects the `api` backend so MCP follows the same persisted Workspace path as
+CLI and WebUI.
 
 ## Runtime Model
 
-This server currently runs over `stdio` only.
+- `stdio` (default) runs as a subprocess of a local MCP client. It supports
+  both the `storage` and `api` backends.
+- `http` runs as a standalone service and accepts Streamable HTTP requests at
+  `/mcp`. It requires the authenticated `api` backend and an explicit business
+  capability allowlist.
 
-- `stdio` is implemented
-- `http` is not implemented yet
-
-The server supports two backends:
+### Backends
 
 - `storage`
   - if `DATABASE_URL` is set, it uses Postgres
   - otherwise it starts embedded Postgres under `.t3x/pg-data`
 - `api`
   - talks to the T3X API via `T3X_API_URL`
-  - reuses `T3X_API_KEY` or the shared `~/.t3x/config.json` key when present
+  - in stdio mode, reuses `T3X_API_KEY` or the shared `~/.t3x/config.json` key
+    when present
+  - in HTTP mode, uses the request's `Authorization: Bearer <token>` header
 
 The opt-in `transition` toolset requires the `api` backend. In `storage` mode,
 all six Transition tools fail closed with `API_BACKEND_REQUIRED`; there is no
@@ -487,16 +493,48 @@ the same Workspace/Transition path as WebUI and CLI.
 Local Codex/Cursor development should prefer the `api` backend so MCP and CLI
 see the same data without each process trying to own embedded Postgres.
 
+### Streamable HTTP
+
+From the repository root, build the service and start it on loopback against
+an authentication-enabled T3X API.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm exec turbo run build --filter=@t3x-dev/mcp
+T3X_TRANSPORT=http T3X_MCP_BACKEND=api \
+  T3X_API_URL=http://127.0.0.1:8000/api \
+  T3X_MCP_CAPABILITIES=read-only \
+  node apps/mcp/dist/index.js
+```
+
+Connect a Streamable HTTP client to `http://127.0.0.1:3001/mcp` and configure
+it to send `Authorization: Bearer <token>` on every MCP request. Issue the
+token from the Web Settings → API Tokens page on the same T3X deployment. For
+a single repository, use a project-bound Agent token with the required scopes.
+HTTP mode uses pre-issued T3X tokens. Clients that require OAuth discovery need
+a separate integration.
+
+The server validates each request's credential with the T3X API and uses that
+credential for the operation. Tool availability is set by
+`T3X_MCP_CAPABILITIES`, and the API enforces the caller's access. The endpoint
+uses stateless JSON responses over `POST`, with no MCP session ID or SSE stream.
+Authenticated `GET` and `DELETE` requests to `/mcp` receive `405`. [Streamable HTTP specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http)
+
+For hosted setup, see [MCP service deployment](../../docs/deployment.md#mcp-service).
+
 ## Environment Variables
 
 | Variable | Description | Default |
 | --- | --- | --- |
 | `T3X_TOOLSETS` | Comma-separated toolsets to enable: `core`, `advanced`, `transition` | `core` |
-| `T3X_MCP_CAPABILITIES` | Explicit comma-separated business capabilities for the authenticated API backend | Unset |
-| `T3X_TRANSPORT` | MCP transport | `stdio` |
+| `T3X_MCP_CAPABILITIES` | Explicit comma-separated business capabilities for the authenticated API backend. Required in HTTP mode. | Unset |
+| `T3X_TRANSPORT` | `stdio` or `http` (Streamable HTTP) | `stdio` |
 | `T3X_MCP_BACKEND` | Backend mode: `storage` or `api` | `storage` |
-| `T3X_API_URL` | Base API URL for `api` backend | `http://localhost:8000/api` |
-| `T3X_API_KEY` | Optional API key for `api` backend | unset |
+| `T3X_API_URL` | Base API URL for `api` backend. Required explicitly in HTTP mode. | `http://localhost:8000/api` in stdio mode |
+| `T3X_API_KEY` | Optional API key for stdio with the `api` backend | unset |
+| `HOST` | HTTP listener bind address | `127.0.0.1` |
+| `PORT` | HTTP listener port | `3001` |
+| `T3X_MCP_PUBLIC_URL` | External HTTPS endpoint ending in `/mcp`. Sets the accepted request host and origin. | Unset, allowing loopback clients |
 | `DATABASE_URL` | Postgres connection string; when omitted, embedded Postgres is used | unset |
 | `T3X_POSTGRES_STARTUP_MODE` | External Postgres startup: read-only `runtime` validation or explicit `bootstrap` migration/seed | `runtime` |
 | `T3X_DATA_DIR` | Embedded Postgres data directory | `.t3x/pg-data` |

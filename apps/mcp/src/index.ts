@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createMcpServer, type McpToolset, parseMcpCapabilities } from '@t3x-dev/mcp-lib';
+import {
+  createMcpServer,
+  type McpServerOptions,
+  type McpToolset,
+  parseMcpCapabilities,
+} from '@t3x-dev/mcp-lib';
+import { startMcpHttpServer } from './http.js';
 
 const SUPPORTED_TOOLSETS = new Set<McpToolset>(['core', 'advanced', 'transition']);
 
@@ -9,6 +15,10 @@ function failConfiguration(message: string): never {
   console.error(message);
   process.exit(1);
   throw new Error(message);
+}
+
+function parseUrl(value: string | undefined): URL | undefined {
+  if (value && URL.canParse(value)) return new URL(value);
 }
 
 function parseToolsets(value: string): McpToolset[] {
@@ -38,31 +48,82 @@ const onDiagnostic: NonNullable<Parameters<typeof createMcpServer>[0]['onDiagnos
   );
 };
 
-const { server } = (() => {
+const options: McpServerOptions = (() => {
   if (capabilityEnv === undefined) {
-    return createMcpServer({
+    return {
       toolsets: parseToolsets(process.env.T3X_TOOLSETS ?? 'core'),
       onDiagnostic,
-    });
+    };
   }
   try {
-    return createMcpServer({
+    return {
       toolsets: [],
       capabilities: parseMcpCapabilities(capabilityEnv),
       onDiagnostic,
-    });
+    };
   } catch {
     return failConfiguration('Invalid T3X_MCP_CAPABILITIES or API backend configuration.');
   }
 })();
 
 if (transport === 'stdio') {
-  const stdioTransport = new StdioServerTransport();
-  await server.connect(stdioTransport);
+  let server: ReturnType<typeof createMcpServer>['server'];
+  try {
+    ({ server } = createMcpServer(options));
+  } catch (error) {
+    if (capabilityEnv !== undefined)
+      failConfiguration('Invalid T3X_MCP_CAPABILITIES or API backend configuration.');
+    throw error;
+  }
+  await server.connect(new StdioServerTransport());
 } else if (transport === 'http') {
-  console.error('HTTP transport not yet implemented. Use stdio.');
-  process.exit(1);
+  if (process.env.T3X_MCP_BACKEND?.trim().toLowerCase() !== 'api' || !options.capabilities) {
+    failConfiguration('HTTP transport requires T3X_MCP_BACKEND=api and T3X_MCP_CAPABILITIES.');
+  }
+  const apiUrl = parseUrl(process.env.T3X_API_URL);
+  if (
+    !apiUrl ||
+    !['http:', 'https:'].includes(apiUrl.protocol) ||
+    apiUrl.username ||
+    apiUrl.password ||
+    apiUrl.search ||
+    apiUrl.hash
+  ) {
+    failConfiguration(
+      'HTTP transport requires an explicit HTTP(S) T3X_API_URL without credentials, query, or fragment.'
+    );
+  }
+  const portValue = process.env.PORT ?? '3001';
+  const port = Number(portValue);
+  const host = process.env.HOST?.trim() ?? '127.0.0.1';
+  if (!/^\d{1,5}$/.test(portValue) || port > 65535) {
+    failConfiguration('PORT must be an integer from 0 to 65535.');
+  }
+  if (!host) failConfiguration('HOST must identify the MCP HTTP listener.');
+  const externalEndpoint = process.env.T3X_MCP_PUBLIC_URL;
+  const publicUrl = parseUrl(externalEndpoint);
+  if (
+    externalEndpoint !== undefined &&
+    (!publicUrl ||
+      publicUrl.protocol !== 'https:' ||
+      publicUrl.pathname !== '/mcp' ||
+      publicUrl.username ||
+      publicUrl.password ||
+      publicUrl.search ||
+      publicUrl.hash)
+  ) {
+    failConfiguration(
+      'T3X_MCP_PUBLIC_URL must be an HTTPS /mcp URL without credentials, query, or fragment.'
+    );
+  }
+  if (!publicUrl && !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+    failConfiguration('Binding HTTP transport beyond loopback requires T3X_MCP_PUBLIC_URL.');
+  }
+  try {
+    await startMcpHttpServer(options, { apiUrl: apiUrl.href, host, port, publicUrl });
+  } catch {
+    failConfiguration('Could not start the MCP HTTP listener. Check HOST and PORT.');
+  }
 } else {
-  console.error('Unknown T3X_TRANSPORT. Use stdio.');
-  process.exit(1);
+  failConfiguration('Unknown T3X_TRANSPORT. Use stdio or http.');
 }
