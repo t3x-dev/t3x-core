@@ -4,6 +4,7 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
   createStudioPreviewCache,
+  prefetchStudioDraft,
   StudioPreviewCacheContext,
 } from '@/hooks/schemas/studioPreviewCache';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
@@ -309,4 +310,38 @@ it('shows the exact saved draft immediately on revisit while revalidating, witho
   expect(again.result.current.candidate).toBeNull();
   again.rerender({ revision: 8, branch: 'main' });
   expect(again.result.current.candidate).toBeNull();
+});
+
+it.each([
+  'in flight',
+  'completed',
+])('reuses the %s read started at Schema navigation', async (status) => {
+  const cache = createStudioPreviewCache();
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StudioPreviewCacheContext.Provider, { value: cache }, children);
+  const candidate = {
+    candidateId: 'edit',
+    revision: 2,
+    draftPreview: {
+      candidateIds: [],
+      saved: {
+        workspace: { id: 'workspace', revision: 7 },
+        freshness: { candidateId: 'edit', candidateRevision: 2 },
+      },
+    },
+  };
+  const pending = deferred<typeof candidate>();
+  mocks.read.mockReturnValue(pending.promise);
+  const prefetch = prefetchStudioDraft(cache, null, 'project', 'workspace', 7, 'main');
+  if (status === 'completed') {
+    pending.resolve(candidate);
+    await prefetch;
+  }
+  const { result } = renderHook(
+    () => useStudioSchemaEditCandidate('project', 'workspace', 7, false, 'main'),
+    { wrapper }
+  );
+  if (status === 'in flight') await act(async () => pending.resolve(candidate));
+  await waitFor(() => expect(result.current.candidate).toEqual(candidate));
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith('project', 'workspace', 7);
 });
