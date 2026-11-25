@@ -81,7 +81,6 @@ function RepositoryLayoutContent({
   useEffect(() => {
     if (settings) ensureSettingsNavigationTiming();
   }, [settings, pathname]);
-  const lookup = useRepositoryAddress(owner, name, !creating && !organizationSettings && !retired);
   const entry = useProjectStore((state) => state.directoryStateEntry);
   const readEpoch = useSessionReadEpoch();
   const queryString = query.toString();
@@ -112,6 +111,12 @@ function RepositoryLayoutContent({
       setClaimedEntry(undefined);
     }
   }, [claimedEntry, incoming, opening]);
+  const lookup = useRepositoryAddress(
+    owner,
+    name,
+    !creating && !organizationSettings && !retired,
+    opening?.address
+  );
   const address = lookup.current?.address;
   useEffect(() => {
     if (settings && address && !address.redirect) markNavigationTiming('settings', 'address');

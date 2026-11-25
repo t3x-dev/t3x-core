@@ -7,10 +7,11 @@ import {
   StudioApplyInputSchema,
   StudioCandidateListSchema,
   StudioCandidateSchema,
+  type StudioPreviewInput,
   StudioPreviewInputSchema,
   StudioPreviewSchema,
+  StudioSchemaEditCandidateReadSchema,
   StudioSchemaEditCandidateSaveResultSchema,
-  StudioSchemaEditCandidateSchema,
   WorkspaceSchemaPendingViewSchema,
 } from '@t3x-dev/api-client';
 import {
@@ -157,13 +158,18 @@ const readSchemaEditCandidateRoute = createRoute({
   path: '/v1/projects/{projectId}/schema-studio/edit-candidates/{workspaceId}',
   tags: ['YSchema'],
   summary: 'Recover the server-managed Schema edit candidate for a Workspace',
-  request: { params: schemaEditParams },
+  request: {
+    params: schemaEditParams,
+    query: z.object({
+      previewWorkspaceRevision: z.coerce.number().int().nonnegative().optional(),
+    }),
+  },
   responses: {
     200: {
       description: 'Persisted Schema edit candidate',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(StudioSchemaEditCandidateSchema),
+          schema: SuccessResponseSchema(StudioSchemaEditCandidateReadSchema),
         },
       },
     },
@@ -296,9 +302,12 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
   if (access instanceof Response) return access;
   const draft = await findWorkspaceDraft(db, projectId, workspaceId);
   const stored = draft?.workspace_state?.schemaEditCandidate;
-  if (!stored)
+  if (!draft || !stored)
     return errorResponse(c, 'NOT_FOUND', 'No Schema edit candidate exists for this Workspace.');
   const candidate = parseWorkspaceSchemaEditCandidate(stored);
+  const { previewWorkspaceRevision } = c.req.valid('query');
+  if (previewWorkspaceRevision !== undefined && previewWorkspaceRevision !== draft.revision)
+    return errorResponse(c, 'CONFLICT', 'The Workspace changed. Refresh it before editing.');
   for (const source of candidate.baseSources) {
     const available = await resolveStudioSource(c, db, {
       sourceProjectId: source.projectId,
@@ -331,10 +340,63 @@ schemaStudioRoutes.openapi(readSchemaEditCandidateRoute, async (c) => {
     composition = (snapshot.manifestJson as { studioComposition?: Record<string, string> })
       .studioComposition;
   }
+  const binding = (
+    draft.workspace_state?.schemaBindings as { schemaHash?: string }[] | undefined
+  )?.[0];
+  const bindingHash = binding?.schemaHash;
+  const authoredBase = candidate.authoringDraft?.base;
+  const alreadyApplied = bindingHash && candidate.authoringDraft?.resultSchemaHash === bindingHash;
+  let draftPreview: z.input<typeof StudioSchemaEditCandidateReadSchema>['draftPreview'];
+  if (previewWorkspaceRevision !== undefined && !alreadyApplied) {
+    const usesBinding =
+      bindingHash &&
+      authoredBase?.kind === 'composition' &&
+      authoredBase.schemaHash === bindingHash;
+    const rows =
+      !usesBinding && candidate.baseSources.length
+        ? await listSchemaStudioCandidates(db, projectId)
+        : [];
+    const candidateIds = usesBinding
+      ? []
+      : candidate.baseSources.map(
+          (source) =>
+            rows.find(
+              (row) =>
+                row.artifactVersionId === source.artifactVersionId &&
+                row.artifactHash === source.hash &&
+                row.sourceProjectId === source.projectId &&
+                row.canonicalName === source.canonicalName &&
+                row.version === source.version
+            )?.id
+        );
+    if (candidateIds.every((id): id is string => Boolean(id))) {
+      const input = { candidateIds, workspaceId, ...(candidateIds.length ? { composition } : {}) };
+      const read = (options: StudioPreviewInput) =>
+        timeRepositoryRead(c, 'schema_preview', () =>
+          previewStudio(c, db, projectId, options, undefined, draft)
+        ).catch((error: unknown) => {
+          if (!(error instanceof StudioError)) throw error;
+          return undefined;
+        });
+      const [saved, base] = await Promise.all([
+        read({
+          ...input,
+          schemaEditCandidate: { candidateId: candidate.candidateId, revision: candidate.revision },
+        }),
+        read(input),
+      ]);
+      if (saved) draftPreview = { candidateIds, base, saved };
+    }
+  }
   return c.json(
     {
       success: true as const,
-      data: StudioSchemaEditCandidateSchema.parse({ ...candidate, baseDefinition, composition }),
+      data: StudioSchemaEditCandidateReadSchema.parse({
+        ...candidate,
+        baseDefinition,
+        composition,
+        draftPreview,
+      }),
     },
     200
   );

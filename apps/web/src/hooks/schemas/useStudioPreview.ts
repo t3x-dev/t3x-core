@@ -126,7 +126,8 @@ export function useStudioPreview(
   projectId: string,
   input: StudioPreviewInput,
   workspaceRevision?: number,
-  branch?: string
+  branch?: string,
+  initial?: StudioPreview
 ) {
   const userId = useSessionUserId();
   const cache = useContext(StudioPreviewCacheContext);
@@ -142,6 +143,7 @@ export function useStudioPreview(
       if (!available) return;
       const exactSnapshot =
         mode === 'focus' ? cache?.snapshots.get(key)?.data : cachedPreview(cache, key);
+      if (initial && mode !== 'retry') return;
       if (mode === 'initial' && exactSnapshot) {
         setResult({ key, data: exactSnapshot });
         return;
@@ -166,7 +168,7 @@ export function useStudioPreview(
         }
       );
     },
-    [available, cache, key]
+    [available, cache, initial, key]
   );
   useEffect(() => {
     load('initial');
@@ -178,7 +180,8 @@ export function useStudioPreview(
     };
   }, [available, load]);
   const refresh = useCallback(() => load('retry'), [load]);
-  const data = current?.data ?? (!current?.error ? cachedPreview(cache, key) : undefined);
+  const data =
+    current?.data ?? (!current?.error ? (initial ?? cachedPreview(cache, key)) : undefined);
   return {
     data,
     receivedAt: current?.receivedAt,

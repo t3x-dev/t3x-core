@@ -10,7 +10,7 @@
  * reading those values need no change.
  */
 
-import type { RepositoryProfile } from '@t3x-dev/api-client';
+import type { RepositoryAddress, RepositoryProfile } from '@t3x-dev/api-client';
 import { create } from 'zustand';
 import type { ApiCommit, Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
@@ -45,6 +45,7 @@ export interface DirectoryStateEntry {
   readEpoch: number;
   expiresAt: number;
   head: Promise<ApiCommit[]>;
+  address?: Promise<RepositoryAddress>;
 }
 
 type ProjectStore = {

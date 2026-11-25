@@ -5,13 +5,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
-import { checkRepositoryName, fetchDeletedProjects } from '@/queries/projects';
+import { checkRepositoryName, fetchDeletedProjects, resolveRepository } from '@/queries/projects';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
 
 vi.mock('@/queries/projects', () => ({
   checkRepositoryName: vi.fn(),
   fetchDeletedProjects: vi.fn(),
+  resolveRepository: vi.fn().mockResolvedValue({}),
 }));
 
 const routerPush = vi.fn();
@@ -189,6 +190,7 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage />);
     const link = await screen.findByRole('link', { name: 'prd-workflow', exact: true });
     expect(preloadHead).not.toHaveBeenCalled();
+    expect(resolveRepository).not.toHaveBeenCalled();
     fireEvent.click(link);
     expect(preloadHead).toHaveBeenCalledExactlyOnceWith('proj_prd', 'main', 1);
     const entry = useProjectStore.getState().directoryStateEntry;
@@ -197,6 +199,8 @@ describe('ProjectDirectoryPage', () => {
       canonical_path: '/t3x-dev/prd-workflow',
     });
     expect(entry?.head).toBe(preloadHead.mock.results[0].value);
+    expect(resolveRepository).toHaveBeenCalledExactlyOnceWith('t3x-dev', 'prd-workflow');
+    expect(entry?.address).toBe(vi.mocked(resolveRepository).mock.results[0].value);
   });
 
   it('renders the organization-level repository directory as the app entrypoint', () => {

@@ -543,6 +543,18 @@ export const StudioSchemaEditCandidateSchema = z.object({
   requestDigest: digest,
 });
 
+export const StudioSchemaEditCandidateReadSchema = StudioSchemaEditCandidateSchema.extend({
+  draftPreview: z
+    .object({
+      candidateIds: z.array(z.string()),
+      base: StudioPreviewSchema.optional(),
+      saved: StudioPreviewSchema,
+    })
+    .optional(),
+});
+
+export type StudioSchemaEditCandidateRead = z.infer<typeof StudioSchemaEditCandidateReadSchema>;
+
 export const StudioSchemaEditCandidateSaveResultSchema = z.object({
   outcome: z.enum(['created', 'updated', 'reused']),
   workspaceRevision: z.number().int().positive(),
