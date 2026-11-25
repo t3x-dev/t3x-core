@@ -2,118 +2,183 @@
 import type { StudioPreview, StudioPreviewInput } from '@t3x-dev/api-client';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useSessionUserId } from '@/hooks/shared/useSession';
+import { ApiError } from '@/infrastructure/core';
 import { applyStudioSelection, previewStudioSelection } from '@/infrastructure/schemaStudio';
 
-import { StudioPreviewCacheContext } from './studioPreviewCache';
+import {
+  createStudioPreviewCache,
+  invalidateStudioPreviews,
+  type StudioPreviewCache,
+  StudioPreviewCacheContext,
+  studioPreviewKey,
+} from './studioPreviewCache';
 
 const PREVIEW_FRESH_MS = 30_000;
 const MAX_CACHED_PREVIEWS = 8;
-const inFlight = new Map<string, { promise: Promise<StudioPreview>; invalidated: boolean }>();
+const standaloneReads = createStudioPreviewCache();
 
-/** Results belong to the exact selection and Workspace revision that requested them. */
+type PreviewRead = {
+  data?: StudioPreview;
+  receivedAt?: number;
+  error?: string;
+};
+
+function cachedPreview(cache: StudioPreviewCache | null, key: string) {
+  const snapshot = cache?.snapshots.get(key);
+  return snapshot && snapshot.expiresAt > Date.now() ? snapshot.data : undefined;
+}
+
+function readStudioPreview(cache: StudioPreviewCache | null, key: string) {
+  const owner = cache ?? standaloneReads;
+  const existing = owner.requests.get(key);
+  if (existing) return existing;
+  const [, projectId, input, revision] = JSON.parse(key) as [
+    string | null,
+    string,
+    StudioPreviewInput,
+    number | null,
+  ];
+  const previous = owner.snapshots.get(key)?.data;
+  const request = previewStudioSelection(projectId, input).then(
+    (data) => {
+      if (owner.requests.get(key) !== request)
+        throw new Error('The Schema changed. Reload it before editing.');
+      if (
+        input.workspaceId &&
+        (data.workspace?.id !== input.workspaceId ||
+          (revision !== null && data.workspace.revision !== revision))
+      ) {
+        owner.snapshots.delete(key);
+        throw new Error('The Workspace changed. Refresh it before editing the Schema.');
+      }
+      if (previous && previous.reviewHash !== data.reviewHash) {
+        owner.snapshots.delete(key);
+        throw new Error('The Schema changed. Reload it before editing.');
+      }
+      const candidate = input.schemaEditCandidate;
+      if (
+        candidate &&
+        (data.freshness.candidateId !== candidate.candidateId ||
+          data.freshness.candidateRevision !== candidate.revision)
+      ) {
+        owner.snapshots.delete(key);
+        throw new Error('The saved Schema draft changed. Reload it before editing.');
+      }
+      const canReuse =
+        candidate ||
+        (!input.candidateIds.length && !input.composition && Boolean(data.workspace?.boundSchema));
+      if (
+        cache &&
+        revision !== null &&
+        input.workspaceId &&
+        !input.schemaDefinition &&
+        !input.localContribution &&
+        canReuse
+      ) {
+        if (cache.snapshots.size >= MAX_CACHED_PREVIEWS && !cache.snapshots.has(key)) {
+          const oldest = cache.snapshots.keys().next().value;
+          if (oldest !== undefined) cache.snapshots.delete(oldest);
+        }
+        cache.snapshots.set(key, { data, expiresAt: Date.now() + PREVIEW_FRESH_MS });
+      }
+      return data;
+    },
+    (error: unknown) => {
+      if (owner.requests.get(key) === request) {
+        owner.snapshots.delete(key);
+        if (
+          error instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].includes(error.code)
+        )
+          invalidateStudioPreviews(owner);
+      }
+      throw error;
+    }
+  );
+  owner.requests.set(key, request);
+  const clear = () => {
+    if (owner.requests.get(key) === request) owner.requests.delete(key);
+  };
+  void request.then(clear, clear);
+  return request;
+}
+
+export function prefetchBoundStudioPreview(
+  cache: StudioPreviewCache,
+  userId: string | null,
+  projectId: string,
+  workspaceId: string,
+  revision: number,
+  branch: string
+) {
+  const key = studioPreviewKey(
+    userId,
+    projectId,
+    { candidateIds: [], workspaceId },
+    revision,
+    branch
+  );
+  if (!cachedPreview(cache, key)) void readStudioPreview(cache, key).catch(() => {});
+}
+
+/** The editor and its early read share the same principal and versioned target. */
 export function useStudioPreview(
   projectId: string,
   input: StudioPreviewInput,
-  workspaceRevision?: number
+  workspaceRevision?: number,
+  branch?: string
 ) {
   const userId = useSessionUserId();
   const cache = useContext(StudioPreviewCacheContext);
-  const key = JSON.stringify([projectId, input, workspaceRevision, userId]);
-  const epoch = useRef(0);
-  const available = !!(input.candidateIds.length || input.workspaceId);
-  const [result, setResult] = useState<{
-    key: string;
-    data?: StudioPreview;
-    receivedAt?: number;
-    error?: string;
-  }>();
-  const [retry, setRetry] = useState(0);
-  const refresh = useCallback(() => {
-    ++epoch.current;
-    const request = inFlight.get(key);
-    if (request) request.invalidated = true;
-    inFlight.delete(key);
-    cache?.delete(key);
-    setResult(undefined);
-    setRetry((value) => value + 1);
-  }, [cache, key]);
-  useEffect(() => {
-    if (!available) return;
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, [available, refresh]);
-  useEffect(() => {
-    const current = ++epoch.current;
-    if (!available) return;
-    const snapshot = cache?.get(key);
-    if (snapshot && snapshot.expiresAt > Date.now()) {
-      setResult({ key, data: snapshot.data });
-      return;
-    }
-    const [target, selection, revision] = JSON.parse(key) as [
-      string,
-      StudioPreviewInput,
-      number | null,
-    ];
-    let request = inFlight.get(key);
-    if (!request) {
-      request = { promise: previewStudioSelection(target, selection), invalidated: false };
-      inFlight.set(key, request);
-      const clear = () => {
-        if (inFlight.get(key) === request) inFlight.delete(key);
-      };
-      void request.promise.then(clear, clear);
-    }
-    const activeRequest = request;
-    void activeRequest.promise.then(
-      (data) => {
-        if (current !== epoch.current) return;
-        const receivedAt = performance.now();
-        if (
-          data.workspace &&
-          selection.workspaceId &&
-          (data.workspace.id !== selection.workspaceId ||
-            (revision !== null && data.workspace.revision !== revision))
-        ) {
-          setResult({ key, error: 'The Workspace changed. Refresh it before editing the Schema.' });
-          return;
-        }
-        if (
-          cache &&
-          !activeRequest.invalidated &&
-          revision !== null &&
-          selection.candidateIds.length === 0 &&
-          !selection.composition &&
-          !selection.schemaEditCandidate &&
-          !selection.schemaDefinition &&
-          !selection.localContribution &&
-          data.workspace?.boundSchema &&
-          data.workspace.revision === revision
-        ) {
-          if (cache.size >= MAX_CACHED_PREVIEWS) {
-            const oldest = cache.keys().next().value;
-            if (oldest !== undefined) cache.delete(oldest);
-          }
-          cache.set(key, { data, expiresAt: Date.now() + PREVIEW_FRESH_MS });
-        }
-        setResult({ key, data, receivedAt });
-      },
-      (error: unknown) => {
-        if (current === epoch.current)
-          setResult({
-            key,
-            error: error instanceof Error ? error.message : 'Could not resolve selection',
-          });
-      }
-    );
-    return () => {
-      ++epoch.current;
-    };
-  }, [available, cache, key, retry]);
-  const cached = cache?.get(key);
-  const fromCache = !!cached && cached.expiresAt > Date.now();
+  const key = studioPreviewKey(userId, projectId, input, workspaceRevision, branch);
+  const available = Boolean(input.candidateIds.length || input.workspaceId);
+  const [result, setResult] = useState<PreviewRead & { key: string }>();
   const current = result?.key === key ? result : undefined;
-  const data = current?.data ?? (fromCache ? cached.data : undefined);
+  const readEpoch = useRef(0);
+
+  const load = useCallback(
+    (mode: 'initial' | 'focus' | 'retry') => {
+      const epoch = ++readEpoch.current;
+      if (!available) return;
+      const exactSnapshot =
+        mode === 'focus' ? cache?.snapshots.get(key)?.data : cachedPreview(cache, key);
+      if (mode === 'initial' && exactSnapshot) {
+        setResult({ key, data: exactSnapshot });
+        return;
+      }
+      if (mode === 'retry') {
+        cache?.snapshots.delete(key);
+        (cache ?? standaloneReads).requests.delete(key);
+      }
+      if (mode === 'retry' || (mode === 'focus' && !exactSnapshot)) setResult(undefined);
+      const request = readStudioPreview(cache, key);
+      void request.then(
+        (data) => {
+          if (epoch !== readEpoch.current) return;
+          setResult({ key, data, receivedAt: performance.now() });
+        },
+        (error: unknown) => {
+          if (epoch === readEpoch.current)
+            setResult({
+              key,
+              error: error instanceof Error ? error.message : 'Could not resolve selection',
+            });
+        }
+      );
+    },
+    [available, cache, key]
+  );
+  useEffect(() => {
+    load('initial');
+    const focus = () => load('focus');
+    if (available) window.addEventListener('focus', focus);
+    return () => {
+      ++readEpoch.current;
+      window.removeEventListener('focus', focus);
+    };
+  }, [available, load]);
+  const refresh = useCallback(() => load('retry'), [load]);
+  const data = current?.data ?? (!current?.error ? cachedPreview(cache, key) : undefined);
   return {
     data,
     receivedAt: current?.receivedAt,
