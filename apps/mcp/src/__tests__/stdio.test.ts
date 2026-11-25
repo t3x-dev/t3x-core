@@ -1,3 +1,4 @@
+import { EventEmitter, once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -244,6 +245,111 @@ describe('apps/mcp stdio subprocess smoke', () => {
           error: { status: 401, call_id: expect.any(String), http_request_id: requestIds.at(-1) },
         });
         expect(requested).toHaveLength(5);
+      } finally {
+        api.closeAllConnections();
+        await new Promise<void>((resolve) => api.close(() => resolve()));
+      }
+    },
+    stdioSmokeTimeoutMs
+  );
+
+  it(
+    'marks a lost write response as unconfirmed and allows authorized read-back without replay',
+    async () => {
+      const events = new EventEmitter();
+      const receipt = {
+        request_id: 'fixture-request',
+        project_id: 'fixture-project',
+        actor: { kind: 'agent', id: 'fixture-actor' },
+        result: { action: 'create_thread', source_thread_id: 'fixture-thread' },
+      };
+      let writes = 0;
+      const api = createServer(async (request, response) => {
+        if (request.headers.authorization !== 'Bearer fixture') {
+          response.writeHead(401).end();
+          return;
+        }
+        if (request.url === '/api/v1/auth/me/credential') {
+          response.end(
+            JSON.stringify({
+              success: true,
+              data: {
+                actor_kind: 'agent',
+                credential_kind: 'mcp',
+                project_id: receipt.project_id,
+                namespace_id: null,
+                transition_scopes: [],
+              },
+            })
+          );
+        } else if (request.method === 'POST') {
+          for await (const _chunk of request) {
+            // Wait for the complete request before simulating loss of the response.
+          }
+          writes++;
+          response.destroy();
+        } else if (request.url?.endsWith('/fixture-cancel')) {
+          response.once('close', () => events.emit('cancelled'));
+          events.emit('pending');
+        } else if (writes === 1 && request.url?.endsWith(`/${receipt.request_id}`)) {
+          response.end(JSON.stringify({ success: true, data: receipt }));
+        } else {
+          response.writeHead(404).end();
+        }
+      });
+      api.listen(0, '127.0.0.1');
+      await once(api, 'listening');
+      try {
+        const { client } = await connectConfiguredClient({
+          T3X_MCP_BACKEND: 'api',
+          T3X_MCP_CAPABILITIES: 'sources:ingest',
+          T3X_API_KEY: 'fixture',
+          T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
+        });
+        openClients.push(client);
+        const call = {
+          name: 't3x_ingest_source',
+          arguments: {
+            request_id: receipt.request_id,
+            project_id: receipt.project_id,
+            action: 'create_thread',
+            title: 'Fixture',
+          },
+        };
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        expect(parseTextResult(result as Parameters<typeof parseTextResult>[0])).toMatchObject({
+          error: {
+            code: 'UPSTREAM_UNAVAILABLE',
+            write_outcome: 'unconfirmed',
+            call_id: expect.any(String),
+          },
+        });
+        const args = {
+          project_id: receipt.project_id,
+          request_id: receipt.request_id,
+          action: 'receipt',
+        };
+        const recovered = await client.callTool({ name: call.name, arguments: args });
+        expect(parseTextResult(recovered as Parameters<typeof parseTextResult>[0])).toEqual(
+          receipt
+        );
+        expect(writes).toBe(1);
+
+        const controller = new AbortController();
+        const pending = once(events, 'pending');
+        const closed = once(events, 'cancelled');
+        const abandoned = client.callTool(
+          { name: call.name, arguments: { ...args, request_id: 'fixture-cancel' } },
+          undefined,
+          { signal: controller.signal }
+        );
+        const rejection = expect(abandoned).rejects.toThrow();
+        await pending;
+        controller.abort();
+        await rejection;
+        await closed;
+        expect(writes).toBe(1);
       } finally {
         api.closeAllConnections();
         await new Promise<void>((resolve) => api.close(() => resolve()));

@@ -29,6 +29,15 @@ Use the application or API error code where available. A tool error carries a st
 - On a stale Draft, Review, or ref head, read the current revisions and ref. Reconcile when required and prepare a fresh Review when the existing one can no longer be used. Preserve the existing confirmation and authority checks. [Reliable Workspace](../../../docs/architecture/reliable-workspace-gate-1.md)
 - Source ingestion supports receipt lookup by request ID. A configured repository Run can recover its Run record with the original request. Treat Commit and Workspace validation triggers according to their own contracts, which currently offer no idempotency guarantee. [Source ingestion](../../../packages/mcp/src/tools/source-ingestion.ts) · [Configured Run](../../../packages/mcp/src/tools/repository-runs.ts) · [Commit validation](../../../packages/mcp/src/tools/commit-validation.ts) · [Workspace validation](../../../packages/mcp/src/tools/workspace-validation.ts)
 
+| Interrupted operation | Read back before attempting another write |
+| --- | --- |
+| Repository or branch creation | Resolve the intended repository and ref, and check the known ownership and expected basis. |
+| Draft, Schema, or candidate write | Read the owned Workspace activity, saved action, and current revisions. Review any intervening edit before proceeding. |
+| Verify, Decision, or Commit | Inspect the exact Transition. For a Commit, read `t3x_commit_result` and verify the recorded Commit and separately observed ref head. |
+| Delivery | Read the receipt and current preview assignment. For prepare, reuse the original request ID, Workspace revision, and Commit digest as documented. |
+
+The stdio entry point bounds downstream API requests to 60 seconds and propagates MCP cancellation to the fetch. Where a write may have reached the API, tool errors for an unconfirmed result include `write_outcome: "unconfirmed"` in the existing text response. A client-side disconnect can still leave the host without a tool response, so apply the same recovery rule when the host sees a timeout or exit during a write.
+
 Long-running operations should expose durable business IDs and authorized status reads. A supported host may receive request-scoped MCP progress while a call is active. Evaluate the opt-in Tasks extension separately when a supported host needs it. Continue to use the business record for the operation's final state. [MCP progress](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/progress) · [MCP Tasks extension](https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks)
 
 ## Diagnostics and safe evidence

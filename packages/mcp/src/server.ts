@@ -35,7 +35,7 @@ import {
   isSafeWorkspaceIdentifier,
   type McpCapability,
 } from './business-capabilities.js';
-import { type McpDiagnostic, trackToolCall } from './diagnostics.js';
+import { type McpDiagnostic, McpRequestError, trackToolCall } from './diagnostics.js';
 import { getPrompt, PROMPT_DEFS } from './prompts/index.js';
 import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 // Advanced tools
@@ -298,7 +298,7 @@ export function createMcpServer(options: McpServerOptions) {
   });
 
   // 7. Register CallTool handler
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     const entry = entries.get(name);
 
@@ -360,6 +360,17 @@ export function createMcpServer(options: McpServerOptions) {
         return { ...result };
       } catch (error: unknown) {
         if (error instanceof T3xApiError) return { ...apiToolError(error) };
+        if (error instanceof McpRequestError) {
+          return fail(
+            JSON.stringify({
+              error: {
+                code: error.code,
+                message: error.message,
+                http_request_id: error.httpRequestId,
+              },
+            })
+          );
+        }
         return exposure
           ? { ...toolError('INTERNAL_ERROR', 'The tool could not complete the operation.') }
           : { ...fail(`Error: ${formatErrorMessage(error)}`) };
@@ -367,7 +378,7 @@ export function createMcpServer(options: McpServerOptions) {
     };
     return {
       ...(options.onDiagnostic
-        ? await trackToolCall(entry.def, input, options.onDiagnostic, execute)
+        ? await trackToolCall(entry.def, input, options.onDiagnostic, extra.signal, execute)
         : await execute()),
     };
   });

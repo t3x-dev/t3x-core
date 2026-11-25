@@ -379,8 +379,15 @@ export class T3xClient {
 
     const requestId = response.headers?.get('X-Request-Id') ?? undefined;
     const data = (await response.json().catch((error: unknown) => {
-      if (!(error instanceof SyntaxError)) throw error;
-      return undefined;
+      if (options?.signal?.aborted) throw error;
+      if (error instanceof SyntaxError) return undefined;
+      throw new T3xApiError(
+        'UPSTREAM_RESPONSE_INTERRUPTED',
+        'The API response was interrupted.',
+        response.status,
+        undefined,
+        requestId
+      );
     })) as ApiResponse<T> | undefined;
 
     if (
