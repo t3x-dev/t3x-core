@@ -30,8 +30,8 @@ export function ProjectDangerZone({
   const [confirmation, setConfirmation] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<ReturnType<typeof repositoryMutationError> | null>(null);
-  const commits = project.commits_count ?? project.stats?.commits_count ?? 0;
-  const branches = project.branches_count ?? 0;
+  const commits = project.commits_count ?? project.stats?.commits_count;
+  const branches = project.branches_count;
 
   async function handleDelete() {
     if (deleting || error?.refreshRequired) return;
@@ -59,9 +59,12 @@ export function ProjectDangerZone({
             Delete this repository
           </p>
           <p className="mt-0.5 max-w-[520px] text-xs leading-[17px] text-[var(--text-secondary)]">
-            Removes {project.name} with {commits} commit{commits === 1 ? '' : 's'} across {branches}{' '}
-            branch{branches === 1 ? '' : 'es'} from active lists. Its data and all names stay
-            reserved. Restore it or permanently delete it and release its names from{' '}
+            Removes {project.name}
+            {commits !== undefined && branches !== undefined
+              ? ` with ${commits} commit${commits === 1 ? '' : 's'} across ${branches} branch${branches === 1 ? '' : 'es'}`
+              : ''}{' '}
+            from active lists. Its data and all names stay reserved. Restore it or permanently
+            delete it and release its names from{' '}
             <Link
               href={getDeletedRepositoriesPath(project.namespace)}
               className="text-[var(--accent-commit)] underline"

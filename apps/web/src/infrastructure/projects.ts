@@ -52,17 +52,20 @@ export async function listProjects(
   return data;
 }
 
+export interface ProjectPageFilters {
+  q?: string;
+  tag_query?: string;
+  editable?: true;
+  visibility?: Project['visibility'];
+  tags?: string[];
+  include_counts?: false;
+}
+
 export async function listProjectPage(
   limit: number,
   cursor: string,
   namespace?: string,
-  filters?: {
-    q?: string;
-    tag_query?: string;
-    editable?: true;
-    visibility?: Project['visibility'];
-    tags?: string[];
-  },
+  filters?: ProjectPageFilters,
   signal?: AbortSignal
 ) {
   const { tags, ...scope } = filters ?? {};
@@ -77,79 +80,107 @@ const DIRECTORY_PAGE_MAX_AGE_MS = 30_000;
 const DIRECTORY_PAGE_PREFETCH_FRESH_MS = 5_000;
 
 type DirectoryPage = Awaited<ReturnType<typeof listProjectPage>>;
-let directoryPage:
-  | {
-      userId: string;
-      snapshot?: { page: DirectoryPage; loadedAt: number };
-      request?: {
-        promise: Promise<DirectoryPage>;
-        controller: AbortController;
-        speculative: boolean;
-      };
-    }
-  | undefined;
+interface DirectoryPageScope {
+  namespace?: string;
+  limit?: number;
+  filters?: ProjectPageFilters;
+}
+interface DirectoryPageEntry {
+  snapshot?: { page: DirectoryPage; loadedAt: number };
+  request?: { promise: Promise<DirectoryPage>; controller: AbortController; speculative: boolean };
+}
+
+const directoryPages = new Map<string, DirectoryPageEntry>();
+const DIRECTORY_PAGE_CACHE_LIMIT = 12;
 let watchingDirectorySession = false;
-let lastPrefetch: { userId: string; at: number } | undefined;
+let lastPrefetch: { key: string; at: number } | undefined;
+
+function directoryPageKey(userId: string, scope: DirectoryPageScope): string {
+  const { namespace, limit = REPOSITORY_DIRECTORY_PAGE_SIZE, filters } = scope;
+  return JSON.stringify([
+    userId,
+    namespace,
+    limit,
+    filters?.q,
+    filters?.tag_query,
+    filters?.editable,
+    filters?.visibility,
+    [...(filters?.tags ?? [])].sort(),
+    filters?.include_counts,
+  ]);
+}
 
 function invalidateDirectoryPage() {
-  directoryPage?.request?.controller.abort();
-  directoryPage = undefined;
+  for (const { request } of directoryPages.values()) request?.controller.abort();
+  directoryPages.clear();
+  lastPrefetch = undefined;
 }
 
 export function cancelRepositoryDirectoryPrefetch() {
-  const request = directoryPage?.request;
-  if (request?.speculative) {
-    directoryPage!.request = undefined;
-    request.controller.abort();
+  for (const entry of directoryPages.values()) {
+    if (!entry.request?.speculative) continue;
+    const { controller } = entry.request;
+    entry.request = undefined;
+    controller.abort();
   }
 }
 
-export function cancelRepositoryDirectoryRead(userId: string): void {
-  if (directoryPage?.userId !== userId || !directoryPage.request) return;
-  const request = directoryPage.request;
-  directoryPage.request = undefined;
-  request.controller.abort();
+export function cancelRepositoryDirectoryRead(
+  userId: string,
+  scope: DirectoryPageScope = {}
+): void {
+  const entry = directoryPages.get(directoryPageKey(userId, scope));
+  if (!entry?.request) return;
+  const { controller } = entry.request;
+  entry.request = undefined;
+  controller.abort();
 }
 
-export function readCachedRepositoryDirectoryPage(userId: string) {
-  const cached = directoryPage?.userId === userId ? directoryPage.snapshot : undefined;
+export function readCachedRepositoryDirectoryPage(userId: string, scope: DirectoryPageScope = {}) {
+  if (getSessionUserId() !== userId) return undefined;
+  const cached = directoryPages.get(directoryPageKey(userId, scope))?.snapshot;
   return cached && Date.now() - cached.loadedAt < DIRECTORY_PAGE_MAX_AGE_MS
     ? cached.page
     : undefined;
 }
 
-export function prefetchDirectoryPage(userId: string) {
-  if (
-    lastPrefetch?.userId === userId &&
-    Date.now() - lastPrefetch.at < DIRECTORY_PAGE_PREFETCH_FRESH_MS
-  )
+export function prefetchDirectoryPage(userId: string, scope: DirectoryPageScope = {}) {
+  const key = directoryPageKey(userId, scope);
+  if (lastPrefetch?.key === key && Date.now() - lastPrefetch.at < DIRECTORY_PAGE_PREFETCH_FRESH_MS)
     return;
-  lastPrefetch = { userId, at: Date.now() };
-  void loadRepositoryDirectoryPage(userId, false, true).catch(() => {});
+  if (lastPrefetch?.key !== key) cancelRepositoryDirectoryPrefetch();
+  lastPrefetch = { key, at: Date.now() };
+  void loadRepositoryDirectoryPage(userId, false, true, scope).catch(() => {});
 }
 
 export function loadRepositoryDirectoryPage(
   userId: string,
   force = false,
-  speculative = false
+  speculative = false,
+  scope: DirectoryPageScope = {}
 ): Promise<DirectoryPage> {
   if (!watchingDirectorySession) {
     watchingDirectorySession = true;
-    subscribeSessionReadInvalidation(() => {
-      directoryPage = undefined;
-      lastPrefetch = undefined;
-    });
+    subscribeSessionReadInvalidation(invalidateDirectoryPage);
+    let currentUser = getSessionUserId();
     subscribeSessionUser(() => {
       const userId = getSessionUserId();
-      if (lastPrefetch && lastPrefetch.userId !== userId) lastPrefetch = undefined;
-      if (userId !== directoryPage?.userId) invalidateDirectoryPage();
+      if (currentUser !== userId) invalidateDirectoryPage();
+      currentUser = userId;
     });
   }
-  if (directoryPage?.userId !== userId) {
-    invalidateDirectoryPage();
-    directoryPage = { userId };
+  if (getSessionUserId() !== userId)
+    return Promise.reject(new ApiError('ABORTED', 'The repository list changed.'));
+
+  const key = directoryPageKey(userId, scope);
+  const entry = directoryPages.get(key) ?? {};
+  directoryPages.delete(key);
+  directoryPages.set(key, entry);
+  if (directoryPages.size > DIRECTORY_PAGE_CACHE_LIMIT) {
+    const oldest = directoryPages.keys().next().value!;
+    directoryPages.get(oldest)?.request?.controller.abort();
+    directoryPages.delete(oldest);
   }
-  const entry = directoryPage;
   if (entry.request) {
     if (!speculative) entry.request.speculative = false;
     return entry.request.promise;
@@ -163,14 +194,18 @@ export function loadRepositoryDirectoryPage(
 
   const controller = new AbortController();
   const promise = listProjectPage(
-    REPOSITORY_DIRECTORY_PAGE_SIZE,
+    scope.limit ?? REPOSITORY_DIRECTORY_PAGE_SIZE,
     '',
-    undefined,
-    undefined,
+    scope.namespace,
+    scope.filters,
     controller.signal
   )
     .then((page) => {
-      if (controller.signal.aborted || getSessionUserId() !== userId || entry !== directoryPage)
+      if (
+        controller.signal.aborted ||
+        getSessionUserId() !== userId ||
+        entry !== directoryPages.get(key)
+      )
         throw new ApiError('ABORTED', 'The repository list changed.');
       entry.snapshot = { page, loadedAt: Date.now() };
       return page;
@@ -192,8 +227,9 @@ async function afterRepositoryWrite<T>(write: Promise<T>): Promise<T> {
   return result;
 }
 
-export async function getProject(projectId: string): Promise<ProjectDetail> {
-  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
+export async function getProject(projectId: string, includeStats = true): Promise<ProjectDetail> {
+  const query = includeStats ? '' : '?include_stats=false';
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}${query}`);
   return handleResponse<ProjectDetail>(res);
 }
 

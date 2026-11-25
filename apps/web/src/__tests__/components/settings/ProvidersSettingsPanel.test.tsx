@@ -22,6 +22,7 @@ vi.mock('@/hooks/providers/useProviderCommands', () => ({
 }));
 
 vi.mock('@/queries/providers', () => ({
+  fetchProjectProviderConfig: vi.fn(),
   fetchProviders: mockFetchProviders,
   fetchProviderRoles: mockFetchProviderRoles,
 }));

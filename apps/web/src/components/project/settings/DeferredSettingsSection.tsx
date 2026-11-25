@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { SettingsSection } from './SettingsSection';
 
@@ -34,7 +34,15 @@ export function DeferredSettingsSection({
   }, [id, opened]);
 
   return opened ? (
-    children
+    <Suspense
+      fallback={
+        <SettingsSection id={id} icon={icon} title={title} description={null}>
+          <output>Loading {title.toLowerCase()} settings…</output>
+        </SettingsSection>
+      }
+    >
+      {children}
+    </Suspense>
   ) : (
     <SettingsSection id={id} icon={icon} title={title} description={null}>
       <Button type="button" variant="outline" onClick={() => setOpened(true)}>

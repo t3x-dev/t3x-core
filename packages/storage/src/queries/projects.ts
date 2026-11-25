@@ -517,14 +517,18 @@ export async function findProjectListCounts(db: AnyDB, projectIds: string[]) {
 }
 
 /** Enrich the authorized page with counts and addresses from one database read. */
-export async function findProjectListDetails(db: AnyDB, projectIds: string[]) {
+export async function findProjectListDetails(
+  db: AnyDB,
+  projectIds: string[],
+  includeCounts = true
+) {
   const rows = projectIds.length
     ? await db
         .select({
           projectId: projects.projectId,
           name: projects.name,
           ...repositoryAddressColumns,
-          counts: projectListCounts,
+          ...(includeCounts ? { counts: projectListCounts } : {}),
         })
         .from(projects)
         .leftJoin(namespaces, eq(namespaces.namespaceId, projects.namespaceId))

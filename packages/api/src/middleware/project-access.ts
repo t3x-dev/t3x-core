@@ -35,7 +35,11 @@ export async function projectAccessMiddleware(c: Context<AppEnv>, next: Next) {
       assertProjectReadWithEditPermission(c, db, projectId)
     );
     if (access instanceof Response) return access;
-    c.set('repositoryReadAccess', { projectId, canEdit: access.canEdit === true });
+    c.set('repositoryReadAccess', {
+      projectId,
+      canEdit: access.canEdit === true,
+      project: access.project,
+    });
     return next();
   }
   if (action === 'project:edit' && isSchemaPreviewRead(c)) {

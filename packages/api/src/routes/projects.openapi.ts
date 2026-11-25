@@ -22,6 +22,7 @@ import {
   ensureMainBranch,
   findNamespaceBySlug,
   findPersonalNamespaceByOwner,
+  findProjectById,
   findProjectListDetails,
   findProjects,
   findProjectWithStats,
@@ -135,6 +136,7 @@ const listProjectsRoute = createRoute({
   request: {
     query: PaginationQuerySchema.extend({
       cursor: z.string().optional(),
+      include_counts: z.literal('false').optional(),
       namespace: NamespaceSlugSchema.optional(),
       q: z.string().trim().max(200).optional(),
       visibility: z.enum(['private', 'unlisted', 'public']).optional(),
@@ -155,9 +157,14 @@ const listProjectsRoute = createRoute({
         'application/json': {
           schema: SuccessResponseSchema(
             z.union([
-              CursorPageResponseSchema(ProjectWithCountsSchema).extend({
-                status: z.literal('deleted').optional(),
-              }),
+              CursorPageResponseSchema(
+                ProjectWithCountsSchema.partial({
+                  conversations_count: true,
+                  commits_count: true,
+                  branches_count: true,
+                  outputs_count: true,
+                })
+              ).extend({ status: z.literal('deleted').optional() }),
               ListProjectsResponseSchema,
             ])
           ),
@@ -188,6 +195,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     limit,
     offset,
     cursor,
+    include_counts,
     namespace: namespaceSlug,
     status,
     q,
@@ -206,11 +214,14 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       createdAt: Date;
       deletedAt: Date | null;
       metadataJson: string | null;
-    }[]
+    }[],
+    includeCounts: boolean
   ) => {
     const projectIds = page.map((project) => project.projectId);
     const [detailsById, actionsById] = await Promise.all([
-      timeRepositoryRead(c, 'list_metadata', () => findProjectListDetails(db, projectIds)),
+      timeRepositoryRead(c, 'list_metadata', () =>
+        findProjectListDetails(db, projectIds, includeCounts)
+      ),
       timeRepositoryRead(c, 'list_permissions', () =>
         listAuthorizedProjectActionsForPage(c, db, projectIds, {
           includeDeleted: status === 'deleted',
@@ -240,10 +251,12 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         visibility: p.visibility,
         created_at: p.createdAt.toISOString(),
         ...projectMetadataFields(p.metadataJson),
-        conversations_count: counts?.conversationsCount ?? 0,
-        commits_count: counts?.commitsCount ?? 0,
-        branches_count: counts?.branchesCount ?? 0,
-        outputs_count: counts?.outputsCount ?? 0,
+        ...(includeCounts && {
+          conversations_count: counts?.conversationsCount ?? 0,
+          commits_count: counts?.commitsCount ?? 0,
+          branches_count: counts?.branchesCount ?? 0,
+          outputs_count: counts?.outputsCount ?? 0,
+        }),
       };
     });
   };
@@ -292,7 +305,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
           limit,
         })
       );
-      const apiProjects = await enrichProjects(db, result.items);
+      const apiProjects = await enrichProjects(db, result.items, include_counts !== 'false');
       return c.json(
         {
           success: true as const,
@@ -316,13 +329,20 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       })
     );
 
-    const apiProjects = await enrichProjects(db, projects);
+    const apiProjects = await enrichProjects(db, projects, true);
+    const countedProjects = apiProjects.map((project) => ({
+      ...project,
+      conversations_count: project.conversations_count ?? 0,
+      commits_count: project.commits_count ?? 0,
+      branches_count: project.branches_count ?? 0,
+      outputs_count: project.outputs_count ?? 0,
+    }));
 
     return c.json(
       {
         success: true as const,
         data: {
-          projects: apiProjects,
+          projects: countedProjects,
           limit,
           offset,
           ...(status === 'deleted' ? { status: 'deleted' as const } : {}),
@@ -818,16 +838,17 @@ const getProjectRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{id}',
   tags: ['Projects'],
-  summary: 'Get project by ID with stats',
+  summary: 'Get project by ID with optional statistics',
   request: {
     params: IdParamSchema,
+    query: z.object({ include_stats: z.enum(['true', 'false']).optional() }),
   },
   responses: {
     200: {
       description: 'Project details',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(ProjectWithStatsSchema),
+          schema: SuccessResponseSchema(z.union([ProjectWithStatsSchema, ProjectSchema])),
         },
       },
     },
@@ -867,9 +888,13 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
           );
     if (accessResult instanceof Response) return accessResult;
 
-    const project = await timeRepositoryRead(c, 'project_details', () =>
-      findProjectWithStats(db, id)
-    );
+    const includeStats = c.req.valid('query').include_stats !== 'false';
+    const detailed = includeStats
+      ? await timeRepositoryRead(c, 'project_details', () => findProjectWithStats(db, id))
+      : null;
+    const project = includeStats
+      ? detailed
+      : (accessResult.project ?? (await findProjectById(db, id)));
 
     if (!project) {
       return c.json(
@@ -881,20 +906,24 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
+    const stats = detailed?.stats;
     const apiProject = {
-      ...project.address,
+      ...(detailed?.address ??
+        (await timeRepositoryRead(c, 'project_details', () => getRepositoryAddress(db, project)))),
       project_id: project.projectId,
       name: project.name,
       visibility: project.visibility,
       created_at: project.createdAt.toISOString(),
       ...projectMetadataFields(project.metadataJson),
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
-      conversations_count: project.stats.conversationsCount,
-      turns_count: project.stats.turnsCount,
-      commits_count: project.stats.commitsCount,
-      branches_count: project.stats.branchesCount,
-      drafts_count: project.stats.draftsCount,
-      outputs_count: project.stats.outputsCount,
+      ...(stats && {
+        conversations_count: stats.conversationsCount,
+        turns_count: stats.turnsCount,
+        commits_count: stats.commitsCount,
+        branches_count: stats.branchesCount,
+        drafts_count: stats.draftsCount,
+        outputs_count: stats.outputsCount,
+      }),
       extraction_style: project.extractionStyle ?? null,
       can_edit: accessResult.canEdit === true,
     };

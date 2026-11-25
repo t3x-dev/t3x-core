@@ -241,6 +241,19 @@ describe('project-scoped repository information', () => {
     expect(new Set([...page.items, ...nextPage.items].map((item) => item.project_id))).toEqual(
       new Set([first.project_id, second.project_id])
     );
+    const lean = await appFor().request(`${path}&include_counts=false`);
+    expect(lean.status).toBe(200);
+    const leanPage = (await lean.json()).data;
+    expect(leanPage.next_cursor).toBe(page.next_cursor);
+    expect(leanPage.items[0]).toMatchObject({
+      project_id: page.items[0].project_id,
+      can_edit: true,
+      canonical_path: page.items[0].canonical_path,
+    });
+    expect(leanPage.items[0]).not.toHaveProperty('commits_count');
+    expect(page.items[0]).toHaveProperty('commits_count', 0);
+    const denied = await appFor('profile-outsider').request(`${path}&include_counts=false`);
+    expect(denied.status).toBe(403);
   });
 
   it('filters accessible repository pages by visibility and any selected exact tag', async () => {
@@ -277,6 +290,25 @@ describe('project-scoped repository information', () => {
       });
     expect((await read(p.project_id, appFor('profile-viewer'))).can_edit).toBe(false);
     expect((await read(p.project_id, appFor('profile-editor'))).can_edit).toBe(true);
+    const generalPath = `/v1/projects/${p.project_id}?include_stats=false`;
+    for (const [role, canEdit] of [
+      ['viewer', false],
+      ['editor', true],
+    ] as const) {
+      const res = await appFor(`profile-${role}`).request(generalPath);
+      expect(res.status).toBe(200);
+      const { data } = await res.json();
+      expect(data).toMatchObject({
+        project_id: p.project_id,
+        name: 'Permissions',
+        can_edit: canEdit,
+      });
+      expect(data).not.toHaveProperty('commits_count');
+      expect(data).not.toHaveProperty('branches_count');
+    }
+    expect((await appFor('profile-outsider').request(generalPath)).ok).toBe(false);
+    expect((await read(p.project_id)).branches_count).toBe(1);
+
     expect(
       (
         await put(

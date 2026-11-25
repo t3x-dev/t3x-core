@@ -13,6 +13,7 @@ import {
 import { invalidateSessionReads, setSessionUser } from '@/infrastructure/session';
 import { deferred } from './deferred';
 
+const leanScope = { filters: { include_counts: false as const } };
 const account = (id: string) => setSessionUser({ id, name: null, username: null });
 const firstPage = {
   items: [{ project_id: 'p1', name: 'Private repository' }],
@@ -33,7 +34,10 @@ it('shares the prefetched request and displays the cached first page on return',
   vi.stubGlobal('fetch', fetch);
   prefetchRepositoryDirectoryPage();
   const renderDirectory = () =>
-    useProjects(20, undefined, 'on-demand', { directoryUserId: 'directory-reader' });
+    useProjects(20, undefined, 'on-demand', {
+      directoryUserId: 'directory-reader',
+      deferCounts: true,
+    });
   const first = renderHook(renderDirectory);
   await act(async () => response.resolve(Response.json({ success: true, data: firstPage })));
   await waitFor(() => expect(first.result.current.projects).toEqual(firstPage.items));
@@ -79,13 +83,16 @@ it.each([20, 200])('shares the idle first page for %i accessible repositories', 
   expect(fetch).not.toHaveBeenCalled();
   expect(runIdle).toBeDefined();
   await act(async () => runIdle?.({ didTimeout: false, timeRemaining: () => 50 }));
-  await waitFor(() => expect(readCachedRepositoryDirectoryPage('idle-reader')).toEqual(page));
+  await waitFor(() =>
+    expect(readCachedRepositoryDirectoryPage('idle-reader', leanScope)).toEqual(page)
+  );
   const directory = renderHook(() =>
-    useProjects(20, undefined, 'on-demand', { directoryUserId: 'idle-reader' })
+    useProjects(20, undefined, 'on-demand', { directoryUserId: 'idle-reader', deferCounts: true })
   );
   expect(directory.result.current.projects).toEqual(items);
   expect(directory.result.current.hasMore).toBe(total > 20);
   expect(fetch).toHaveBeenCalledTimes(1);
+  directory.unmount();
   prefetch.unmount();
 });
 
@@ -118,4 +125,73 @@ it('hides the already visible repository list when same-account authorization ch
   expect(directory.result.current.hasMore).toBe(false);
   expect(directory.result.current.error).toMatch(/access changed/i);
   expect(fetch).toHaveBeenCalledOnce();
+});
+
+it('reuses a namespace first page and isolates filters, counts, accessible scope and page size', async () => {
+  const user = 'namespace-reader';
+  account(user);
+  const calls: URLSearchParams[] = [];
+  const fetch = vi.fn(async (url: string) => {
+    const params = new URL(url, 'http://localhost').searchParams;
+    calls.push(params);
+    const name = [
+      params.get('namespace') ?? 'all',
+      params.get('q') ?? 'all',
+      params.get('cursor') || 'first',
+    ].join(':');
+    return Response.json({
+      success: true,
+      data: {
+        ...firstPage,
+        items: [{ project_id: name, name }],
+        next_cursor: params.get('cursor') ? null : 'next',
+      },
+    });
+  });
+  vi.stubGlobal('fetch', fetch);
+  prefetchRepositoryDirectoryPage('alpha');
+  await waitFor(() =>
+    expect(
+      readCachedRepositoryDirectoryPage(user, { ...leanScope, namespace: 'alpha' })
+    ).toBeDefined()
+  );
+  const directory = renderHook(
+    ({ namespace, search }: { namespace: string; search?: string }) =>
+      useProjects(20, namespace, 'on-demand', { directoryUserId: user, deferCounts: true, search }),
+    { initialProps: { namespace: 'alpha' } }
+  );
+  expect(directory.result.current.projects[0]?.name).toBe('alpha:all:first');
+  await waitFor(() => expect(directory.result.current.loading).toBe(false));
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(
+    readCachedRepositoryDirectoryPage(user, { ...leanScope, namespace: 'alpha', limit: 1 })
+  ).toBeUndefined();
+  expect(readCachedRepositoryDirectoryPage(user, { namespace: 'alpha' })).toBeUndefined();
+  expect(readCachedRepositoryDirectoryPage(user, leanScope)).toBeUndefined();
+
+  await act(async () => directory.result.current.loadMore());
+  expect(calls[1]?.get('cursor')).toBe('next');
+  expect(calls[1]?.get('include_counts')).toBeNull();
+  expect(directory.result.current.projects.map(({ name }) => name)).toEqual([
+    'alpha:all:first',
+    'alpha:all:next',
+  ]);
+  directory.rerender({ namespace: 'beta', search: 'filtered' });
+  expect(directory.result.current.projects).toEqual([]);
+  await waitFor(() =>
+    expect(directory.result.current.projects[0]?.name).toBe('beta:filtered:first')
+  );
+  expect(calls[2]?.get('cursor')).toBe('');
+  expect(calls[2]?.get('q')).toBe('filtered');
+
+  directory.rerender({ namespace: 'alpha' });
+  expect(directory.result.current.projects[0]?.name).toBe('alpha:all:first');
+  await waitFor(() => expect(directory.result.current.loading).toBe(false));
+  expect(fetch).toHaveBeenCalledTimes(3);
+  act(invalidateSessionReads);
+  expect(directory.result.current.projects).toEqual([]);
+  expect(
+    readCachedRepositoryDirectoryPage(user, { ...leanScope, namespace: 'alpha' })
+  ).toBeUndefined();
+  directory.unmount();
 });

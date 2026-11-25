@@ -21,8 +21,9 @@ import {
 import { repositoryBranch, repositoryBranchRoute } from '@/domain/project/repoPath';
 import { isRetiredRepositoryLocation } from '@/domain/project/repositoryLocation';
 import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
-import { useSessionUserId } from '@/hooks/shared/useSession';
+import { useSessionReadEpoch, useSessionUserId } from '@/hooks/shared/useSession';
 import { type DirectoryStateEntry, useProjectStore } from '@/store/projectStore';
+import { ensureSettingsNavigationTiming, markNavigationTiming } from '@/utils/navigationTiming';
 
 function RepositoryNavigationShell({
   children,
@@ -76,23 +77,32 @@ function RepositoryLayoutContent({
   const query = useSearchParams();
   const suffix = `/${pathname.split('/').slice(3).join('/')}`;
   const retired = isRetiredRepositoryLocation(suffix, query);
+  const settings = !organizationSettings && !retired && suffix.replace(/\/$/, '') === '/settings';
+  useEffect(() => {
+    if (settings) ensureSettingsNavigationTiming();
+  }, [settings, pathname]);
   const lookup = useRepositoryAddress(owner, name, !creating && !organizationSettings && !retired);
   const entry = useProjectStore((state) => state.directoryStateEntry);
+  const readEpoch = useSessionReadEpoch();
   const queryString = query.toString();
   const incoming = useMemo(
     () =>
       entry &&
       entry.userId === userId &&
+      entry.readEpoch === readEpoch &&
       entry.project.canonical_path === pathname &&
       !queryString &&
       entry.expiresAt > Date.now()
         ? entry
         : undefined,
-    [entry, pathname, queryString, userId]
+    [entry, pathname, queryString, userId, readEpoch]
   );
   const [claimedEntry, setClaimedEntry] = useState<DirectoryStateEntry>();
   const opening =
-    incoming ?? (claimedEntry?.project.canonical_path === pathname ? claimedEntry : undefined);
+    incoming ??
+    (claimedEntry?.project.canonical_path === pathname && claimedEntry.readEpoch === readEpoch
+      ? claimedEntry
+      : undefined);
   useEffect(() => {
     if (incoming) {
       setClaimedEntry(incoming);
@@ -103,6 +113,9 @@ function RepositoryLayoutContent({
     }
   }, [claimedEntry, incoming, opening]);
   const address = lookup.current?.address;
+  useEffect(() => {
+    if (settings && address && !address.redirect) markNavigationTiming('settings', 'address');
+  }, [settings, address]);
   const addressMatchesEntry =
     address &&
     !address.redirect &&
@@ -145,7 +158,7 @@ function RepositoryLayoutContent({
     <RepositoryAddressContext.Provider
       value={{ ...lookup, directoryStateEntry: lookup.current ? directoryStateEntry : opening }}
     >
-      <ProjectDetailProvider projectId={detailProjectId ?? null}>
+      <ProjectDetailProvider projectId={detailProjectId ?? null} settings={settings}>
         <RepositoryViewData
           active={viewNeedsData}
           projectId={projectId}
