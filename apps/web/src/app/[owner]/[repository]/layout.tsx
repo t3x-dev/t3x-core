@@ -122,6 +122,8 @@ function RepositoryLayoutContent({
     !query.get('reviewSnapshot') &&
     query.get('reviewPane') !== 'checks';
   const viewNeedsData = ['', '/state', '/schemas'].includes(viewSuffix) || liveWorkspace;
+  const earlySchemaRead =
+    viewSuffix === '/schemas' && !address?.redirect && !query.has('candidate');
   const view = viewSuffix.slice(1);
   const hasProjectTab = !view || PROJECT_TABS.some((tab) => getProjectTabSegment(tab.id) === view);
   const navigationProject =
@@ -144,7 +146,14 @@ function RepositoryLayoutContent({
       value={{ ...lookup, directoryStateEntry: lookup.current ? directoryStateEntry : opening }}
     >
       <ProjectDetailProvider projectId={detailProjectId ?? null}>
-        <RepositoryViewData active={viewNeedsData} projectId={projectId}>
+        <RepositoryViewData
+          active={viewNeedsData}
+          projectId={projectId}
+          schemaBranch={
+            earlySchemaRead ? (repositoryBranch(pathname, query) ?? undefined) : undefined
+          }
+          schemaWorkspaceId={earlySchemaRead ? (query.get('workspace') ?? undefined) : undefined}
+        >
           {navigationProject ? (
             <RepositoryNavigationShell
               project={navigationProject}

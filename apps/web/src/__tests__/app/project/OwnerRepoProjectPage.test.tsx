@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   listBranches: vi.fn(),
   fetchProject: vi.fn(),
   fetchProjectWorkspaces: vi.fn(),
+  previewStudioSelection: vi.fn(),
   params: { owner: 'alice', repoPath: ['Repo'] } as { owner: string; repoPath: string[] },
   pathname: null as string | null,
   query: 'workspace=w&conversation=c&pr=9',
@@ -46,6 +47,10 @@ vi.mock('@/infrastructure/branches', () => ({
 vi.mock('@/queries/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/queries/workspaces')>()),
   fetchProjectWorkspaces: mocks.fetchProjectWorkspaces,
+}));
+vi.mock('@/infrastructure/schemaStudio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/schemaStudio')>()),
+  previewStudioSelection: mocks.previewStudioSelection,
 }));
 vi.mock('@/queries/repositoryObjectAddresses', () => ({
   getRepositoryObjectAddress: mocks.resolveObject,
@@ -263,6 +268,49 @@ it('reuses the verified address, project details and in-flight view reads across
   expect(screen.getByTestId('view-data')).toHaveTextContent('main main-draft');
   expect(mocks.listBranches).toHaveBeenCalledOnce();
   expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+});
+
+it('starts the exact bound Schema while the repository page and branch list are still loading', async () => {
+  mocks.query = '';
+  mocks.listBranches.mockReturnValue(new Promise(() => {}));
+  mocks.fetchProjectWorkspaces.mockResolvedValue([
+    {
+      id: 'main-workspace',
+      targetBranch: 'main',
+      revision: 8,
+      status: 'draft',
+      schemaBindings: [{ schemaHash: 'main-schema' }],
+      schemaActivity: { hasEditCandidate: false, hasPendingTask: false },
+    },
+  ]);
+  mocks.previewStudioSelection.mockImplementation(() => new Promise(() => {}));
+  const view = render(<OwnerRepoProjectPage />);
+  await waitFor(() => expect(screen.getByTestId('view-data')).toHaveTextContent('main-workspace'));
+  expect(mocks.previewStudioSelection).not.toHaveBeenCalled();
+
+  mocks.params.repoPath = ['Repo', 'branches', 'feature', 'schemas'];
+  mocks.query = 'workspace=main-workspace';
+  view.rerender(
+    <OwnerRepoProjectPage>
+      <RepositoryLoading />
+    </OwnerRepoProjectPage>
+  );
+  expect(mocks.previewStudioSelection).not.toHaveBeenCalled();
+
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
+  mocks.query = '';
+  view.rerender(
+    <OwnerRepoProjectPage>
+      <RepositoryLoading />
+    </OwnerRepoProjectPage>
+  );
+  expect(screen.getByText('Loading repository view...')).toBeInTheDocument();
+  await waitFor(() =>
+    expect(mocks.previewStudioSelection).toHaveBeenCalledExactlyOnceWith('proj_outside_list', {
+      candidateIds: [],
+      workspaceId: 'main-workspace',
+    })
+  );
 });
 
 it('starts project details from the directory selection and waits for matching address access', async () => {
