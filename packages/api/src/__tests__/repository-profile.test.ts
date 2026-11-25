@@ -277,6 +277,25 @@ describe('project-scoped repository information', () => {
       });
     expect((await read(p.project_id, appFor('profile-viewer'))).can_edit).toBe(false);
     expect((await read(p.project_id, appFor('profile-editor'))).can_edit).toBe(true);
+    const generalPath = `/v1/projects/${p.project_id}?include_stats=false`;
+    for (const [role, canEdit] of [
+      ['viewer', false],
+      ['editor', true],
+    ] as const) {
+      const res = await appFor(`profile-${role}`).request(generalPath);
+      expect(res.status).toBe(200);
+      const { data } = await res.json();
+      expect(data).toMatchObject({
+        project_id: p.project_id,
+        name: 'Permissions',
+        can_edit: canEdit,
+      });
+      expect(data).not.toHaveProperty('commits_count');
+      expect(data).not.toHaveProperty('branches_count');
+    }
+    expect((await appFor('profile-outsider').request(generalPath)).ok).toBe(false);
+    expect((await read(p.project_id)).branches_count).toBe(1);
+
     expect(
       (
         await put(

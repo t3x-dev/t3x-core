@@ -23,6 +23,7 @@ import { isRetiredRepositoryLocation } from '@/domain/project/repositoryLocation
 import { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { useSessionUserId } from '@/hooks/shared/useSession';
 import { type DirectoryStateEntry, useProjectStore } from '@/store/projectStore';
+import { ensureSettingsNavigationTiming, markNavigationTiming } from '@/utils/navigationTiming';
 
 function RepositoryNavigationShell({
   children,
@@ -76,6 +77,10 @@ function RepositoryLayoutContent({
   const query = useSearchParams();
   const suffix = `/${pathname.split('/').slice(3).join('/')}`;
   const retired = isRetiredRepositoryLocation(suffix, query);
+  const settings = !organizationSettings && !retired && suffix.replace(/\/$/, '') === '/settings';
+  useEffect(() => {
+    if (settings) ensureSettingsNavigationTiming();
+  }, [settings, pathname]);
   const lookup = useRepositoryAddress(owner, name, !creating && !organizationSettings && !retired);
   const entry = useProjectStore((state) => state.directoryStateEntry);
   const queryString = query.toString();
@@ -103,6 +108,9 @@ function RepositoryLayoutContent({
     }
   }, [claimedEntry, incoming, opening]);
   const address = lookup.current?.address;
+  useEffect(() => {
+    if (settings && address && !address.redirect) markNavigationTiming('settings', 'address');
+  }, [settings, address]);
   const addressMatchesEntry =
     address &&
     !address.redirect &&
@@ -145,7 +153,7 @@ function RepositoryLayoutContent({
     <RepositoryAddressContext.Provider
       value={{ ...lookup, directoryStateEntry: lookup.current ? directoryStateEntry : opening }}
     >
-      <ProjectDetailProvider projectId={detailProjectId ?? null}>
+      <ProjectDetailProvider projectId={detailProjectId ?? null} settings={settings}>
         <RepositoryViewData
           active={viewNeedsData}
           projectId={projectId}

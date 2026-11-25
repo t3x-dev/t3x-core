@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import RepositoryLoading from '@/app/[owner]/[repository]/[[...repoPath]]/loading';
 import RepositoryPage from '@/app/[owner]/[repository]/[[...repoPath]]/page';
 import RepositoryLayout from '@/app/[owner]/[repository]/layout';
@@ -124,9 +124,14 @@ function OwnerRepoProjectPage({ children }: { children?: ReactNode }) {
   );
 }
 
+beforeAll(() => {
+  // Keep the real transport disabled until every route has been unmounted.
+  vi.stubGlobal('WebSocket', undefined);
+});
+afterAll(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('WebSocket', undefined);
   mocks.listBranches.mockResolvedValue({
     branches: ['main', 'feature/release', 'feature/100%'].map((name) => ({ name })),
   });
@@ -151,7 +156,6 @@ beforeEach(() => {
     redirect: false,
   });
 });
-afterEach(() => vi.unstubAllGlobals());
 
 it('keeps a single repository navigation mounted during loading across all seven tabs', async () => {
   mocks.query = '';

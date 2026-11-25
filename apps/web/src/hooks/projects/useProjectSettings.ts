@@ -25,7 +25,16 @@ export function projectDescription(project: Pick<ProjectDetail, 'metadata'> | nu
 export function useProjectSettings(projectId: string) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { detail: project, loading, error, updateDetail } = useRepositoryProjectDetail(projectId);
+  const {
+    detail: project,
+    loading,
+    error,
+    updateDetail,
+    hasStats,
+    loadStats,
+    statsError,
+    statsLoading,
+  } = useRepositoryProjectDetail(projectId, true);
 
   const saveGeneral = useCallback(
     async ({ description, name }: { description: string; name: string }) => {
@@ -75,6 +84,10 @@ export function useProjectSettings(projectId: string) {
     error: error?.message ?? null,
     exportArchive,
     loading,
+    loadStats,
+    hasStats,
+    statsLoading,
+    statsError: statsError?.message ?? null,
     project,
     remove,
     saveGeneral,

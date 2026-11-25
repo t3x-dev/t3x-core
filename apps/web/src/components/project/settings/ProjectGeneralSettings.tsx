@@ -77,10 +77,19 @@ function RepositoryStats({ project }: { project: ProjectDetail }) {
 export function ProjectGeneralSettings({
   onSave,
   project,
+  hasStats = true,
+  onLoadStats,
+  statsLoading = false,
+  statsError,
 }: {
   onSave: (input: { description: string; name: string }) => Promise<void>;
   project: ProjectDetail;
+  hasStats?: boolean;
+  onLoadStats?: () => void;
+  statsLoading?: boolean;
+  statsError?: string | null;
 }) {
+  const canEdit = project.can_edit === true;
   const savedDescription = projectDescription(project);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(savedDescription);
@@ -104,6 +113,7 @@ export function ProjectGeneralSettings({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canEdit || !dirty || saving) return;
     if (nameEdited && !nameCheck.canSubmit) {
       setError(
         nameCheck.result?.message ?? nameCheck.error ?? 'Wait for the name check to finish.'
@@ -142,6 +152,7 @@ export function ProjectGeneralSettings({
           <Input
             aria-invalid={error && !trimmedName ? 'true' : undefined}
             disabled={saving}
+            readOnly={!canEdit}
             id="settings-repo-name"
             maxLength={4096}
             onChange={(event) => {
@@ -167,6 +178,7 @@ export function ProjectGeneralSettings({
             <Textarea
               className="min-h-[76px] resize-y"
               disabled={saving}
+              readOnly={!canEdit}
               id="settings-repo-description"
               maxLength={DESCRIPTION_LIMIT}
               onChange={(event) => setDescription(event.target.value)}
@@ -191,7 +203,7 @@ export function ProjectGeneralSettings({
         <div className={styles.actions}>
           {dirty ? <span className={styles.unsaved}>You have unsaved changes</span> : null}
           <Button
-            disabled={!dirty || saving}
+            disabled={!canEdit || !dirty || saving}
             onClick={() => {
               setName(project.name);
               setDescription(savedDescription);
@@ -202,7 +214,10 @@ export function ProjectGeneralSettings({
           >
             Discard
           </Button>
-          <Button disabled={!dirty || saving || (nameEdited && !nameCheck.canSubmit)} type="submit">
+          <Button
+            disabled={!canEdit || !dirty || saving || (nameEdited && !nameCheck.canSubmit)}
+            type="submit"
+          >
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
@@ -220,7 +235,20 @@ export function ProjectGeneralSettings({
         </div>
         <div className={styles.contents}>
           <h3>Contents</h3>
-          <RepositoryStats project={project} />
+          {hasStats ? (
+            <RepositoryStats project={project} />
+          ) : (
+            <>
+              {statsError ? <p role="alert">{statsError}</p> : null}
+              <Button disabled={statsLoading} onClick={onLoadStats} type="button" variant="outline">
+                {statsLoading
+                  ? 'Loading repository counts…'
+                  : statsError
+                    ? 'Retry repository counts'
+                    : 'Load repository counts'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </section>

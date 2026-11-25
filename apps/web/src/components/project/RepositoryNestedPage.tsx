@@ -1,22 +1,14 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Changes from '@/app/project/[projectId]/changes/[workspaceId]/[snapshotId]/page';
+import Settings from '@/app/project/[projectId]/settings/page';
 import { ProjectChecksPage } from '@/components/checks/ProjectChecksPage';
 import { repositoryBranch } from '@/domain/project/repoPath';
 import { RepositoryRouteContext } from '@/hooks/projects/repositoryRouteContext';
 import { ProjectRouteShell } from './ProjectRouteShell';
 
-const Settings = dynamic(() => import('@/app/project/[projectId]/settings/page'), {
-  loading: () => (
-    <output className="flex items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-      <Loader2 aria-hidden="true" className="size-5 animate-spin" />
-      Loading repository settings...
-    </output>
-  ),
-});
 const Diff = dynamic(() => import('@/app/project/[projectId]/diff/page'));
 const Merge = dynamic(() => import('@/app/project/[projectId]/merge/[mergeId]/page'));
 const History = dynamic(() =>
