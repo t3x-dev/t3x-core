@@ -26,6 +26,7 @@ import styles from './ProjectCommunityTab.module.css';
 interface ProjectCommunityTabProps {
   branch?: string | null;
   projectId: string;
+  namespaceId?: string | null;
 }
 
 interface CommunityDestination {
@@ -35,7 +36,11 @@ interface CommunityDestination {
   label: string;
 }
 
-export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+export function ProjectCommunityTab({
+  projectId,
+  branch,
+  namespaceId: resolvedNamespaceId,
+}: ProjectCommunityTabProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
@@ -44,7 +49,9 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
   const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId, {
     includeInvitations: false,
   });
-  const namespaceId = guestsQuery.data?.namespace_id ?? null;
+  const confirmedNamespaceId = guestsQuery.data?.namespace_id;
+  const namespaceId =
+    confirmedNamespaceId ?? (guestsQuery.error ? null : (resolvedNamespaceId ?? null));
   const { membersQuery } = useNamespaceCollaboration({
     namespaceId,
     canReadMembers: !!namespaceId,
@@ -61,7 +68,9 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
     (filter !== 'workspaces' && pullRequestRead.error) || (filter !== 'prs' && workspaceRead.error);
 
   const collaborators = new Map<string, { name: string; scopes: string[] }>();
-  for (const member of membersQuery.data?.members ?? []) {
+  // Wait for the project response to confirm the namespace before showing members.
+  const members = confirmedNamespaceId ? (membersQuery.data?.members ?? []) : [];
+  for (const member of members) {
     if (member.status !== 'active') continue;
     collaborators.set(`${member.principal.kind}:${member.principal.principal_id}`, {
       name: member.principal.display_name ?? member.principal.principal_id,
@@ -310,7 +319,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
               Project collaborators unavailable or access denied.
             </p>
           ) : null}
-          {membersQuery.error ? (
+          {confirmedNamespaceId && membersQuery.error ? (
             <p className={styles.message} role="alert">
               Namespace members unavailable or access denied.
             </p>

@@ -925,6 +925,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
         outputs_count: stats.outputsCount,
       }),
       extraction_style: project.extractionStyle ?? null,
+      namespace_id: project.namespaceId ?? null,
       can_edit: accessResult.canEdit === true,
     };
 

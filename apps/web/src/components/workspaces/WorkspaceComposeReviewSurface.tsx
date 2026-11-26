@@ -328,7 +328,10 @@ export function WorkspaceComposeReviewSurface({
     selectedWorkspace.id === candidate.id &&
       selectedWorkspace.revision === candidate.revision &&
       (selectedWorkspace.revision === undefined ||
-        candidate.schemaActivity?.hasEditCandidate === false)
+        candidate.schemaActivity?.hasEditCandidate === false),
+    mode === 'review' && !workspaceTool && !legacyContentEdit
+      ? selectedWorkspace.targetBranch
+      : undefined
   );
   const syncRequired = (activity.newActivity ?? activity.view)?.synchronization?.required;
 

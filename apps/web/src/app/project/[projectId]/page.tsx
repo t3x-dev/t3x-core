@@ -57,6 +57,7 @@ interface ProjectDetailPageContentProps {
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
   ownerSlugOverride?: string;
+  namespaceIdOverride?: string | null;
   surface?: 'canvas' | 'repository';
   workspaceBranch?: string | null;
 }
@@ -74,6 +75,7 @@ export function ProjectDetailPageContent({
   initialTabOverride,
   projectIdOverride,
   ownerSlugOverride,
+  namespaceIdOverride,
   surface = 'repository',
   workspaceBranch,
 }: ProjectDetailPageContentProps = {}) {
@@ -474,7 +476,17 @@ export function ProjectDetailPageContent({
           />
         );
       case 'community':
-        return <ProjectCommunityTab branch={searchParams.get('branch')} projectId={projectId} />;
+        return (
+          <ProjectCommunityTab
+            branch={searchParams.get('branch')}
+            projectId={projectId}
+            namespaceId={
+              fetchedProject?.namespaceId === undefined
+                ? namespaceIdOverride
+                : fetchedProject.namespaceId
+            }
+          />
+        );
       default:
         return renderStateTab();
     }

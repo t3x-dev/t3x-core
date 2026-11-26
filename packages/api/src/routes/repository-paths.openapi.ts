@@ -49,6 +49,7 @@ const resolveRoute = createRoute({
               project_id: z.string(),
               name: z.string(),
               namespace: z.string().nullable(),
+              namespace_id: z.string().nullable().optional(),
               canonical_path: z.string().nullable(),
               path_status: z.enum(['ready', 'pending_migration']),
               redirect: z.boolean(),
@@ -72,6 +73,7 @@ repositoryPathRoutes.openapi(resolveRoute, async (c) => {
       success: true as const,
       data: {
         ...address,
+        namespace_id: access.namespaceId ?? null,
         project_id: access.projectId,
         name: access.name,
         redirect: address.canonical_path !== null && address.canonical_path !== `/${owner}/${name}`,
