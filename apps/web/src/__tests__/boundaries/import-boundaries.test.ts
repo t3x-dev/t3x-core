@@ -144,7 +144,6 @@ describe('L1-L4 import boundaries', () => {
       'app/dev/db/page.tsx:literal fetch',
       'app/invitations/page.tsx:import @/infrastructure/sharedApiClient',
       'app/invite/page.tsx:import @/infrastructure/core',
-      'app/login/page.tsx:import @/infrastructure/namespaces',
       'app/page.tsx:import @/infrastructure/core',
       'app/page.tsx:import @/infrastructure/namespaces',
       'app/project/[projectId]/page.tsx:import @/queries/yschemaValidation',

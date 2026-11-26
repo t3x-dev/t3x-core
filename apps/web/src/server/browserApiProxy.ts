@@ -1,7 +1,32 @@
+import { cookies } from 'next/headers';
+
 const SESSION_COOKIE = 't3x-session';
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const LOGIN_PATHS = new Set(['v1/auth/login', 'v1/auth/register']);
+
+function upstreamOrigin() {
+  return process.env.T3X_API_URL || 'http://localhost:8000';
+}
+
+/** An expired cookie or a machine credential cannot resume a person's OAuth consent. */
+export async function hasHumanWebSession(): Promise<boolean> {
+  const session = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!session) return false;
+  try {
+    const response = await fetch(new URL('/api/v1/auth/me/credential', upstreamOrigin()), {
+      headers: { Authorization: `Bearer ${session}` },
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(3500),
+    });
+    if (!response.ok) return false;
+    const { data } = await response.json();
+    return data?.actor_kind === 'human' && data?.credential_kind === 'session';
+  } catch {
+    return false;
+  }
+}
 
 function readCookie(header: string | null, name: string): string | null {
   if (!header) return null;
@@ -72,13 +97,12 @@ export async function proxyBrowserApi(request: Request, path: string[]): Promise
     );
   }
 
-  const apiOrigin = process.env.T3X_API_URL || 'http://localhost:8000';
   const incoming = new URL(request.url);
   const upstreamPath =
     path.length === 1 && path[0] === 'health'
       ? '/health'
       : `/api/${path.map(encodeURIComponent).join('/')}`;
-  const target = new URL(upstreamPath, apiOrigin);
+  const target = new URL(upstreamPath, upstreamOrigin());
   target.search = incoming.search;
   const session = readCookie(request.headers.get('cookie'), SESSION_COOKIE);
   const body = ['GET', 'HEAD'].includes(request.method.toUpperCase())
