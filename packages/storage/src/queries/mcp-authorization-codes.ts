@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import type { AnyDB } from '../index';
 
@@ -31,14 +31,21 @@ export async function pendingMcpApproval(db: AnyDB, requestHash: string) {
       grantId: codes.grantId,
     })
     .from(codes)
-    .where(and(eq(codes.requestHash, requestHash), gt(codes.expiresAt, new Date())))
+    .where(and(eq(codes.requestHash, requestHash), gt(codes.expiresAt, sql`clock_timestamp()`)))
     .limit(1);
   return row ?? null;
 }
 
 export async function storeMcpAuthorizationCode(db: AnyDB, code: typeof codes.$inferInsert) {
-  await db.delete(codes).where(lte(codes.expiresAt, new Date()));
+  await db.execute(sql`
+    DELETE FROM mcp_authorization_codes WHERE code_hash IN (
+      SELECT code_hash FROM mcp_authorization_codes WHERE expires_at <= clock_timestamp()
+      ORDER BY expires_at LIMIT 64 FOR UPDATE SKIP LOCKED
+    )
+  `);
   await db.insert(codes).values(code);
+  await db.execute(sql`UPDATE mcp_authorization_attempts SET code_deadline=${code.expiresAt.toISOString()}::timestamptz
+    WHERE id=${code.requestHash} AND status IN ('pending','approved')`);
 }
 
 export async function redeemMcpAuthorizationCode(
@@ -59,7 +66,7 @@ export async function redeemMcpAuthorizationCode(
         eq(codes.redirectUri, match.redirectUri),
         eq(codes.resource, match.resource),
         eq(codes.challenge, match.challenge),
-        gt(codes.expiresAt, new Date())
+        gt(codes.expiresAt, sql`clock_timestamp()`)
       )
     )
     .returning();

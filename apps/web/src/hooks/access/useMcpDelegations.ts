@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ConsentDecision, DelegationUpdate } from '@/domain/mcpDelegation';
 import {
   decideDelegationConsent,
+  readConnectionChoices,
   readDelegationConsent,
   readRepositoryDelegations,
   revokeRepositoryDelegation,
+  saveConnectionSelection,
   updateRepositoryDelegation,
 } from '@/infrastructure/mcpDelegations';
 import { getSessionUserId, subscribeSessionUser } from '@/infrastructure/session';
@@ -47,7 +49,37 @@ function useDelegationRead<T>(key: string, load: (key: string, signal: AbortSign
 
 export function useDelegationConsent(query: string) {
   const state = useDelegationRead(query, readDelegationConsent);
-  return { ...state, decide: (input: ConsentDecision) => decideDelegationConsent(query, input) };
+  const reload = state.reload;
+  const submitting = useRef(false);
+  useEffect(() => {
+    const onReturn = (event: PageTransitionEvent) => {
+      if (event.persisted && !submitting.current) reload();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !submitting.current) reload();
+    };
+    window.addEventListener('pageshow', onReturn);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('pageshow', onReturn);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reload]);
+  return {
+    ...state,
+    decide: async (input: ConsentDecision) => {
+      submitting.current = true;
+      try {
+        return await decideDelegationConsent(query, input);
+      } finally {
+        submitting.current = false;
+      }
+    },
+  };
+}
+
+export function useConnectionChoices() {
+  return { ...useDelegationRead('', readConnectionChoices), save: saveConnectionSelection };
 }
 
 export function useRepositoryDelegations(projectId: string, branch: string) {

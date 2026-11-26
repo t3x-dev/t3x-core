@@ -73,4 +73,31 @@ describe('proxy auth gating', () => {
       'http://localhost/login?callbackUrl=%2Fsettings%2Fagent-access%2Fauthorize%3Fclient_id%3Deditorial'
     );
   });
+
+  it('removes legacy chat text before redirecting to login or rendering consent', () => {
+    for (const cookie of [undefined, 't3x-session=test-key']) {
+      const result = proxy(
+        createRequest(
+          '/settings/agent-access/authorize?state=keep&task=private-instruction&task=more',
+          cookie
+        )
+      );
+      expect(result.headers.get('location')).toBe(
+        'http://localhost/settings/agent-access/authorize?state=keep'
+      );
+      expect(result.headers.get('referrer-policy')).toBe('no-referrer');
+    }
+  });
+
+  it('reopens a bookmarked login return URL without propagating its legacy task', () => {
+    const callbackUrl = '/settings/agent-access/authorize?client_id=one&task=legacy';
+    const result = proxy(createRequest('/login?' + new URLSearchParams({ callbackUrl })));
+    const clean = new URL(result.headers.get('location')!);
+    expect(clean.pathname).toBe('/login');
+    expect(clean.searchParams.get('callbackUrl')).toBe(
+      '/settings/agent-access/authorize?client_id=one'
+    );
+    expect(result.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(proxy(createRequest(clean.pathname + clean.search)).status).toBe(200);
+  });
 });

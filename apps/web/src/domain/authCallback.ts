@@ -1,3 +1,5 @@
+import { isAgentEntry } from './mcpDelegation';
+
 const CALLBACK_BASE = 'https://t3x.invalid';
 
 /**
@@ -11,6 +13,8 @@ export function safeAuthCallbackUrl(candidate: string | null | undefined, fallba
     const base = new URL(CALLBACK_BASE);
     const resolved = new URL(candidate, base);
     if (resolved.origin !== base.origin) return fallback;
+    if (isAgentEntry(resolved.pathname) && resolved.searchParams.has('task'))
+      resolved.searchParams.delete('task');
     return `${resolved.pathname}${resolved.search}${resolved.hash}`;
   } catch {
     return fallback;

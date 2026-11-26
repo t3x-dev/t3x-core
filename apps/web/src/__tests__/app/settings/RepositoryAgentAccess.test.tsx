@@ -63,6 +63,10 @@ it('opens repository-scoped management and reads the revocation result from the 
     '/editor/calendar/branches/release%2Fv2'
   );
   expect(await screen.findByRole('heading', { name: 'Calendar agent' })).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Connect an Agent' })).toHaveAttribute(
+    'href',
+    '/settings/agent-access?projectId=repo-1&branch=release%2Fv2'
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Revoke access' }));
   expect(grants.revoke).toHaveBeenCalledWith('repo-1', 'grant-1');
   expect(await screen.findByText(/Revoked ·/)).toBeVisible();

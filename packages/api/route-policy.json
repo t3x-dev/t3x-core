@@ -1078,6 +1078,22 @@
       "action": "project:guests:manage"
     },
     {
+      "source": "mcp-delegations.openapi.ts",
+      "method": "GET",
+      "path": "/v1/mcp-delegations/preselections",
+      "policy": "authenticated",
+      "rationale": "A human web session and current repository delegation management authority are required.",
+      "action": "project:guests:manage"
+    },
+    {
+      "source": "mcp-delegations.openapi.ts",
+      "method": "POST",
+      "path": "/v1/mcp-delegations/preselections",
+      "policy": "authenticated",
+      "rationale": "A human web session and current repository delegation management authority are required.",
+      "action": "project:guests:manage"
+    },
+    {
       "source": "merge.openapi.ts",
       "method": "POST",
       "path": "/v1/merge/drafts",

@@ -14,6 +14,7 @@ export interface DelegationOptions {
 const columns = {
   id: apiKeys.id,
   clientId: repositoryAgentDelegations.clientId,
+  revision: repositoryAgentDelegations.revision,
   projectId: apiKeys.projectId,
   userId: apiKeys.userId,
   agentName: apiKeys.name,
@@ -85,7 +86,12 @@ export async function adjustAgentDelegation(
   if (!active) return false;
   await db
     .update(repositoryAgentDelegations)
-    .set({ mode: options.mode, branch: options.branch, branchOnly: options.branchOnly })
+    .set({
+      mode: options.mode,
+      branch: options.branch,
+      branchOnly: options.branchOnly,
+      revision: sql`${repositoryAgentDelegations.revision} + 1`,
+    })
     .where(eq(repositoryAgentDelegations.keyId, id));
   await db
     .update(projectGrants)

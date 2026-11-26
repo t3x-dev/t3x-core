@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, SquareTerminal } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
+  connectAgentPage,
   type DelegationDays,
   type DelegationMode,
   delegationModes,
@@ -38,6 +39,14 @@ export function RepositoryAgentAccess({
           Agent access
         </h1>
         <p className={s.description}>Manage the Agents you have authorized for {repository}.</p>
+        {grants.data && (
+          <Link
+            className={s.primary}
+            href={`${connectAgentPage}?${new URLSearchParams({ projectId, branch })}`}
+          >
+            Connect an Agent
+          </Link>
+        )}
         {grants.error ? (
           <div className={s.scope}>
             <p role="alert">{grants.error}</p>
@@ -48,9 +57,7 @@ export function RepositoryAgentAccess({
         ) : !grants.data ? (
           <output className={s.statusText}>Loading Agent access…</output>
         ) : grants.data.grants.length === 0 ? (
-          <p className={s.scope}>
-            No Agents authorized. Start a task in your Agent chat to connect this repository.
-          </p>
+          <p className={s.scope}>No Agents authorized yet.</p>
         ) : (
           <ul className={s.grants}>
             {grants.data.grants.map((grant) => (

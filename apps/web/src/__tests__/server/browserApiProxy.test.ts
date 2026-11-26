@@ -103,6 +103,19 @@ describe('browser API proxy', () => {
     expect(vi.mocked(fetch).mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
   });
 
+  it('omits legacy task text and the browser referer from upstream consent', async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({}));
+    await proxyBrowserApi(
+      request('/api/v1/mcp-delegations/consent?state=keep&task=private', {
+        headers: { referer: 'http://localhost:3000/settings/agent-access/authorize?task=private' },
+      }),
+      ['v1', 'mcp-delegations', 'consent']
+    );
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toBe('http://api.internal:8000/api/v1/mcp-delegations/consent?state=keep');
+    expect(new Headers(init?.headers).has('referer')).toBe(false);
+  });
+
   it('stops retries when RequestInit.signal is cancelled during backoff', async () => {
     const caller = new AbortController();
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 502 }));

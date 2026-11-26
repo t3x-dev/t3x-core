@@ -58,6 +58,13 @@ describe('returning to MCP consent from the login entry', () => {
     expect(['manual', 'error']).toContain(init?.redirect);
   });
 
+  it('resumes the direct Agent entry with its project and branch after a sign-in in another tab', async () => {
+    vi.mocked(fetch).mockResolvedValue(credential('human', 'session'));
+    const selection = '/settings/agent-access?projectId=editorial&branch=release%2Fv2';
+    await expect(page({ callbackUrl: selection })).rejects.toThrow('NEXT_REDIRECT');
+    expect(redirect).toHaveBeenCalledExactlyOnceWith(selection);
+  });
+
   it('keeps the login form when the browser has no session cookie', async () => {
     getCookie.mockReturnValue(undefined);
     expect(isValidElement(await page())).toBe(true);

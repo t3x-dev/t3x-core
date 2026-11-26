@@ -534,7 +534,11 @@ On the API, register the host in `T3X_MCP_OAUTH_CLIENTS`. Each JSON array
 entry supplies its public client ID, display name and exact accepted callback
 URLs. For example, a host with the indicated HTTPS callback can register
 `[{"client_id":"editorial-agent","client_name":"Editorial Agent","redirect_uris":["https://agent.example.com/oauth/callback"]}]`.
-Use the callback supplied by the actual host.
+Use the callback supplied by the actual host. A client can also register
+`connection_start_uri` for its connection settings. Web opens this address
+with an opaque `preselection` reference. The host starts a fresh OAuth request
+and returns the reference to T3X. Without a start URI the user opens the host
+and explicitly selects the saved repository on the consent page.
 
 Connect the registered client to the canonical MCP URL. A request without a
 credential returns a Bearer challenge pointing to
@@ -542,7 +546,8 @@ credential returns a Bearer challenge pointing to
 issuer, the resource audience and the enabled tool groups in
 `t3x_capabilities`. The host discovers the authorization endpoint and starts
 an authorization code flow with PKCE. After confirmation it exchanges the code
-for an MCP access token and resumes its pending task. MCP checks the token's
+for an MCP access token. A host that supports task resumption can then resume
+the original chat. MCP checks the token's
 audience and expiry, then authenticates its repository credential against the
 configured API on every request. Existing pre-issued Bearer tokens continue to
 use their existing credential path. [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
@@ -550,11 +555,16 @@ use their existing credential path. [MCP authorization specification](https://mo
 A chat host keeps its conversation and pending instruction under its OAuth
 `state`. It can add `repository=owner/name` and `branch=main` to the
 authorization request when the task identifies a target. Omit `repository`
-to let the person choose in T3X. An optional `task` field shows a short
-description on consent. Keep the full conversation in the host. On return,
+to let the person choose in T3X. Keep the instruction in the host and omit
+task text from authorization URLs and diagnostics. On return,
 the host validates the issuer and state, completes PKCE and calls
 `t3x_context` to confirm the granted project before resuming that task.
-Reuse a sufficient unexpired grant for later requests to the same repository.
+Reuse a sufficient unexpired credential only for its verified account and
+target. Web consent and successful code exchange are separate from the host
+storing a token or resuming a chat. Configure reverse proxies, access logs
+and tracing to record only route paths for Web login, consent, client launch
+and OAuth callbacks. Omit query strings, Referer headers, authorization
+headers and token exchange bodies at every hop. [Authorization coordination](docs/authorization-coordination.md)
 
 With OAuth enabled, leaving `T3X_MCP_CAPABILITIES` unset selects the managed
 profile for reading repositories, editing Drafts, working with Sources,

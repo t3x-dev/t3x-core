@@ -7,6 +7,8 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { safeAuthCallbackUrl } from '@/domain/authCallback';
+import { isAgentEntry } from '@/domain/mcpDelegation';
 import { schemaDocumentHeaders } from '@/domain/schemas/schemaDocumentRoute';
 
 /** Paths that are always public (even when auth is enabled) */
@@ -17,6 +19,23 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const clean = new URL(request.url);
+  if (isAgentEntry(pathname) && clean.searchParams.has('task')) {
+    clean.searchParams.delete('task');
+  } else if (pathname === '/login') {
+    const original = clean.searchParams.get('callbackUrl');
+    const callback = safeAuthCallbackUrl(original);
+    if (original && original !== callback && isAgentEntry(callback.split(/[?#]/, 1)[0])) {
+      clean.searchParams.set('callbackUrl', callback);
+    }
+  }
+  if (clean.href !== request.url) {
+    const response = NextResponse.redirect(clean);
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   const authDisabled =
     process.env.AUTH_DISABLED?.toLowerCase() === 'true' ||
     process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
@@ -28,8 +47,6 @@ export function proxy(request: NextRequest) {
   if (authDisabled) {
     return next();
   }
-
-  const { pathname } = request.nextUrl;
 
   // Allow public paths
   if (pathname === '/.well-known/oauth-authorization-server' || isPublicPath(pathname)) {

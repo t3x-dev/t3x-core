@@ -102,6 +102,12 @@ if (oauthDelegation) {
         client_name: 'Qualification Chat',
         redirect_uris: [callback],
       },
+      {
+        client_id: 't3x-qualification-launcher',
+        client_name: 'Qualification Launcher',
+        redirect_uris: [callback],
+        connection_start_uri: new URL('/connect', callback).href,
+      },
     ]),
     T3X_E2E_MCP_CALLBACK_URL: callback,
   });

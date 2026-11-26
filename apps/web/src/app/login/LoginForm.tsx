@@ -14,11 +14,11 @@ import { useSessionUserId } from '@/hooks/shared/useSession';
 export function LoginForm({
   callbackUrl,
   mode,
-  agentConsent,
+  agentEntry,
 }: {
   callbackUrl: string;
   mode: LocalAuthMode;
-  agentConsent: boolean;
+  agentEntry: boolean;
 }) {
   const router = useRouter();
   const registering = mode === 'register';
@@ -29,11 +29,11 @@ export function LoginForm({
 
   // A sign-in in another tab updates the local profile. Only the server can confirm the session.
   useEffect(() => {
-    if (agentConsent && sessionUserId) router.refresh();
-  }, [agentConsent, sessionUserId, router]);
+    if (agentEntry && sessionUserId) router.refresh();
+  }, [agentEntry, sessionUserId, router]);
 
   useEffect(() => {
-    if (!agentConsent) return;
+    if (!agentEntry) return;
     // Another tab may have signed in while this authorization request was open.
     const recheck = () => router.refresh();
     const onShow = (event: PageTransitionEvent) => {
@@ -45,7 +45,7 @@ export function LoginForm({
       window.removeEventListener('focus', recheck);
       window.removeEventListener('pageshow', onShow);
     };
-  }, [agentConsent, router]);
+  }, [agentEntry, router]);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -107,7 +107,7 @@ export function LoginForm({
         </nav>
       }
     >
-      {agentConsent && (
+      {agentEntry && (
         <div className="mb-4 space-y-1 text-sm">
           <p>Already signed in elsewhere? Open this request in that browser.</p>
           <button
@@ -118,7 +118,7 @@ export function LoginForm({
               setCopyFeedback(copied ? 'Link copied.' : 'Copy the address of this page instead.');
             }}
           >
-            Copy authorization link
+            Copy Agent access link
           </button>
           <output className="ml-2">{copyFeedback}</output>
         </div>

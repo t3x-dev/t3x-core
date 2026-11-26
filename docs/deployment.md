@@ -183,6 +183,15 @@ additional schema work around this storage-owned job. These are integration
 contracts of the internal storage package; they do not add a stable public npm
 release surface.
 
+When upgrading an OAuth deployment from storage schema 90, drain all API
+replicas that can write consent decisions before running the schema 91
+migration. Resume traffic with the upgraded API and Web. The migration closes
+requests identifiable from existing approval receipts and preserves the
+remaining exchange window for each live code. Pre-upgrade cancellations and
+receipts purged before migration cannot be reconstructed. An old link in
+either group can open a fresh consent screen. Preserve the database lookup
+keys and closed-request markers together in backups and restores.
+
 For existing v83–v85 databases, the standalone job and API bootstrap
 upgrade directly to v86. The upgrade installs any missing portable delivery
 and deployment schema, creates the address and counter tables, installs the

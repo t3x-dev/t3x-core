@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { safeAuthCallbackUrl } from '@/domain/authCallback';
+import { isAgentEntry } from '@/domain/mcpDelegation';
 import { hasHumanWebSession } from '@/server/browserApiProxy';
 import { LoginForm } from './LoginForm';
 
@@ -13,14 +14,13 @@ export default async function LoginPage({
     typeof params.callbackUrl === 'string' ? params.callbackUrl : null
   );
   const mode = params.mode === 'register' ? 'register' : 'login';
-  const agentConsent =
-    mode === 'login' && callbackUrl.split(/[?#]/, 1)[0] === '/settings/agent-access/authorize';
-
-  if (agentConsent && (await hasHumanWebSession())) redirect(callbackUrl);
+  const targetPath = callbackUrl.split(/[?#]/, 1)[0];
+  const agentEntry = mode === 'login' && isAgentEntry(targetPath);
+  if (agentEntry && (await hasHumanWebSession())) redirect(callbackUrl);
 
   return (
     <main className="bg-[var(--surface-app)]">
-      <LoginForm mode={mode} callbackUrl={callbackUrl} agentConsent={agentConsent} />
+      <LoginForm mode={mode} callbackUrl={callbackUrl} agentEntry={agentEntry} />
     </main>
   );
 }
