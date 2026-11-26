@@ -32,9 +32,9 @@ import { readRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 if (typeof window !== 'undefined') performance.mark?.('t3x:settings:module');
 
-const AgentAccessDemo = lazy(() =>
-  import('@/components/project/agent-access/AgentAccessDemo').then((m) => ({
-    default: m.AgentAccessDemo,
+const RepositoryAgentAccess = lazy(() =>
+  import('@/components/project/agent-access/RepositoryAgentAccess').then((m) => ({
+    default: m.RepositoryAgentAccess,
   }))
 );
 
@@ -117,13 +117,16 @@ function ProjectSettingsPageContent() {
     return () => cancelAnimationFrame(frame);
   }, [project]);
 
-  if (process.env.NODE_ENV === 'development' && searchParams.get('view') === 'agent-access') {
+  if (searchParams.get('view') === 'agent-access') {
     if (settings.loading) return <LoadingSpinner message="Loading repository access…" />;
-    if (project?.can_edit !== true) {
+    if (project?.can_manage_agent_access !== true) {
       return (
         <div className="mx-auto grid max-w-lg gap-3 p-8 text-sm">
           <h1 className="text-lg font-semibold">Agent access unavailable</h1>
-          <p>{settings.error ?? 'Opening Agent access requires edit access to this repository.'}</p>
+          <p>
+            {settings.error ??
+              'Opening Agent access requires permission to manage access to this repository.'}
+          </p>
           <Link className="underline" href={repositoryPath}>
             Back to repository
           </Link>
@@ -132,8 +135,9 @@ function ProjectSettingsPageContent() {
     }
     const branch = searchParams.get('targetBranch')?.trim() || 'main';
     return (
-      <AgentAccessDemo
+      <RepositoryAgentAccess
         key={`${projectId}:${branch}`}
+        projectId={projectId}
         repository={project.namespace ? `${project.namespace}/${project.name}` : project.name}
         branch={branch}
         backHref={repositoryBranchHref(repositoryPath, '', branch)}
@@ -164,7 +168,7 @@ function ProjectSettingsPageContent() {
           ) : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h1>Repository settings</h1>
-            {project?.can_edit && (
+            {project?.can_manage_agent_access && (
               <AgentAccessLink href={repositoryAgentAccessHref(repositoryPath)} />
             )}
           </div>

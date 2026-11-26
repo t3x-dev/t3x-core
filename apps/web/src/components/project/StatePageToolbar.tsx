@@ -31,6 +31,7 @@ export function StatePageToolbar({
   workspaceHref,
   historical,
   canProposeChanges,
+  canManageAgentAccess,
 }: {
   projectId: string;
   projectName: string;
@@ -47,6 +48,7 @@ export function StatePageToolbar({
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   workspaceHref: string;
   canProposeChanges: boolean;
+  canManageAgentAccess: boolean;
 }) {
   const commitHref = headCommit ? historyCommitHref(historyHref, headCommit) : historyHref;
   return (
@@ -86,7 +88,7 @@ export function StatePageToolbar({
             <Link href={historical ? commitHref : historyHref}>
               <History aria-hidden="true" /> History
             </Link>
-            {canProposeChanges && <AgentAccessLink href={agentAccessHref} />}
+            {canManageAgentAccess && <AgentAccessLink href={agentAccessHref} />}
             {canProposeChanges ? (
               <Link href={workspaceHref} className={overviewStyles.primary}>
                 <Pencil aria-hidden="true" />

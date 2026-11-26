@@ -53,6 +53,7 @@ import {
   databaseRateLimitStore,
   type RateLimitStore,
 } from './middleware/rate-limit';
+import { repositoryDelegationMiddleware } from './middleware/repository-delegation';
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import { workspaceAccessMiddleware } from './middleware/workspace-access';
@@ -129,6 +130,7 @@ import {
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
+import { mcpDelegationRoutes } from './routes/mcp-delegations.openapi';
 import { repositoryObjectAddressRoutes } from './routes/repository-object-addresses.openapi';
 import { repositoryPathRoutes } from './routes/repository-paths.openapi';
 import { createWsRoute } from './routes/ws';
@@ -220,6 +222,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   }
 
   app.use('*', createRateLimitL2(rateLimitStore));
+  app.use('*', repositoryDelegationMiddleware);
 
   // Health check at root (not under /api)
   app.route('/', healthRoutes);
@@ -293,6 +296,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
+  api.route('/', mcpDelegationRoutes);
   api.route('/', transitionPolicyBindingRoutes);
   api.route('/', createTransitionControlPlaneRoutes(transitionControlPlane));
   api.route('/', shareRoutes);
@@ -405,6 +409,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       },
       { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
+      { name: 'MCP authorization', description: 'OAuth consent and repository Agent access' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },
       { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
       { name: 'Comparisons', description: 'Saved A/B comparison snapshots' },

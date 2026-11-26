@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { mcpOAuthConfig } from '@t3x-dev/api/mcp-oauth';
 import {
   createMcpServer,
   type McpServerOptions,
   type McpToolset,
   parseMcpCapabilities,
 } from '@t3x-dev/mcp-lib';
-import { startMcpHttpServer } from './http.js';
+import { managedMcpCapabilities, startMcpHttpServer } from './http.js';
 
 const SUPPORTED_TOOLSETS = new Set<McpToolset>(['core', 'advanced', 'transition']);
 
@@ -40,6 +41,16 @@ function parseToolsets(value: string): McpToolset[] {
 
 const capabilityEnv = process.env.T3X_MCP_CAPABILITIES;
 const transport = process.env.T3X_TRANSPORT ?? 'stdio';
+const oauth = (() => {
+  if (transport !== 'http') return;
+  try {
+    return mcpOAuthConfig();
+  } catch {
+    return failConfiguration(
+      'Invalid MCP OAuth configuration. Check the resource URL, issuer origin and 32-byte secret.'
+    );
+  }
+})();
 const onDiagnostic: NonNullable<Parameters<typeof createMcpServer>[0]['onDiagnostic']> = (
   event
 ) => {
@@ -50,6 +61,7 @@ const onDiagnostic: NonNullable<Parameters<typeof createMcpServer>[0]['onDiagnos
 
 const options: McpServerOptions = (() => {
   if (capabilityEnv === undefined) {
+    if (oauth) return { toolsets: [], capabilities: managedMcpCapabilities, onDiagnostic };
     return {
       toolsets: parseToolsets(process.env.T3X_TOOLSETS ?? 'core'),
       onDiagnostic,
@@ -116,11 +128,18 @@ if (transport === 'stdio') {
       'T3X_MCP_PUBLIC_URL must be an HTTPS /mcp URL without credentials, query, or fragment.'
     );
   }
-  if (!publicUrl && !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+  if (oauth && publicUrl && oauth.resource.href !== publicUrl.href) {
+    failConfiguration('T3X_MCP_PUBLIC_URL and T3X_MCP_RESOURCE_URL must match.');
+  }
+  if (
+    !publicUrl &&
+    oauth?.resource.protocol !== 'https:' &&
+    !['127.0.0.1', 'localhost', '::1'].includes(host)
+  ) {
     failConfiguration('Binding HTTP transport beyond loopback requires T3X_MCP_PUBLIC_URL.');
   }
   try {
-    await startMcpHttpServer(options, { apiUrl: apiUrl.href, host, port, publicUrl });
+    await startMcpHttpServer(options, { apiUrl: apiUrl.href, host, port, publicUrl, oauth });
   } catch {
     failConfiguration('Could not start the MCP HTTP listener. Check HOST and PORT.');
   }

@@ -40,6 +40,7 @@ export interface Project {
   repository_profile?: import('./repository-profile').RepositoryProfile;
   /** Present on authorized project list and detail responses. */
   can_edit?: boolean;
+  can_manage_agent_access?: boolean;
   /** Delete capability returned by authorized project lists. */
   can_delete?: boolean;
   deleted_at?: string | null;

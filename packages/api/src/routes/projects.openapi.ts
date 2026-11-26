@@ -926,6 +926,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       }),
       extraction_style: project.extractionStyle ?? null,
       can_edit: accessResult.canEdit === true,
+      can_manage_agent_access: accessResult.canManageAgentAccess === true,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

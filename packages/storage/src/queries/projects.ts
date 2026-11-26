@@ -69,7 +69,7 @@ export interface ListProjectsOptions {
   tags?: string[];
   tag_query?: string;
   /** Server-selected capability, applied before pagination. */
-  required_action?: 'project:edit';
+  required_action?: 'project:edit' | 'project:guests:manage';
   limit?: number;
   offset?: number;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */

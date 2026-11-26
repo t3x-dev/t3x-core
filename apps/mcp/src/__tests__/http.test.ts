@@ -1,10 +1,12 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, request, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { type McpOAuthConfig, sealMcpAccessToken } from '@t3x-dev/api/mcp-oauth';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const credentials = new Map([
@@ -36,7 +38,7 @@ function json(response: ServerResponse, status: number, payload: unknown) {
   response.end(JSON.stringify(payload));
 }
 
-async function startFixture(publicUrl?: URL) {
+async function startFixture(publicUrl?: URL, oauth?: McpOAuthConfig, capabilities?: string) {
   const active = new Map(credentials);
   const apiRequests: string[] = [];
   const pendingBranches: Array<() => void> = [];
@@ -101,7 +103,13 @@ async function startFixture(publicUrl?: URL) {
       PORT: '0',
       T3X_TRANSPORT: 'http',
       T3X_MCP_BACKEND: 'api',
-      T3X_MCP_CAPABILITIES: 'read-only',
+      ...(!oauth && { T3X_MCP_CAPABILITIES: 'read-only' }),
+      ...(capabilities && { T3X_MCP_CAPABILITIES: capabilities }),
+      ...(oauth && {
+        T3X_MCP_OAUTH_SECRET: oauth.secret,
+        T3X_MCP_OAUTH_ISSUER: oauth.issuer.origin,
+        T3X_MCP_RESOURCE_URL: oauth.resource.href,
+      }),
       T3X_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}/api`,
       ...(publicUrl && { T3X_MCP_PUBLIC_URL: publicUrl.href }),
     },
@@ -175,7 +183,96 @@ function initializeStatus(endpoint: URL, headers: Record<string, string> = {}) {
   });
 }
 
+function getResponse(url: URL, host: string) {
+  return new Promise<{ status?: number; challenge?: string; body: string }>((resolve, reject) => {
+    const req = request(url, { headers: { Host: host } }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (data) => {
+        body += data;
+      });
+      response.on('end', () =>
+        resolve({
+          status: response.statusCode,
+          challenge: response.headers['www-authenticate'],
+          body,
+        })
+      );
+    });
+    req.once('error', reject);
+    req.end();
+  });
+}
+
 describe('apps/mcp Streamable HTTP subprocess', () => {
+  it('discovers the configured issuer, checks resource tokens before API use and honors revocation', async () => {
+    const oauth = {
+      resource: new URL('https://mcp.example.test/mcp'),
+      issuer: new URL('https://web.example.test'),
+      secret: randomBytes(32).toString('base64url'),
+    };
+    const fixture = await startFixture(undefined, oauth);
+    const challenge = await getResponse(fixture.endpoint, oauth.resource.host);
+    const metadataPath = '/.well-known/oauth-protected-resource/mcp';
+    expect(challenge).toMatchObject({
+      status: 401,
+      challenge: `Bearer resource_metadata="${oauth.resource.origin}${metadataPath}", scope="repository:commit"`,
+    });
+    const metadataUrl = new URL(metadataPath, fixture.endpoint);
+    const metadata = await getResponse(metadataUrl, oauth.resource.host);
+    expect(metadata.status).toBe(200);
+    expect(JSON.parse(metadata.body)).toMatchObject({
+      resource: oauth.resource.href,
+      authorization_servers: [oauth.issuer.origin],
+      t3x_capabilities: expect.arrayContaining([
+        'transitions:prepare',
+        'decision:accept',
+        'commit',
+      ]),
+    });
+    expect(await getResponse(metadataUrl, 'other.example.test')).toMatchObject({ status: 403 });
+    const claims = {
+      audience: oauth.resource.href,
+      expiresAt: Date.now() + 60_000,
+      apiKey: 'fixture-first',
+    };
+    const valid = sealMcpAccessToken(claims, oauth.secret);
+    const status = (token: string) =>
+      initializeStatus(fixture.endpoint, {
+        Host: oauth.resource.host,
+        Authorization: `Bearer ${token}`,
+      });
+    const otherResource = sealMcpAccessToken(
+      { ...claims, audience: 'https://other.example.test/mcp' },
+      oauth.secret
+    );
+    expect(await status(otherResource)).toBe(401);
+    expect(await status(`${valid}invalid`)).toBe(401);
+    expect(fixture.apiRequests).toEqual([]);
+    expect(await status(valid)).toBe(200);
+    expect(fixture.apiRequests).toEqual(['Bearer fixture-first']);
+    fixture.revoke('fixture-first');
+    expect(await status(valid)).toBe(401);
+    expect(await status('fixture-second')).toBe(200);
+    expect(fixture.stderr.join('\n')).not.toContain(valid);
+  }, 15_000);
+
+  it('keeps an explicit capability ceiling on an OAuth deployment', async () => {
+    const oauth = {
+      resource: new URL('https://mcp.example.test/mcp'),
+      issuer: new URL('https://web.example.test'),
+      secret: randomBytes(32).toString('base64url'),
+    };
+    const fixture = await startFixture(undefined, oauth, 'read-only');
+    const metadata = await getResponse(
+      new URL('/.well-known/oauth-protected-resource/mcp', fixture.endpoint),
+      oauth.resource.host
+    );
+    expect(JSON.parse(metadata.body)).toMatchObject({
+      t3x_capabilities: ['read-only'],
+      scopes_supported: ['repository:read'],
+    });
+  }, 15_000);
   it('uses the caller credential on overlapping tool calls and rejects it immediately after revocation', async () => {
     const fixture = await startFixture();
     const first = await connect(fixture.endpoint, 'fixture-first');

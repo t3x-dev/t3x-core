@@ -240,6 +240,8 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
 }
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (pathname === '/settings/agent-access/authorize') return children;
   return (
     <Suspense fallback={null}>
       <SettingsLayoutContent>{children}</SettingsLayoutContent>

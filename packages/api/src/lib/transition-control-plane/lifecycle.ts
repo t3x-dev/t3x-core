@@ -44,6 +44,7 @@ import {
   getTransitionViewForCommit,
   markProjectConversationsCommitted,
   type ResolvedTransitionProposalGraph,
+  readAgentDelegation,
   recordRepositoryDecision,
   recordRepositoryDecisionAuthorization,
   recordTransitionCommandReceipt,
@@ -61,6 +62,8 @@ import {
   type ProtocolValue,
   type StringClaim,
 } from '@t3x-dev/transition';
+import { enforceDelegatedDraftAuthorship } from '../delegated-draft-authorship';
+import { delegatedActorKey, delegatedRefPolicy } from '../repository-agent-delegation';
 import {
   assertWorkspaceAuthoringReview,
   renewWorkspaceAuthoringState,
@@ -296,17 +299,6 @@ export async function decideTransition(input: {
     persisted = await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
       const locked = await acquireTransitionReviewLock(tx, input.projectId, input.transitionId);
-      if (
-        locked.membershipFound &&
-        input.authoritySelection === undefined &&
-        !locked.policyBindingFound &&
-        input.actor.kind !== 'human'
-      ) {
-        // Machine actors require an explicit binding; humans fall back to the
-        // unprotected policy. The project-parent lock keeps this observed
-        // absence sealed until the transaction finishes.
-        throw new TransitionReviewStaleError();
-      }
       const facts = await resolveReviewFacts(
         tx,
         input.projectId,
@@ -314,6 +306,20 @@ export async function decideTransition(input: {
         locked.policyBindingFound,
         input.outcome !== 'rejected'
       );
+      facts.refPolicyBinding = await delegatedRefPolicy(
+        tx,
+        input.projectId,
+        facts.graph.membership.refName,
+        input.actor,
+        facts.refPolicyBinding,
+        true,
+        'commit'
+      );
+      const delegationKey = delegatedActorKey(input.actor);
+      if (delegationKey && (await readAgentDelegation(tx, delegationKey, true))) {
+        if (!facts.refPolicyBinding) throw new TransitionReviewStaleError();
+        enforceDelegatedDraftAuthorship(facts.graph, input.actor);
+      }
       const selected =
         input.authoritySelection === undefined
           ? (() => {
@@ -683,7 +689,16 @@ export async function commitTransition(input: {
       ? null
       : (JSON.parse(graph.preparation.canonicalJson) as ProtocolValue);
   const isGeneratedProposal = isGeneratedProposalPreparation(preparationFacts);
-  const governingPolicy = refPolicyForActor(refPolicyBinding, input.actor);
+  const governingPolicy = refPolicyForActor(
+    await delegatedRefPolicy(
+      input.db,
+      input.projectId,
+      graph.membership.refName,
+      input.actor,
+      refPolicyBinding
+    ),
+    input.actor
+  );
   if (governingPolicy === null && isGeneratedProposal) throw new TransitionReviewStaleError();
   const applicablePolicy =
     governingPolicy === null
@@ -742,6 +757,36 @@ export async function commitTransition(input: {
   try {
     await (input.db as unknown as TxRunner).transaction(async (rawTx) => {
       const tx = rawTx as AnyDB;
+      const delegationKey = delegatedActorKey(input.actor);
+      if (delegationKey && (await readAgentDelegation(tx, delegationKey, true))) {
+        if (audit.decision.actor.kind === 'agent')
+          enforceDelegatedDraftAuthorship(graph, audit.decision.actor);
+        const { refName } = graph.membership;
+        await acquireTransitionPolicyBindingLock(tx, input.projectId, refName);
+        const current = await delegatedRefPolicy(
+          tx,
+          input.projectId,
+          refName,
+          input.actor,
+          await getTransitionPolicyBinding(tx, input.projectId, refName),
+          true,
+          'commit'
+        );
+        if (!current || audit.decision.predicate.policy.mode !== 'evaluated')
+          throw new TransitionReviewStaleError();
+        const applicable = resolveApplicableTransitionPolicy({
+          refPolicyBinding: current,
+          requestKind: graph.membership.requestKind,
+          preparationFacts,
+        });
+        if (
+          !sameTransitionPolicyResource(
+            applicable.resource,
+            audit.decision.predicate.policy.resource
+          )
+        )
+          throw new TransitionReviewStaleError();
+      }
       await persistTransitionCommitGraph(tx, {
         projectId: input.projectId,
         refName: graph.membership.refName,

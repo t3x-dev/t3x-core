@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import net from 'node:net';
@@ -38,6 +39,9 @@ if (isolatedMcp && (!authEnabled || process.env.DATABASE_URL || process.env.T3X_
   );
 }
 
+const oauthDelegation = isolatedMcp && process.env.T3X_E2E_MCP_PHASE === 'oauth-delegation';
+const mcpPort = process.env.T3X_E2E_MCP_PORT ?? '8317';
+let oauthWebDir;
 const apiPort = process.env.T3X_E2E_API_PORT ?? '8100';
 const webPort = process.env.T3X_E2E_WEB_PORT ?? '3100';
 const runnerPort = process.env.T3X_E2E_RUNNER_PORT ?? '8200';
@@ -85,6 +89,24 @@ const runtimeEnv = {
   WEBUI_URL: webUrl,
 };
 
+if (oauthDelegation) {
+  const callbackPort = process.env.T3X_E2E_MCP_CALLBACK_PORT ?? '38497';
+  const callback = `http://127.0.0.1:${callbackPort}/oauth/callback`;
+  Object.assign(runtimeEnv, {
+    T3X_MCP_OAUTH_ISSUER: webUrl,
+    T3X_MCP_RESOURCE_URL: `http://127.0.0.1:${mcpPort}/mcp`,
+    T3X_MCP_OAUTH_SECRET: randomBytes(32).toString('base64url'),
+    T3X_MCP_OAUTH_CLIENTS: JSON.stringify([
+      {
+        client_id: 't3x-qualification-chat',
+        client_name: 'Qualification Chat',
+        redirect_uris: [callback],
+      },
+    ]),
+    T3X_E2E_MCP_CALLBACK_URL: callback,
+  });
+}
+
 if (runtimeEnv.T3X_E2E_MCP_PHASE === 'repository-runs') {
   const webhookPort = process.env.T3X_E2E_WEBHOOK_PORT ?? '18267';
   runtimeEnv.N8N_WEBHOOK_URL = `http://127.0.0.1:${webhookPort}/webhook`;
@@ -126,13 +148,27 @@ try {
   await assertPortAvailable(Number(apiPort), 'API', 'T3X_E2E_API_PORT');
   await assertPortAvailable(Number(webPort), 'WebUI', 'T3X_E2E_WEB_PORT');
   await assertPortAvailable(Number(runnerPort), 'Runner', 'T3X_E2E_RUNNER_PORT');
+  if (oauthDelegation) {
+    await assertPortAvailable(Number(mcpPort), 'MCP', 'T3X_E2E_MCP_PORT');
+    await assertPortAvailable(
+      Number(new URL(runtimeEnv.T3X_E2E_MCP_CALLBACK_URL).port),
+      'OAuth client',
+      'T3X_E2E_MCP_CALLBACK_PORT'
+    );
+  }
   if (!runtimeEnv.DATABASE_URL) {
     await assertPortAvailable(Number(pgPort), 'embedded PostgreSQL', 'T3X_E2E_PG_PORT');
   }
 
   if (!skipBuild) {
     await runCommand('pnpm', ['build:api-server'], runtimeEnv);
-    await runCommand('pnpm', ['build:webui'], runtimeEnv);
+    if (oauthDelegation)
+      await runCommand(
+        'pnpm',
+        ['exec', 'turbo', 'run', 'build', '--filter=@t3x-dev/mcp', '--filter=@t3x-dev/runner'],
+        runtimeEnv
+      );
+    else await runCommand('pnpm', ['build:webui'], runtimeEnv);
   }
 
   if (runtimeEnv.DATABASE_URL) {
@@ -179,12 +215,61 @@ try {
       throw new Error('MCP qualification API did not require credentials.');
   }
 
-  const web = startLoggedProcess(
-    'webui',
-    'pnpm',
-    ['--filter', 't3x-webui', 'start', '--hostname', '127.0.0.1'],
-    { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
-  );
+  let web;
+  if (oauthDelegation) {
+    const mcp = startLoggedProcess('mcp', 'node', ['apps/mcp/dist/index.js'], {
+      ...runtimeEnv,
+      T3X_TRANSPORT: 'http',
+      T3X_API_URL: `${apiUrl}/api`,
+      T3X_MCP_BACKEND: 'api',
+      PORT: mcpPort,
+    });
+    children.push(mcp);
+    await waitForUrl(`http://127.0.0.1:${mcpPort}/health`, mcp, 90_000);
+    // A separate checkout of the Web sources isolates Next's generated types and build files
+    // from a running developer preview. The API, MCP, issuer and database are all local to this run.
+    const outputRoot = path.join(repoRoot, 'test-results');
+    await fsp.mkdir(outputRoot, { recursive: true });
+    oauthWebDir = await fsp.mkdtemp(path.join(outputRoot, 'oauth-web-'));
+    const webSource = path.join(repoRoot, 'apps/web');
+    for (const item of [
+      'src',
+      'public',
+      'package.json',
+      'tsconfig.json',
+      'next-env.d.ts',
+      'next.config.ts',
+      'postcss.config.mjs',
+    ]) {
+      await fsp.cp(path.join(webSource, item), path.join(oauthWebDir, item), { recursive: true });
+    }
+    await fsp.symlink(
+      path.join(webSource, 'node_modules'),
+      path.join(oauthWebDir, 'node_modules'),
+      'junction'
+    );
+    web = startLoggedProcess(
+      'webui',
+      'node',
+      [
+        path.join(webSource, 'node_modules/next/dist/bin/next'),
+        'dev',
+        oauthWebDir,
+        '--hostname',
+        '127.0.0.1',
+        '--port',
+        webPort,
+      ],
+      { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+    );
+  } else {
+    web = startLoggedProcess(
+      'webui',
+      'pnpm',
+      ['--filter', 't3x-webui', 'start', '--hostname', '127.0.0.1'],
+      { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+    );
+  }
   children.push(web);
   await waitForUrl(webUrl, web, 90_000);
 
@@ -201,6 +286,7 @@ try {
 } finally {
   try {
     await stopChildren();
+    if (oauthWebDir) await fsp.rm(oauthWebDir, { recursive: true, force: true });
     if (ownsDataDir && !keepData) {
       await fsp.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       dataRetained = false;

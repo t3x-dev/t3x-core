@@ -38,6 +38,8 @@ const approvedPublicRoutes = new Set([
   'deployment-capabilities.openapi.ts::GET /v1/deployment/capabilities',
   'health.openapi.ts::GET /health',
   'llm.openapi.ts::GET /v1/llm/models',
+  'mcp-delegations.openapi.ts::GET /mcp-oauth/metadata',
+  'mcp-delegations.openapi.ts::POST /mcp-oauth/token',
   'namespaces.openapi.ts::GET /v1/namespaces/{slug}',
   'share.openapi.ts::GET /v1/share/{token}',
   'ws.ts::GET /ws',

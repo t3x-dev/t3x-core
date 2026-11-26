@@ -38,6 +38,7 @@ export async function projectAccessMiddleware(c: Context<AppEnv>, next: Next) {
     c.set('repositoryReadAccess', {
       projectId,
       canEdit: access.canEdit === true,
+      canManageAgentAccess: access.canManageAgentAccess === true,
       project: access.project,
     });
     return next();

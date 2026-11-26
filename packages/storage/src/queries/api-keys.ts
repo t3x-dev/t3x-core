@@ -59,6 +59,8 @@ export interface CreateApiKeyInput {
   expiresAt?: Date;
   /** The raw key value (e.g. "t3xk_...") — caller generates this */
   keyValue: string;
+  machineGrantRole?: 'viewer' | 'editor';
+  repositoryDelegation?: true;
 }
 
 // ============================================================
@@ -66,8 +68,8 @@ export interface CreateApiKeyInput {
 // ============================================================
 
 /** Generate an ak_ prefixed ID */
-function generateApiKeyId(): string {
-  return `${ID_PREFIX}${randomUUID().replace(/-/g, '').slice(0, ID_RANDOM_LENGTH)}`;
+function generateApiKeyId(repositoryDelegation?: boolean): string {
+  return `${repositoryDelegation ? 'ak_dlg_' : ID_PREFIX}${randomUUID().replace(/-/g, '').slice(0, ID_RANDOM_LENGTH)}`;
 }
 
 /** SHA-256 hash a raw key value */
@@ -101,7 +103,7 @@ function parseStoredTransitionScopes(value: unknown): TransitionScope[] {
  * @returns The created ApiKey record (does NOT include the raw key value)
  */
 export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise<ApiKey> {
-  const id = generateApiKeyId();
+  const id = generateApiKeyId(input.repositoryDelegation);
   const keyHash = hashKeyValue(input.keyValue);
   const keyPrefix = input.keyValue.slice(0, 8);
   const now = new Date();
@@ -168,7 +170,7 @@ export async function createApiKey(db: AnyDB, input: CreateApiKeyInput): Promise
         namespaceId: project.namespaceId,
         principalKind,
         principalId: id,
-        role: 'editor',
+        role: input.machineGrantRole ?? 'editor',
         status: 'active',
       });
     }

@@ -6,6 +6,7 @@ import {
   type TransitionPolicyBinding,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
+import { delegatedRefPolicy } from './repository-agent-delegation';
 import { getRequestPrincipal } from './request-principal';
 
 export type TrustedTransitionPrincipal = {
@@ -139,7 +140,13 @@ export async function resolveTransitionControlPlane(input: {
   policyBinding: TransitionPolicyBinding | null;
 }> {
   const principal = requireTransitionAuthority(input);
-  const policyBinding = await getTransitionPolicyBinding(input.db, input.projectId, input.refName);
+  const policyBinding = await delegatedRefPolicy(
+    input.db,
+    input.projectId,
+    input.refName,
+    principal.actor,
+    await getTransitionPolicyBinding(input.db, input.projectId, input.refName)
+  );
   if (
     principal.actor.kind !== 'human' &&
     POLICY_BOUND_SCOPES.has(input.scope) &&
@@ -183,7 +190,13 @@ export async function resolveCompatibilityTransitionAuthority(input: {
   }
 
   const policyBinding = input.refName
-    ? await getTransitionPolicyBinding(input.db, input.projectId, input.refName)
+    ? await delegatedRefPolicy(
+        input.db,
+        input.projectId,
+        input.refName,
+        principal.actor,
+        await getTransitionPolicyBinding(input.db, input.projectId, input.refName)
+      )
     : null;
   if (
     principal.actor.kind !== 'human' &&

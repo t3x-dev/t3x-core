@@ -22,7 +22,7 @@ The current MCP server exposes three protocol surfaces:
 ### Tools
 
 In stdio mode, the default toolset is `core`. Enable `advanced` and `transition`
-through `T3X_TOOLSETS`. Streamable HTTP uses an explicit
+through `T3X_TOOLSETS`. Streamable HTTP uses a
 [business capability allowlist](#business-capability-configuration).
 
 Core:
@@ -110,7 +110,9 @@ Statement set, and ref head are all resolved or checked at the API boundary.
 ### Business capability configuration
 
 Set `T3X_MCP_CAPABILITIES` to choose an allowlist on the authenticated API
-backend. Streamable HTTP requires it. In stdio mode it takes precedence over
+backend. An explicit list takes precedence over the managed repository profile
+on an OAuth-enabled HTTP deployment. Bearer-only HTTP requires an explicit
+list. In stdio mode it takes precedence over
 `T3X_TOOLSETS`. The legacy toolsets, resource aliases, and prompts remain
 available in stdio mode when the capability variable is unset.
 
@@ -464,8 +466,8 @@ CLI and WebUI.
 - `stdio` (default) runs as a subprocess of a local MCP client. It supports
   both the `storage` and `api` backends.
 - `http` runs as a standalone service and accepts Streamable HTTP requests at
-  `/mcp`. It requires the authenticated `api` backend and an explicit business
-  capability allowlist.
+  `/mcp`. It requires the authenticated `api` backend. The operator can select
+  an explicit business capability allowlist or enable the managed OAuth profile.
 
 ### Backends
 
@@ -511,14 +513,55 @@ Connect a Streamable HTTP client to `http://127.0.0.1:3001/mcp` and configure
 it to send `Authorization: Bearer <token>` on every MCP request. Issue the
 token from the Web Settings → API Tokens page on the same T3X deployment. For
 a single repository, use a project-bound Agent token with the required scopes.
-HTTP mode uses pre-issued T3X tokens. Clients that require OAuth discovery need
-a separate integration.
 
 The server validates each request's credential with the T3X API and uses that
-credential for the operation. Tool availability is set by
-`T3X_MCP_CAPABILITIES`, and the API enforces the caller's access. The endpoint
+credential for the operation. The API enforces the caller's access. The endpoint
 uses stateless JSON responses over `POST`, with no MCP session ID or SSE stream.
 Authenticated `GET` and `DELETE` requests to `/mcp` receive `405`. [Streamable HTTP specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http)
+
+#### Repository delegation with OAuth
+
+Configure these values on both the API and the MCP service. The Web server
+connects to that API through `T3X_API_URL`.
+
+| Variable | Value |
+| --- | --- |
+| `T3X_MCP_RESOURCE_URL` | Canonical MCP resource, such as `https://mcp.example.com/mcp`. Use the same URL in the client and in `T3X_MCP_PUBLIC_URL` if set. |
+| `T3X_MCP_OAUTH_ISSUER` | Public Web origin serving the authorization page and discovery, such as `https://t3x.example.com`. HTTP loopback is supported for local development. |
+| `T3X_MCP_OAUTH_SECRET` | A shared 32-byte random key encoded as base64url, stored in the deployment secret manager. Rotating the key invalidates previously issued OAuth access tokens. |
+
+On the API, register the host in `T3X_MCP_OAUTH_CLIENTS`. Each JSON array
+entry supplies its public client ID, display name and exact accepted callback
+URLs. For example, a host with the indicated HTTPS callback can register
+`[{"client_id":"editorial-agent","client_name":"Editorial Agent","redirect_uris":["https://agent.example.com/oauth/callback"]}]`.
+Use the callback supplied by the actual host.
+
+Connect the registered client to the canonical MCP URL. A request without a
+credential returns a Bearer challenge pointing to
+`/.well-known/oauth-protected-resource/mcp`. This document identifies the Web
+issuer, the resource audience and the enabled tool groups in
+`t3x_capabilities`. The host discovers the authorization endpoint and starts
+an authorization code flow with PKCE. After confirmation it exchanges the code
+for an MCP access token and resumes its pending task. MCP checks the token's
+audience and expiry, then authenticates its repository credential against the
+configured API on every request. Existing pre-issued Bearer tokens continue to
+use their existing credential path. [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+
+A chat host keeps its conversation and pending instruction under its OAuth
+`state`. It can add `repository=owner/name` and `branch=main` to the
+authorization request when the task identifies a target. Omit `repository`
+to let the person choose in T3X. An optional `task` field shows a short
+description on consent. Keep the full conversation in the host. On return,
+the host validates the issuer and state, completes PKCE and calls
+`t3x_context` to confirm the granted project before resuming that task.
+Reuse a sufficient unexpired grant for later requests to the same repository.
+
+With OAuth enabled, leaving `T3X_MCP_CAPABILITIES` unset selects the managed
+profile for reading repositories, editing Drafts, working with Sources,
+checking changes, preparing fixed Reviews, deciding eligible changes and
+committing. Overrides and deployments require their own operator opt-in.
+A deployment that explicitly sets `T3X_MCP_CAPABILITIES=read-only` continues
+to serve reading tools only.
 
 For hosted setup, see [MCP service deployment](../../docs/deployment.md#mcp-service).
 
@@ -527,7 +570,7 @@ For hosted setup, see [MCP service deployment](../../docs/deployment.md#mcp-serv
 | Variable | Description | Default |
 | --- | --- | --- |
 | `T3X_TOOLSETS` | Comma-separated toolsets to enable: `core`, `advanced`, `transition` | `core` |
-| `T3X_MCP_CAPABILITIES` | Explicit comma-separated business capabilities for the authenticated API backend. Required in HTTP mode. | Unset |
+| `T3X_MCP_CAPABILITIES` | Comma-separated business capabilities. Required in Bearer-only HTTP mode. | Managed repository profile with HTTP OAuth |
 | `T3X_TRANSPORT` | `stdio` or `http` (Streamable HTTP) | `stdio` |
 | `T3X_MCP_BACKEND` | Backend mode: `storage` or `api` | `storage` |
 | `T3X_API_URL` | Base API URL for `api` backend. Required explicitly in HTTP mode. | `http://localhost:8000/api` in stdio mode |

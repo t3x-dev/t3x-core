@@ -38,7 +38,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { isCredentialKind } from '@t3x-dev/core';
-import { findConversationById, touchLastUsed } from '@t3x-dev/storage';
+import { findConversationById, readAgentDelegation, touchLastUsed } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { logAuthorizationDenial } from '../lib/authorization-denial-audit';
@@ -47,6 +47,7 @@ import { createError } from '../lib/errors';
 import type { RealtimeEvent } from '../lib/event-bus';
 import { replayEventsSince } from '../lib/event-replay';
 import { evaluateProjectAccess } from '../lib/project-access';
+import { delegatedActorKey, isRepositoryDelegationKey } from '../lib/repository-agent-delegation';
 import { WEB_SESSION_TOKEN_PREFIX } from '../lib/request-principal';
 import { canReceiveRealtimeEvent, type RoomConnection, roomManager } from '../lib/room-manager';
 import { type BearerTokenVerifier, verifyBearerToken } from '../middleware/auth';
@@ -157,6 +158,17 @@ export function createWsRoute(
         if (!principal) {
           return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
         }
+        // A long-lived realtime subscription cannot recheck a repository delegation on each event.
+        // Check after the verifier so hosted and OSS authentication follow the same boundary.
+        const delegatedKey = delegatedActorKey(principal.actor);
+        if (
+          delegatedKey &&
+          (isRepositoryDelegationKey(delegatedKey) || (await readAgentDelegation(db, delegatedKey)))
+        )
+          return c.json(
+            createError('FORBIDDEN', 'This delegation supports HTTP requests only'),
+            403
+          );
         const identityOverride = RESERVED_IDENTITY_QUERY_FIELDS.find(
           (field) => c.req.query(field) !== undefined
         );

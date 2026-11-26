@@ -170,6 +170,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
     getTransitionProposalPreparation: storageMock.getTransitionProposalPreparation,
     getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
+    readAgentDelegation: vi.fn().mockResolvedValue(null),
     getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
@@ -453,7 +454,7 @@ describe('Workspace routes', () => {
         body: JSON.stringify({ content: { trees: [], relations: [] } }),
       }
     );
-    expect(reviewed.status).toBe(200);
+    expect(reviewed.status, await reviewed.clone().text()).toBe(200);
     expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

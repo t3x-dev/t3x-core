@@ -14,6 +14,7 @@ import type { RateLimitStore } from './middleware/rate-limit';
 export type AppEnv = {
   Variables: {
     apiKey?: ApiKey;
+    managedRepositoryDelegation?: true;
     /** Active browser session set by auth middleware. */
     session?: WebSession;
     /** Server-derived identity shared by every authenticated ingress. */
@@ -28,7 +29,12 @@ export type AppEnv = {
     principalRateLimit?: { keyId: string; result: ConsumeRateLimitResult };
     /** Host-owned policy around project admissions into a namespace. */
     projectLifecyclePolicy?: ProjectLifecyclePolicy;
-    repositoryReadAccess?: { projectId: string; canEdit?: boolean; project?: Project };
+    repositoryReadAccess?: {
+      projectId: string;
+      canEdit?: boolean;
+      canManageAgentAccess?: boolean;
+      project?: Project;
+    };
     pendingSchemaWorkspace?: Draft;
   };
 };

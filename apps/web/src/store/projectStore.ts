@@ -18,6 +18,7 @@ import type { NotifyCallback } from './shared';
 export interface ProjectSummary {
   repositoryProfile?: RepositoryProfile;
   canEdit?: boolean;
+  canManageAgentAccess?: boolean;
   canDelete?: boolean;
   namespace?: string | null;
   canonical_path?: string | null;
@@ -95,6 +96,7 @@ const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
 export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   repositoryProfile: project.repository_profile,
   canEdit: project.can_edit,
+  canManageAgentAccess: project.can_manage_agent_access,
   canDelete: project.can_delete,
   id: project.project_id,
   namespace: project.namespace,

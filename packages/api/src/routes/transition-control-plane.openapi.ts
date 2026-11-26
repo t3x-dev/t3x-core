@@ -19,6 +19,7 @@ import { canonicalizeProtocolValue, TransitionProtocolError } from '@t3x-dev/tra
 import type { Context } from 'hono';
 import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
+import { DelegatedDraftHumanDecisionRequired } from '../lib/delegated-draft-authorship';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   createInferenceRuntime,
@@ -463,6 +464,7 @@ function controlPlaneError(c: Context, error: unknown) {
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError ||
     error instanceof GenerationHumanDecisionRequiredError ||
+    error instanceof DelegatedDraftHumanDecisionRequired ||
     error instanceof TransitionAutomatedOverrideDeniedError ||
     error instanceof DecisionNotAuthorizedError
   ) {

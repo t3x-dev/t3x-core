@@ -29,7 +29,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
-  if (isPublicPath(pathname)) {
+  if (pathname === '/.well-known/oauth-authorization-server' || isPublicPath(pathname)) {
     return NextResponse.next();
   }
 

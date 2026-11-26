@@ -14,6 +14,46 @@ import type { ActorRef } from '@t3x-dev/transition';
 import { and, eq } from 'drizzle-orm';
 import { initializeWorkspaceAuthoring } from './workspace-authoring';
 import { readCommittedSchemaBinding, unboundWorkspaceSchema } from './workspace-schema-review';
+import { resolveWorkspaceYSchema } from './workspace-yschema';
+
+async function openDraftForBranch(
+  db: AnyDB,
+  projectId: string,
+  owner: WorkspaceOwner,
+  ref: string
+) {
+  const drafts = await listWorkspaceDraftsForOwner(db, projectId, owner);
+  return drafts.find(
+    (draft) => draft.target_branch === ref && draft.workspace_state?.status !== 'committed'
+  );
+}
+
+/** Inspect the same Workspace and pinned Schema that the Agent will open, without initializing a Draft. */
+export async function contentSchemaReadiness(
+  db: AnyDB,
+  projectId: string,
+  owner: WorkspaceOwner,
+  ref: string,
+  head: string | null
+) {
+  const draft = await openDraftForBranch(db, projectId, owner, ref);
+  if (draft?.workspace_state) {
+    const schema = await resolveWorkspaceYSchema(draft.workspace_state, db, projectId);
+    if (schema.schema) return head ? 'ready' : 'first-schema';
+    if (
+      Array.isArray(draft.workspace_state.schemaBindings) &&
+      draft.workspace_state.schemaBindings.length
+    )
+      return 'unresolved';
+  }
+  if (!head) return 'unbound';
+  const binding = await readCommittedSchemaBinding(db, projectId, head);
+  return binding?.status === 'bound'
+    ? 'ready'
+    : binding?.status === 'unbound'
+      ? 'unbound'
+      : 'unresolved';
+}
 
 export async function openWorkspace(
   db: AnyDB,
@@ -44,9 +84,7 @@ export async function openWorkspace(
     const head = await getTransitionRefHead(tx, { projectId, refName: ref });
     if (head.head !== expectedHead) throw new TransitionHeadConflictError(expectedHead, head.head);
 
-    const existing = (await listWorkspaceDraftsForOwner(tx, projectId, owner)).find(
-      (draft) => draft.target_branch === ref && draft.workspace_state?.status !== 'committed'
-    );
+    const existing = await openDraftForBranch(tx, projectId, owner, ref);
     if (existing?.workspace_id) {
       const basis = existing.workspace_state?.authoringBasis as
         | { refHead?: string | null }

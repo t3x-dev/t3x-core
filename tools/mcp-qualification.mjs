@@ -11,6 +11,13 @@ const webCore = 'Web-issued Agent credential and trusted Web confirmation';
 
 export const phases = [
   [
+    'oauth-delegation',
+    'oauth-delegation',
+    apiCore,
+    null,
+    'registered loopback OAuth client and HTTP MCP server',
+  ],
+  [
     'write-recovery',
     'write-recovery',
     ['context', 'sources'],
@@ -81,11 +88,13 @@ export const phases = [
   capabilities,
   ...(scenario ? { scenario } : {}),
   credentials:
-    name === 'web' || name === 'journey'
-      ? 'Web-issued Agent fixture and signed-in Web user'
-      : ['schema-authoring', 'workspace-candidate'].includes(name)
-        ? 'fixture API credentials and signed-in Web user'
-        : 'fixture API credentials',
+    name === 'oauth-delegation'
+      ? 'Web consent and PKCE-bound repository credential'
+      : name === 'web' || name === 'journey'
+        ? 'Web-issued Agent fixture and signed-in Web user'
+        : ['schema-authoring', 'workspace-candidate'].includes(name)
+          ? 'fixture API credentials and signed-in Web user'
+          : 'fixture API credentials',
   dependencies: dependency ?? 'isolated local stack and test data',
 }));
 
@@ -110,6 +119,7 @@ export function isolatedEnv(source) {
     ...Object.fromEntries(
       inherited.filter((key) => source[key] !== undefined).map((key) => [key, source[key]])
     ),
+    ...(source.T3X_E2E_CHROME_CHANNEL === 'chrome' ? { T3X_E2E_CHROME_CHANNEL: 'chrome' } : {}),
     T3X_E2E_MCP_ISOLATED: '1',
     T3X_API_URL: 'http://127.0.0.1:8100',
     NEXT_PUBLIC_AUTH_DISABLED: 'false',
@@ -217,7 +227,12 @@ async function qualify(selected) {
       'build',
       '--filter=@t3x-dev/mcp',
       '--filter=t3x-api-server',
-      '--filter=t3x-webui',
+      ...(selected.some((phase) => phase.name === 'oauth-delegation')
+        ? ['--filter=@t3x-dev/runner']
+        : []),
+      ...(selected.some((phase) => phase.name !== 'oauth-delegation')
+        ? ['--filter=t3x-webui']
+        : []),
     ],
     env
   ).catch(() => ({ code: 1 }));
