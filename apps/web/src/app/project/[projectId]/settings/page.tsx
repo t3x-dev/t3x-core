@@ -4,6 +4,8 @@ import { ArrowLeft, Bot, Eye, GitBranch, Loader2, Sparkles, Users } from 'lucide
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { LoadingSpinner } from '@/components/layout/ApiStatus';
+import { AgentAccessLink } from '@/components/project/agent-access/AgentAccessLink';
 import { DeferredSettingsSection } from '@/components/project/settings/DeferredSettingsSection';
 import { ProjectDangerZone } from '@/components/project/settings/ProjectDangerZone';
 import { ProjectExportSettings } from '@/components/project/settings/ProjectExportSettings';
@@ -17,6 +19,8 @@ import {
   getCanonicalRepositoryPath,
   getDeletedRepositoriesPath,
   getProjectIdRepoPath,
+  repositoryAgentAccessHref,
+  repositoryBranchHref,
 } from '@/domain/project/repoPath';
 import { useRepositoryRouteParams as useParams } from '@/hooks/projects/repositoryRouteContext';
 import { projectDescription, useProjectSettings } from '@/hooks/projects/useProjectSettings';
@@ -27,6 +31,12 @@ import { ensureSettingsNavigationTiming, markNavigationTiming } from '@/utils/na
 import { readRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 
 if (typeof window !== 'undefined') performance.mark?.('t3x:settings:module');
+
+const AgentAccessDemo = lazy(() =>
+  import('@/components/project/agent-access/AgentAccessDemo').then((m) => ({
+    default: m.AgentAccessDemo,
+  }))
+);
 
 const ProjectVisibilitySettings = lazy(() =>
   import('@/components/project/ProjectVisibilitySettings').then((m) => ({
@@ -107,6 +117,30 @@ function ProjectSettingsPageContent() {
     return () => cancelAnimationFrame(frame);
   }, [project]);
 
+  if (process.env.NODE_ENV === 'development' && searchParams.get('view') === 'agent-access') {
+    if (settings.loading) return <LoadingSpinner message="Loading repository access…" />;
+    if (project?.can_edit !== true) {
+      return (
+        <div className="mx-auto grid max-w-lg gap-3 p-8 text-sm">
+          <h1 className="text-lg font-semibold">Agent access unavailable</h1>
+          <p>{settings.error ?? 'Opening Agent access requires edit access to this repository.'}</p>
+          <Link className="underline" href={repositoryPath}>
+            Back to repository
+          </Link>
+        </div>
+      );
+    }
+    const branch = searchParams.get('targetBranch')?.trim() || 'main';
+    return (
+      <AgentAccessDemo
+        key={`${projectId}:${branch}`}
+        repository={project.namespace ? `${project.namespace}/${project.name}` : project.name}
+        branch={branch}
+        backHref={repositoryBranchHref(repositoryPath, '', branch)}
+      />
+    );
+  }
+
   return (
     <div className={`${palette.scope} ${generalStyles.layout}`}>
       <aside className={generalStyles.sidebar}>
@@ -128,7 +162,12 @@ function ProjectSettingsPageContent() {
               {project.name}
             </span>
           ) : null}
-          <h1>Repository settings</h1>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1>Repository settings</h1>
+            {project?.can_edit && (
+              <AgentAccessLink href={repositoryAgentAccessHref(repositoryPath)} />
+            )}
+          </div>
           <p>Manage details, access, and defaults for this repository.</p>
         </header>
         {settings.loading ? (

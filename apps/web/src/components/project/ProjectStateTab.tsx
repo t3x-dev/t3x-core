@@ -64,6 +64,7 @@ import {
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
+  repositoryAgentAccessHref,
   repositoryBranch,
   repositoryBranchHref,
   workspaceLocation,
@@ -865,6 +866,10 @@ export function ProjectStateTab({
                 headCommitHash={branchHeads[inspectedBranch] ?? null}
                 sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
+                agentAccessHref={repositoryAgentAccessHref(
+                  repositoryPath ?? getProjectIdRepoPath(projectId),
+                  inspectedBranch
+                )}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}

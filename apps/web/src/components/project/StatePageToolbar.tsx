@@ -3,6 +3,7 @@
 import type { RepositoryIcon } from '@t3x-dev/api-client';
 import { Eye, GitCommit, History, Pencil, TableProperties } from 'lucide-react';
 import Link from 'next/link';
+import { AgentAccessLink } from '@/components/project/agent-access/AgentAccessLink';
 import { StateExportButton } from '@/components/shared/StateExportButton';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { shortHash } from '@/domain/format/formatters';
@@ -24,6 +25,7 @@ export function StatePageToolbar({
   headCommitHash,
   sourceCommitHash,
   historyHref,
+  agentAccessHref,
   onBranchChange,
   onCreateBranch,
   workspaceHref,
@@ -40,6 +42,7 @@ export function StatePageToolbar({
   headCommitHash: string | null;
   sourceCommitHash?: string;
   historyHref: string;
+  agentAccessHref: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (name: string, fromBranch: string) => Promise<void>;
   workspaceHref: string;
@@ -83,6 +86,7 @@ export function StatePageToolbar({
             <Link href={historical ? commitHref : historyHref}>
               <History aria-hidden="true" /> History
             </Link>
+            {canProposeChanges && <AgentAccessLink href={agentAccessHref} />}
             {canProposeChanges ? (
               <Link href={workspaceHref} className={overviewStyles.primary}>
                 <Pencil aria-hidden="true" />
