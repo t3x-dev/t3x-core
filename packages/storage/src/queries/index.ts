@@ -150,6 +150,7 @@ export {
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
+  findSchemaStartupWorkspace,
   findWorkspaceDraft,
   findWorkspaceDraftForOwner,
   findWorkspaceDraftOwner,

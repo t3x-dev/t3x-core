@@ -10,6 +10,7 @@ const detailPath = /^\/api\/v1\/projects\/[^/]+$/;
 const pendingPath = /^\/(?:api\/)?v1\/projects\/[^/]+\/schema-studio\/pending\/[^/]+$/;
 const schemaPreviewPath = /^\/(?:api\/)?v1\/projects\/[^/]+\/schema-studio\/preview$/;
 const repositoryAddressPath = /^\/api\/v1\/repositories\/[^/]+\/[^/]+$/;
+const schemaStartupPath = /^\/api\/v1\/repositories\/[^/]+\/[^/]+\/schema-startup$/;
 const requests = new WeakMap<
   Context,
   {
@@ -40,6 +41,7 @@ export async function repositoryReadTimingMiddleware(c: Context, next: Next) {
     c.req.method === 'GET' &&
     (listPaths.has(c.req.path) ||
       repositoryAddressPath.test(c.req.path) ||
+      schemaStartupPath.test(c.req.path) ||
       isProjectDetailRead(c) ||
       isPendingSchemaRead(c));
   if (!timedGet && !isSchemaPreviewRead(c)) return next();

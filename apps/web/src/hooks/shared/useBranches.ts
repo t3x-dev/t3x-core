@@ -26,12 +26,17 @@ export interface UseBranchesResult {
   branchHeads: Readonly<Record<string, string | null>>;
   branches: string[];
   loading: boolean;
+  hasFullList?: boolean;
   error: string | null;
   refresh: () => Promise<boolean>;
   create: (name: string, parentBranch: string, headCommitHash?: string) => Promise<Branch>;
 }
 
-export function useBranches(projectId: string | null, enabled: boolean): UseBranchesResult {
+export function useBranches(
+  projectId: string | null,
+  enabled: boolean,
+  initialBranch?: { name: string; headCommitHash: string | null }
+): UseBranchesResult {
   const scope = useMemo(
     () => ({ active: true, read: 0, completedRead: 0, creates: new Map<string, object>() }),
     [projectId, enabled]
@@ -52,8 +57,14 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
     const isCurrent = () => scope.active && activeScope.current === scope && request === scope.read;
     setSnapshot((current) => ({
       scope,
-      branches: current?.scope === scope ? current.branches : [],
-      branchHeads: current?.scope === scope ? current.branchHeads : {},
+      branches:
+        current?.scope === scope ? current.branches : initialBranch ? [initialBranch.name] : [],
+      branchHeads:
+        current?.scope === scope
+          ? current.branchHeads
+          : initialBranch
+            ? { [initialBranch.name]: initialBranch.headCommitHash }
+            : {},
       loading: true,
       error: current?.scope === scope ? current.error : null,
     }));
@@ -83,16 +94,16 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
         }));
       return false;
     }
-  }, [projectId, enabled, scope]);
+  }, [projectId, enabled, initialBranch, scope]);
 
   useEffect(() => {
     scope.active = true;
-    void refresh();
+    if (!initialBranch) void refresh();
     return () => {
       scope.active = false;
       ++scope.read;
     };
-  }, [refresh, scope]);
+  }, [initialBranch, refresh, scope]);
 
   const create = useCallback(
     async (name: string, parentBranch: string, headCommitHash?: string) => {
@@ -143,9 +154,12 @@ export function useBranches(projectId: string | null, enabled: boolean): UseBran
 
   const current = enabled && projectId && snapshot?.scope === scope ? snapshot : undefined;
   return {
-    branchHeads: current?.branchHeads ?? {},
-    branches: current?.branches ?? [],
-    loading: Boolean(enabled && projectId && (current?.loading ?? true)),
+    branchHeads:
+      current?.branchHeads ??
+      (initialBranch ? { [initialBranch.name]: initialBranch.headCommitHash } : {}),
+    branches: current?.branches ?? (initialBranch ? [initialBranch.name] : []),
+    loading: Boolean(enabled && projectId && (current?.loading ?? !initialBranch)),
+    hasFullList: scope.completedRead > 0,
     error: current?.error ?? null,
     refresh,
     create,

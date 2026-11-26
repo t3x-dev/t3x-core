@@ -25,7 +25,8 @@ export interface UseProjectWorkspacesResult {
 
 export function useProjectWorkspaces(
   projectId: string | null | undefined,
-  enabled = true
+  enabled = true,
+  initialWorkspaces?: WorkspaceCandidate[]
 ): UseProjectWorkspacesResult {
   const userId = useSessionUserId();
   const key = JSON.stringify([userId, projectId, enabled]);
@@ -51,7 +52,7 @@ export function useProjectWorkspaces(
         mounted.current && activeKey.current === key && token === request.current;
       setSnapshot((current) => ({
         key,
-        workspaces: current?.key === key ? current.workspaces : [],
+        workspaces: current?.key === key ? current.workspaces : (initialWorkspaces ?? []),
         loading: showLoading || (current?.key === key ? current.loading : true),
         error: null,
       }));
@@ -62,7 +63,7 @@ export function useProjectWorkspaces(
         if (isCurrent())
           setSnapshot((current) => ({
             key,
-            workspaces: current?.key === key ? current.workspaces : [],
+            workspaces: current?.key === key ? current.workspaces : (initialWorkspaces ?? []),
             loading: false,
             error: formatUserFacingError(err, 'Failed to load workspaces.'),
           }));
@@ -70,7 +71,7 @@ export function useProjectWorkspaces(
         if (isCurrent()) lastRead.current = { key, completedAt: Date.now() };
       }
     },
-    [enabled, key, projectId]
+    [enabled, initialWorkspaces, key, projectId]
   );
 
   const refresh = useCallback(() => load(true), [load]);
@@ -86,13 +87,13 @@ export function useProjectWorkspaces(
 
   useEffect(() => {
     mounted.current = true;
-    if (available) void refresh();
+    if (available && !initialWorkspaces) void refresh();
     else setSnapshot(undefined);
     return () => {
       mounted.current = false;
       ++request.current;
     };
-  }, [available, refresh]);
+  }, [available, initialWorkspaces, refresh]);
 
   useEffect(() => {
     if (!projectId || !enabled) return;
@@ -184,8 +185,8 @@ export function useProjectWorkspaces(
 
   const current = available && snapshot?.key === key ? snapshot : undefined;
   return {
-    workspaces: current?.workspaces ?? [],
-    loading: available && (current?.loading ?? true),
+    workspaces: current?.workspaces ?? initialWorkspaces ?? [],
+    loading: available && (current?.loading ?? !initialWorkspaces),
     error: current?.error ?? null,
     refresh,
     revalidate,

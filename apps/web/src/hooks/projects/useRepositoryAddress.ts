@@ -15,7 +15,8 @@ export function useRepositoryAddress(
   owner: string,
   name: string,
   enabled: boolean,
-  earlyAddress?: Promise<RepositoryAddress>
+  earlyAddress?: Promise<RepositoryAddress>,
+  initialAddress?: RepositoryAddress
 ) {
   const key = JSON.stringify([owner, name]);
   const earlyAddressRef = useRef(earlyAddress);
@@ -40,7 +41,7 @@ export function useRepositoryAddress(
   }, []);
   useEffect(() => {
     setLookup(null);
-    if (!enabled) return;
+    if (!enabled || (initialAddress && attempt === 0)) return;
     let cancelled = false;
     // The layout may consume the handoff after mount. Keep its in-flight lookup
     // for this route, and always make a fresh request on manual invalidation.
@@ -56,9 +57,15 @@ export function useRepositoryAddress(
     return () => {
       cancelled = true;
     };
-  }, [key, owner, name, enabled, attempt]);
+  }, [key, owner, name, enabled, attempt, initialAddress]);
   return {
-    current: enabled && lookup?.key === key ? lookup : null,
+    current: !enabled
+      ? null
+      : lookup?.key === key
+        ? lookup
+        : attempt === 0 && initialAddress
+          ? { key, address: initialAddress }
+          : null,
     retry: () => setAttempt((value) => value + 1),
   };
 }

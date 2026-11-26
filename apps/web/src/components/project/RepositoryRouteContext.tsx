@@ -1,5 +1,6 @@
 'use client';
 
+import type { RepositorySchemaStartup } from '@t3x-dev/api-client';
 import { useParams } from 'next/navigation';
 import {
   createContext,
@@ -30,6 +31,7 @@ import {
   type WorkspaceActivitySnapshot,
 } from '@/hooks/workspaces/workspaceActivityCache';
 import type { DirectoryStateEntry } from '@/store/projectStore';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export const RepositoryAddressContext = createContext<
   ReturnType<typeof useRepositoryAddress> & { directoryStateEntry?: DirectoryStateEntry }
@@ -65,6 +67,8 @@ const RepositoryViewDataContext = createContext<{
   projectId: string;
   branches: UseBranchesResult;
   workspaces: UseProjectWorkspacesResult;
+  initialSchema?: RepositorySchemaStartup;
+  loadSchemaInventory?: () => void;
   prefetchSchema: (branch?: string | null, workspaceId?: string | null) => void;
 } | null>(null);
 
@@ -74,12 +78,14 @@ export function RepositoryViewData({
   projectId,
   schemaBranch,
   schemaWorkspaceId,
+  initialSchema,
 }: {
   active: boolean;
   children: ReactNode;
   projectId: string | null;
   schemaBranch?: string;
   schemaWorkspaceId?: string;
+  initialSchema?: RepositorySchemaStartup;
 }) {
   const userId = useSessionUserId();
   const [retainedProjectId, setRetainedProjectId] = useState<string | null>(null);
@@ -95,11 +101,32 @@ export function RepositoryViewData({
     () => (projectId ? createStudioPreviewCache() : null),
     [projectId]
   );
-  const branches = useBranches(projectId, enabled);
-  const workspaces = useProjectWorkspaces(projectId, enabled);
+  const initialTarget = initialSchema?.workspace as WorkspaceCandidate | null | undefined;
+  const initialWorkspaces = useMemo(
+    () => (initialTarget ? [initialTarget] : undefined),
+    [initialTarget]
+  );
+  const branches = useBranches(
+    projectId,
+    enabled,
+    initialTarget ? (initialSchema?.branch ?? undefined) : undefined
+  );
+  const workspaces = useProjectWorkspaces(projectId, enabled, initialWorkspaces);
+  const loadSchemaInventory = initialTarget
+    ? () => {
+        if (!branches.hasFullList && !branches.loading) void branches.refresh();
+        if (workspaces.workspaces === initialWorkspaces && !workspaces.loading)
+          void workspaces.refresh();
+      }
+    : undefined;
   const prefetchSchema = useCallback(
     (branch?: string | null, workspaceId?: string | null) => {
       if (!studioPreviewCache || !projectId || workspaces.error || !(branch || workspaceId)) return;
+      if (
+        initialTarget &&
+        (branch === initialTarget.targetBranch || workspaceId === initialTarget.id)
+      )
+        return;
       const targetId = resolveStudioWorkspaceId(workspaces.workspaces, workspaceId ?? '', branch);
       const target = workspaces.workspaces.find(({ id }) => id === targetId);
       if (
@@ -130,7 +157,7 @@ export function RepositoryViewData({
         );
       }
     },
-    [projectId, studioPreviewCache, userId, workspaces.error, workspaces.workspaces]
+    [projectId, studioPreviewCache, initialTarget, userId, workspaces.error, workspaces.workspaces]
   );
   useEffect(() => {
     prefetchSchema(schemaBranch, schemaWorkspaceId);
@@ -168,7 +195,11 @@ export function RepositoryViewData({
   }, [projectId, studioPreviewCache]);
   return (
     <RepositoryViewDataContext.Provider
-      value={enabled && projectId ? { projectId, branches, workspaces, prefetchSchema } : null}
+      value={
+        enabled && projectId
+          ? { projectId, branches, workspaces, initialSchema, loadSchemaInventory, prefetchSchema }
+          : null
+      }
     >
       <WorkspaceActivityCacheContext.Provider value={enabled ? activityCache : null}>
         <StudioPreviewCacheContext.Provider value={enabled ? studioPreviewCache : null}>
@@ -191,7 +222,7 @@ export function useRepositoryViewData(projectId: string) {
   const shared = context?.projectId === projectId ? context : null;
   const branches = useRepositoryBranches(projectId, true);
   const workspaces = useProjectWorkspaces(projectId, !shared);
-  return shared ?? { branches, workspaces };
+  return { ...shared, branches, workspaces: shared?.workspaces ?? workspaces };
 }
 
 export function usePrefetchRepositorySchema() {
