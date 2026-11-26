@@ -1,14 +1,11 @@
 'use client';
 
-import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
+import type { StudioPreview, StudioSchemaEditCandidateRead } from '@t3x-dev/api-client';
 import { dump } from 'js-yaml';
 import { type ReactNode, useEffect, useState } from 'react';
 import { SchemaDefinitionTree } from '@/components/schemas/SchemaDefinitionTree';
 import { Button } from '@/components/ui/button';
-import {
-  useWorkspaceSchemaEditingRequests,
-  type WorkspaceSchemaEditing,
-} from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
+import { useWorkspaceSchemaEditingRequests } from '@/hooks/workspaces/useWorkspaceSchemaEditingRequests';
 import { WorkspaceReviewCodeView } from './WorkspaceReviewCodeView';
 import { WorkspaceReviewComparison } from './WorkspaceReviewComparison';
 import type { WorkspaceReviewPane } from './WorkspaceReviewWorkbench';
@@ -26,7 +23,7 @@ export function WorkspacePendingSchemaReview({
   projectId: string;
   workspaceId: string;
   revision?: number;
-  candidate: StudioSchemaEditCandidate;
+  candidate: StudioSchemaEditCandidateRead;
   branch: string;
   pane: WorkspaceReviewPane;
   inspectedSchema?: ReactNode;
@@ -41,12 +38,18 @@ export function WorkspacePendingSchemaReview({
     candidate.revision,
     attempt,
   ]);
-  const [state, setState] = useState<{
-    key: string;
-    data?: WorkspaceSchemaEditing;
-    error?: string;
-  }>();
+  const bundledPreview = candidate.draftPreview?.saved;
+  const initialPreview =
+    revision !== undefined &&
+    bundledPreview?.workspace?.id === workspaceId &&
+    bundledPreview.workspace.revision === revision &&
+    bundledPreview.freshness.candidateId === candidate.candidateId &&
+    bundledPreview.freshness.candidateRevision === candidate.revision
+      ? bundledPreview
+      : undefined;
+  const [state, setState] = useState<{ key: string; preview?: StudioPreview; error?: string }>();
   useEffect(() => {
+    if (initialPreview) return;
     let active = true;
     void requests.read().then(
       (data) => {
@@ -64,7 +67,7 @@ export function WorkspacePendingSchemaReview({
           });
           return;
         }
-        setState({ key, data });
+        setState({ key, preview: data.preview });
       },
       (cause) => {
         if (active)
@@ -77,9 +80,9 @@ export function WorkspacePendingSchemaReview({
     return () => {
       active = false;
     };
-  }, [requests, key, revision, candidate.candidateId, candidate.revision]);
-  const current = state?.key === key ? state : undefined;
-  const preview = current?.data?.preview;
+  }, [requests, initialPreview, key, revision, candidate.candidateId, candidate.revision]);
+  const current = !initialPreview && state?.key === key ? state : undefined;
+  const preview = initialPreview ?? current?.preview;
   return (
     <section aria-label="Saved Schema review" className="space-y-4">
       {!preview && inspectedSchema}

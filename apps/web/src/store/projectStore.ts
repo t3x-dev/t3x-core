@@ -20,6 +20,7 @@ export interface ProjectSummary {
   canEdit?: boolean;
   canDelete?: boolean;
   namespace?: string | null;
+  namespaceId?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
   id: string;
@@ -99,6 +100,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   canDelete: project.can_delete,
   id: project.project_id,
   namespace: project.namespace,
+  namespaceId: project.namespace_id,
   canonical_path: project.canonical_path,
   path_status: project.path_status,
   name: project.name,
