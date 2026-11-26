@@ -1,12 +1,22 @@
 'use client';
 
+import type { RepositorySchemaStartup } from '@t3x-dev/api-client';
 import { useParams } from 'next/navigation';
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { resolveStudioWorkspaceId } from '@/domain/workspaces/studioTargets';
 import type { useRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import {
   createStudioPreviewCache,
   invalidateStudioPreviews,
+  prefetchStudioDraft,
   StudioPreviewCacheContext,
 } from '@/hooks/schemas/studioPreviewCache';
 import { prefetchBoundStudioPreview } from '@/hooks/schemas/useStudioPreview';
@@ -21,6 +31,7 @@ import {
   type WorkspaceActivitySnapshot,
 } from '@/hooks/workspaces/workspaceActivityCache';
 import type { DirectoryStateEntry } from '@/store/projectStore';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 
 export const RepositoryAddressContext = createContext<
   ReturnType<typeof useRepositoryAddress> & { directoryStateEntry?: DirectoryStateEntry }
@@ -56,6 +67,9 @@ const RepositoryViewDataContext = createContext<{
   projectId: string;
   branches: UseBranchesResult;
   workspaces: UseProjectWorkspacesResult;
+  initialSchema?: RepositorySchemaStartup;
+  loadSchemaInventory?: () => void;
+  prefetchSchema: (branch?: string | null, workspaceId?: string | null) => void;
 } | null>(null);
 
 export function RepositoryViewData({
@@ -64,12 +78,14 @@ export function RepositoryViewData({
   projectId,
   schemaBranch,
   schemaWorkspaceId,
+  initialSchema,
 }: {
   active: boolean;
   children: ReactNode;
   projectId: string | null;
   schemaBranch?: string;
   schemaWorkspaceId?: string;
+  initialSchema?: RepositorySchemaStartup;
 }) {
   const userId = useSessionUserId();
   const [retainedProjectId, setRetainedProjectId] = useState<string | null>(null);
@@ -85,36 +101,67 @@ export function RepositoryViewData({
     () => (projectId ? createStudioPreviewCache() : null),
     [projectId]
   );
-  const branches = useBranches(projectId, enabled);
-  const workspaces = useProjectWorkspaces(projectId, enabled);
-  const targetId =
-    !workspaces.error && (schemaBranch || schemaWorkspaceId)
-      ? resolveStudioWorkspaceId(workspaces.workspaces, schemaWorkspaceId ?? '', schemaBranch)
-      : undefined;
-  const target = workspaces.workspaces.find(({ id }) => id === targetId);
-  const earlyTarget =
-    target &&
-    (!schemaBranch || target.targetBranch === schemaBranch) &&
-    target.status !== 'committed' &&
-    target.schemaBindings.length &&
-    target.schemaActivity?.hasEditCandidate === false &&
-    target.schemaActivity?.hasPendingTask === false
-      ? target
-      : undefined;
-  const earlyId = earlyTarget?.id;
-  const earlyBranch = earlyTarget?.targetBranch;
-  const earlyRevision = earlyTarget?.revision;
+  const initialTarget = initialSchema?.workspace as WorkspaceCandidate | null | undefined;
+  const initialWorkspaces = useMemo(
+    () => (initialTarget ? [initialTarget] : undefined),
+    [initialTarget]
+  );
+  const branches = useBranches(
+    projectId,
+    enabled,
+    initialTarget ? (initialSchema?.branch ?? undefined) : undefined
+  );
+  const workspaces = useProjectWorkspaces(projectId, enabled, initialWorkspaces);
+  const loadSchemaInventory = initialTarget
+    ? () => {
+        if (!branches.hasFullList && !branches.loading) void branches.refresh();
+        if (workspaces.workspaces === initialWorkspaces && !workspaces.loading)
+          void workspaces.refresh();
+      }
+    : undefined;
+  const prefetchSchema = useCallback(
+    (branch?: string | null, workspaceId?: string | null) => {
+      if (!studioPreviewCache || !projectId || workspaces.error || !(branch || workspaceId)) return;
+      if (
+        initialTarget &&
+        (branch === initialTarget.targetBranch || workspaceId === initialTarget.id)
+      )
+        return;
+      const targetId = resolveStudioWorkspaceId(workspaces.workspaces, workspaceId ?? '', branch);
+      const target = workspaces.workspaces.find(({ id }) => id === targetId);
+      if (
+        !target ||
+        (branch && target.targetBranch !== branch) ||
+        target.status === 'committed' ||
+        target.revision === undefined ||
+        target.schemaActivity?.hasPendingTask !== false
+      )
+        return;
+      if (target.schemaActivity.hasEditCandidate) {
+        void prefetchStudioDraft(
+          studioPreviewCache,
+          userId,
+          projectId,
+          target.id,
+          target.revision,
+          target.targetBranch
+        );
+      } else if (target.schemaActivity.hasEditCandidate === false && target.schemaBindings.length) {
+        prefetchBoundStudioPreview(
+          studioPreviewCache,
+          userId,
+          projectId,
+          target.id,
+          target.revision,
+          target.targetBranch
+        );
+      }
+    },
+    [projectId, studioPreviewCache, initialTarget, userId, workspaces.error, workspaces.workspaces]
+  );
   useEffect(() => {
-    if (studioPreviewCache && projectId && earlyId && earlyBranch && earlyRevision !== undefined)
-      prefetchBoundStudioPreview(
-        studioPreviewCache,
-        userId,
-        projectId,
-        earlyId,
-        earlyRevision,
-        earlyBranch
-      );
-  }, [projectId, userId, earlyId, earlyBranch, earlyRevision, studioPreviewCache]);
+    prefetchSchema(schemaBranch, schemaWorkspaceId);
+  }, [prefetchSchema, schemaBranch, schemaWorkspaceId]);
   useEffect(() => {
     if (!studioPreviewCache) return;
     const invalidateCandidate = ({
@@ -148,7 +195,11 @@ export function RepositoryViewData({
   }, [projectId, studioPreviewCache]);
   return (
     <RepositoryViewDataContext.Provider
-      value={enabled && projectId ? { projectId, branches, workspaces } : null}
+      value={
+        enabled && projectId
+          ? { projectId, branches, workspaces, initialSchema, loadSchemaInventory, prefetchSchema }
+          : null
+      }
     >
       <WorkspaceActivityCacheContext.Provider value={enabled ? activityCache : null}>
         <StudioPreviewCacheContext.Provider value={enabled ? studioPreviewCache : null}>
@@ -171,5 +222,9 @@ export function useRepositoryViewData(projectId: string) {
   const shared = context?.projectId === projectId ? context : null;
   const branches = useRepositoryBranches(projectId, true);
   const workspaces = useProjectWorkspaces(projectId, !shared);
-  return shared ?? { branches, workspaces };
+  return { ...shared, branches, workspaces: shared?.workspaces ?? workspaces };
+}
+
+export function usePrefetchRepositorySchema() {
+  return useContext(RepositoryViewDataContext)?.prefetchSchema;
 }

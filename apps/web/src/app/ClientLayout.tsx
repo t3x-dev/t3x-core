@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { showToast } from '@/components/layout/Toast';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Toaster } from '@/components/ui/sonner';
+import { schemaDocumentRoute } from '@/domain/schemas/schemaDocumentRoute';
 import { useRepositoryDirectoryIdlePrefetch } from '@/hooks/projects/repositoryDirectory';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -38,7 +39,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (pathname === '/invitations') markInteraction('invitations', 'route');
   }, [pathname]);
   const isLoginPage = pathname === '/login';
-  useRepositoryDirectoryIdlePrefetch(!isLoginPage && pathname !== '/repositories');
+  useRepositoryDirectoryIdlePrefetch(
+    !isLoginPage && pathname !== '/repositories' && !schemaDocumentRoute(pathname, '')
+  );
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);

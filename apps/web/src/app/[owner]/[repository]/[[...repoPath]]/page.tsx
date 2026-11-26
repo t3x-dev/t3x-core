@@ -224,6 +224,7 @@ function OwnerRepoProjectPageContent() {
       key={address.project_id}
       initialTabOverride={parseProjectTab(view)}
       ownerSlugOverride={address.namespace ?? undefined}
+      namespaceIdOverride={address.namespace_id}
       projectIdOverride={address.project_id}
       directoryProject={directoryStateEntry?.project}
       workspaceBranch={view === 'workspaces' ? routeBranch : null}

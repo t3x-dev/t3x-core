@@ -7,6 +7,7 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { schemaDocumentHeaders } from '@/domain/schemas/schemaDocumentRoute';
 
 /** Paths that are always public (even when auth is enabled) */
 const PUBLIC_PATHS = ['/login', '/api', '/share', '/invite'];
@@ -20,17 +21,19 @@ export function proxy(request: NextRequest) {
     process.env.AUTH_DISABLED?.toLowerCase() === 'true' ||
     process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
 
+  const next = () => NextResponse.next({ request: { headers: schemaDocumentHeaders(request) } });
+
   // Auth is ENABLED by default (secure by default).
   // Only disabled when AUTH_DISABLED is explicitly set to 'true'.
   if (authDisabled) {
-    return NextResponse.next();
+    return next();
   }
 
   const { pathname } = request.nextUrl;
 
   // Allow public paths
   if (pathname === '/.well-known/oauth-authorization-server' || isPublicPath(pathname)) {
-    return NextResponse.next();
+    return next();
   }
 
   // Allow static assets and Next.js internals
@@ -39,7 +42,7 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/favicon') ||
     pathname === '/robots.txt'
   ) {
-    return NextResponse.next();
+    return next();
   }
 
   // Check for local auth session cookie
@@ -51,7 +54,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return next();
 }
 
 export const config = {

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import RepositoryLoading from '@/app/[owner]/[repository]/[[...repoPath]]/loading';
 import RepositoryPage from '@/app/[owner]/[repository]/[[...repoPath]]/page';
-import RepositoryLayout from '@/app/[owner]/[repository]/layout';
+import RepositoryLayout from '@/app/[owner]/[repository]/RepositoryLayoutClient';
 import OwnerPage from '@/app/[owner]/page';
 import { ProjectShell } from '@/components/project/ProjectShell';
 import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
@@ -155,6 +155,71 @@ beforeEach(() => {
     path_status: 'ready',
     redirect: false,
   });
+});
+
+it('uses authorized document data without starting the repository or inventory requests', async () => {
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
+  mocks.query = '';
+  const address = {
+    project_id: 'proj_outside_list',
+    namespace: 'alice',
+    name: 'Repo',
+    canonical_path: '/alice/Repo',
+    path_status: 'ready' as const,
+    redirect: false,
+  };
+  const startup = {
+    location: '/alice/Repo/branches/main/schemas',
+    userId: null,
+    address,
+    project: {
+      ...address,
+      created_at: '2026-01-01',
+      visibility: 'private' as const,
+      can_edit: true,
+    },
+    branch: { name: 'main', headCommitHash: null },
+    workspace: {
+      id: 'owned-main',
+      projectId: address.project_id,
+      targetBranch: 'main',
+      revision: 3,
+      schemaBindings: [],
+      schemaActivity: { hasEditCandidate: false, hasPendingTask: false },
+    },
+  };
+  const initialDocument = Promise.resolve(startup);
+  let view!: ReturnType<typeof render>;
+  await act(async () => {
+    view = render(
+      <RepositoryLayout startup={initialDocument}>
+        <RepositoryPage />
+      </RepositoryLayout>
+    );
+    await initialDocument;
+  });
+  expect(screen.getByTestId('view-data')).toHaveTextContent('owned-main');
+  expect(screen.getByTestId('view-data')).toHaveAttribute('data-project', 'Repo');
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.fetchProject).not.toHaveBeenCalled();
+  expect(mocks.listBranches).not.toHaveBeenCalled();
+  expect(mocks.fetchProjectWorkspaces).not.toHaveBeenCalled();
+
+  mocks.params.repoPath = ['Repo', 'branches', 'feature', 'schemas'];
+  view.rerender(
+    <RepositoryLayout startup={initialDocument}>
+      <RepositoryPage />
+    </RepositoryLayout>
+  );
+  expect(screen.getByTestId('view-data')).not.toHaveTextContent('owned-main');
+  expect(mocks.fetchProjectWorkspaces).toHaveBeenCalledOnce();
+  mocks.params.repoPath = ['Repo', 'branches', 'main', 'schemas'];
+  view.rerender(
+    <RepositoryLayout startup={initialDocument}>
+      <RepositoryPage />
+    </RepositoryLayout>
+  );
+  expect(screen.getByTestId('view-data')).not.toHaveTextContent('owned-main');
 });
 
 it('keeps a single repository navigation mounted during loading across all seven tabs', async () => {
@@ -320,11 +385,9 @@ it('starts the exact bound Schema while the repository page and branch list are 
 it('starts project details from the directory selection and waits for matching address access', async () => {
   mocks.query = '';
   let resolveAddress!: (value: unknown) => void;
-  mocks.resolve.mockReturnValueOnce(
-    new Promise((resolve) => {
-      resolveAddress = resolve;
-    })
-  );
+  const address = new Promise((resolve) => {
+    resolveAddress = resolve;
+  }) as NonNullable<ReturnType<typeof useProjectStore.getState>['directoryStateEntry']>['address'];
   useProjectStore.setState({
     directoryStateEntry: {
       project: {
@@ -336,9 +399,11 @@ it('starts project details from the directory selection and waits for matching a
       readEpoch: 0,
       expiresAt: Date.now() + 15_000,
       head: Promise.resolve([]),
+      address,
     },
   });
   render(<OwnerRepoProjectPage />);
+  expect(mocks.resolve).not.toHaveBeenCalled();
   expect(screen.getByRole('heading', { name: 'Directory summary' })).toBeInTheDocument();
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
   expect(mocks.fetchProject).toHaveBeenCalledExactlyOnceWith('proj_outside_list');

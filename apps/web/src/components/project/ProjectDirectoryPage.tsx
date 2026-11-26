@@ -47,6 +47,7 @@ import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { REPOSITORY_DIRECTORY_PAGE_SIZE } from '@/hooks/projects/repositoryDirectory';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { prefetchDirectoryRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
 import { useSessionReadEpoch, useSessionUserId } from '@/hooks/shared/useSession';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
@@ -88,10 +89,19 @@ function useOpenDirectoryRepository() {
     recordRecentProjectOpen(project.id);
     if (project.canonical_path && project.path_status !== 'pending_migration') {
       const head = loadCommits(project.id, 'main', 1);
+      const address = prefetchDirectoryRepositoryAddress(project.canonical_path);
       // The destination may never mount, or the address may resolve to another project.
       void head.catch(() => {});
+      void address?.catch(() => {});
       useProjectStore.setState({
-        directoryStateEntry: { project, userId, readEpoch, expiresAt: Date.now() + 15_000, head },
+        directoryStateEntry: {
+          project,
+          userId,
+          readEpoch,
+          expiresAt: Date.now() + 15_000,
+          head,
+          address,
+        },
       });
     }
   };

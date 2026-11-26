@@ -62,4 +62,15 @@ describe('proxy auth gating', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
   });
+
+  it('allows OAuth discovery before login and keeps consent behind the session gate', () => {
+    process.env.AUTH_DISABLED = 'false';
+
+    expect(proxy(createRequest('/.well-known/oauth-authorization-server')).status).toBe(200);
+    const consent = proxy(createRequest('/settings/agent-access/authorize?client_id=editorial'));
+    expect(consent.status).toBe(307);
+    expect(consent.headers.get('location')).toBe(
+      'http://localhost/login?callbackUrl=%2Fsettings%2Fagent-access%2Fauthorize%3Fclient_id%3Deditorial'
+    );
+  });
 });

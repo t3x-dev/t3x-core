@@ -202,8 +202,8 @@
     ]
   },
   "reviewSnapshotReferences": [
+    "apps/web/src/app/[owner]/[repository]/RepositoryLayoutClient.tsx",
     "apps/web/src/app/[owner]/[repository]/[[...repoPath]]/page.tsx",
-    "apps/web/src/app/[owner]/[repository]/layout.tsx",
     "apps/web/src/app/project/[projectId]/page.tsx",
     "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",
     "apps/web/src/components/project/ProjectWorkspacesTab.tsx",

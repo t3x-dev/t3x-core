@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   guests: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   members: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   canManageGuests: false,
+  namespaceCollaboration: vi.fn(),
   prs: vi.fn(),
   workspaces: vi.fn(),
 }));
@@ -25,7 +26,7 @@ vi.mock('@/hooks/accounts/useProjectCollaboration', () => ({
   }),
 }));
 vi.mock('@/hooks/accounts/useNamespaceCollaboration', () => ({
-  useNamespaceCollaboration: () => ({ membersQuery: mocks.members }),
+  useNamespaceCollaboration: mocks.namespaceCollaboration,
 }));
 vi.mock('@/infrastructure/pullRequests', () => ({ listProjectPullRequests: mocks.prs }));
 vi.mock('@/infrastructure/workspaces', () => ({ listProjectWorkspaces: mocks.workspaces }));
@@ -40,6 +41,7 @@ beforeEach(() => {
   mocks.guests.isLoading = false;
   mocks.members.isLoading = false;
   mocks.canManageGuests = false;
+  mocks.namespaceCollaboration.mockReset().mockReturnValue({ membersQuery: mocks.members });
 });
 
 describe('ProjectCommunityTab', () => {
@@ -94,6 +96,34 @@ describe('ProjectCommunityTab', () => {
     expect(screen.getAllByText('Jordan')).toHaveLength(1);
     expect(screen.getByText('Namespace · viewer · Project guest · editor')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Manage access' })).not.toBeInTheDocument();
+  });
+
+  it('starts the member read while guests are pending and hides members if access is denied', () => {
+    const principal = { kind: 'human', principal_id: 'user-1', display_name: 'Jordan' };
+    mocks.guests.isLoading = true;
+    mocks.members.data = { members: [{ principal, status: 'active', role: 'viewer' }] };
+    const { rerender } = render(
+      <ProjectCommunityTab projectId="project one" namespaceId="team-1" />
+    );
+
+    expect(mocks.namespaceCollaboration).toHaveBeenCalledWith({
+      namespaceId: 'team-1',
+      canReadMembers: true,
+      canManageInvitations: false,
+    });
+    expect(screen.getByText('Loading collaborators…')).toBeVisible();
+    expect(screen.queryByText('Jordan')).not.toBeInTheDocument();
+
+    mocks.guests.isLoading = false;
+    mocks.guests.error = new Error('Access denied');
+    rerender(<ProjectCommunityTab projectId="project one" namespaceId="team-1" />);
+    expect(mocks.namespaceCollaboration).toHaveBeenLastCalledWith({
+      namespaceId: null,
+      canReadMembers: false,
+      canManageInvitations: false,
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Project collaborators unavailable');
+    expect(screen.queryByText('Jordan')).not.toBeInTheDocument();
   });
 
   it('links authorized collaborators directly to canonical repository access settings', () => {

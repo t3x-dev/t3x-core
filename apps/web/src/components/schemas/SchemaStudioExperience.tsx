@@ -200,7 +200,12 @@ export function SchemaStudioExperience({
   const router = useRouter();
   const pathname = usePathname();
   const repositoryPath = getCanonicalRepositoryPath(pathname);
-  const { branches: projectBranches, workspaces } = useRepositoryViewData(projectId);
+  const {
+    branches: projectBranches,
+    workspaces,
+    initialSchema,
+    loadSchemaInventory,
+  } = useRepositoryViewData(projectId);
   const { saveDraft } = useWorkspaceFlow();
   const [workspaceSetupFailures, setWorkspaceSetupFailures] = useState<{
     scope: object;
@@ -481,11 +486,21 @@ export function SchemaStudioExperience({
     persistedTarget?.revision !== undefined && !workspaces.error
       ? persistedTarget.schemaActivity
       : undefined;
+  const initialWorkspace = initialSchema?.workspace;
+  const readOnly = initialSchema?.project.can_edit === false;
+  const initialMatches = Boolean(
+    persistedTarget &&
+      initialWorkspace?.id === persistedTarget.id &&
+      initialWorkspace?.revision === persistedTarget.revision &&
+      initialWorkspace?.targetBranch === persistedTarget.targetBranch
+  );
   const schemaEdit = useStudioSchemaEditCandidate(
     projectId,
     persistedTarget?.id ?? '',
     persistedTarget?.revision,
-    schemaActivity?.hasEditCandidate === false
+    schemaActivity?.hasEditCandidate === false,
+    !requested ? persistedTarget?.targetBranch : undefined,
+    initialMatches ? initialSchema?.candidate : undefined
   );
   const currentBinding = persistedTarget?.schemaBindings?.[0];
   const creatingBlank = blankWorkspace === workspaceId;
@@ -503,13 +518,22 @@ export function SchemaStudioExperience({
     !!currentBinding?.schemaHash &&
     schemaEdit.candidate?.authoringDraft?.base?.kind === 'composition' &&
     schemaEdit.candidate.authoringDraft.base.schemaHash === currentBinding.schemaHash;
+  const draftPreview = requested ? undefined : schemaEdit.candidate?.draftPreview;
+  const matchesDraftSelection =
+    draftPreview?.candidateIds.length === selection.length &&
+    draftPreview.candidateIds.every((id, index) => id === selection[index]);
   const needsCandidateSources = Boolean(
-    schemaEdit.candidate?.baseSources?.length && !savedEditIsApplied && !savedEditUsesBinding
+    schemaEdit.candidate?.baseSources?.length &&
+      !savedEditIsApplied &&
+      !savedEditUsesBinding &&
+      !draftPreview
   );
-  const definitionNeedsCandidates = needsCandidateSources || selection.length > 0;
+  const definitionNeedsCandidates =
+    needsCandidateSources || (selection.length > 0 && !matchesDraftSelection);
   const candidates = useStudioCandidates(
     projectId,
     definitionNeedsCandidates ||
+      selection.length > 0 ||
       Boolean(requested || currentBinding?.studioSources?.length) ||
       sourceManagerOpen ||
       definitionOpen
@@ -523,7 +547,8 @@ export function SchemaStudioExperience({
     projectId,
     persistedTarget?.id ?? '',
     persistedTarget?.revision,
-    schemaActivity?.hasPendingTask === false
+    schemaActivity?.hasPendingTask === false,
+    initialMatches ? initialSchema?.pending : undefined
   );
   const recoveredSelection = useRef('');
   const [recoveredEditIdentity, setRecoveredEditIdentity] = useState('');
@@ -552,6 +577,7 @@ export function SchemaStudioExperience({
     recoveredEditIdentity !== editIdentity &&
     !savedEditIsApplied &&
     !savedEditUsesBinding &&
+    !draftPreview &&
     missingEditSources.length
       ? `The saved Schema candidate needs missing sources: ${missingEditSources.map((source) => `${source.canonicalName} @ ${source.version}`).join(', ')}. ${currentRestore?.error ?? 'Restore the pinned sources to reopen your saved draft, or use Combine sources to prepare a replacement.'}`
       : undefined;
@@ -601,6 +627,8 @@ export function SchemaStudioExperience({
     const source = pendingSchema.data?.pending?.source;
     if (source?.kind === 'studio') {
       setSelection([...source.candidateIds]);
+    } else if (draftPreview) {
+      setSelection(draftPreview.candidateIds);
     } else if (schemaEdit.candidate && !savedEditIsApplied && !savedEditUsesBinding) {
       const ids = (schemaEdit.candidate.baseSources ?? [])
         .map(
@@ -624,6 +652,7 @@ export function SchemaStudioExperience({
     pendingSchema.data,
     pendingSchema.loading,
     persistedTarget,
+    draftPreview,
     recoveryKey,
     requested,
     savedEditIsApplied,
@@ -639,6 +668,7 @@ export function SchemaStudioExperience({
       return;
     if (recoveredEditIdentity === editIdentity) return;
     if (savedEditIsApplied || savedEditUsesBinding) setSelection([]);
+    else if (draftPreview) setSelection(draftPreview.candidateIds);
     else if (schemaEdit.candidate?.baseSources?.length) {
       const ids = schemaEdit.candidate.baseSources.map(
         (base) =>
@@ -677,6 +707,7 @@ export function SchemaStudioExperience({
     candidates.items,
     candidates.loading,
     needsCandidateSources,
+    draftPreview,
     editIdentity,
     projectId,
     recoveredCandidateKey,
@@ -711,11 +742,22 @@ export function SchemaStudioExperience({
       ? { workspaceId: persistedTarget.id }
       : {}),
   };
+  const recoveredPreview =
+    activeCandidate && recoveredEditIdentity === editIdentity && matchesDraftSelection
+      ? draftPreview
+      : undefined;
+  const recoveringDraft =
+    !requested &&
+    (schemaEdit.loading || Boolean(draftPreview && recoveredEditIdentity !== editIdentity));
   const basePreview = useStudioPreview(
     projectId,
-    previewInput,
+    recoveringDraft ? { candidateIds: [] } : previewInput,
     persistedTarget?.revision,
-    persistedTarget?.targetBranch
+    persistedTarget?.targetBranch,
+    recoveredPreview?.base ??
+      (initialMatches && !selection.length && !recoveringDraft
+        ? initialSchema?.boundPreview
+        : undefined)
   );
   const hasLocalContribution = contributionHasContent(localContribution);
   const hasSchemaEdit = hasLocalContribution || !!savedCandidateRef || !!schemaDefinition;
@@ -736,7 +778,11 @@ export function SchemaStudioExperience({
         }
       : { candidateIds: [] },
     persistedTarget?.revision,
-    persistedTarget?.targetBranch
+    persistedTarget?.targetBranch,
+    savedCandidateRef?.candidateId === activeCandidate?.candidateId &&
+      savedCandidateRef?.revision === activeCandidate?.revision
+      ? recoveredPreview?.saved
+      : undefined
   );
   const preview = hasSchemaEdit ? localPreview : basePreview;
   const data = preview.data;
@@ -1534,6 +1580,7 @@ export function SchemaStudioExperience({
               initiallyDirty={creatingBlank && !savedCandidateRef}
               onCreateBlank={
                 persistedTarget &&
+                !readOnly &&
                 !currentBinding &&
                 !selection.length &&
                 !activeCandidate &&
@@ -1563,11 +1610,12 @@ export function SchemaStudioExperience({
                     ? 'Select a saved Workspace to edit its Schema.'
                     : undefined)
               }
-              pending={applying || canInspectBoundDefinition}
+              pending={applying || canInspectBoundDefinition || readOnly}
               loading={
                 (!persistedTarget && (workspaces.loading || projectBranches.loading)) ||
                 (pendingSchema.loading && !canInspectBoundDefinition) ||
                 preview.loading ||
+                recoveringDraft ||
                 schemaEdit.loading ||
                 (definitionNeedsCandidates && candidates.loading)
               }
@@ -1663,8 +1711,12 @@ export function SchemaStudioExperience({
               target ? (projectBranches.branchHeads[target.targetBranch] ?? null) : null
             }
             disabled={
-              !draftWorkspaces.length || applying || workspaces.loading || projectBranches.loading
+              !draftWorkspaces.length ||
+              applying ||
+              (!loadSchemaInventory && (workspaces.loading || projectBranches.loading))
             }
+            onOpen={loadSchemaInventory}
+            loading={workspaces.loading || projectBranches.loading}
             showCreate={false}
             onCreateBranch={target ? createSchemaBranch : undefined}
             requestCreateNavigation={(create) => {
@@ -1718,7 +1770,8 @@ export function SchemaStudioExperience({
         loading={candidates.loading}
         data={data}
         canEditDefinition={Boolean(
-          persistedTarget &&
+          !readOnly &&
+            persistedTarget &&
             recoveredDefinitionReady &&
             !checkingPendingSchema &&
             (schemaDefinition || data) &&

@@ -34,6 +34,7 @@ const jsonRequest = (method: string, body: unknown) => ({
 describe('repository addresses HTTP contract', () => {
   let cleanup: () => Promise<void>;
   let id: string;
+  let namespaceId: string;
   const original = process.env.AUTH_DISABLED;
   beforeAll(async () => {
     process.env.AUTH_DISABLED = 'false';
@@ -45,7 +46,8 @@ describe('repository addresses HTTP contract', () => {
       { id: 'names-outsider', emailVerified: true },
     ]);
     const ns = await insertPersonalNamespace(db, { slug: 'api-paths', ownerUserId: 'names-owner' });
-    const p = await insertProject(db, { name: 'Old-Name', namespaceId: ns.namespaceId });
+    namespaceId = ns.namespaceId;
+    const p = await insertProject(db, { name: 'Old-Name', namespaceId });
     id = p.projectId;
     // This project will fall outside the old front-end's first 50 rows.
     for (let i = 0; i < 51; i++)
@@ -95,13 +97,19 @@ describe('repository addresses HTTP contract', () => {
     expect((await response.json()).data).toMatchObject({
       project_id: id,
       namespace: 'api-paths',
+      namespace_id: namespaceId,
       canonical_path: '/api-paths/Old-Name',
       redirect: true,
     });
+    const detail = await appFor('names-owner').request(`/v1/projects/${id}?include_stats=false`);
+    expect(detail.status).toBe(200);
+    expect((await detail.json()).data.namespace_id).toBe(namespaceId);
     for (const app of [appFor('names-outsider'), appFor()]) {
       const denied = await app.request('/v1/repositories/api-paths/Old-Name');
       expect(denied.status).toBe(403);
-      expect(await denied.text()).not.toContain(id);
+      const body = await denied.text();
+      expect(body).not.toContain(id);
+      expect(body).not.toContain(namespaceId);
       expect(
         (await app.request('/v1/repository-name?namespace=api-paths&name=Old-Name')).status
       ).toBe(403);

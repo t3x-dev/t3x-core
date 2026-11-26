@@ -50,6 +50,7 @@ export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
   namespace: z.string().nullable().optional(),
+  namespace_id: z.string().nullable().optional(),
   canonical_path: z.string().nullable().optional(),
   path_status: z.enum(['ready', 'pending_migration']).optional(),
   visibility: ProjectVisibilitySchema,

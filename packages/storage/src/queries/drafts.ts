@@ -482,6 +482,34 @@ export async function listWorkspaceDraftsForOwner(
   return rows.map(rowToDraft);
 }
 
+/** Read the same preferred editable Workspace as Studio, without listing other branches. */
+export async function findSchemaStartupWorkspace(
+  db: AnyDB,
+  projectId: string,
+  branch: string,
+  workspaceId: string | undefined,
+  owner: WorkspaceOwner | null
+): Promise<Draft | null> {
+  const [row] = await db
+    .select()
+    .from(drafts)
+    .where(
+      and(
+        eq(drafts.projectId, projectId),
+        eq(drafts.targetBranch, branch),
+        workspaceId ? eq(drafts.workspaceId, workspaceId) : isNotNull(drafts.workspaceId),
+        isNotNull(drafts.workspaceStateJson),
+        sql`${drafts.status} <> 'abandoned'`,
+        sql`COALESCE(${drafts.workspaceStateJson}->>'status', 'draft') <> 'committed'`,
+        owner ? eq(drafts.ownerPrincipalKind, owner.kind) : undefined,
+        owner ? eq(drafts.ownerPrincipalId, owner.id) : undefined
+      )
+    )
+    .orderBy(desc(drafts.updatedAt))
+    .limit(1);
+  return row ? rowToDraft(row) : null;
+}
+
 /**
  * Create or update the Draft that backs a Workspace staged state.
  */

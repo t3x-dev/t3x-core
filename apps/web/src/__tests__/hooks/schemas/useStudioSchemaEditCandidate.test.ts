@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
+import {
+  createStudioPreviewCache,
+  prefetchStudioDraft,
+  StudioPreviewCacheContext,
+} from '@/hooks/schemas/studioPreviewCache';
 import { useStudioSchemaEditCandidate } from '@/hooks/schemas/useStudioSchemaEditCandidate';
+import { invalidateSessionReads } from '@/infrastructure/session';
 import { deferred } from '../deferred';
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
@@ -258,4 +265,83 @@ it('skips a confirmed empty revision and reads a newly reported candidate', asyn
   rerender({ absent: false });
   await waitFor(() => expect(result.current.candidate?.candidateId).toBe('edit'));
   expect(mocks.read).toHaveBeenCalledExactlyOnceWith('project', 'workspace');
+});
+
+it('shows the exact saved draft immediately on revisit while revalidating, without reusing it on another branch or revision', async () => {
+  const cache = createStudioPreviewCache();
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StudioPreviewCacheContext.Provider, { value: cache }, children);
+  const candidate = {
+    candidateId: 'edit',
+    revision: 2,
+    draftPreview: {
+      candidateIds: [],
+      saved: {
+        workspace: { id: 'workspace', revision: 7 },
+        freshness: { candidateId: 'edit', candidateRevision: 2 },
+      },
+    },
+  };
+  mocks.read.mockResolvedValueOnce(candidate);
+  const first = renderHook(
+    () => useStudioSchemaEditCandidate('project', 'workspace', 7, false, 'main'),
+    { wrapper }
+  );
+  await waitFor(() => expect(first.result.current.candidate).toEqual(candidate));
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith('project', 'workspace', 7);
+  first.unmount();
+
+  const background = deferred<null>();
+  mocks.read.mockReturnValue(background.promise);
+  const again = renderHook(
+    ({ revision, branch }) =>
+      useStudioSchemaEditCandidate('project', 'workspace', revision, false, branch),
+    { wrapper, initialProps: { revision: 7, branch: 'main' } }
+  );
+  expect(again.result.current.candidate).toEqual(candidate);
+  expect(again.result.current.loading).toBe(false);
+  expect(mocks.read).toHaveBeenCalledTimes(2);
+  act(() => invalidateSessionReads());
+  expect(again.result.current.candidate).toBeNull();
+  expect(mocks.read).toHaveBeenCalledTimes(2);
+  await act(async () => background.resolve(null));
+  expect(again.result.current.error).toMatch(/access changed/i);
+  again.rerender({ revision: 7, branch: 'feature' });
+  expect(again.result.current.candidate).toBeNull();
+  again.rerender({ revision: 8, branch: 'main' });
+  expect(again.result.current.candidate).toBeNull();
+});
+
+it.each([
+  'in flight',
+  'completed',
+])('reuses the %s read started at Schema navigation', async (status) => {
+  const cache = createStudioPreviewCache();
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StudioPreviewCacheContext.Provider, { value: cache }, children);
+  const candidate = {
+    candidateId: 'edit',
+    revision: 2,
+    draftPreview: {
+      candidateIds: [],
+      saved: {
+        workspace: { id: 'workspace', revision: 7 },
+        freshness: { candidateId: 'edit', candidateRevision: 2 },
+      },
+    },
+  };
+  const pending = deferred<typeof candidate>();
+  mocks.read.mockReturnValue(pending.promise);
+  const prefetch = prefetchStudioDraft(cache, null, 'project', 'workspace', 7, 'main');
+  if (status === 'completed') {
+    pending.resolve(candidate);
+    await prefetch;
+  }
+  const { result } = renderHook(
+    () => useStudioSchemaEditCandidate('project', 'workspace', 7, false, 'main'),
+    { wrapper }
+  );
+  if (status === 'in flight') await act(async () => pending.resolve(candidate));
+  await waitFor(() => expect(result.current.candidate).toEqual(candidate));
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith('project', 'workspace', 7);
 });

@@ -48,6 +48,7 @@ export interface Project {
   can_restore?: boolean;
   can_permanently_delete?: boolean;
   namespace?: string | null;
+  namespace_id?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
   project_id: string;
@@ -1427,6 +1428,7 @@ export interface RepositoryAddress {
   project_id: string;
   name: string;
   namespace: string | null;
+  namespace_id?: string | null;
   canonical_path: string | null;
   path_status: 'ready' | 'pending_migration';
   redirect: boolean;
