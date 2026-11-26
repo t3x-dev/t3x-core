@@ -10,6 +10,8 @@ The inventory starts from source at `ae7df1304` and includes the repository, Sta
 
 See [MCP Operability and Qualification](operability.md) for the requirements for diagnostics, write recovery, Agent reporting, and full business qualification.
 
+[Repository delegation](#repository-delegation) defines the target experience for handing one repository to an Agent from the Web. The capability inventory below describes which steps work today.
+
 ## Proposed tool groups
 
 | Group | Business capabilities | Exposure |
@@ -94,18 +96,69 @@ See [MCP Operability and Qualification](operability.md) for the requirements for
 - **Evidence and scope** — The portable bundle contains exact committed State and its verified Schema. A preview record proves which version the built-in slot points to. External runtime deployment and backup or restore are deferred. [Portable artifact contract](../../../docs/architecture/portable-artifact.md) · [Archive verification scope](../../../docs/architecture/project-archive-verification.md)
 - **Roles and permissions** — Delivery routes require Workspace access. Listing needs `project:read`. Preparation, assignment, and rollback need `project:edit`. Preparation pins the Workspace revision and Commit digest and uses an idempotency key. Preview assignment consumes a successful portable receipt. Rollback appends a new record that selects a previous fixed version. [Delivery API](../../../packages/api/src/routes/workspace-deliveries.openapi.ts) · [Workspace ownership](../../../packages/api/src/middleware/workspace-access.ts)
 
+## Repository delegation
+
+**Product target.** A person can hand one repository to a named Agent in one Web confirmation. For a personal branch that permits ordinary changes, the same Agent can read materials and history, edit Content, run configured checks, prepare and inspect a fixed Review, accept its own eligible change, commit it and return the exact resulting Content. History identifies the Agent and the human who delegated the work. Each branch keeps its own requirements. [Project grants and credentials](../../../docs/architecture/namespace-authority-v1.md#project-grants-and-credentials) · [Actor and delegator](../../../docs/architecture/request-principal-migration-baseline.md#actor)
+
+### What the person confirms
+
+Open the authorization view from the selected repository. Resolve the Agent, repository and target branch before describing what the Agent can do. For a personal repository with an eligible `main`, use copy like the following.
+
+> **Let Codex work on Editorial Calendar?**
+>
+> Codex can organize sources, edit content and commit its own changes to `main` after checks pass. Other branches follow their review rules. You can revoke access at any time.
+>
+> **Authorize and start** · Advanced settings
+
+When `main` requires independent review, replace the outcome before confirmation with “Codex can prepare and check changes. An eligible reviewer must approve them before they reach `main`.” Use the actual branch name. Keep token fields and tool names out of the default view.
+
+| User task | Default | Advanced setting |
+| --- | --- | --- |
+| Set a time limit | Seven days, with a reminder before expiry | Change the expiry, renew or end access early |
+| Limit where the Agent works | This repository, subject to the rules on each branch | Restrict writable branches. Authorize each additional repository separately |
+| Limit what the Agent does | Complete ordinary content work through Commit | Choose read-only access or preparation for human review. Enable changes to a shared preview separately |
+| Review each change personally | The Agent can decide its own eligible changes on a personal branch | Require a human Decision before Commit. Changing an existing branch protection is a separate action for a person authorized to manage it |
+
+### When the Agent is ready
+
+One confirmation coordinates three existing boundaries. The API resolves the human's authority, issues or updates a repository-bound Agent grant and credential, and enforces the selected actions and writable branches on each relevant API entry point. For the default workflow the credential covers inspection, proposal, verification, acceptance or rejection, Commit creation and ref advancement.
+
+The server resolves an applicable AcceptancePolicy for the specific Agent and ref. On an ordinary personal branch the delegation must permit this Agent to prepare a fixed Review and accept its own eligible change. An existing actor restriction, independent-review rule or required check still applies. A delegation applies only to its recipient and cannot relax rules for another principal. An authorized human can complete an existing grant that lacks a machine policy, keep the saved Draft and prepare a fresh Review.
+
+A managed MCP connection exposes the actions for the selected workflow within the deployment's tool allowlist. Check the actual connection, authenticated Agent, repository, effective ref policy and required actions. For a first Content Commit, also check whether the target Workspace can resolve its Schema. Readiness checks leave repository history untouched. The API checks authority and preconditions again when the Agent executes the change.
+
+| Observed result | What the user sees |
+| --- | --- |
+| Access granted, client has yet to connect | “Authorized. Waiting for Codex to connect.” Offer **Connect Codex** for a client that needs pairing. |
+| Connected, ordinary changes eligible on the target | “Codex is connected and can commit to `main`. You can send it a task.” |
+| Connected, empty repository awaiting its first Schema | “Codex can collect sources now. Choose a structure before the first content commit.” Show the suggested definition when available. |
+| Connected, deployment exposes only reads | “This connection can read the repository. Its MCP service has disabled editing.” Provide the connection details for its operator. |
+| Provisioning or readiness check failed | Show the last confirmed step, the missing condition and a retry or repair action for the same grant. |
+| The first real change was committed and read back | Show “Codex committed to `main`” with links to the fixed Review and the exact committed version. A later ref head is a separate observation. |
+
+### Repository scenarios and acceptance
+
+- **Empty personal repository.** The Agent can start collecting material immediately. Use the exact Schema already selected by the person if a template supplies one. With no selected Schema, the Agent can suggest a structure. When the first Review needs it, show that definition and its impact for explicit human adoption. After this decision the Agent can resume eligible work. [Schema adoption contract](../../web/docs/business.md#b-04-schema-adoption-and-publication)
+- **Existing branch rules.** Let the Agent prepare everything its authority permits. When an independent Decision is required, show the blocking rule and link an eligible reviewer to the exact fixed Review once it exists. After acceptance, the Agent may commit if its authority, checks and expected head still hold. A failing check sends the work back for correction. A generated Proposal that requires human Decision, a generated deletion that requires confirmation, or a requested policy override goes to the authorized human with the specific evidence. [Transition authorization](#transitions--propose-verify-decide-and-commit)
+- **Existing personal Draft.** A fixed Review covers the entire saved Draft. Keep the assigned edit separate from unrelated work where possible. If the Agent would also commit the person's pending edits, show the combined diff and obtain a decision on those edits before proceeding. [Review scope](../../web/docs/business.md#b-03-the-version-being-reviewed)
+- **Revocation.** Stop subsequent access through this delegation, including calls from an already connected client. Keep the user's saved Draft, fixed Reviews, Decisions and committed history available under their existing access rules. If a write was in flight, the Web uses the person's access to establish its outcome before showing the last saved Draft or Commit. Other delegations retain their own permissions. [Write recovery](operability.md#timeouts-and-recovery)
+
+**End-to-end acceptance.** In an authenticated personal repository, start on an ordinary `main` with a selected Schema and no preinstalled machine policy. Grant access in the Web. Have the same Agent save an ordinary content edit, prepare and read its fixed Review by ID, accept against its exact preconditions, then commit with the recorded Decision digest and expected head. Read back the exact Commit and check the edited field in its resulting State. Also exercise a protected branch and revocation through an already connected client. The existing fixture tests an explicit policy, rejects the Agent's self-approval and then has a human prepare the Review the Agent accepts. [Existing core qualification](../../web/e2e/security/mcp-core-loop.spec.ts)
+
+**Current implementation.** Web Settings issues and revokes Agent tokens. Ref policy binding and the MCP tool allowlist are configured separately. With no applicable machine policy, Replay and Schema checks can complete while the Agent receives `REVIEW_SNAPSHOT_POLICY_REQUIRED`. The saved Draft is available for another preparation after the policy is configured. [Token settings](../../web/src/components/settings/ApiTokensSettingsPanel.tsx) · [Fixed Review preparation](../../../packages/mcp/src/tools/draft-review.ts) · [MCP capability configuration](../README.md#business-capability-configuration)
+
 ## Single-user workflow after Web authorization
 
 The diagram shows the target workflow. The CUI presents exact changes and collects human confirmation when required. An Agent executes actions allowed by its credential and ref policy. Both use the same T3X business commands as the Web client.
 
 ```mermaid
 flowchart TD
-    web["User signs in and grants access on the Web"] --> credentials["Configure authorized CUI and Agent credentials"]
-    credentials --> cui["CUI presents context and collects human confirmation"]
-    credentials --> agent["Agent executes authorized actions"]
-    cui --> mcp["MCP exposes configured business tool groups"]
-    agent --> mcp
+    web["User opens the repository in the signed-in Web"] --> grant["Authorize a named Agent for this repository"]
+    web --> cui["Signed-in person confirms exact changes when required"]
+    grant --> agent["Connected Agent uses the granted actions on the selected ref"]
+    agent --> mcp["MCP exposes configured business tool groups"]
     mcp --> api["T3X API checks principal, repository, scopes, and ref policy"]
+    cui --> api
     api --> read["Resolve repository and ref, read exact State and head"]
     read --> draft["Open owned Workspace, read Draft and bound Schema"]
     draft --> edit["Select sources, edit Content, or preview and adopt Schema"]
@@ -125,7 +178,7 @@ flowchart TD
     delivery --> preview["Assign or roll back the built-in preview slot and read the recorded version"]
 ```
 
-1. **Start from the repository.** The human may create a personal repository. Authorize a CUI and an Agent for that repository on the Web, including any ref policy needed for machine Decision. Both can locate the branch and select or open the user's Workspace, then read the exact basis and Schema binding. Exercise an empty ref and establish a Schema before reviewing Content.
+1. **Start from the repository.** The human may create a personal repository and grant access through [repository delegation](#repository-delegation). The Agent locates the branch, selects or opens an authorized Workspace and reads its exact basis and Schema binding. An empty ref needs an agreed Schema before Content Review.
 2. **Complete a change.** Create, update, or delete Content in Draft, or save a Schema-only change. Prepare and read fixed Review, verify, record an authorized Decision, and Commit. Read back the exact Commit and its resulting Content and binding. A human uses the CUI for human-only steps. An Agent can finish a machine-eligible change when the ref policy allows it.
 3. **Use evidence and deliver the result.** Ingest a source with traceable authorship, apply a candidate to Draft, and check its evidence in Review. Export the exact result. Where Delivery is enabled, prepare the portable artifact, read the receipt, and verify preview assignment and rollback by recorded digest.
 4. **Recover and continue.** Exercise edits from two clients on the same Draft, a moving ref, failed checks, rejection, revoked or insufficient permission, and a lost response. Preserve usable Draft and evidence. Re-read authoritative state before retrying, reconciling, or preparing a fresh Review. A ref that requires independent review returns a policy block for the single-user workflow.
