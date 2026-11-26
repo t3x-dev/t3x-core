@@ -1,11 +1,12 @@
 import { GitBranch } from 'lucide-react';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { AgentAccessDemo } from '@/components/project/agent-access/AgentAccessDemo';
 import { AgentAccessLink } from '@/components/project/agent-access/AgentAccessLink';
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import inspection from '@/components/project/StateInspection.module.css';
 import frame from '@/components/project/StatePageFrame.module.css';
+import { demoRepositories } from './chat/demoChat';
 
 export const metadata: Metadata = { title: 'Agent access demo · T3X' };
 
@@ -28,7 +29,7 @@ function RepositoryPreview() {
               <code>main</code>
             </span>
             <div>
-              <AgentAccessLink href={previewPath} />
+              <AgentAccessLink href={`${previewPath}?view=access`} />
             </div>
           </div>
         </header>
@@ -75,11 +76,31 @@ function RepositoryPreview() {
 export default async function AgentAccessPreviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string | string[] }>;
+  searchParams: Promise<{ view?: string; repository?: string; chat?: string }>;
 }) {
   if (process.env.NODE_ENV === 'production') notFound();
-  const { view } = await searchParams;
+  const { view, repository: target, chat } = await searchParams;
   if (view === 'repository') return <RepositoryPreview />;
+  if (view === 'settings') {
+    const repo = demoRepositories.find((item) => item.name === target);
+    if (!repo) notFound();
+    return (
+      <>
+        <header className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-3 text-sm">
+          {repo.name} <span aria-hidden="true"> / </span> Repository settings{' '}
+          <span aria-hidden="true"> / </span> <strong>Agent access</strong>
+        </header>
+        <AgentAccessDemo
+          repository={repo.name}
+          branch={repo.branch}
+          scenario={repo.scenario}
+          backHref={`${previewPath}/chat?chat=${chat === 'choose' ? 'choose' : 'editorial'}`}
+          backLabel="Return to chat"
+        />
+      </>
+    );
+  }
+  if (view !== 'access') redirect(`${previewPath}/chat`);
   return (
     <AgentAccessDemo
       repository={repository}

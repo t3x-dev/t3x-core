@@ -12,45 +12,26 @@ import {
   SquareTerminal,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { T3XMark } from '@/components/layout/T3XMark';
 import styles from './AgentAccessDemo.module.css';
 
-const scenarios = {
-  personal: 'Personal repository',
-  protected: 'Independent review required',
-  empty: 'Empty repository',
-  offline: 'Client not connected',
-  readonly: 'Read-only MCP service',
-  policy: 'Existing grant missing a branch policy',
-  completed: 'First commit returned',
-} as const;
-type Scenario = keyof typeof scenarios;
-type Mode = 'commit' | 'prepare' | 'read';
-type Preview = {
-  scenario: Scenario;
-  stage: 'confirm' | 'active' | 'revoked';
-  mode: Mode;
-  branchOnly: boolean;
-  days: string;
-};
-
-const initial: Preview = {
-  scenario: 'personal',
-  stage: 'confirm',
-  mode: 'commit',
-  branchOnly: false,
-  days: '7',
-};
-
-// Only simulated UI choices survive client navigation. A reload starts a fresh preview.
-const previews = new Map<string, Preview>();
+import {
+  initial,
+  type Mode,
+  type Preview,
+  readDemoAccess,
+  type Scenario,
+  scenarios,
+  writeDemoAccess,
+} from './agentAccessPreview';
 
 function branchOutcome({ scenario, mode }: Preview) {
   if (mode === 'read' || scenario === 'readonly') return 'Read content and history only.';
   if (scenario === 'protected') return 'An independent reviewer must approve each change.';
   if (scenario === 'empty') return 'Choose a data structure before the first content commit.';
-  if (mode === 'prepare') return 'Codex prepares changes for your review.';
   if (scenario === 'policy') return 'A branch policy is needed to create a fixed Review.';
+  if (mode === 'prepare') return 'Codex prepares changes for your review.';
   return 'Codex can commit its changes after checks pass.';
 }
 
@@ -60,7 +41,7 @@ function grantResult(preview: Preview, branch: string) {
       title: 'Waiting for Codex to connect',
       detail: 'Access is authorized. Connect the client to start using this repository.',
     };
-  if (preview.scenario === 'policy')
+  if (preview.scenario === 'policy' && preview.mode !== 'read')
     return {
       title: 'Your draft is saved',
       detail:
@@ -103,25 +84,95 @@ function grantResult(preview: Preview, branch: string) {
   };
 }
 
-export function AgentAccessDemo({
-  repository,
-  branch,
-  backHref,
-}: {
+interface AgentAccessDemoProps {
   repository: string;
   branch: string;
   backHref: string;
-}) {
-  const previewKey = JSON.stringify([repository, branch]);
-  const [preview, setPreview] = useState(initial);
+  backLabel?: string;
+  scenario?: Scenario;
+  request?: {
+    task: string;
+    required: Mode;
+    repositoryPicker?: ReactNode;
+    onAuthorized: (grant: Preview) => void;
+  };
+}
+
+export function AgentAccessDemo(props: AgentAccessDemoProps) {
+  const identity = JSON.stringify([
+    props.repository,
+    props.branch,
+    props.scenario,
+    props.request?.task,
+  ]);
+  return <AccessForm key={identity} {...props} />;
+}
+
+function AccessForm({
+  repository,
+  branch,
+  backHref,
+  backLabel,
+  scenario: targetScenario,
+  request,
+}: AgentAccessDemoProps) {
+  const [preview, setPreview] = useState<Preview>({
+    ...initial,
+    scenario: targetScenario ?? 'personal',
+  });
+  const [loaded, setLoaded] = useState(false);
+  const confirmed = useRef(false);
   const demoControls = useRef<HTMLDetailsElement>(null);
+  const isRequest = Boolean(request);
+  const required = request?.required;
   useEffect(() => {
-    setPreview(previews.get(previewKey) ?? initial);
-  }, [previewKey]);
+    const saved = readDemoAccess(repository, branch, targetScenario);
+    const policyRepaired =
+      targetScenario === 'policy' && saved.stage === 'active' && saved.scenario === 'personal';
+    const widen = required === 'commit' || (required === 'prepare' && saved.mode === 'read');
+    setPreview({
+      ...saved,
+      mode: widen ? required : saved.mode,
+      scenario: policyRepaired ? 'personal' : (targetScenario ?? saved.scenario),
+      stage: isRequest ? 'confirm' : saved.stage,
+    });
+    setLoaded(true);
+  }, [repository, branch, targetScenario, isRequest, required]);
+
+  useEffect(() => {
+    if (preview.stage !== 'active' || !preview.expiresAt) return;
+    const deadline = preview.expiresAt;
+    let timer: ReturnType<typeof setTimeout>;
+    function checkExpiry() {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        setPreview((current) => ({ ...current, stage: 'confirm', expiresAt: undefined }));
+      } else {
+        timer = setTimeout(checkExpiry, Math.min(remaining, 2_147_483_647));
+      }
+    }
+    checkExpiry();
+    return () => clearTimeout(timer);
+  }, [preview.stage, preview.expiresAt]);
 
   function update(next: Preview) {
-    previews.set(previewKey, next);
-    setPreview(next);
+    writeDemoAccess(repository, branch, next);
+    setPreview(readDemoAccess(repository, branch));
+  }
+
+  function authorize() {
+    if (!loaded || !repository || (isRequest && confirmed.current)) return;
+    confirmed.current = true;
+    const next: Preview = {
+      ...preview,
+      mode: preview.scenario === 'readonly' ? 'read' : preview.mode,
+      scenario:
+        preview.scenario === 'policy' && preview.mode !== 'read' ? 'personal' : preview.scenario,
+      stage: 'active',
+      expiresAt: Date.now() + Number(preview.days) * 86_400_000,
+    };
+    update(next);
+    request?.onAuthorized(next);
   }
 
   function selectScenario(scenario: Scenario) {
@@ -141,30 +192,42 @@ export function AgentAccessDemo({
   const name = repository.split('/').filter(Boolean).at(-1) ?? repository;
   const scope = branchOutcome(preview);
   const isReadOnly = preview.mode === 'read' || scenario === 'readonly';
+  const needsPolicy = scenario === 'policy' && !isReadOnly;
   const title =
     stage === 'confirm'
-      ? `Let Codex work on ${name}?`
+      ? needsPolicy
+        ? 'Complete access for this branch?'
+        : `Let Codex work on ${name}?`
       : stage === 'revoked'
         ? 'Codex access revoked'
         : result.title;
   const detail =
     stage === 'confirm'
-      ? isReadOnly
-        ? 'Codex can look up content and inspect committed versions on your behalf.'
-        : preview.branchOnly
-          ? `Codex can read this repository, edit content on ${branch} and run its checks.`
-          : 'Codex can organize sources and edit content across this repository. Each branch keeps its review rules.'
+      ? needsPolicy
+        ? preview.mode === 'prepare'
+          ? 'The saved draft passed Replay and Schema checks. Allow Codex to prepare a fixed Review for your decision.'
+          : 'The saved draft passed Replay and Schema checks. Allow Codex to prepare its fixed Review and commit eligible changes on your behalf.'
+        : isReadOnly
+          ? 'Codex can look up content and inspect committed versions on your behalf.'
+          : preview.branchOnly
+            ? `Codex can read this repository, edit content on ${branch} and run its checks.`
+            : 'Codex can organize sources and edit content across this repository. Each branch keeps its review rules.'
       : stage === 'revoked'
         ? 'Codex can no longer use this grant. You can continue working with the saved drafts and commits.'
         : result.detail;
 
-  return (
-    <section aria-label="Repository agent access" className={styles.page}>
-      <div className={styles.topbar}>
-        <Link className={styles.back} href={backHref}>
-          <ArrowLeft size={16} aria-hidden="true" />
-          {repository}
-        </Link>
+  const header = (
+    <div className={styles.topbar}>
+      {isRequest && (
+        <span className={styles.brand}>
+          <T3XMark /> T3X
+        </span>
+      )}
+      <Link className={styles.back} href={backHref}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        {backLabel ?? repository}
+      </Link>
+      {!isRequest && !targetScenario && (
         <details ref={demoControls} className={styles.demo}>
           <summary>
             <FlaskConical size={15} aria-hidden="true" /> Demo controls
@@ -193,7 +256,55 @@ export function AgentAccessDemo({
             </button>
           </div>
         </details>
+      )}
+    </div>
+  );
+
+  if (request && !repository) {
+    return (
+      <section aria-label="Repository selection" className={styles.page}>
+        {header}
+        <div className={styles.body}>
+          <article className={styles.card}>
+            <div className={styles.content}>
+              <h1 className={styles.title}>Choose a repository</h1>
+              <p className={styles.description}>
+                Select the repository Codex should use for this task.
+              </p>
+              <div className={styles.requestContext}>
+                <dl>
+                  <div>
+                    <dt>Task from Codex</dt>
+                    <dd>{request.task}</dd>
+                  </div>
+                </dl>
+                {request.repositoryPicker}
+              </div>
+            </div>
+            <div className={styles.footer}>
+              <Link className={styles.secondary} href={backHref}>
+                Cancel
+              </Link>
+            </div>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
+  if (!loaded) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.body}>
+          <output>Loading Agent access…</output>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <section aria-label="Repository agent access" className={styles.page}>
+      {header}
       <div className={styles.body}>
         <article className={styles.card}>
           <div className={styles.content}>
@@ -212,6 +323,23 @@ export function AgentAccessDemo({
               <h1 className={styles.title}>{title}</h1>
               <p className={styles.description}>{detail}</p>
             </div>
+            {request && (
+              <div className={styles.requestContext}>
+                <dl>
+                  <div>
+                    <dt>Task from Codex</dt>
+                    <dd>{request.task}</dd>
+                  </div>
+                  {!request.repositoryPicker && (
+                    <div>
+                      <dt>Repository</dt>
+                      <dd>{repository}</dd>
+                    </div>
+                  )}
+                </dl>
+                {request.repositoryPicker}
+              </div>
+            )}
             {stage !== 'revoked' && (
               <div className={styles.scope}>
                 <span className={styles.branch}>
@@ -232,7 +360,7 @@ export function AgentAccessDemo({
                     <select
                       className={styles.select}
                       value={preview.days}
-                      onChange={(e) => update({ ...preview, days: e.target.value })}
+                      onChange={(e) => setPreview({ ...preview, days: e.target.value })}
                     >
                       <option value="1">1 day</option>
                       <option value="7">7 days</option>
@@ -246,7 +374,7 @@ export function AgentAccessDemo({
                       disabled={isReadOnly}
                       value={isReadOnly ? 'none' : preview.branchOnly ? 'current' : 'all'}
                       onChange={(e) =>
-                        update({ ...preview, branchOnly: e.target.value === 'current' })
+                        setPreview({ ...preview, branchOnly: e.target.value === 'current' })
                       }
                     >
                       {isReadOnly && <option value="none">No writable branches</option>}
@@ -260,7 +388,7 @@ export function AgentAccessDemo({
                       className={styles.select}
                       value={isReadOnly ? 'read' : preview.mode}
                       disabled={scenario === 'readonly'}
-                      onChange={(e) => update({ ...preview, mode: e.target.value as Mode })}
+                      onChange={(e) => setPreview({ ...preview, mode: e.target.value as Mode })}
                     >
                       <option value="commit">Submit eligible changes</option>
                       <option value="prepare">Prepare changes for my review</option>
@@ -283,6 +411,15 @@ export function AgentAccessDemo({
                       ? `Writes are limited to ${branch}.`
                       : 'Each branch keeps its own rules.'}
                 </p>
+                {!isRequest && (
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() => setPreview({ ...preview, stage: 'confirm' })}
+                  >
+                    Edit or renew access
+                  </button>
+                )}
               </details>
             )}
             {stage === 'active' && scenario === 'completed' && (
@@ -306,9 +443,11 @@ export function AgentAccessDemo({
                 <button
                   type="button"
                   className={styles.primary}
-                  onClick={() => update({ ...preview, stage: 'active' })}
+                  disabled={!loaded}
+                  onClick={authorize}
                 >
-                  Authorize and start <ArrowRight size={16} aria-hidden="true" />
+                  {needsPolicy ? 'Complete authorization' : 'Authorize and start'}{' '}
+                  <ArrowRight size={16} aria-hidden="true" />
                 </button>
               </>
             )}
@@ -321,7 +460,7 @@ export function AgentAccessDemo({
                 >
                   Revoke access
                 </button>
-                {scenario === 'offline' || scenario === 'policy' ? (
+                {scenario === 'offline' || needsPolicy ? (
                   <button
                     type="button"
                     className={styles.primary}
@@ -332,7 +471,7 @@ export function AgentAccessDemo({
                   </button>
                 ) : (
                   <Link className={styles.primary} href={backHref}>
-                    Back to repository <ArrowRight size={16} aria-hidden="true" />
+                    {backLabel ?? 'Back to repository'} <ArrowRight size={16} aria-hidden="true" />
                   </Link>
                 )}
               </>
@@ -340,7 +479,7 @@ export function AgentAccessDemo({
             {stage === 'revoked' && (
               <>
                 <Link className={styles.secondary} href={backHref}>
-                  Back to repository
+                  {backLabel ?? 'Back to repository'}
                 </Link>
                 <button
                   type="button"

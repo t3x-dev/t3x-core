@@ -33,6 +33,14 @@
   cursor: pointer;
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .back:hover,
 .demo > summary:hover,
 .advanced > summary:hover {
@@ -141,6 +149,35 @@
   color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.65;
+}
+
+.requestContext {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.requestContext dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.requestContext dl > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 8px;
+}
+
+.requestContext dt {
+  color: var(--text-secondary);
+}
+
+.requestContext dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .scope {
