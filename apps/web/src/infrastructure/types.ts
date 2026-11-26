@@ -24,6 +24,7 @@ export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 export interface Project {
   repository_profile?: RepositoryProfile;
   can_edit?: boolean;
+  can_manage_agent_access?: boolean;
   can_delete?: boolean;
   deleted_at?: string | null;
   can_restore?: boolean;

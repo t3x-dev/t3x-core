@@ -424,6 +424,7 @@ export function ProjectDetailPageContent({
         projectVisibility={project.visibility}
         repositoryProfile={project.repositoryProfile}
         repositoryPath={project.canonical_path ?? undefined}
+        canManageAgentAccess={fetchedProject?.canManageAgentAccess === true}
         canEditRepository={projectIdOverride ? fetchedProject?.canEdit === true : project.canEdit}
         detailsError={directoryProject ? projectLookupError?.message : undefined}
         onRetryDetails={retryProjectDetail}

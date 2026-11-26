@@ -10,6 +10,7 @@ import {
   denied,
   type DraftVersion,
   invoke,
+  initializeQualificationSchema,
   type Mcp,
   mcpClient,
   mintBrowser,
@@ -155,39 +156,7 @@ async function qualifyCore(input: {
     // Pin the first Schema through the existing human Web Workspace entry on the empty ref.
     const material = await input.evidence(project_id);
     const workspace_id = 'core-first-schema';
-    const workspaceUrl = `${projectUrl}/workspaces/${workspace_id}`;
-    const created = await input.actor<{ workspace: { revision: number } }>('PATCH', workspaceUrl, {
-      workspace: {
-        id: workspace_id,
-        title: 'First Schema',
-        targetBranch: 'main',
-        status: 'draft',
-        baseCommitHash: null,
-        sourceBundle: [
-          {
-            id: `material:${material.id}`,
-            type: 'document',
-            title: 'core-loop-evidence.txt',
-            materialId: material.id,
-            contentHash: material.content_hash,
-          },
-        ],
-        schemaBindings: [
-          {
-            canonicalName: 't3x/prd',
-            version: 'v2',
-            mode: 'pinned',
-            rootKey: 'prd',
-          },
-        ],
-        yopsDraft: { id: 'core-first-draft', operations: [] },
-      },
-    });
-    await input.actor('POST', `${workspaceUrl}/authoring`, {
-      request_id: randomUUID(),
-      expected_workspace_revision: created.workspace.revision,
-      expected_ref_head: null,
-    });
+    await initializeQualificationSchema(input.actor, project_id, workspace_id, material);
 
     const activity = (id: string) =>
       invoke<DraftVersion>(human, 't3x_query', { target: 'workspace_activity', project_id, id });

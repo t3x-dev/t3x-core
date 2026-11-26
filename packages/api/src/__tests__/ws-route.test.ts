@@ -57,6 +57,7 @@ vi.mock('../lib/room-manager', () => ({
 // and authMiddleware (for the createApp() integration test below) dynamically
 // import from this module.
 vi.mock('@t3x-dev/storage', () => ({
+  readAgentDelegation: async () => null,
   touchLastUsed: touchSpy,
   findApiKeyByValue: findApiKeySpy,
   findProjectById: findProjectSpy,

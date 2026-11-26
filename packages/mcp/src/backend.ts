@@ -1,8 +1,9 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { createClient, type T3xClient } from '@t3x-dev/api-client';
-import { mcpFetch } from './diagnostics.js';
+import { createClient, T3xApiError, type T3xClient } from '@t3x-dev/api-client';
+import { mcpFetch, mcpHttpFetch } from './diagnostics.js';
 
 type FileConfig = {
   api_url?: string;
@@ -10,6 +11,31 @@ type FileConfig = {
 };
 
 export type McpBackend = 'storage' | 'api';
+
+const requestApiClients = new AsyncLocalStorage<T3xClient>();
+
+export async function runWithMcpApiCredential(
+  apiUrl: string,
+  token: string,
+  run: () => Promise<void>
+): Promise<'handled' | 'unauthorized' | 'rate-limited'> {
+  const client = createClient({
+    baseUrl: apiUrl,
+    headers: { Authorization: `Bearer ${token}` },
+    fetch: mcpHttpFetch,
+  });
+  try {
+    await client.getCredentialContext();
+  } catch (error) {
+    if (error instanceof T3xApiError) {
+      if (error.status === 401 || error.status === 403) return 'unauthorized';
+      if (error.status === 429) return 'rate-limited';
+    }
+    throw error;
+  }
+  await requestApiClients.run(client, run);
+  return 'handled';
+}
 
 function getConfigPath(): string {
   return process.env.T3X_CONFIG_PATH || path.join(homedir(), '.t3x', 'config.json');
@@ -45,6 +71,12 @@ export function isApiBackend(): boolean {
 }
 
 export function getApiClient(): T3xClient {
+  const requestClient = requestApiClients.getStore();
+  if (requestClient) return requestClient;
+  if (process.env.T3X_TRANSPORT === 'http') {
+    throw new Error('The MCP HTTP request has no authenticated API client.');
+  }
+
   const fileConfig = readFileConfig();
   const apiUrl = process.env.T3X_API_URL || fileConfig.api_url || 'http://localhost:8000/api';
   const apiKey = process.env.T3X_API_KEY || fileConfig.api_key;

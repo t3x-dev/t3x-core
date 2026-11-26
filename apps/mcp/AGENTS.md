@@ -1,6 +1,6 @@
 # MCP Agent Guide
 
-Follow the [repository guide](../../AGENTS.md). `apps/mcp` owns the runnable stdio entry point and runtime configuration. `packages/mcp` owns the server, tool definitions, handlers, resources, and prompts. Write MCP documentation and agent guidance in English.
+Follow the [repository guide](../../AGENTS.md). `apps/mcp` owns the runnable stdio and Streamable HTTP entry points and runtime configuration. `packages/mcp` owns the server, tool definitions, handlers, resources, and prompts. Write MCP documentation and agent guidance in English.
 
 ## Before changing MCP
 
@@ -12,4 +12,4 @@ Follow the [repository guide](../../AGENTS.md). `apps/mcp` owns the runnable std
 ## Verification
 
 - For documentation changes, follow the [repository verification policy](../../AGENTS.md#verification) and check links and Mermaid syntax where applicable.
-- For tool or server changes, run the relevant tests for `@t3x-dev/mcp-lib` and `@t3x-dev/mcp`. Exercise the stdio entry point for changes to tool discovery, configuration, or transport. Treat authenticated workflow acceptance as a separate check using the relevant API credential and ref policy.
+- For tool or server changes, run the relevant tests for `@t3x-dev/mcp-lib` and `@t3x-dev/mcp`. Exercise both transports for changes to shared discovery or runtime configuration. Treat authenticated workflow acceptance as a separate check using the relevant API credential and ref policy.

@@ -38,6 +38,7 @@ import {
   type ProposalGenerationReviewProjection,
   projectProposalGenerationReview,
 } from '../proposal-generation-projection';
+import { delegatedRefPolicy } from '../repository-agent-delegation';
 import { resolveWorkspaceExtractionTransitionSource } from '../workspace-extraction-proposal';
 import {
   buildWorkspaceSourceProposal,
@@ -231,7 +232,13 @@ export async function inspectTransition(input: {
       resolveTransitionProposalGraph(input.db, projectId, transitionId),
     getTransitionPolicyBinding: async ({ projectId, refName }) =>
       refPolicyForActor(
-        await getTransitionPolicyBinding(input.db, projectId, refName),
+        await delegatedRefPolicy(
+          input.db,
+          projectId,
+          refName,
+          input.actor,
+          await getTransitionPolicyBinding(input.db, projectId, refName)
+        ),
         input.actor
       ),
     resolveApplicableTransitionPolicy: ({ refPolicyBinding, requestKind, preparationFacts }) =>

@@ -87,6 +87,11 @@ function rejectIdentityOverride(c: Context): Response | null {
 }
 
 function isPublicPath(path: string, method?: string): boolean {
+  if (
+    (path === '/api/mcp-oauth/metadata' && method === 'GET') ||
+    (path === '/api/mcp-oauth/token' && method === 'POST')
+  )
+    return true;
   if (PUBLIC_PATHS.includes(path)) return true;
   for (const prefix of PUBLIC_PREFIXES) {
     if (path.startsWith(prefix)) return true;

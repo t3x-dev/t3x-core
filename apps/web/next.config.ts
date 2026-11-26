@@ -45,6 +45,18 @@ const nextConfig: NextConfig = {
   },
   // Hide the dev indicator floating ball (N button) in development
   devIndicators: false,
+  async headers() {
+    return [
+      {
+        source: '/settings/agent-access/authorize',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     const apiOrigin = (process.env.T3X_API_URL || 'http://localhost:8000').replace(/\/$/, '');
     return [{ source: '/ws', destination: `${apiOrigin}/ws` }];

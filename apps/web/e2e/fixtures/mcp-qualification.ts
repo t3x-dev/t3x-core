@@ -331,8 +331,49 @@ export async function revokeBrowser(page: Page) {
   await expect(page.getByText('API token revoked', { exact: true })).toBeVisible();
 }
 
+export async function initializeQualificationSchema(
+  actor: ApiCall,
+  projectId: string,
+  workspace_id: string,
+  material: { id: string; content_hash: string },
+) {
+  const workspaceUrl = `/projects/${projectId}/workspaces/${workspace_id}`;
+  const created = await actor<{ workspace: { revision: number } }>('PATCH', workspaceUrl, {
+    workspace: {
+      id: workspace_id,
+      title: 'First Schema',
+      targetBranch: 'main',
+      status: 'draft',
+      baseCommitHash: null,
+      sourceBundle: [
+        {
+          id: `material:${material.id}`,
+          type: 'document',
+          title: 'core-loop-evidence.txt',
+          materialId: material.id,
+          contentHash: material.content_hash,
+        },
+      ],
+      schemaBindings: [
+        {
+          canonicalName: 't3x/prd',
+          version: 'v2',
+          mode: 'pinned',
+          rootKey: 'prd',
+        },
+      ],
+      yopsDraft: { id: 'core-first-draft', operations: [] },
+    },
+  });
+  await actor('POST', `${workspaceUrl}/authoring`, {
+    request_id: randomUUID(),
+    expected_workspace_revision: created.workspace.revision,
+    expected_ref_head: null,
+  });
+}
+
 export async function invoke<T>(
-  client: Mcp,
+  client: Pick<Mcp, 'call'>,
   tool: string,
   args: Record<string, unknown>
 ): Promise<T> {

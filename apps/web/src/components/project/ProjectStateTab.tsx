@@ -64,6 +64,7 @@ import {
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
+  repositoryAgentAccessHref,
   repositoryBranch,
   repositoryBranchHref,
   workspaceLocation,
@@ -136,6 +137,7 @@ interface ProjectStateTabProps {
   repositoryPath?: string;
   repositoryProfile?: import('@t3x-dev/api-client').RepositoryProfile;
   canEditRepository?: boolean;
+  canManageAgentAccess?: boolean;
   initialView?: ProjectStateView;
   onRunValidation?: (commitHash: string, schemaName: string) => Promise<void> | void;
   projectId: string;
@@ -211,6 +213,7 @@ export function ProjectStateTab({
   projectVisibility,
   repositoryProfile,
   canEditRepository = false,
+  canManageAgentAccess = false,
   validation,
   validationError,
   validationLoading = false,
@@ -865,11 +868,16 @@ export function ProjectStateTab({
                 headCommitHash={branchHeads[inspectedBranch] ?? null}
                 sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
+                agentAccessHref={repositoryAgentAccessHref(
+                  repositoryPath ?? getProjectIdRepoPath(projectId),
+                  inspectedBranch
+                )}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 workspaceHref={workspaceHref}
                 canProposeChanges={canEditRepository}
+                canManageAgentAccess={canManageAgentAccess}
               />
               <StatePageFrame
                 projectName={projectName}

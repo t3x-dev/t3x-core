@@ -10,6 +10,8 @@ The inventory starts from source at `ae7df1304` and includes the repository, Sta
 
 See [MCP Operability and Qualification](operability.md) for the requirements for diagnostics, write recovery, Agent reporting, and full business qualification.
 
+[Repository delegation](#repository-delegation) defines how a task in an Agent chat can request access to one T3X repository and resume after Web authorization. The capability inventory below describes which steps work today.
+
 ## Proposed tool groups
 
 | Group | Business capabilities | Exposure |
@@ -28,9 +30,9 @@ See [MCP Operability and Qualification](operability.md) for the requirements for
 
 ### `context` · Identity and authorization
 
-- **MCP today** — With `T3X_MCP_BACKEND=api`, the client sends `T3X_API_KEY` or the key from the shared CLI configuration as a Bearer credential. The API resolves the caller. `t3x_context` returns the current actor and credential kinds, binding and granted Transition scopes. Invalid, expired and revoked credentials receive HTTP 401. [MCP backend](../../../packages/mcp/src/backend.ts)
+- **MCP today** — With `T3X_MCP_BACKEND=api`, stdio sends `T3X_API_KEY` or the key from the shared CLI configuration as a Bearer credential. Streamable HTTP accepts a pre-issued Bearer or a resource-bound OAuth access token when repository delegation is configured. The API resolves the caller. `t3x_context` returns the current actor and credential kinds, binding and granted Transition scopes. Invalid, expired and revoked credentials receive HTTP 401. [MCP backend](../../../packages/mcp/src/backend.ts)
 - **Web Chat and reusable APIs** — The assistant chooses capabilities using the authenticated principal, operation authorization, and model capabilities. Web Settings provides token creation and revocation. MCP can reuse API identity and permission decisions. [Assistant route](../../../packages/api/src/routes/workspace-assistant.openapi.ts) · [API Tokens Settings](../../web/src/components/settings/ApiTokensSettingsPanel.tsx)
-- **Web authorization** — Web API Tokens can issue a project-bound Agent credential. Its initial expiration is seven days, with separate Decision and Commit scope selections and the existing project editor grant. Machine Decision requires a ref policy that permits the actor. Policy administration stays with the authorized human. [Identity API](../../../packages/api/src/routes/auth-me.openapi.ts) · [Credential contract](../../../packages/api/src/schemas/api-key-contracts.ts) · [Transition authorization](../../../packages/api/src/lib/transition-authority.ts) · [Policy binding API](../../../packages/api/src/routes/transition-policy-bindings.openapi.ts)
+- **Web authorization** — A registered remote MCP host opens repository consent for the requesting task. Repository Settings manages the resulting delegation. The manual Web API Tokens flow can also issue a project-bound Agent credential. Its initial expiration is seven days, with separate Decision and Commit scope selections and the existing project editor grant. Machine Decision requires a ref policy that permits the actor. Policy administration stays with the authorized human. [Identity API](../../../packages/api/src/routes/auth-me.openapi.ts) · [Credential contract](../../../packages/api/src/schemas/api-key-contracts.ts) · [Transition authorization](../../../packages/api/src/lib/transition-authority.ts) · [Policy binding API](../../../packages/api/src/routes/transition-policy-bindings.openapi.ts)
 - **Roles and permissions** — Viewers can read, editors can edit, and owners or admins can perform the management actions granted to their roles. Credentials further restrict those grants. CUI human actions and machine Agent actions use their respective credentials. Machine credentials require a project binding. Credentials linked to the same user can select the same `workspace_id` when authorized. The server resolves the actor and any delegator. A CUI confirmation must come through a trusted human request and identify the exact operation or Review. [Namespace roles](../../../docs/architecture/namespace-authority-v1.md#namespace-role-matrix) · [Request Principal contract](../../../docs/architecture/request-principal-migration-baseline.md#ingress-matrix) · [Workspace ownership](../../../packages/api/src/middleware/workspace-access.ts)
 
 ### `repositories` · Repositories and branches
@@ -94,17 +96,94 @@ See [MCP Operability and Qualification](operability.md) for the requirements for
 - **Evidence and scope** — The portable bundle contains exact committed State and its verified Schema. A preview record proves which version the built-in slot points to. External runtime deployment and backup or restore are deferred. [Portable artifact contract](../../../docs/architecture/portable-artifact.md) · [Archive verification scope](../../../docs/architecture/project-archive-verification.md)
 - **Roles and permissions** — Delivery routes require Workspace access. Listing needs `project:read`. Preparation, assignment, and rollback need `project:edit`. Preparation pins the Workspace revision and Commit digest and uses an idempotency key. Preview assignment consumes a successful portable receipt. Rollback appends a new record that selects a previous fixed version. [Delivery API](../../../packages/api/src/routes/workspace-deliveries.openapi.ts) · [Workspace ownership](../../../packages/api/src/middleware/workspace-access.ts)
 
+## Repository delegation
+
+**Product target.** A person can hand one repository to a named Agent in one Web confirmation. For a personal branch that permits ordinary changes, the same Agent can read materials and history, edit Content, run configured checks, prepare and inspect a fixed Review, accept its own eligible change, commit it and return the exact resulting Content. History identifies the Agent and the human who delegated the work. Each branch keeps its own requirements. [Project grants and credentials](../../../docs/architecture/namespace-authority-v1.md#project-grants-and-credentials) · [Actor and delegator](../../../docs/architecture/request-principal-migration-baseline.md#actor)
+
+### Start in the Agent chat
+
+The person gives the Agent a task in their current conversation, for example “Update the December plan in `acme/editorial`.” This chat belongs to the Agent host, such as Codex. The host keeps the task and the originating conversation while the person signs in to T3X and authorizes access when needed.
+
+| Task context | Next action |
+| --- | --- |
+| The task identifies a repository | Open T3X consent with the named repository selected. Resolve its identity under the signed-in user's access and show the requesting Agent, repository and effective branch permissions. |
+| The repository is unspecified or ambiguous | Let the signed-in person choose one repository they can delegate. Show the authorization outcome for that repository before confirmation. |
+| An active grant already covers the identified repository and requested actions | Use it immediately in the same chat, subject to the current branch rules and available tools. Ask for consent only when the task needs new authority. |
+
+After confirmation, the requesting client receives the authorization callback, checks that access is ready and resumes the pending task in the original chat. The person can see which repository the Agent is working on without repeating their instruction. If they cancel, the host leaves that task paused and explains how to resume it.
+
+Repository **Settings → Agent access** is the management surface. The repository home can link to the same page as a shortcut. Show the Agent, effective scope and status of each delegation and let the person inspect, adjust, renew or revoke it. After revocation, a later task can request a fresh authorization in chat. The person must confirm again before that Agent can use the repository through a new grant.
+
+### What the person confirms
+
+When a chat needs authorization, open the T3X consent view for the selected repository. Resolve the Agent, repository and target branch before describing what the Agent can do. For a personal repository with an eligible `main`, use copy like the following.
+
+> **Let Codex work on Editorial Calendar?**
+>
+> Codex can organize sources, edit content and commit its own changes to `main` after checks pass. Other branches follow their review rules. You can revoke access at any time.
+>
+> **Authorize and start** · Advanced settings
+
+When `main` requires independent review, replace the outcome before confirmation with “Codex can prepare and check changes. An eligible reviewer must approve them before they reach `main`.” Use the actual branch name. Keep token fields and tool names out of the default view.
+
+| User task | Default | Advanced setting |
+| --- | --- | --- |
+| Set a time limit | Seven days, with a reminder before expiry | Change the expiry, renew or end access early |
+| Limit where the Agent works | This repository, subject to the rules on each branch | Restrict writable branches. Authorize each additional repository separately |
+| Limit what the Agent does | Complete ordinary content work through Commit | Choose read-only access or preparation for human review. Enable changes to a shared preview separately |
+| Review each change personally | The Agent can decide its own eligible changes on a personal branch | Require a human Decision before Commit. Changing an existing branch protection is a separate action for a person authorized to manage it |
+
+### When the Agent is ready
+
+One confirmation coordinates three existing boundaries. The API resolves the human's authority, issues or updates a repository-bound Agent grant and credential, and enforces the selected actions and writable branches on each relevant API entry point. For the default workflow the credential covers inspection, proposal, verification, acceptance or rejection, Commit creation and ref advancement.
+
+The server resolves an applicable AcceptancePolicy for the specific Agent and ref. On an ordinary personal branch the delegation must permit this Agent to prepare a fixed Review and accept its own eligible change. An existing actor restriction, independent-review rule or required check still applies. A delegation applies only to its recipient and cannot relax rules for another principal. An authorized human can complete an existing grant that lacks a machine policy, keep the saved Draft and prepare a fresh Review.
+
+A managed MCP connection exposes the actions for the selected workflow within the deployment's tool allowlist. Check the actual connection, authenticated Agent, repository, effective ref policy and required actions. For a first Content Commit, also check whether the target Workspace can resolve its Schema. Readiness checks leave repository history untouched. The API checks authority and preconditions again when the Agent executes the change.
+
+| Observed result | What the user sees |
+| --- | --- |
+| Access granted, client has yet to connect | “Authorized. Waiting for Codex to connect.” Offer **Connect Codex** for a client that needs pairing. |
+| Connected, ordinary changes eligible on the target | “Codex can commit to `main`. Returning to your chat.” The host continues the task already given. |
+| The ref requires independent approval | Let the Agent prepare an eligible Review. Show the branch rule and the exact Review to a reviewer allowed by that rule. |
+| The ordinary ref lacks an applicable machine policy | Show “This branch needs an acceptance policy for Codex before it can prepare a Review.” A person authorized to complete the delegation can repair it and the Agent can resume from any saved Draft. |
+| Connected, empty repository awaiting its first Schema | “Codex can collect sources now. Choose a structure before the first content commit.” Show the suggested definition when available. |
+| Connected, deployment exposes only reads | “This connection can read the repository. Its MCP service has disabled editing.” Provide the connection details for its operator. |
+| Provisioning or readiness check failed | Show the last confirmed step, the missing condition and a retry or repair action for the same grant. |
+| The first real change was committed and read back | Show “Codex committed to `main`” with links to the fixed Review and the exact committed version. A later ref head is a separate observation. |
+
+### Repository scenarios and acceptance
+
+- **Empty personal repository.** The Agent can start collecting material immediately. Use the exact Schema already selected by the person if a template supplies one. With no selected Schema, the Agent can suggest a structure. When the first Review needs it, show that definition and its impact for explicit human adoption. After this decision the Agent can resume eligible work. [Schema adoption contract](../../web/docs/business.md#b-04-schema-adoption-and-publication)
+- **Existing branch rules.** Let the Agent prepare everything its authority permits. When an independent Decision is required, show the blocking rule and link an eligible reviewer to the exact fixed Review once it exists. After acceptance, the Agent may commit if its authority, checks and expected head still hold. A failing check sends the work back for correction. A generated Proposal that requires human Decision, a generated deletion that requires confirmation, or a requested policy override goes to the authorized human with the specific evidence. [Transition authorization](#transitions--propose-verify-decide-and-commit)
+- **Existing personal Draft.** A fixed Review covers the entire saved Draft. Keep the assigned edit separate from unrelated work where possible. If the Agent would also commit the person's pending edits, show the combined diff and obtain a decision on those edits before proceeding. [Review scope](../../web/docs/business.md#b-03-the-version-being-reviewed)
+- **Revocation.** Stop subsequent access through this delegation, including calls from an already connected client. Keep the user's saved Draft, fixed Reviews, Decisions and committed history available under their existing access rules. If a write was in flight, the Web uses the person's access to establish its outcome before showing the last saved Draft or Commit. Other delegations retain their own permissions. [Write recovery](operability.md#timeouts-and-recovery)
+
+**End-to-end acceptance.** Start a chat task against an authenticated personal repository on an ordinary `main` with a selected Schema and no preinstalled machine policy. Grant access in the Web and resume that task in its originating chat. Have the same Agent save an ordinary content edit, prepare and read its fixed Review by ID, accept against its exact preconditions, then commit with the recorded Decision digest and expected head. Read back the exact Commit and check the edited field in its resulting State. The OAuth qualification also covers repository selection, reuse for a second chat task, a protected branch and revocation through an already connected client followed by fresh consent. Run `node tools/mcp-qualification.mjs --run oauth-delegation` for this flow. The core qualification exercises a separately configured policy where a human prepares the Review the Agent accepts. [OAuth qualification](../../web/e2e/security/mcp-oauth-delegation.spec.ts) · [Core qualification](../../web/e2e/security/mcp-core-loop.spec.ts)
+
+### Remote MCP authorization
+
+For a remote HTTP MCP client, the recommended integration uses standard MCP OAuth authorization. The client discovers the authorization server through the MCP server's protected resource metadata, opens consent in the browser, receives the code at its registered redirect URI and exchanges it for an access token using PKCE. The host correlates that callback with its pending conversation and task. The API still checks repository access and ref policy on each operation. [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+
+**Current implementation.** An OAuth-enabled HTTP deployment advertises its resource, issuer and enabled tool groups. T3X Web opens consent for a registered client using the signed-in person's current repository authority. A confirmed grant and a five-minute single-use code are recorded together. Exchange checks the registered client, exact callback, resource and S256 verifier. The MCP service accepts the resulting resource-bound token and checks the delegation's underlying credential with the API on each request. The host owns conversation state, task resumption and credential reuse. A host can include `repository=owner/name` and `branch` on its authorization request. Omitting the repository opens the picker. [HTTP deployment and client registration](../README.md#repository-delegation-with-oauth) · [Consent and exchange API](../../../packages/api/src/routes/mcp-delegations.openapi.ts)
+
+A managed personal delegation supplies an applicable policy for its own eligible changes on an ordinary ref. Existing branch rules and the operator's explicit MCP tool selection take precedence. A pre-issued Bearer keeps its existing API-token workflow. When an eligible older personal Agent credential reaches `REVIEW_SNAPSHOT_POLICY_REQUIRED`, the delegating person can choose **Complete authorization** in repository Settings. The Agent retries with the same credential and saved Draft revision. The repair applies to that Agent on the chosen branch and preserves the existing credential expiry and scopes. The development Chat remains available for an isolated walkthrough with sample data. [Repository access settings](../../web/src/components/project/agent-access/RepositoryAgentAccess.tsx) · [Policy resolution and repair](../../../packages/api/src/lib/repository-agent-delegation.ts) · [Fixed Review preparation](../../../packages/mcp/src/tools/draft-review.ts)
+
 ## Single-user workflow after Web authorization
 
 The diagram shows the target workflow. The CUI presents exact changes and collects human confirmation when required. An Agent executes actions allowed by its credential and ref policy. Both use the same T3X business commands as the Web client.
 
 ```mermaid
 flowchart TD
-    web["User signs in and grants access on the Web"] --> credentials["Configure authorized CUI and Agent credentials"]
-    credentials --> cui["CUI presents context and collects human confirmation"]
-    credentials --> agent["Agent executes authorized actions"]
-    cui --> mcp["MCP exposes configured business tool groups"]
-    agent --> mcp
+    chat["User gives the Agent a task in chat"] --> target{"Repository identified?"}
+    target -->|No| pick["Select a repository in T3X"]
+    target -->|Yes| existing{"Sufficient active grant?"}
+    pick --> existing
+    existing -->|No| grant["Authorize this Agent in T3X"]
+    grant --> task["Resume the pending task in the original chat"]
+    existing -->|Yes| task
+    task --> agent["Connected Agent works on the selected ref"]
+    agent --> mcp["MCP exposes configured business tool groups"]
     mcp --> api["T3X API checks principal, repository, scopes, and ref policy"]
     api --> read["Resolve repository and ref, read exact State and head"]
     read --> draft["Open owned Workspace, read Draft and bound Schema"]
@@ -114,10 +193,12 @@ flowchart TD
     edit --> saved["Save Draft at the expected revisions"]
     saved --> review["Freeze Review, verify, and read the diff and evidence"]
     review --> decision{"Review current and Decision authorized?"}
+    decision -->|Human Decision required| cui["Eligible person inspects the fixed Review"]
+    cui -->|Decide on this Review| api
     decision -->|Accept or permitted override| commit["Commit with the Decision digest and expected head"]
     decision -->|Reject| rejected["Record rejection and close the change"]
     decision -->|Check failed or Review stale| draft
-    decision -->|Unauthorized or independent review required| blocked["Return the policy reason"]
+    decision -->|Missing authority| blocked["Return the policy reason"]
     commit -->|Head changed| sync
     commit --> result["Read exact Commit and State, export or continue working"]
     result --> read
@@ -125,7 +206,7 @@ flowchart TD
     delivery --> preview["Assign or roll back the built-in preview slot and read the recorded version"]
 ```
 
-1. **Start from the repository.** The human may create a personal repository. Authorize a CUI and an Agent for that repository on the Web, including any ref policy needed for machine Decision. Both can locate the branch and select or open the user's Workspace, then read the exact basis and Schema binding. Exercise an empty ref and establish a Schema before reviewing Content.
+1. **Start with a task in chat.** Identify or select the repository and use [repository delegation](#repository-delegation) when the Agent needs access. Once the task resumes, the Agent locates the branch, selects or opens an authorized Workspace and reads its exact basis and Schema binding. An empty ref needs an agreed Schema before Content Review.
 2. **Complete a change.** Create, update, or delete Content in Draft, or save a Schema-only change. Prepare and read fixed Review, verify, record an authorized Decision, and Commit. Read back the exact Commit and its resulting Content and binding. A human uses the CUI for human-only steps. An Agent can finish a machine-eligible change when the ref policy allows it.
 3. **Use evidence and deliver the result.** Ingest a source with traceable authorship, apply a candidate to Draft, and check its evidence in Review. Export the exact result. Where Delivery is enabled, prepare the portable artifact, read the receipt, and verify preview assignment and rollback by recorded digest.
 4. **Recover and continue.** Exercise edits from two clients on the same Draft, a moving ref, failed checks, rejection, revoked or insufficient permission, and a lost response. Preserve usable Draft and evidence. Re-read authoritative state before retrying, reconciling, or preparing a fresh Review. A ref that requires independent review returns a policy block for the single-user workflow.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { postAuthDestination } from '@/domain/authCallback';
 import {
   type AuthSessionResponse,
   postLogin,
@@ -8,6 +9,7 @@ import {
   type RegisterCredentials,
 } from '@/infrastructure/auth';
 import { ApiError } from '@/infrastructure/core';
+import { getCurrentPersonalNamespace } from '@/infrastructure/namespaces';
 import { useSession } from './useSession';
 
 export type LocalAuthMode = 'login' | 'register';
@@ -17,6 +19,12 @@ interface LocalAuthInput {
   username: string;
   password: string;
   name?: string;
+}
+
+async function destinationAfterLogin(mode: LocalAuthMode, callbackUrl: string) {
+  const personalNamespace =
+    mode === 'login' && callbackUrl === '/' ? await getCurrentPersonalNamespace() : null;
+  return postAuthDestination(mode, callbackUrl, personalNamespace?.slug);
 }
 
 export function useLocalAuth() {
@@ -51,5 +59,5 @@ export function useLocalAuth() {
     return 'Failed to connect to server';
   }, []);
 
-  return { authenticate, persistSession, getErrorMessage };
+  return { authenticate, persistSession, getErrorMessage, destinationAfterLogin };
 }

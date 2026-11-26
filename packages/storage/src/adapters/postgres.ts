@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { MCP_AUTHORIZATION_CODES_SQL } from './mcp-authorization-codes-sql';
 import { REPOSITORY_OBJECT_ADDRESSES_SQL } from './repository-object-addresses-sql';
 import { ensureRepositoryPaths } from './repository-paths';
 
@@ -191,7 +192,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 89;
+export const POSTGRES_SCHEMA_VERSION = 90;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -291,9 +292,12 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
 
   // v83 already supports one open draft per owner. Replaying the old
   // per-branch deduplication would abandon another owner's draft.
-  if (version !== undefined && version >= 83 && version < 86) {
+  if (version !== undefined && version >= 83 && version < POSTGRES_SCHEMA_VERSION) {
     if (version < 85) await ensurePortableDeliverySchema(sql);
-    await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+    if (version < 86) await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
+    await ensureSourceTextRevisionsSchema(sql);
+    await ensurePullRequestsSchema(sql);
+    await ensureMachineWorkflowSchema(sql);
     await recordSchemaVersion(sql);
     return false;
   }
@@ -602,25 +606,6 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
     CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
     CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
-
-    CREATE TABLE IF NOT EXISTS repository_run_requests (
-      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      actor_id TEXT NOT NULL,
-      request_id TEXT NOT NULL,
-      commit_digest TEXT NOT NULL,
-      configuration_digest TEXT NOT NULL,
-      run_id TEXT NOT NULL,
-      PRIMARY KEY (project_id, actor_id, request_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS source_ingestion_receipts (
-      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      actor_id TEXT NOT NULL,
-      request_id TEXT NOT NULL,
-      request_digest TEXT NOT NULL,
-      result JSONB NOT NULL,
-      PRIMARY KEY (project_id, actor_id, request_id)
-    );
 
     -- Pins table (source selection for commit sources + conversation context)
     CREATE TABLE IF NOT EXISTS pins (
@@ -2683,9 +2668,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
     );
   `);
 
-  await sql.unsafe(
-    'ALTER TABLE state_presentations ADD COLUMN IF NOT EXISTS revision_parent_digest TEXT'
-  );
+  await ensureMachineWorkflowSchema(sql);
 
   // Studio candidates retain exact references, never private manifest/resource copies.
   await sql.unsafe(`
@@ -2934,7 +2917,44 @@ async function ensurePortableDeliverySchema(sql: postgres.Sql): Promise<void> {
   `);
 }
 
+// v87–89 updates also run on the post-v83 path to preserve principal-owned drafts.
+async function ensureMachineWorkflowSchema(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS repository_run_requests (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      commit_digest TEXT NOT NULL,
+      configuration_digest TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      PRIMARY KEY (project_id, actor_id, request_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS source_ingestion_receipts (
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      actor_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_digest TEXT NOT NULL,
+      result JSONB NOT NULL,
+      PRIMARY KEY (project_id, actor_id, request_id)
+    );
+
+    ALTER TABLE state_presentations ADD COLUMN IF NOT EXISTS revision_parent_digest TEXT;
+  `);
+}
+
 async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(MCP_AUTHORIZATION_CODES_SQL);
+  // v90. Legacy credentials do not acquire repository delegation.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS repository_agent_delegations (
+      key_id TEXT PRIMARY KEY REFERENCES api_keys(id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      branch_only BOOLEAN NOT NULL,
+      mode TEXT NOT NULL CHECK (mode IN ('read','prepare','commit'))
+    );
+  `);
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())

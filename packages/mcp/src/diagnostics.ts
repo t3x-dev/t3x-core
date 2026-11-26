@@ -171,3 +171,9 @@ export const mcpFetch: typeof fetch = async (input, init) => {
     );
   }
 };
+
+export const mcpHttpFetch: typeof fetch = (input, init) => {
+  // Tool calls already have a diagnostic deadline. Bound discovery and resource reads too.
+  const signal = init?.signal ?? (calls.getStore() ? undefined : AbortSignal.timeout(60_000));
+  return mcpFetch(input, { ...init, redirect: 'error', signal });
+};

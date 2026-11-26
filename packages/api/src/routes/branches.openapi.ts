@@ -1,3 +1,4 @@
+import type { AppEnv } from '../types';
 /**
  * Branches Routes
  *
@@ -41,7 +42,7 @@ import {
   SuccessResponseSchema,
 } from '../schemas/common';
 
-export const branchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+export const branchRoutes = new OpenAPIHono<AppEnv>({ defaultHook: zodErrorHook });
 
 // ============================================================
 // Shared schema
@@ -318,7 +319,8 @@ branchRoutes.openapi(listBranchesRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    if (initialize_main !== '0') await ensureMainBranch(db, projectId);
+    if (initialize_main !== '0' && !c.get('managedRepositoryDelegation'))
+      await ensureMainBranch(db, projectId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -437,7 +439,7 @@ branchRoutes.openapi(getCurrentBranchRoute, async (c) => {
 
     let branch = await findCurrentBranch(db, projectId);
 
-    if (!branch) {
+    if (!branch && !c.get('managedRepositoryDelegation')) {
       await ensureMainBranch(db, projectId);
       branch = await switchBranch(db, projectId, 'main');
     }

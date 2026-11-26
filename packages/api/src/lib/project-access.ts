@@ -58,6 +58,7 @@ export type ProjectAccessDecision =
       allowed: true;
       project: NonNullable<Awaited<ReturnType<typeof findProjectById>>>;
       canEdit?: boolean;
+      canManageAgentAccess?: boolean;
     }
   | {
       allowed: false;
@@ -248,7 +249,12 @@ async function evaluateProjectAccessFromFacts(
     allowed: true,
     project: facts.project,
     ...(options.includeEditPermission
-      ? { canEdit: evaluateProjectAction(authorityFacts, 'project:edit').allowed }
+      ? {
+          canEdit: evaluateProjectAction(authorityFacts, 'project:edit').allowed,
+          canManageAgentAccess:
+            trustedPrincipal.kind === 'human' &&
+            evaluateProjectAction(authorityFacts, 'project:guests:manage').allowed,
+        }
       : {}),
   };
 }

@@ -1,0 +1,364 @@
+.page {
+  composes: scope from "../../../styles/management-palette.module.css";
+  flex: 1;
+  width: 100%;
+  min-height: 100%;
+  min-width: 0;
+  overflow: auto;
+  background: var(--surface-canvas);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px clamp(16px, 4vw, 48px);
+  border-bottom: 1px solid var(--stroke-divider);
+  background: var(--surface-panel);
+}
+
+.back,
+.demo > summary,
+.advanced > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.back:hover,
+.demo > summary:hover,
+.advanced > summary:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.back {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.back svg,
+.note svg {
+  flex: none;
+}
+
+.demo {
+  position: relative;
+  flex: none;
+}
+
+.demoPanel {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  width: min(288px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  box-shadow: var(--fx-shadow-lg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.body {
+  width: min(100%, 648px);
+  margin-inline: auto;
+  padding: clamp(32px, 8vh, 80px) 24px 48px;
+}
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--stroke-default);
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere;
+}
+
+.content {
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.agentIcon,
+.repoIcon,
+.stateIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.repoIcon,
+.stateIcon {
+  border-color: transparent;
+  background: var(--status-info-muted);
+  color: var(--status-info);
+}
+
+.connector {
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.description,
+.statusText {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.requestContext {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.requestContext dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.requestContext dl > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 8px;
+}
+
+.requestContext dt {
+  color: var(--text-secondary);
+}
+
+.requestContext dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 24px;
+  padding: 10px 12px;
+  border: 1px solid var(--stroke-divider);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.advanced {
+  margin-top: 12px;
+}
+
+.advanced > summary::-webkit-details-marker,
+.demo > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fields {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+  padding-block: 4px;
+}
+
+.fields label,
+.demoPanel label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.select,
+.fields select,
+.demoPanel select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px clamp(24px, 4vw, 40px);
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--color-brand);
+  color: var(--primary-foreground);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+}
+
+.secondary {
+  border-color: var(--stroke-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.page :is(a, button, summary, select, input):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.page :is(button, select):disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.note svg {
+  margin-block-start: 3px;
+}
+
+.advanced[open] > summary svg:last-child {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 520px) {
+  .body {
+    padding: 24px 14px 32px;
+  }
+
+  .content {
+    padding: 22px 18px;
+  }
+
+  .footer {
+    padding: 14px 18px;
+  }
+
+  .back,
+  .demo > summary,
+  .advanced > summary,
+  .primary,
+  .secondary {
+    min-height: 44px;
+  }
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.grants {
+  display: grid;
+  gap: 14px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grantTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+}

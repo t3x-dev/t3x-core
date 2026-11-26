@@ -29,6 +29,7 @@ WebUI work unless a task explicitly touches its subject.
 | Review, decisions, or commits | [Transition Application Convergence](../../docs/architecture/transition-application-convergence.md) for immutable review evidence and the authoritative mutation path |
 | Workspace ownership, saving, or conflict recovery | [Reliable Workspace Gate 1](../../docs/architecture/reliable-workspace-gate-1.md#frozen-behavior) for private drafts, guarded writes, and reconciliation |
 | Roles, collaboration, or request identity | [Namespace Authority](../../docs/architecture/namespace-authority-v1.md) for roles and project grants, and [Request Principal](../../docs/architecture/request-principal-migration-baseline.md) when changing how WebUI forwards authenticated requests |
+| Authorizing an MCP Agent from chat or managing access in repository Settings | [Repository delegation](../mcp/docs/business-capabilities.md#repository-delegation) for repository selection, Web consent, return to the task and revocation |
 | Committed State export | [Exact Committed State Export](../../docs/architecture/state-export.md) for version identity and complete export |
 | Repository names, addresses, or redirects | [Repository Addresses](../../docs/repository-addresses.md) for canonical names, stable identity, and historical addresses |
 
