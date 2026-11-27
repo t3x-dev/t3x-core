@@ -269,7 +269,7 @@ workspaceAssistantRoutes.post(
                   ...(binding.generationModel
                     ? {
                         resolveModel: async () =>
-                          createWorkspaceProposalModel(binding.generationModel!),
+                          createWorkspaceProposalModel(binding.generationModel!, controller.signal),
                       }
                     : {}),
                 }

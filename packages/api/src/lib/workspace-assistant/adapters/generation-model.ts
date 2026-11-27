@@ -1,16 +1,25 @@
-import { isPromptImageBlock, type LLMPrompt, type LLMProvider } from '@t3x-dev/core';
+import {
+  isPromptImageBlock,
+  type LLMPrompt,
+  type LLMProvider,
+  LLMProviderError,
+} from '@t3x-dev/core';
 import { z } from 'zod';
-import type { InferenceAttempt, MeteredInferenceResult } from '../../inference';
+import type { InferenceAttempt, InferenceExecution, MeteredInferenceResult } from '../../inference';
 import {
   type GenerationModel,
   type GenerationModelContentPart,
   GenerationModelError,
   type GenerationModelEvidence,
   type GenerationModelMessage,
+  type GenerationModelOutputPart,
   type GenerationModelRequest,
   type GenerationModelResult,
 } from '../../model-runtime-contract';
-import type { ProposalGenerationModel } from '../../proposal-generation';
+import type {
+  ProposalGenerationMeter,
+  ProposalGenerationModelInput,
+} from '../../proposal-generation';
 import { createProposalGenerationModel } from '../../proposal-generation-model';
 
 type ToolDefinition = Parameters<NonNullable<LLMProvider['generateWithTools']>>[1][number];
@@ -146,52 +155,77 @@ export async function invokeWorkspaceGenerationModel(input: {
   };
 }
 
-export function createWorkspaceProposalModel(model: GenerationModel): ProposalGenerationModel {
+export function createWorkspaceProposalModel(model: GenerationModel, signal?: AbortSignal) {
   return {
     provider: model.provider,
     model: model.modelId,
-    async generate(input, attempt) {
-      if (!attempt || !model.capabilities.includes('structured_output')) {
+    async generateMetered(input: ProposalGenerationModelInput, meter: ProposalGenerationMeter) {
+      if (!model.capabilities.includes('structured_output')) {
         throw new GenerationModelError('generation_capability_unsupported', 'not_started');
       }
-      let evidence: GenerationModelEvidence | undefined;
+      let attemptIndex = 0;
+      let execution: InferenceExecution<readonly GenerationModelOutputPart[]> | undefined;
       const proposal = createProposalGenerationModel({
         providerId: model.provider,
         model: model.modelId,
-        retry: false,
         provider: {
           async generateStructured(prompt, schema, options) {
-            const result = await invokeModel({
-              model,
-              attempt,
-              request: {
-                messages: messagesFromPrompt(prompt, model),
-                output: {
-                  type: 'json',
-                  name: 'ProposalGenerationDraft',
-                  // Protocol refinements remain server-validated by schema.parse below.
-                  schema: z.toJSONSchema(schema, { unrepresentable: 'any', io: 'input' }),
+            if (signal?.aborted)
+              throw new GenerationModelError('generation_cancelled', 'not_started');
+            execution = await meter(attemptIndex++, async (attempt) => {
+              const result = await invokeModel({
+                model,
+                attempt,
+                signal,
+                request: {
+                  messages: messagesFromPrompt(prompt, model),
+                  output: {
+                    type: 'json',
+                    name: 'ProposalGenerationDraft',
+                    schema: z.toJSONSchema(schema, { unrepresentable: 'any', io: 'input' }),
+                  },
+                  temperature: options.temperature,
+                  maxOutputTokens: options.maxTokens,
                 },
-                temperature: options.temperature,
-                maxOutputTokens: options.maxTokens,
-              },
+              });
+              return { value: result.output, ...metering(result.evidence) };
             });
-            evidence = result.evidence;
-            const json = result.output.find((part) => part.type === 'json');
-            const value =
+            // Settle a delivered provider response before validating it or starting a repair.
+            const json = execution.value.find((part) => part.type === 'json');
+            const jsonText =
               json?.type === 'json'
-                ? json.value
-                : JSON.parse(
-                    result.output
-                      .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-                      .join('')
-                  );
-            return { data: schema.parse(value), usage: result.evidence.usage };
+                ? JSON.stringify(json.value)
+                : execution.value
+                    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+                    .join('');
+            let value: unknown;
+            try {
+              value = json?.type === 'json' ? json.value : JSON.parse(jsonText);
+            } catch {
+              throw new LLMProviderError(
+                model.provider,
+                undefined,
+                'Failed to parse structured response as JSON',
+                'JSON_PARSE',
+                { jsonText }
+              );
+            }
+            const parsed = schema.safeParse(value);
+            if (!parsed.success)
+              throw new LLMProviderError(
+                model.provider,
+                undefined,
+                'Generated Proposal Draft is invalid',
+                'SCHEMA_MISMATCH',
+                { jsonText, issues: parsed.error.issues }
+              );
+            return { data: parsed.data, usage: execution.receipt.usage };
           },
         },
       });
       const result = await proposal.generate(input);
-      return { ...result, ...metering(evidence!) };
+      if (!execution) throw new Error('Proposal generation did not execute a model attempt');
+      return { ...execution, value: result.draft };
     },
   };
 }

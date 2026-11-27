@@ -8,7 +8,10 @@ import {
 import { type LLMProvider, resolveNativeYOpsPath } from '@t3x-dev/core';
 import { type AnyDB, findTurnsByConversation } from '@t3x-dev/storage';
 import { z } from 'zod';
-import { generateTransitionProposal, type ProposalGenerationModel } from '../proposal-generation';
+import {
+  type ContentProposalGenerationModel,
+  generateTransitionProposal,
+} from '../proposal-generation';
 import { defaultProposalGenerationModel } from '../proposal-generation-model';
 import { publishWorkspaceAuthoringAction } from '../workspace-authoring';
 import { assertAssistantContextCurrent } from './context';
@@ -53,7 +56,7 @@ export function createAssistantCapabilities(input: {
     posture: 'source_only' | 'guided' | 'recommend';
     requestedProvider?: string;
     requestedModel?: string;
-    resolveModel?: () => Promise<ProposalGenerationModel>;
+    resolveModel?: () => Promise<ContentProposalGenerationModel>;
   };
 }): AssistantCapabilities {
   const { prepared } = input;

@@ -29,11 +29,13 @@ import type { YSchema } from '@t3x-dev/yschema';
 import {
   executeMeteredInference,
   type InferenceAttempt,
+  type InferenceExecution,
   type InferenceFinishStatus,
   type InferenceProviderCost,
   type InferenceRuntime,
   type InferenceScope,
   type InferenceUsage,
+  type MeteredInferenceCall,
 } from './inference';
 import {
   generateSchemaTransitionProposal,
@@ -276,6 +278,22 @@ export interface ProposalGenerationModel {
     attempt?: InferenceAttempt
   ): Promise<ProposalGenerationModelResult>;
 }
+
+export type ProposalGenerationMeter = <T>(
+  attemptIndex: number,
+  invoke: MeteredInferenceCall<T>['invoke']
+) => Promise<InferenceExecution<T>>;
+
+export type ContentProposalGenerationModel =
+  | ProposalGenerationModel
+  | {
+      provider: string;
+      model: string;
+      generateMetered(
+        input: ProposalGenerationModelInput,
+        meter: ProposalGenerationMeter
+      ): Promise<InferenceExecution<unknown>>;
+    };
 
 export interface ProposalGenerationModelResult {
   draft: unknown;
@@ -680,7 +698,7 @@ interface ContentProposalGenerationInput {
   requestId: string;
   requester: ActorRef;
   request: ProposalGenerationRequest;
-  resolveModel(): Promise<ProposalGenerationModel>;
+  resolveModel(): Promise<ContentProposalGenerationModel>;
   inference: {
     runtime: InferenceRuntime;
     runId: string;
@@ -837,54 +855,48 @@ async function generateContentTransitionProposal(
         'Proposal context exceeds the generation budget; select smaller source excerpts or a smaller Workspace'
       );
     const model = await input.resolveModel();
-    const execution = await executeMeteredInference({
-      runtime: input.inference.runtime,
-      input: {
-        runId: input.inference.runId,
-        feature: 'transition.proposal-generation',
-        requestedModel: input.request.requestedModel ?? model.model,
-        scope: input.inference.scope,
-      },
-      resolvedProvider: model.provider,
-      resolvedModel: model.model,
-      now: input.now,
-      invoke: async (attempt) => {
-        const result = await model.generate(
-          {
-            profile: profile.profile,
-            context,
-            base: workspace.base,
-            ...(authoring ? { authoring } : {}),
-            yschema: { resource: schemaResource, value: yschema },
-            schemaLayout,
-            sources,
-            ...(images.length
-              ? {
-                  images: {
-                    memoryIndexOffset: context.memories.length - images.length,
-                    items: images,
-                  },
-                }
-              : {}),
-            instruction: input.request.instruction,
-            prompt: GENERATION_PROMPT,
-            ...(conversationTranscript ? { conversationTranscript } : {}),
-          },
-          attempt
-        );
-        return {
-          value: result.draft,
-          usage: result.usage,
-          resolvedProvider: result.resolvedProvider,
-          resolvedModel: result.resolvedModel,
-          ...(result.finishStatus ? { finishStatus: result.finishStatus } : {}),
-          ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
-          ...(result.providerReportedCost
-            ? { providerReportedCost: result.providerReportedCost }
-            : {}),
-        };
-      },
-    });
+    const generation: ProposalGenerationModelInput = {
+      profile: profile.profile,
+      context,
+      base: workspace.base,
+      ...(authoring ? { authoring } : {}),
+      yschema: { resource: schemaResource, value: yschema },
+      schemaLayout,
+      sources,
+      ...(images.length
+        ? {
+            images: {
+              memoryIndexOffset: context.memories.length - images.length,
+              items: images,
+            },
+          }
+        : {}),
+      instruction: input.request.instruction,
+      prompt: GENERATION_PROMPT,
+      ...(conversationTranscript ? { conversationTranscript } : {}),
+    };
+    const meter: ProposalGenerationMeter = (attemptIndex, invoke) =>
+      executeMeteredInference({
+        runtime: input.inference.runtime,
+        input: {
+          runId: input.inference.runId,
+          attemptIndex,
+          feature: 'transition.proposal-generation',
+          requestedModel: input.request.requestedModel ?? model.model,
+          scope: input.inference.scope,
+        },
+        resolvedProvider: model.provider,
+        resolvedModel: model.model,
+        now: input.now,
+        invoke,
+      });
+    const execution =
+      'generateMetered' in model
+        ? await model.generateMetered(generation, meter)
+        : await meter(0, async (attempt) => {
+            const { draft, ...receipt } = await model.generate(generation, attempt);
+            return { ...receipt, value: draft };
+          });
     const rawDraft = alignGeneratedProposalDraft(execution.value, {
       posture: input.request.posture,
       context,
