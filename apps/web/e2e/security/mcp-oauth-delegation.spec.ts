@@ -564,6 +564,40 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       protectedScope.project_id,
       protectedScope.workspace_id
     );
+    await test.step('open the Agent-prepared fixed Review from its current Draft', async () => {
+      const reviewPage = await page.context().newPage();
+      try {
+        const root = `${issuer}/${identity.namespace}/reviewed`;
+        const query = new URLSearchParams({
+          workspace: protectedWorkspace.workspace_id,
+          workspaceMode: 'review',
+        });
+        await reviewPage.goto(`${root}/branches/main/workspaces?${query}`);
+        const open = reviewPage.getByRole('link', { name: 'Open fixed review' });
+        const path = '/reviews/' + protectedReview.review.address_number;
+        await expect(open).toHaveAttribute('href', new RegExp(path + '(?:\\?|$)'));
+        await reviewPage.screenshot({
+          path: test.info().outputPath('current-draft-fixed-review.png'),
+        });
+        const mutations: string[] = [];
+        reviewPage.on('request', (request) => {
+          if (
+            request.method() !== 'GET' &&
+            request.url().includes('/api/') &&
+            request.url().includes('/workspaces/')
+          )
+            mutations.push(request.url());
+        });
+        await open.click();
+        await expect(reviewPage).toHaveURL((url) => url.pathname === new URL(root + path).pathname);
+        await expect(
+          reviewPage.getByRole('heading', { name: /Fixed snapshot · Workspace r/ })
+        ).toBeVisible();
+        expect(mutations).toEqual([]);
+      } finally {
+        await reviewPage.close();
+      }
+    });
     const selfApproval = await second.call('decide_transition', {
       project_id: other.project_id,
       transition_id: protectedReview.view.transition_id,

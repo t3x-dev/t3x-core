@@ -9,11 +9,13 @@ import styles from './WorkspaceReviewWorkbench.module.css';
 export function WorkspaceReviewValidation({
   checks,
   running = false,
+  prepared = false,
   actions,
   children,
 }: {
   checks: readonly ChangeCheckRow[];
   running?: boolean;
+  prepared?: boolean;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
@@ -26,7 +28,9 @@ export function WorkspaceReviewValidation({
   const status = running
     ? 'Preparing…'
     : !checks.length
-      ? 'Not prepared'
+      ? prepared
+        ? 'Recorded in fixed review'
+        : 'Not prepared'
       : failed
         ? `${failed} failed`
         : completed < applicable
@@ -76,7 +80,11 @@ export function WorkspaceReviewValidation({
           {actions}
         </div>
         {!checks.length ? (
-          <p>Prepare review to record checks for this revision.</p>
+          <p>
+            {prepared
+              ? 'Open the fixed review to read its checks.'
+              : 'Prepare review to record checks for this revision.'}
+          </p>
         ) : (
           <ul className={styles.validationList}>
             {checks

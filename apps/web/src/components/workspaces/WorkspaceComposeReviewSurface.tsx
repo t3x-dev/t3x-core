@@ -3064,6 +3064,8 @@ function ReviewSurface({
     : controller.candidate.baseCommitHash;
   const snapshotMatchesDraft =
     snapshotBasis !== undefined &&
+    snapshot?.projectId === controller.candidate.projectId &&
+    snapshot?.workspaceId === controller.candidate.id &&
     snapshotBasis.workspaceRevision === inspectedRevision &&
     snapshotBasis.refHead === inspectedRefHead &&
     snapshotBasis.refName === (authoring?.basis.refName ?? controller.candidate.targetBranch);
@@ -3277,23 +3279,40 @@ function ReviewSurface({
   const preparing = controller.busyAction === 'review.prepare';
   const draftLoading = activity.enabled && !authoring && activity.loading;
   const draftUnavailable = activity.enabled && !draftLoading && (!authoring || !authoringReview);
-  const snapshotStatus: DraftSnapshotStatus = !snapshot
-    ? 'none'
-    : newerDraft || hasSavedSchema
-      ? 'outdated'
-      : !snapshotBasis ||
-          preparing ||
-          preparingSchema ||
-          savedSchema.loading ||
-          savedSchema.error ||
-          activity.error ||
-          draftUnavailable ||
-          draftLoading ||
-          activity.awaitingPublishRefresh
-        ? 'unknown'
-        : snapshotMatchesDraft
-          ? 'matching'
-          : 'outdated';
+  const fixedReview = authoring?.fixedReview;
+  const snapshotStatus: DraftSnapshotStatus =
+    !snapshot && !fixedReview
+      ? 'none'
+      : newerDraft || hasSavedSchema
+        ? 'outdated'
+        : (!snapshotBasis && !fixedReview) ||
+            preparing ||
+            preparingSchema ||
+            savedSchema.loading ||
+            savedSchema.error ||
+            activity.error ||
+            draftUnavailable ||
+            draftLoading ||
+            activity.awaitingPublishRefresh
+          ? 'unknown'
+          : fixedReview || snapshotMatchesDraft
+            ? 'matching'
+            : 'outdated';
+  const matchingSnapshot =
+    fixedReview ??
+    (snapshotMatchesDraft && snapshot
+      ? { snapshotId: snapshot.snapshotId, number: undefined }
+      : undefined);
+  const fixedReviewHref =
+    snapshotStatus === 'matching' && matchingSnapshot
+      ? workspaceReviewHref(candidate.projectId, candidate.id, {
+          snapshotId: matchingSnapshot.snapshotId,
+          snapshotNumber: matchingSnapshot.number,
+          repositoryPath: matchingSnapshot.number ? repositoryPath : undefined,
+          branch: authoring?.basis.refName ?? candidate.targetBranch,
+          pane,
+        })
+      : undefined;
   const committedId =
     committedReviewId(view) ??
     (controller.candidate.status === 'committed'
@@ -3382,7 +3401,9 @@ function ReviewSurface({
         status={
           showEmptyWorkbench
             ? 'Content and Schema changes relative to the draft base.'
-            : 'Review the saved Draft. Prepare review to freeze this revision and run checks.'
+            : fixedReviewHref
+              ? 'This saved Draft has a fixed Review.'
+              : 'Review the saved Draft. Prepare review to freeze this revision and run checks.'
         }
         notice={
           newerDraft ||
@@ -3495,6 +3516,8 @@ function ReviewSurface({
               candidate={candidate}
               controller={controller}
               snapshotStatus={snapshotStatus}
+              fixedReviewHref={fixedReviewHref}
+              matchingSnapshotId={matchingSnapshot?.snapshotId}
               hasChanges={hasSavedSchema ? true : authoring?.hasChanges}
               preparingSchema={preparingSchema || Boolean(schemaPreparation)}
               schemaLoading={Boolean(
@@ -3653,6 +3676,8 @@ function WorkspaceReviewSummary({
   candidate,
   controller,
   snapshotStatus,
+  fixedReviewHref,
+  matchingSnapshotId,
   hasChanges,
   preparingSchema,
   schemaLoading,
@@ -3666,6 +3691,8 @@ function WorkspaceReviewSummary({
   candidate: WorkspaceCandidate;
   controller: WorkspaceComposeReviewController;
   snapshotStatus: DraftSnapshotStatus;
+  fixedReviewHref?: string;
+  matchingSnapshotId?: string;
   hasChanges: boolean | undefined;
   preparingSchema: boolean;
   schemaLoading: boolean;
@@ -3678,7 +3705,9 @@ function WorkspaceReviewSummary({
 }) {
   const snapshotCurrent = snapshotStatus === 'matching';
   const checks =
-    snapshotCurrent && controller.review.view?.mode === 'transition'
+    snapshotCurrent &&
+    matchingSnapshotId === controller.review.reviewSnapshot?.snapshotId &&
+    controller.review.view?.mode === 'transition'
       ? changeCheckRows(controller.review.view, controller.review.schemaReview?.contentValidation)
       : [];
   const preparing = preparingSchema || controller.busyAction === 'review.prepare';
@@ -3693,7 +3722,7 @@ function WorkspaceReviewSummary({
           : snapshotStatus === 'unknown'
             ? 'The previous snapshot could not yet be matched to this Draft.'
             : snapshotCurrent
-              ? 'These checks apply to the fixed snapshot of this Draft.'
+              ? 'Open the fixed Review to inspect its recorded checks and decision.'
               : 'Prepare a fixed snapshot to approve and commit here.';
   return (
     <section aria-label="Review readiness" className={workbenchStyles.draftChecks}>
@@ -3720,6 +3749,7 @@ function WorkspaceReviewSummary({
       <WorkspaceReviewValidation
         checks={checks}
         running={preparing}
+        prepared={snapshotCurrent}
         actions={
           <Button size="sm" variant="canvas-outline" onClick={onOpenChecks}>
             Open Run <ExternalLink aria-hidden="true" />
@@ -3742,9 +3772,14 @@ function WorkspaceReviewSummary({
         </div>
       ) : null}
       <div className={workbenchStyles.draftActions}>
+        {fixedReviewHref ? (
+          <Button asChild size="sm" variant="commit">
+            <NextLink href={fixedReviewHref}>Open fixed review</NextLink>
+          </Button>
+        ) : null}
         <Button
           size="sm"
-          variant="commit"
+          variant={fixedReviewHref ? 'canvas-outline' : 'commit'}
           disabled={
             controller.isBusy ||
             preparing ||
