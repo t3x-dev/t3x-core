@@ -2835,6 +2835,49 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).toHaveTextContent('Clarify the intended outcome.');
   });
 
+  it('shows business fields for an unmarked semantic first Draft', () => {
+    enableComposeActivity();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const content = {
+      trees: [
+        {
+          key: 'prd',
+          slots: {},
+          children: [{ key: 'product', slots: { title: 'New draft' }, children: [] }],
+        },
+      ],
+    };
+    Object.assign(activityMocks.value!.view!, {
+      basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+      base: {},
+      current: { content },
+      netDiff: [{ nodeId: 'content', path: 'content', after: content }],
+      hasChanges: true,
+    });
+    const controller = {
+      candidate,
+      isBusy: false,
+      busyAction: null,
+      scenarios: { options: [], selectedId: candidate.id },
+      review: { content: null, deterministicValidation: null, reviewSnapshot: null, view: null },
+    } as unknown as WorkspaceComposeReviewController;
+    render(
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+
+    const structure = within(screen.getByLabelText('Workspace review structure'));
+    expect(structure.getByText('1 added')).toBeInTheDocument();
+    expect(structure.getByText(/Empty base compared with Workspace draft/)).toBeInTheDocument();
+    const rows = within(structure.getByRole('table'));
+    expect(rows.getByTitle('prd/product/title')).toBeInTheDocument();
+    expect(rows.queryByTitle('content/trees')).not.toBeInTheDocument();
+  });
+
   it.each([
     ['sha256:abcdef0123456789', 'Base commit abcdef0 (empty Content)'],
     [null, 'Empty base'],

@@ -137,6 +137,42 @@ describe('authoringReview', () => {
       'version',
     ]);
   });
+  it('compares unmarked saved trees to the empty Base using business paths', () => {
+    const raw = { content: { trees: current.content.trees } };
+    const projection = buildAuthoringReviewProjection(
+      getProjectWorkspaceStarterCandidate('proj_1'),
+      {
+        schema: 't3x.application/workspace-authoring-view/v1',
+        projectionVersion: 1,
+        workspaceRevision: 6,
+        compositionRevision: 2,
+        basis: { refName: 'main', refHead: null, baseDigest: 'empty' },
+        actions: [],
+        selected: null,
+        node: null,
+        nextBeforeSequence: null,
+        base: {},
+        current: raw,
+        netDiff: [cards[0]!, { nodeId: 'content', path: 'content', after: raw.content }],
+      },
+      { content: null, deterministicValidation: null }
+    );
+    expect(projection?.review.content).toEqual(current.content);
+    expect(projection?.review.deterministicValidation?.baselineTrees).toEqual([]);
+    expect(projection?.candidate.yopsDraft.operations.map((op) => op.path)).toEqual([
+      'prd/requirements/weather/title',
+      'prd/requirements/weather',
+    ]);
+    expect(raw.content).not.toHaveProperty('relations');
+  });
+
+  it('preserves ordinary YAML with a similar trees key and other data', () => {
+    const raw = { content: { trees: current.content.trees, notes: 'Keep this data' } };
+    const documents = authoringReviewDocuments({ base: {}, current: raw });
+    expect(documents?.current.trees[0]).toMatchObject({ key: 'content' });
+    expect(JSON.stringify(documents?.current)).toContain('Keep this data');
+  });
+
   it('keeps a missing or unreadable Before distinct from an empty Base', () => {
     expect(authoringReviewDocuments({ current })).toBeNull();
     expect(authoringReviewDocuments({ base: null, current })).toBeNull();

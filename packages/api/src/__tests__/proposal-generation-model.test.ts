@@ -1,4 +1,4 @@
-import { LLMProviderError } from '@t3x-dev/core';
+import { applyNativeYOps, LLMProviderError, NativeYOpSchema } from '@t3x-dev/core';
 import type { YSchema } from '@t3x-dev/yschema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -184,6 +184,54 @@ describe('managed Workspace Proposal binding', () => {
       { kind: 'receipt', receipt: { providerRequestId: 'repair-request' } },
     ]);
   });
+  it('adds the semantic envelope to a managed first proposal without another model call', async () => {
+    const trees = [
+      {
+        key: 'prd',
+        slots: {},
+        children: [
+          {
+            key: 'requirements',
+            slots: {},
+            children: [
+              {
+                key: 'weather',
+                slots: { title: '天气为晴天', acceptance: '显示天气' },
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const generate = vi.fn<GenerationModel['generate']>(async () => ({
+      output: [
+        {
+          type: 'json',
+          value: {
+            ...draft,
+            changes: [
+              {
+                ...draft.changes[0],
+                operations: [{ set: { path: 'content/trees', value: trees } }],
+              },
+            ],
+          },
+        },
+      ],
+      evidence,
+    }));
+    const result = await invoke(generate).result;
+    const operations = NativeYOpSchema.array().parse(
+      result.value.changes.flatMap((change) => change.operations)
+    );
+    expect(applyNativeYOps({}, operations)).toMatchObject({
+      ok: true,
+      doc: { domain: 't3x.dev/semantic-content', version: 1, content: { trees, relations: [] } },
+    });
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
   it('stops after one repair when the proposal is still invalid', async () => {
     const generate = vi.fn<GenerationModel['generate']>(async () => ({
       output: [{ type: 'json', value: {} }],
