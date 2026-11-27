@@ -179,10 +179,23 @@ function SelectionForm({
             Open {client?.name}
           </a>
         ) : (
-          <p className={s.statusText}>
-            Open {client?.name}'s connection settings and connect to T3X. Choose this saved
-            selection on the authorization page (reference {selectionLabel(saved.id)}).
-          </p>
+          <>
+            <p className={s.statusText}>
+              Open {client?.name}'s connection settings. Add or select the HTTP MCP server{' '}
+              {saved.resourceUrl ? (
+                <>
+                  at <code>{saved.resourceUrl}</code>
+                </>
+              ) : (
+                <>using the OAuth server URL from your deployment administrator</>
+              )}{' '}
+              and start OAuth sign-in.
+            </p>
+            <p className={s.statusText}>
+              On the T3X authorization page, choose the saved selection with reference{' '}
+              <code>{selectionLabel(saved.id)}</code> and confirm access.
+            </p>
+          </>
         )}
         <p className={s.statusText}>
           Selection expires {new Date(saved.expiresAt).toLocaleString()}.

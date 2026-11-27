@@ -60,6 +60,7 @@ export interface SavedSelection {
   id: string;
   expiresAt: string;
   launchUrl: string | null;
+  resourceUrl?: string;
 }
 
 export interface RepositoryDelegation {

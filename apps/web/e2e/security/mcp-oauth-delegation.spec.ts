@@ -739,6 +739,8 @@ test('Web preselection and Chat consent share one guarded repository approval', 
   await page.getByRole('button', { name: 'Continue in client' }).click();
   const selection = (await (await saved).json()) as { id: string };
   await expect(page.getByText(/Selection saved for/)).toBeVisible();
+  await expect(page.getByText(resource.href, { exact: true })).toBeVisible();
+  await page.locator('article').screenshot({ path: test.info().outputPath('manual-oauth-connection.png') });
   expect(await listGrants()).toHaveLength(0);
 
   const { query } = oauthQuery();

@@ -358,6 +358,7 @@ describe('repository OAuth consent and code exchange', () => {
       })
     ).json();
     expect(new URL(saved.launchUrl).searchParams.get('preselection')).toBe(saved.id);
+    expect(saved.resourceUrl).toBe(resource);
     const ordinary = fixture();
     const before = await (await ordinary.preview()).json();
     expect(before.preselections.map((s: { id: string }) => s.id)).toContain(saved.id);
