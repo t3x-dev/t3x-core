@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CheckCircle2, Circle, GripVertical, Loader2, RotateCcw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -205,15 +206,8 @@ export function ProjectAiSettings({
   project: ProjectDetail | null;
   projectLoading: boolean;
 }) {
-  const { saveProjectProviderConfig } = useProviderCommands();
-  const { fetchProjectProviderSettings, fetchProvidersWithRoles, fetchProviders } =
-    useProvidersSettingsData();
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
-  const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [providerError, setProviderError] = useState<string | null>(null);
+  const { capabilities, administrationStatus, canAdministerProviderCredentials } =
+    useDeploymentCapabilities();
   const [modelError, setModelError] = useState<string | null>(null);
   const [savedModel, setSavedModel] = useState<{
     provider: string | null;
@@ -240,6 +234,71 @@ export function ProjectAiSettings({
       setModelVersion((version) => version + 1);
     }
   };
+
+  return (
+    <SettingsSection
+      description="The model and provider order used when AI proposes changes here. Replay and commits never depend on them."
+      icon={Sparkles}
+      id="ai"
+      title="AI defaults"
+    >
+      <div className="grid gap-6">
+        <div>
+          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Default model</h3>
+          <p className="mb-3 mt-0.5 text-xs text-[var(--text-tertiary)]">
+            Used for AI operations in this project unless a run picks another model.
+          </p>
+          {modelError ? (
+            <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+              {modelError}
+            </p>
+          ) : null}
+          {projectLoading ? (
+            <output className="text-xs text-[var(--text-tertiary)]">
+              Loading project model settings...
+            </output>
+          ) : projectModel ? (
+            <ModelSelector
+              contentClassName={palette.scope}
+              initialModel={projectModel.model}
+              initialProvider={projectModel.provider}
+              key={modelVersion}
+              onChange={handleModelChange}
+            />
+          ) : null}
+        </div>
+
+        <div className="border-t border-[var(--stroke-divider)] pt-5">
+          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
+            Provider overrides
+          </h3>
+          {canAdministerProviderCredentials ? (
+            <ProjectProviderOverrides projectId={projectId} />
+          ) : (
+            <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+              {administrationStatus === 'loading'
+                ? 'Checking provider permissions…'
+                : capabilities.provider_credentials.administration === 'disabled'
+                  ? 'Provider overrides are unavailable on this deployment.'
+                  : 'Provider overrides require deployment operator access.'}
+            </p>
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function ProjectProviderOverrides({ projectId }: { projectId: string }) {
+  const { saveProjectProviderConfig } = useProviderCommands();
+  const { fetchProjectProviderSettings, fetchProvidersWithRoles, fetchProviders } =
+    useProvidersSettingsData();
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
+  const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -363,9 +422,13 @@ export function ProjectAiSettings({
   const grouped = groupByRole(providers);
 
   return (
-    <SettingsSection
-      action={
-        overriddenRoles.size > 0 ? (
+    <>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+          Override the global fallback order for this project only.
+          {saving && <output className="ml-2">Saving…</output>}
+        </p>
+        {overriddenRoles.size > 0 ? (
           <button
             className={cn(
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
@@ -381,81 +444,35 @@ export function ProjectAiSettings({
             <RotateCcw className="size-3" />
             Reset to global
           </button>
-        ) : null
-      }
-      description={
-        <>
-          The model and provider order used when AI proposes changes here. Replay and commits never
-          depend on them.
-          {saving && <span className="ml-2 text-[var(--text-tertiary)]">Saving...</span>}
-        </>
-      }
-      icon={Sparkles}
-      id="ai"
-      title="AI defaults"
-    >
-      <div className="grid gap-6">
-        <div>
-          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Default model</h3>
-          <p className="mb-3 mt-0.5 text-xs text-[var(--text-tertiary)]">
-            Used for AI operations in this project unless a run picks another model.
-          </p>
-          {modelError ? (
-            <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
-              {modelError}
-            </p>
-          ) : null}
-          {projectLoading ? (
-            <output className="text-xs text-[var(--text-tertiary)]">
-              Loading project model settings...
-            </output>
-          ) : projectModel ? (
-            <ModelSelector
-              contentClassName={palette.scope}
-              initialModel={projectModel.model}
-              initialProvider={projectModel.provider}
-              key={modelVersion}
-              onChange={handleModelChange}
-            />
-          ) : null}
-        </div>
-
-        <div className="border-t border-[var(--stroke-divider)] pt-5">
-          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
-            Provider overrides
-          </h3>
-          <p className="mb-4 mt-0.5 text-xs text-[var(--text-tertiary)]">
-            Override the global fallback order for this project only.
-          </p>
-          {providerError ? (
-            <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
-              {providerError}
-            </p>
-          ) : null}
-          {loading ? (
-            <div className="flex h-20 items-center justify-center">
-              <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
-                const roleProviders = grouped[role] ?? [];
-                if (roleProviders.length === 0) return null;
-                return (
-                  <SortableRoleGroup
-                    isOverridden={overriddenRoles.has(role)}
-                    key={role}
-                    onReorder={handleReorder}
-                    providers={roleProviders}
-                    role={role}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
+        ) : null}
       </div>
-    </SettingsSection>
+      {providerError ? (
+        <p className="mb-3 text-xs text-[var(--status-error)]" role="alert">
+          {providerError}
+        </p>
+      ) : null}
+      {loading ? (
+        <div className="flex h-20 items-center justify-center">
+          <Loader2 className="size-4 animate-spin text-[var(--text-tertiary)]" />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
+            const roleProviders = grouped[role] ?? [];
+            if (roleProviders.length === 0) return null;
+            return (
+              <SortableRoleGroup
+                isOverridden={overriddenRoles.has(role)}
+                key={role}
+                onReorder={handleReorder}
+                providers={roleProviders}
+                role={role}
+              />
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
