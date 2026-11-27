@@ -78,6 +78,12 @@ const FrameBodySchema = z.object({
 // Routes
 // ============================================================================
 
+function missingCommitDetails(digest: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(digest)
+    ? { protocol_code: 'COMMIT_NOT_FOUND' as const }
+    : undefined;
+}
+
 function semanticDocument(state: State) {
   const { value } = state;
   if (
@@ -293,7 +299,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       db,
       body.base_commit_hash,
       body.project_id,
-      { protocol_code: 'COMMIT_NOT_FOUND' }
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
@@ -301,7 +307,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       db,
       body.target_commit_hash,
       body.project_id,
-      { protocol_code: 'COMMIT_NOT_FOUND' }
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 
@@ -310,9 +316,12 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       getVerifiedTransitionCommitGraph(db, targetProjectId, body.target_commit_hash),
     ]);
     if (!base || !target)
-      return errorResponse(c, 'NOT_FOUND', 'Comparison Commit not found.', {
-        protocol_code: 'COMMIT_NOT_FOUND',
-      });
+      return errorResponse(
+        c,
+        'NOT_FOUND',
+        'Comparison Commit not found.',
+        missingCommitDetails(!base ? body.base_commit_hash : body.target_commit_hash)
+      );
     const states = [base.state, target.state];
     if (
       states.some(
@@ -427,7 +436,7 @@ diffRoutes.openapi(frameRoute, async (c) => {
       db,
       body.base_commit_hash,
       body.project_id,
-      { protocol_code: 'COMMIT_NOT_FOUND' }
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
@@ -435,7 +444,7 @@ diffRoutes.openapi(frameRoute, async (c) => {
       db,
       body.target_commit_hash,
       body.project_id,
-      { protocol_code: 'COMMIT_NOT_FOUND' }
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 
