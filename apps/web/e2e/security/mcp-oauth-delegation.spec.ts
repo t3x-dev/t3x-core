@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { expect, type Page, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 import { ChatTasks, fixtureChat } from '../fixtures/mcp-oauth-chat';
 import { API_BASE } from '../fixtures/api-helpers';
 import {
@@ -64,6 +64,19 @@ async function connectBearer(token: string) {
       }[],
     close: () => client.close(),
   };
+}
+
+async function waitForReviewRequestBudget(request: APIRequestContext, session?: string) {
+  // Browser and MCP clients in this suite share the deployment's per-IP request window.
+  const budget = await request.get(API_BASE + '/auth/me/credential', {
+    headers: session ? { Authorization: 'Bearer ' + session } : {},
+  });
+  expect([200, 401, 429]).toContain(budget.status());
+  const remaining = Number(budget.headers()['x-ratelimit-remaining']);
+  const reset = Number(budget.headers()['x-ratelimit-reset']) * 1000;
+  if (remaining < 90 && reset > Date.now()) {
+    await delay(Math.min(61_000, reset - Date.now() + 150));
+  }
 }
 
 async function prepare(client: ToolClient, project_id: string, workspace_id: string) {
@@ -270,7 +283,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
   page,
   request,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const identity = account('oauth');
   const owner = await registerBrowser(page, identity);
   const { project_id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
@@ -353,6 +366,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     };
     const message = 'Update the editorial plan and commit it.';
     let agentCommit = '';
+    let agentReviewNumber = '';
     const { job, token } = await authorize(page, host, message, {
       repository,
       signIn: identity,
@@ -408,6 +422,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
             })
           ).toMatchObject({ snapshot_digest: review.review.snapshot_digest });
           const commit = await acceptAndCommit(agent, project_id, review, base);
+          agentReviewNumber = review.review.address_number;
           expect(
             await invoke(agent, 't3x_commit_result', {
               project_id,
@@ -432,6 +447,26 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       },
     });
     await expect(page.getByText(job.result!, { exact: true })).toBeVisible();
+    await waitForReviewRequestBudget(request, owner.session);
+    await test.step('reopen the fixed Review after the Agent commit', async () => {
+      const reviewPage = await page.context().newPage();
+      try {
+        await reviewPage.goto(`${issuer}/${repository}/reviews/${agentReviewNumber}`);
+        await reviewPage.getByRole('button', { name: 'Refresh', exact: true }).click();
+        await expect(reviewPage.getByRole('heading', { name: 'Recorded review' })).toBeVisible();
+        await expect(reviewPage.getByRole('button', { name: 'Approve and commit' })).toHaveCount(0);
+        await expect(reviewPage.getByRole('button', { name: 'Reject change' })).toHaveCount(0);
+        await expect(
+          reviewPage.getByRole('link', { name: 'View commit in History' })
+        ).toHaveAttribute('href', new RegExp(encodeURIComponent(agentCommit)));
+        await expect(reviewPage.getByText('Committed. This snapshot stays available for reference.')).toBeVisible();
+        await reviewPage.screenshot({
+          path: test.info().outputPath('fixed-review-after-mcp-commit.png'),
+        });
+      } finally {
+        await reviewPage.close();
+      }
+    });
     await test.step('identify the Agent commit in State and History', async () => {
       const pinned = await page.request.get(
         `${issuer}/api/v1/commits/${encodeURIComponent(agentCommit)}?project_id=${project_id}`
@@ -495,6 +530,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     });
     expect(denied.isError).toBe(true);
 
+    await waitForReviewRequestBudget(request, owner.session);
     const otherGrant = await authorize(page, host, 'List the repository branches.', {
       chooseId: other.project_id,
       expectedDetail: /reviewer must approve/i,
@@ -553,17 +589,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     await authorize(page, host, 'Read the latest editorial plan.', { repository });
     expect(host.count()).toBe(3);
     await test.step('repair a pre-issued Agent token and resume its checked Draft', async () => {
-      // All three clients and both browsers share one real IP quota in this isolated stack.
-      // Start the separate legacy journey with enough budget for its guarded writes.
-      const budget = await request.get(API_BASE + '/auth/me/credential', {
-        headers: { Authorization: 'Bearer ' + owner.session },
-      });
-      expect([200, 429]).toContain(budget.status());
-      const remaining = Number(budget.headers()['x-ratelimit-remaining']);
-      const reset = Number(budget.headers()['x-ratelimit-reset']) * 1000;
-      if (remaining < 90 && reset > Date.now()) {
-        await delay(Math.min(61_000, reset - Date.now() + 150));
-      }
+      await waitForReviewRequestBudget(request, owner.session);
       await page.goto(issuer + '/' + identity.namespace);
       const { project_id: id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
         name: 'uat-recovery',
@@ -939,4 +965,52 @@ test('a registered Web launcher carries its preselection through PKCE to the sel
   } finally {
     await client.close();
   }
+});
+
+test('reopen a fixed Review after its owner approves and commits on the Web', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  await waitForReviewRequestBudget(request);
+  const identity = account('web-review');
+  const owner = await registerBrowser(page, identity);
+  const { project_id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
+    name: 'web-review',
+    namespace: identity.namespace,
+  });
+  const workspace = 'first-schema-review';
+  await initializeQualificationSchema(
+    owner.actor,
+    project_id,
+    workspace,
+    await owner.evidence(project_id)
+  );
+  await page.goto(
+    `${issuer}/${identity.namespace}/web-review/branches/main/workspaces?${new URLSearchParams({ workspace, workspaceMode: 'review' })}`
+  );
+  const preparing = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/authoring/reviews')
+  );
+  await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
+  const prepared = await preparing;
+  expect(prepared.ok()).toBe(true);
+  await expect(page).toHaveURL(/\/reviews\/\d+(?:\?|$)/);
+  const url = page.url();
+  const response = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/transition/decide')
+  );
+  await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
+  const decision = await response;
+  expect(decision.ok()).toBe(true);
+  const commit = (await decision.json()).data.review_snapshot.objects.commit.digest as string;
+  await page.goto(url);
+  await expect(page.getByRole('heading', { name: 'Recorded review' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View commit in History' })).toHaveAttribute(
+    'href',
+    new RegExp(encodeURIComponent(commit))
+  );
+  await expect(page.getByRole('button', { name: 'Approve and commit' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reject change' })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('fixed-review-after-web-commit.png') });
 });

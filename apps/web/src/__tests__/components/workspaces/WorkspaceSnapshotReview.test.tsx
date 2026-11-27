@@ -421,6 +421,46 @@ it('keeps the fixed Review visible and offers refresh when its decision update f
   expect(load).toHaveBeenCalledOnce();
 });
 
+it('keeps the confirmed commit visible alongside a failed latest-status refresh', () => {
+  const data = snapshotResponse();
+  const commit = 'sha256:' + 'c'.repeat(64);
+  vi.mocked(useWorkspaceReviewSnapshot).mockReturnValue({
+    decide: vi.fn(),
+    load: vi.fn(),
+    overrideReason: '',
+    setOverrideReason: vi.fn(),
+    state: {
+      data: {
+        ...data,
+        recorded_outcome: {
+          outcome: 'accepted',
+          decision_digest: 'sha256:' + 'a'.repeat(64),
+          commit_digest: commit,
+        },
+      } as never,
+      deciding: false,
+      loading: false,
+      latestUnavailable: true,
+      error: 'Offline',
+    },
+  });
+  render(
+    <WorkspaceSnapshotReview
+      projectId={data.project_id}
+      workspaceId={data.workspace_id}
+      snapshotId={data.snapshot_id}
+    />
+  );
+  expect(screen.getByRole('alert', { name: 'Could not refresh decision status' })).toBeVisible();
+  expect(screen.getByText('Committed. This snapshot stays available for reference.')).toBeVisible();
+  expect(
+    new URL(
+      screen.getByRole('link', { name: 'View commit in History' }).getAttribute('href')!,
+      'http://localhost'
+    ).searchParams.get('commit')
+  ).toBe(commit);
+});
+
 it('reviews Schema and content in one Workspace snapshot without changing its address', () => {
   const data = snapshotResponse();
   data.snapshot.snapshotId = 'rvs_schema_decided';

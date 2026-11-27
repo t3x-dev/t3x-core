@@ -122,6 +122,14 @@ export function useWorkspaceReviewSnapshot(
           workspaceId,
           fixed.transition_id
         );
+        const confirmRecovery = (result: WorkspaceTransitionReviewSnapshotResponse) => {
+          if (pendingDecision.current && isFinalSnapshot(result)) {
+            pendingDecision.current = null;
+            writeDecisionRecovery(projectId, workspaceId, pinned.transition_id, null);
+            announceCommit(projectId, result);
+          }
+        };
+        confirmRecovery(pinned);
         setStored((current) =>
           current.scope === scope && !current.value.data
             ? { scope, value: { ...current.value, data: pinned } }
@@ -135,16 +143,11 @@ export function useWorkspaceReviewSnapshot(
         if (!isCurrent()) return;
         assertSnapshotScope(latest, projectId, workspaceId, fixed.transition_id);
         assertSameReviewedSubject(fixed.snapshot, latest.snapshot);
-        if (isFinalSnapshot(latest)) {
-          const wasRecovering = pendingDecision.current !== null;
-          pendingDecision.current = null;
-          writeDecisionRecovery(projectId, workspaceId, fixed.transition_id, null);
-          if (wasRecovering) announceCommit(projectId, latest);
-        }
+        confirmRecovery(latest);
         setStored({
           scope,
           value: {
-            data: pinned,
+            data: withLatestOutcome(pinned, latest),
             laterResult: latest.snapshot.snapshotId === snapshotId ? undefined : latest,
             deciding: false,
             error: pendingDecision.current ? recoveryMessage : null,
@@ -156,20 +159,33 @@ export function useWorkspaceReviewSnapshot(
         });
       } catch (error) {
         if (!isCurrent()) return;
-        setStored((current) => ({
-          scope,
-          value: {
-            data: (current.scope === scope ? current.value.data : null) ?? fixed,
-            laterResult: current.scope === scope ? current.value.laterResult : undefined,
-            deciding: false,
-            error: error instanceof Error ? error.message : 'Unable to load the change review.',
-            loading: false,
-            latestUnavailable: true,
-            ...(pendingDecision.current
-              ? { recovery: recoverySummary(pendingDecision.current) }
-              : {}),
-          },
-        }));
+        setStored((current) => {
+          const previous = current.scope === scope ? current.value : undefined;
+          const cached = previous?.data;
+          const data =
+            fixed && cached && !fixed.recorded_outcome
+              ? withLatestOutcome(fixed, cached)
+              : (fixed ?? cached ?? null);
+          const later = previous?.laterResult;
+          // A cached, incomplete successor cannot override a newly confirmed Decision or Commit.
+          const keepLater =
+            later &&
+            (!data?.recorded_outcome || (!isFinalSnapshot(data) && isFinalSnapshot(later)));
+          return {
+            scope,
+            value: {
+              data,
+              laterResult: keepLater ? later : undefined,
+              deciding: false,
+              error: error instanceof Error ? error.message : 'Unable to load the change review.',
+              loading: false,
+              latestUnavailable: true,
+              ...(pendingDecision.current
+                ? { recovery: recoverySummary(pendingDecision.current) }
+                : {}),
+            },
+          };
+        });
       } finally {
         if (isCurrent()) reading.current = false;
       }
@@ -226,6 +242,12 @@ export function useWorkspaceReviewSnapshot(
         return null;
       }
       if (!previous) {
+        if (
+          data.recorded_outcome ||
+          state.laterResult?.recorded_outcome ||
+          snapshot.transition.decision.observation === 'supplied'
+        )
+          return null;
         if (state.latestUnavailable || state.laterResult) {
           fail('Refresh the latest result before making a decision.');
           return null;
@@ -265,7 +287,7 @@ export function useWorkspaceReviewSnapshot(
         setStored({
           scope,
           value: {
-            data,
+            data: withLatestOutcome(data, latest),
             laterResult: latest.snapshot.snapshotId === snapshot.snapshotId ? undefined : latest,
             deciding: false,
             error: null,
@@ -384,9 +406,22 @@ function assertSnapshotScope(
     throw new Error('The latest result belongs to a different Review. Refresh this Review.');
 }
 
+function withLatestOutcome(
+  pinned: WorkspaceTransitionReviewSnapshotResponse,
+  latest: WorkspaceTransitionReviewSnapshotResponse
+) {
+  return pinned.snapshot_id === latest.snapshot_id &&
+    latest.recorded_outcome &&
+    !isFinalSnapshot(pinned)
+    ? { ...pinned, recorded_outcome: latest.recorded_outcome }
+    : pinned;
+}
+
 function isFinalSnapshot(data: WorkspaceTransitionReviewSnapshotResponse) {
   const view = data.snapshot.transition;
   return (
+    Boolean(data.recorded_outcome?.commit_digest) ||
+    data.recorded_outcome?.outcome === 'rejected' ||
     committedTransitionId(view) !== null ||
     (view.mode === 'transition' &&
       view.decision.observation === 'supplied' &&
@@ -405,7 +440,8 @@ function assertSameReviewedSubject(pinned: ReviewSnapshotV1, latest: ReviewSnaps
 }
 
 function announceCommit(projectId: string, data: WorkspaceTransitionReviewSnapshotResponse) {
-  const hash = committedTransitionId(data.snapshot.transition);
+  const hash =
+    data.recorded_outcome?.commit_digest ?? committedTransitionId(data.snapshot.transition);
   if (hash)
     dispatchCommitCreated({ projectId, hash, branch: data.snapshot.review.precondition.refName });
 }

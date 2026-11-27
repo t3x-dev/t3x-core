@@ -822,6 +822,11 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
   address_number?: string;
   can_request_override?: boolean;
+  recorded_outcome?: {
+    decision_digest: string;
+    outcome: 'accepted' | 'rejected' | 'overridden';
+    commit_digest?: string;
+  };
   schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;
