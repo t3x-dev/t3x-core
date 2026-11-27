@@ -114,6 +114,7 @@ export async function invokeWorkspaceGenerationModel(input: {
   model: GenerationModel;
   attempt: InferenceAttempt;
   prompt: LLMPrompt;
+  maxOutputTokens: number;
   tools?: ToolDefinition[];
   signal?: AbortSignal;
   emitText: (text: string) => Promise<void>;
@@ -122,7 +123,7 @@ export async function invokeWorkspaceGenerationModel(input: {
     ...input,
     request: {
       messages: messagesFromPrompt(input.prompt, input.model),
-      maxOutputTokens: 4096,
+      maxOutputTokens: input.maxOutputTokens,
       ...(input.tools?.length
         ? {
             tools: input.tools.map((tool) => ({

@@ -21,6 +21,7 @@ export type AssistantEvent =
       status: 'started' | 'completed';
       result?: unknown;
     }
+  | { type: 'proposal_ready'; transitionId: string }
   | { type: 'done'; reason: 'completed' | 'step_limit' | 'cancelled' | 'awaiting_confirmation' };
 
 /** Bounded loop. Each upstream call is separately admitted and metered through the existing runtime. */
@@ -46,6 +47,7 @@ export async function runAssistantProvider(
       : assistantProviderCapabilities(input.provider).tools);
   let terminalReason: 'completed' | 'awaiting_confirmation' = 'completed';
   let explainingResult = false;
+  let replyingToContentProposal = false;
   await input.emit({
     type: 'capabilities',
     tools: hasTools,
@@ -58,7 +60,7 @@ export async function runAssistantProvider(
   const seen = new Set<string>();
   const canStreamPlainResponse =
     typeof input.provider?.streamFromPrompt === 'function' && !hasTools;
-  for (let step = 0; step < maxSteps; step++) {
+  for (let step = 0; step < maxSteps || replyingToContentProposal; step++) {
     if (input.signal?.aborted) {
       await input.emit({ type: 'done', reason: 'cancelled' });
       return;
@@ -103,11 +105,14 @@ export async function runAssistantProvider(
       });
       return;
     }
+    const maxOutputTokens = replyingToContentProposal ? 128 : 4096;
     const execution = await executeMeteredInference({
       runtime: input.inference.runtime,
       input: {
-        runId: input.inference.runId,
-        attemptIndex: step,
+        runId: replyingToContentProposal
+          ? `${input.inference.runId}:proposal-reply`
+          : input.inference.runId,
+        attemptIndex: replyingToContentProposal ? 0 : step,
         feature: 'workspace.assistant.chat',
         requestedModel: input.model,
         scope: input.inference.scope,
@@ -120,6 +125,7 @@ export async function runAssistantProvider(
             model: input.generationModel,
             attempt,
             prompt,
+            maxOutputTokens,
             tools: hasTools
               ? Object.values(input.capabilities).map((capability) => capability.definition)
               : undefined,
@@ -138,10 +144,10 @@ export async function runAssistantProvider(
         const result = input.provider.generateFromPrompt
           ? await input.provider.generateFromPrompt(prompt, {
               model: input.model,
-              maxTokens: 4096,
+              maxTokens: maxOutputTokens,
               reasoningEffort: input.reasoningEffort,
             })
-          : await input.provider.generate(JSON.stringify(prompt), { maxTokens: 4096 });
+          : await input.provider.generate(JSON.stringify(prompt), { maxTokens: maxOutputTokens });
         return {
           value: {
             tool_calls: [],
@@ -213,6 +219,7 @@ export async function runAssistantProvider(
           })),
     });
     const results: Exclude<LLMPrompt['messages'][number]['content'], string> = [];
+    const contentCandidates = new Set<string>();
     for (const call of response.tool_calls) {
       if (input.signal?.aborted) {
         await input.emit({ type: 'done', reason: 'cancelled' });
@@ -265,12 +272,23 @@ export async function runAssistantProvider(
         call.name === 'requestProposal' &&
         result &&
         typeof result === 'object' &&
-        'kind' in result &&
-        result.kind === 'schema'
+        'kind' in result
       ) {
-        hasTools = false;
-        explainingResult = true;
-        prompt.system = `${prompt.system ?? ''}\nExplain the actual Schema tool result in the user's language. A candidate is not an applied change. This continuation is text-only; do not request tools or claim content or Commit changes.`;
+        if (result.kind === 'schema') {
+          hasTools = false;
+          explainingResult = true;
+          prompt.system = `${prompt.system ?? ''}\nExplain the actual Schema tool result in the user's language. A candidate is not an applied change. This continuation is text-only; do not request tools or claim content or Commit changes.`;
+        }
+        if (
+          result.kind === 'content' &&
+          'status' in result &&
+          result.status === 'candidate' &&
+          'transitionId' in result &&
+          typeof result.transitionId === 'string' &&
+          result.transitionId.length > 0
+        ) {
+          contentCandidates.add(result.transitionId);
+        }
       }
       if (call.name === 'applyUserEdit') {
         await input.emit({ type: 'done', reason: 'completed' });
@@ -279,6 +297,16 @@ export async function runAssistantProvider(
       results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result) });
     }
     prompt.messages.push({ role: 'user', content: results });
+    if (contentCandidates.size > 0) {
+      if (contentCandidates.size === 1) {
+        for (const transitionId of contentCandidates)
+          await input.emit({ type: 'proposal_ready', transitionId });
+      }
+      hasTools = false;
+      explainingResult = true;
+      replyingToContentProposal = true;
+      prompt.system = `${prompt.system ?? ''}\nDescribe the generated proposal in one short sentence in the user's language. Use the actual proposal result and requested change. This reply cannot know whether publication has finished. Do not claim that any changes were saved to the Draft or committed.`;
+    }
   }
   await input.emit({ type: 'done', reason: 'step_limit' });
 }

@@ -570,6 +570,7 @@ export function useSourceThreadGeneration({
           controller.signal.throwIfAborted();
           const unfinished = new Set<string>();
           const completedCandidates = new Set<string>();
+          const deliveredCandidates = new Set<string>();
           let streamFailure: { error: unknown } | undefined;
           let receivedText = false;
           let completed = false;
@@ -661,6 +662,18 @@ export function useSourceThreadGeneration({
                   );
                 }
               }
+              if (
+                event.type === 'proposal_ready' &&
+                event.transitionId &&
+                completedCandidates.has(event.transitionId) &&
+                !deliveredCandidates.has(event.transitionId)
+              ) {
+                deliveredCandidates.add(event.transitionId);
+                setWorkspaceActivity((current) =>
+                  current ? { ...current, turnId: savedUserTurnHash, phase: 'responding' } : current
+                );
+                assistantRef.current?.onCandidate?.(event.transitionId, savedUserTurnHash);
+              }
               if (event.type === 'error') throw new Error(event.message ?? 'Assistant failed');
               if (event.type === 'done') {
                 completed = true;
@@ -721,17 +734,17 @@ export function useSourceThreadGeneration({
             ]);
           }
           stream.setStreamingContent('');
-          // Publishing refreshes the workspace authoring projection. Wait until the
-          // assistant turn has been persisted and the done event has updated local
-          // history, otherwise that refresh can reload the conversation in the brief
-          // gap where only the user turn exists and hide the completed reply until a
-          // manual page reload.
           for (const transitionId of completedCandidates) {
-            assistantRef.current?.onCandidate?.(transitionId, assistantTurnId);
+            if (!deliveredCandidates.has(transitionId))
+              assistantRef.current?.onCandidate?.(transitionId, assistantTurnId);
           }
           setWorkspaceActivity((current) =>
             current
-              ? { ...current, turnId: assistantTurnId, phase: completed ? 'complete' : 'error' }
+              ? {
+                  ...current,
+                  turnId: deliveredCandidates.size > 0 ? savedUserTurnHash : assistantTurnId,
+                  phase: completed ? 'complete' : 'error',
+                }
               : current
           );
           if (streamFailure) throw streamFailure.error;

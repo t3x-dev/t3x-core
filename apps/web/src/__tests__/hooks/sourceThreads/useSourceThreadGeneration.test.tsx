@@ -110,6 +110,63 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Workspace assistant route lifetime', () => {
+  it('publishes the candidate while the model reply is pending and keeps both results', async () => {
+    const reply = deferred();
+    mocks.stream.mockImplementation(async function* (): AsyncGenerator<WorkspaceAssistantEvent> {
+      yield {
+        type: 'operation',
+        operationId: 'operation',
+        name: 'requestProposal',
+        status: 'started',
+      };
+      yield {
+        type: 'operation',
+        operationId: 'operation',
+        name: 'requestProposal',
+        status: 'completed',
+        result: { kind: 'content', transitionId: 'candidate' },
+      };
+      yield { type: 'proposal_ready', transitionId: 'candidate' };
+      await reply.promise;
+      yield { type: 'proposal_ready', transitionId: 'candidate' };
+      yield { type: 'done', turnHash: 'assistant-turn', content: 'I proposed updating the title.' };
+    });
+    const initial = options();
+    const view = renderHook(() => useSourceThreadGeneration(initial));
+    await waitFor(() => expect(view.result.current.isLoading).toBe(false));
+
+    let sending: Promise<void> | undefined;
+    await act(async () => {
+      sending = Promise.resolve(view.result.current.sendMessage('Update the title'));
+    });
+    expect(initial.workspaceAssistant.onCandidate).toHaveBeenCalledExactlyOnceWith(
+      'candidate',
+      'user-turn'
+    );
+    expect(view.result.current.workspaceActivity).toMatchObject({
+      turnId: 'user-turn',
+      phase: 'responding',
+    });
+    expect(view.result.current.messages.some((message) => message.role === 'assistant')).toBe(
+      false
+    );
+
+    await act(async () => {
+      reply.resolve();
+      await sending;
+    });
+    expect(initial.workspaceAssistant.onCandidate).toHaveBeenCalledTimes(1);
+    expect(view.result.current.messages.at(-1)).toMatchObject({
+      id: 'assistant-turn',
+      role: 'assistant',
+      content: 'I proposed updating the title.',
+    });
+    expect(view.result.current.workspaceActivity).toMatchObject({
+      turnId: 'user-turn',
+      phase: 'complete',
+    });
+  });
+
   it('delivers a completed candidate once when the follow-up stream errors', async () => {
     mocks.stream.mockImplementation(async function* (): AsyncGenerator<WorkspaceAssistantEvent> {
       yield { type: 'context' };

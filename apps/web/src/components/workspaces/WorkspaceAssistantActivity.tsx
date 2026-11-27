@@ -171,9 +171,11 @@ function turnPaths({ action, cards: sourceCards }: PublishedTurnChanges) {
 export function WorkspaceTurnReceipt({
   changes,
   onOpen,
+  label = 'This reply',
 }: {
   changes: PublishedTurnChanges;
   onOpen: () => void;
+  label?: string;
 }) {
   const paths = turnPaths(changes);
   return (
@@ -181,7 +183,7 @@ export function WorkspaceTurnReceipt({
       <GitPullRequest aria-hidden="true" />
       <span className={styles.receiptBody}>
         <strong>
-          This reply ·{' '}
+          {label} ·{' '}
           {paths.length
             ? `${paths.length} changed ${paths.length === 1 ? 'path' : 'paths'}`
             : 'Draft update'}
