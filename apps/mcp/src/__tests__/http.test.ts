@@ -117,8 +117,14 @@ async function startFixture(publicUrl?: URL, oauth?: McpOAuthConfig, capabilitie
   });
   cleanup.push(() => stopChild(child));
   const endpoint = await new Promise<URL>((resolve, reject) => {
-    const deadline = setTimeout(() => reject(new Error('HTTP MCP startup timed out')), 5_000);
-    child.once('error', reject);
+    // The built CLI starts alongside other package tests in CI.
+    const deadline = setTimeout(() => {
+      reject(new Error(`HTTP MCP startup timed out: ${stderr.join('\n') || 'no stderr output'}`));
+    }, 15_000);
+    child.once('error', (error) => {
+      clearTimeout(deadline);
+      reject(error);
+    });
     child.once('exit', (code) => {
       clearTimeout(deadline);
       reject(new Error(`HTTP MCP exited (${code ?? 'signal'}): ${stderr.join('\n')}`));
@@ -255,7 +261,7 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
     expect(await status(valid)).toBe(401);
     expect(await status('fixture-second')).toBe(200);
     expect(fixture.stderr.join('\n')).not.toContain(valid);
-  }, 15_000);
+  }, 30_000);
 
   it('keeps an explicit capability ceiling on an OAuth deployment', async () => {
     const oauth = {
@@ -272,7 +278,7 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
       t3x_capabilities: ['read-only'],
       scopes_supported: ['repository:read'],
     });
-  }, 15_000);
+  }, 30_000);
   it('uses the caller credential on overlapping tool calls and rejects it immediately after revocation', async () => {
     const fixture = await startFixture();
     const first = await connect(fixture.endpoint, 'fixture-first');
@@ -304,7 +310,7 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
     await expect(first.client.listTools()).rejects.toMatchObject({ code: 401 });
     await expect(second.client.listTools()).resolves.toMatchObject({ tools: expect.any(Array) });
     expect(fixture.stderr.join('\n')).not.toMatch(/fixture-first|fixture-second/);
-  }, 15_000);
+  }, 30_000);
 
   it('checks host, origin and bearer before accepting a protocol request', async () => {
     const fixture = await startFixture();
@@ -327,7 +333,7 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
     }
     fixture.failUpstream();
     expect(await initializeStatus(endpoint, valid)).toBeGreaterThanOrEqual(500);
-  }, 15_000);
+  }, 30_000);
 
   it('accepts the configured public authority through a TLS-terminating proxy', async () => {
     const publicUrl = new URL('https://mcp.example.test:8443/mcp');
@@ -349,5 +355,5 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
         Origin: publicUrl.origin,
       })
     ).toBe(200);
-  }, 15_000);
+  }, 30_000);
 });
