@@ -53,6 +53,7 @@ export interface WorkspaceAuthoringCard {
 export interface WorkspaceAuthoringView {
   schema: 't3x.application/workspace-authoring-view/v1';
   projectionVersion: number;
+  fixedReview?: { snapshotId: string; number?: string };
   workspaceRevision: number;
   compositionRevision: number;
   basis: { refName: string; refHead: string | null; baseDigest: string };
@@ -186,7 +187,24 @@ export interface WorkspaceReconciliationDecisionInput {
   action: 'adopt' | 'cancel' | 'discard' | 'resolve';
   resolutions?: WorkspaceReconciliationResolution[];
 }
+export interface RestoreWorkspaceContentInput {
+  request_id: string;
+  source_commit_digest: string;
+  expected_workspace_revision: number;
+  expected_ref_head: string | null;
+}
+export interface RestoreWorkspaceContentResult extends WorkspaceAuthoringOutcome {
+  sourceCommitDigest: string;
+  sourceStateDigest: string;
+  schemaHash: string | null;
+  issues: Array<{ code: string; path: string; message: string }>;
+}
 export interface WorkspaceAuthoringCapability {
+  restoreContent(
+    projectId: string,
+    workspaceId: string,
+    input: RestoreWorkspaceContentInput
+  ): Promise<RestoreWorkspaceContentResult>;
   reconcile(
     projectId: string,
     workspaceId: string,

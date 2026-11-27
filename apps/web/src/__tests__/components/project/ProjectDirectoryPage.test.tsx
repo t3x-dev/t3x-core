@@ -5,13 +5,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
-import { checkRepositoryName, fetchDeletedProjects } from '@/queries/projects';
+import { checkRepositoryName, fetchDeletedProjects, resolveRepository } from '@/queries/projects';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project } from '@/types/api';
 
 vi.mock('@/queries/projects', () => ({
   checkRepositoryName: vi.fn(),
   fetchDeletedProjects: vi.fn(),
+  resolveRepository: vi.fn().mockResolvedValue({}),
 }));
 
 const routerPush = vi.fn();
@@ -52,21 +53,51 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(currentQuery),
 }));
 
+const preloadHead = vi.hoisted(() => vi.fn());
+
+vi.mock('@/hooks/commits/useCommitsList', () => ({
+  useCommitsList: () => ({ loadCommits: preloadHead }),
+}));
+
 vi.mock('next/link', () => ({
+  useLinkStatus: () => ({ pending: false }),
   default: ({
     children,
     href,
     scroll: _scroll,
+    onNavigate,
+    onClick,
     ...props
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; scroll?: boolean }) => (
-    <a href={href} {...props}>
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    scroll?: boolean;
+    onNavigate?: () => void;
+  }) => (
+    <a
+      href={href}
+      {...props}
+      onClick={(event) => {
+        onClick?.(event);
+        if (
+          onNavigate &&
+          !event.defaultPrevented &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          onNavigate();
+        }
+      }}
+    >
       {children}
     </a>
   ),
 }));
 
 vi.mock('@/hooks/projects/useProjects', () => ({
-  useProjects: (...args: unknown[]) => {
+  useProjects: (...args: [unknown, unknown, unknown, { enabled?: boolean }]) => {
     useProjectsArgs(...args);
     return {
       create: createProject,
@@ -74,7 +105,7 @@ vi.mock('@/hooks/projects/useProjects', () => ({
       hasMore: hookHasMore,
       loadMore,
       loading: hookLoading,
-      projects: hookProjects,
+      projects: args[3].enabled === false ? [] : hookProjects,
       refresh: refreshProjects,
       remove: removeProject,
       rename: renameProject,
@@ -143,13 +174,33 @@ describe('ProjectDirectoryPage', () => {
     hookLoading = false;
     hookHasMore = false;
     hookProjects = projects;
+    preloadHead.mockReset().mockResolvedValue([]);
     useProjectStore.setState({
+      directoryStateEntry: null,
       error: null,
       initialized: true,
       loading: false,
       projects: [],
       details: {},
     });
+  });
+
+  it('passes the selected repository and its first State read to the destination on navigation', async () => {
+    currentPath = '/t3x-dev';
+    render(<ProjectDirectoryPage />);
+    const link = await screen.findByRole('link', { name: 'prd-workflow', exact: true });
+    expect(preloadHead).not.toHaveBeenCalled();
+    expect(resolveRepository).not.toHaveBeenCalled();
+    fireEvent.click(link);
+    expect(preloadHead).toHaveBeenCalledExactlyOnceWith('proj_prd', 'main', 1);
+    const entry = useProjectStore.getState().directoryStateEntry;
+    expect(entry?.project).toMatchObject({
+      id: 'proj_prd',
+      canonical_path: '/t3x-dev/prd-workflow',
+    });
+    expect(entry?.head).toBe(preloadHead.mock.results[0].value);
+    expect(resolveRepository).toHaveBeenCalledExactlyOnceWith('t3x-dev', 'prd-workflow');
+    expect(entry?.address).toBe(vi.mocked(resolveRepository).mock.results[0].value);
   });
 
   it('renders the organization-level repository directory as the app entrypoint', () => {
@@ -255,7 +306,11 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage scope="accessible" />);
 
-    expect(useProjectsArgs).toHaveBeenLastCalledWith(20, undefined, 'on-demand');
+    expect(useProjectsArgs).toHaveBeenCalledWith(20, undefined, 'on-demand', {
+      directoryUserId: undefined,
+      deferCounts: true,
+      enabled: true,
+    });
     expect(screen.getByRole('heading', { name: /^Your repositories/ })).toBeInTheDocument();
     expect(screen.getByText('Owner: test-a3')).toBeInTheDocument();
     expect(screen.getByText('Editor access')).toBeInTheDocument();

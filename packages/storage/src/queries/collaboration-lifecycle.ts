@@ -253,6 +253,8 @@ async function lockNamespace(db: AnyDB, namespaceId: string): Promise<void> {
   }
 }
 
+export { lockNamespace as lockCollaborationNamespace };
+
 function createTransactionAdapter(db: AnyDB): PostgresCollaborationLifecycleTransaction {
   return {
     lockNamespace: (namespaceId) => lockNamespace(db, namespaceId),

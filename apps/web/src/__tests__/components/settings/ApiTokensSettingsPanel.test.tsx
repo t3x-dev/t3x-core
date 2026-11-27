@@ -94,4 +94,44 @@ describe('ApiTokensSettingsPanel', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Revoke token' }));
     await waitFor(() => expect(mocks.revokeApiKey).toHaveBeenCalledWith('token-1'));
   });
+
+  it('requires an Agent project and issues the selected Decision and Commit permissions separately', async () => {
+    render(<ApiTokensSettingsPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Create API token' }));
+    fireEvent.change(dialog.getByLabelText('Token type'), { target: { value: 'agent' } });
+    fireEvent.change(dialog.getByLabelText('Token name'), { target: { value: ' MCP agent ' } });
+    const submit = dialog.getByRole('button', { name: 'Create token' });
+    expect(submit).toBeDisabled();
+    fireEvent.change(dialog.getByLabelText('Project ID'), { target: { value: ' proj_mcp ' } });
+    expect(dialog.getByLabelText('Expires in (days)')).toHaveValue(7);
+    expect(dialog.getByRole('checkbox', { name: 'Reject changes' })).not.toBeChecked();
+    expect(dialog.getByRole('checkbox', { name: 'Advance branch refs' })).not.toBeChecked();
+    fireEvent.click(dialog.getByRole('checkbox', { name: 'Accept changes' }));
+    fireEvent.click(dialog.getByRole('checkbox', { name: 'Create commits' }));
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-23T00:00:00Z'));
+    try {
+      fireEvent.click(submit);
+      await waitFor(() =>
+        expect(mocks.createApiKey).toHaveBeenCalledWith({
+          name: 'MCP agent',
+          principal_kind: 'agent',
+          credential_kind: 'agent',
+          project_id: 'proj_mcp',
+          expires_at: '2026-11-30T00:00:00.000Z',
+          transition_scopes: [
+            'transition:inspect',
+            'transition:propose',
+            'transition:verify',
+            'transition:decide:accept',
+            'transition:commit:create',
+          ],
+        })
+      );
+    } finally {
+      now.mockRestore();
+    }
+    expect(await dialog.findByText('t3xk_secret-value')).toBeVisible();
+  });
 });

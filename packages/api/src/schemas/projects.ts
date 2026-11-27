@@ -42,6 +42,7 @@ export const ProjectVisibilitySchema = z.enum(['private', 'unlisted', 'public'])
 export const ProjectSchema = z.object({
   repository_profile: RepositoryProfileSchema.optional(),
   can_edit: z.boolean().optional(),
+  can_manage_agent_access: z.boolean().optional(),
   can_delete: z.boolean().optional(),
   deleted_at: z.string().datetime().nullable().optional(),
   can_restore: z.boolean().optional(),
@@ -49,6 +50,7 @@ export const ProjectSchema = z.object({
   project_id: z.string(),
   name: z.string(),
   namespace: z.string().nullable().optional(),
+  namespace_id: z.string().nullable().optional(),
   canonical_path: z.string().nullable().optional(),
   path_status: z.enum(['ready', 'pending_migration']).optional(),
   visibility: ProjectVisibilitySchema,

@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type TransitionReviewSnapshotRecord,
@@ -193,6 +193,39 @@ function sameStoredFacts(
     left.supersedesSnapshotDigest === right.supersedesSnapshotDigest &&
     left.createdAt === right.createdAt.toISOString()
   );
+}
+
+export async function findDraftReviewSnapshot(
+  db: AnyDB,
+  input: {
+    projectId: string;
+    workspaceId: string;
+    workspaceRevision: number;
+    compositionRevision: number;
+    basis: { refName: string; refHead: string | null; baseDigest: string };
+  }
+) {
+  const { projectId, workspaceId, workspaceRevision, compositionRevision } = input;
+  const { refName, refHead, baseDigest } = input.basis;
+  const preparation = {
+    schema: 't3x.application/workspace-authoring-preparation/v1',
+    ledger: { compositionRevision },
+    basis: { refName, refHead, baseDigest },
+  };
+  const rows = await db.execute<{ snapshotId: string }>(sql`
+    SELECT s.snapshot_id AS "snapshotId"
+    FROM transition_proposal_memberships m
+    JOIN transition_proposal_preparations p ON p.transition_id = m.transition_id
+    JOIN transition_review_snapshots s ON s.transition_id = m.transition_id
+      AND s.project_id = m.project_id AND s.workspace_id = m.workspace_id
+    WHERE m.project_id = ${projectId} AND m.workspace_id = ${workspaceId}
+      AND m.workspace_revision = ${workspaceRevision} AND m.ref_name = ${refName}
+      AND m.ref_head IS NOT DISTINCT FROM ${refHead}
+      AND p.canonical_json::jsonb @> ${JSON.stringify(preparation)}::jsonb
+    ORDER BY s.created_at DESC, s.snapshot_id DESC
+    LIMIT 1
+  `);
+  return rows[0]?.snapshotId ?? null;
 }
 
 export async function getTransitionReviewSnapshot(

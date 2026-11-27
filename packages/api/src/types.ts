@@ -1,6 +1,6 @@
 import type { RequestPrincipal } from '@t3x-dev/application';
 import type { ApiKey, Draft } from '@t3x-dev/core';
-import type { WebSession } from '@t3x-dev/storage';
+import type { ConsumeRateLimitResult, Project, WebSession } from '@t3x-dev/storage';
 import type { InferenceIngressChannel } from './lib/inference';
 import type { ProjectLifecyclePolicy } from './lib/project-lifecycle-policy';
 import type { RateLimitStore } from './middleware/rate-limit';
@@ -14,6 +14,7 @@ import type { RateLimitStore } from './middleware/rate-limit';
 export type AppEnv = {
   Variables: {
     apiKey?: ApiKey;
+    managedRepositoryDelegation?: true;
     /** Active browser session set by auth middleware. */
     session?: WebSession;
     /** Server-derived identity shared by every authenticated ingress. */
@@ -24,9 +25,16 @@ export type AppEnv = {
     inferenceIngressChannel?: InferenceIngressChannel;
     /** Shared counter backend selected by createApp. */
     rateLimitStore?: RateLimitStore;
+    /** Host auth may consume this credential's L2 allowance while checking current authority. */
+    principalRateLimit?: { keyId: string; result: ConsumeRateLimitResult };
     /** Host-owned policy around project admissions into a namespace. */
     projectLifecyclePolicy?: ProjectLifecyclePolicy;
-    repositoryReadAccess?: { projectId: string; canEdit?: boolean };
+    repositoryReadAccess?: {
+      projectId: string;
+      canEdit?: boolean;
+      canManageAgentAccess?: boolean;
+      project?: Project;
+    };
     pendingSchemaWorkspace?: Draft;
   };
 };

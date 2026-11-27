@@ -212,6 +212,23 @@ describe('T3xClient', () => {
   // Error handling
   // =========================================================================
   describe('error handling', () => {
+    it('preserves upstream status and request ID for a non-JSON failure', async () => {
+      const client = createTestClient(
+        async () =>
+          new Response('<html>private upstream response</html>', {
+            status: 502,
+            headers: { 'X-Request-Id': 'upstream-42' },
+          })
+      );
+
+      await expect(client.getProject('proj_123')).rejects.toMatchObject({
+        code: 'UPSTREAM_HTTP_ERROR',
+        status: 502,
+        requestId: 'upstream-42',
+        message: 'API returned an unexpected response.',
+      });
+    });
+
     it('throws T3xApiError on non-ok response with error body', async () => {
       const fn = mockFetch(errorResponse('NOT_FOUND', 'Not found'), 404, false);
       const client = createTestClient(fn);

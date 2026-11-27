@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fetchWithTimeout } from '@/infrastructure/core';
 import { proxyBrowserApi } from '@/server/browserApiProxy';
 
 const SESSION = 't3xs_browser_session_secret';
@@ -90,6 +91,49 @@ describe('browser API proxy', () => {
     expect(headers.get('authorization')).toBe(`Bearer ${SESSION}`);
     expect(headers.has('content-length')).toBe(false);
     expect(headers.has('cookie')).toBe(false);
+  });
+
+  it('passes the browser cancellation through to its upstream fetch', async () => {
+    const caller = new AbortController();
+    const incoming = request('/api/v1/projects', { signal: caller.signal });
+    vi.mocked(fetch).mockResolvedValue(Response.json({ success: true }));
+
+    await proxyBrowserApi(incoming, ['v1', 'projects']);
+    caller.abort();
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+
+  it('omits legacy task text and the browser referer from upstream consent', async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({}));
+    await proxyBrowserApi(
+      request('/api/v1/mcp-delegations/consent?state=keep&task=private', {
+        headers: { referer: 'http://localhost:3000/settings/agent-access/authorize?task=private' },
+      }),
+      ['v1', 'mcp-delegations', 'consent']
+    );
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toBe('http://api.internal:8000/api/v1/mcp-delegations/consent?state=keep');
+    expect(new Headers(init?.headers).has('referer')).toBe(false);
+  });
+
+  it('stops retries when RequestInit.signal is cancelled during backoff', async () => {
+    const caller = new AbortController();
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 502 }));
+
+    const result = fetchWithTimeout('/api/v1/projects', { signal: caller.signal });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    caller.abort();
+
+    await expect(result).rejects.toMatchObject({ code: 'ABORTED' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a typed data timeout for the page without replaying it', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(null, { status: 504, headers: { 'x-t3x-request-failure': 'DATA_LOAD_TIMEOUT' } })
+    );
+    expect((await fetchWithTimeout('/api/v1/projects')).status).toBe(504);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('does not let browser JavaScript forward its own Bearer credential', async () => {

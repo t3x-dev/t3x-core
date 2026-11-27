@@ -1,4 +1,4 @@
-name: PR Validation
+name: CI - PR Validation
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: PR Validation-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -117,3 +117,186 @@ jobs:
       - name: Audit production dependencies
         if: ${{ !cancelled() }}
         run: pnpm audit:prod
+
+  standards:
+    name: Standards matrix
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Collect changed files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > .standards-changed-files.txt
+          else
+            git diff --name-only HEAD^ HEAD > .standards-changed-files.txt || true
+          fi
+
+      - name: Run affected standards rows
+        run: pnpm standards:run -- --mode pr --changed-paths .standards-changed-files.txt --summary-file .standards-summary.md
+        env:
+          YOPS_STABILITY_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          T3X_PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Publish standards summary
+        if: always()
+        run: |
+          if [ -f .standards-summary.md ]; then
+            cat .standards-summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Standards runner failed before writing a summary." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  api-changes:
+    name: Detect API surface changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.paths.outputs.relevant }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Match API paths in the PR diff
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet --no-renames "$BASE_SHA...$HEAD_SHA" -- \
+            ':(glob)release/surface.yaml' \
+            ':(glob)packages/*/src/**' \
+            ':(glob)packages/*/etc/**' \
+            ':(glob)packages/*/api-extractor.json' \
+            ':(glob)packages/*/package.json' \
+            ':(glob)packages/*/tsconfig.json' \
+            ':(glob)packages/*/tsup.config.*' \
+            ':(glob)packages/*/scripts/**' \
+            ':(glob)packages/*/*.yaml' \
+            ':(glob)packages/*/*.yml' \
+            ':(glob)tools/api-diff/**' \
+            ':(glob)tools/api-surface/**' \
+            ':(glob)tools/lib/apiSurface.mjs' \
+            ':(glob)tools/__tests__/api*.test.mjs' \
+            ':(glob)package.json' \
+            ':(glob)pnpm-lock.yaml'; then
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              exit "$status"
+            fi
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  api-surface:
+    name: Verify API snapshots and report diffs
+    needs: api-changes
+    if: >-
+      ${{ !cancelled() && (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && needs.api-changes.outputs.relevant == 'true')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify committed API snapshots
+        run: pnpm api:verify
+
+      - name: Fetch base ref
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
+      - name: Compare API snapshots
+        if: github.event_name == 'pull_request'
+        run: >
+          node tools/api-diff/diff.mjs
+          --base-ref FETCH_HEAD
+          --json api-surface-diff.json
+          --markdown api-surface-diff.md
+          --allow-breaking
+
+      - name: Add API diff summary
+        if: github.event_name == 'pull_request'
+        run: cat api-surface-diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload API diff artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-surface-diff
+          path: api-surface-diff.json
+
+  independent-verifier:
+    name: Independent Python verifier
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/transition-conformance-python/requirements.lock
+
+      - name: Install hash-pinned conformance dependencies
+        run: >-
+          python -m pip install
+          --require-hashes
+          -r tools/transition-conformance-python/requirements.lock
+
+      - name: Run independent verifier
+        run: >-
+          python tools/transition-conformance-python/run.py
+          --repo-root .
+
+      - name: Run verifier adversarial tests
+        env:
+          PYTHONPATH: tools/transition-conformance-python
+        run: >-
+          python -m unittest discover
+          -s tools/transition-conformance-python/tests
+          -v

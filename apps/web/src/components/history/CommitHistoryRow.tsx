@@ -19,7 +19,8 @@ import styles from './HistoryList.module.css';
 export interface CommitHistoryRowProps {
   hash: string;
   message: string | null;
-  author: { type: string; name?: string } | null;
+  byline: string;
+  operationCount?: number;
   committedAt: string;
   branch: string | null;
   /** Number of parents (0 = root, 1 = normal, 2+ = merge) */
@@ -50,7 +51,8 @@ export interface CommitHistoryRowProps {
 export function CommitHistoryRow({
   hash,
   message,
-  author,
+  byline,
+  operationCount,
   committedAt,
   branch,
   parentCount,
@@ -61,7 +63,6 @@ export function CommitHistoryRow({
   isSelected,
   onOpen,
 }: CommitHistoryRowProps) {
-  const authorName = author?.name || author?.type || 'Unknown';
   const date = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -83,11 +84,11 @@ export function CommitHistoryRow({
       </span>
 
       <span className={styles.commit}>
-        <span className={styles.message}>{commitTitle(message)}</span>
+        <span className={styles.message}>{commitTitle(message, operationCount)}</span>
         <span className={styles.meta}>
           <span className={styles.hash}>{shortHash(hash)}</span>
           <span className={styles.author}>
-            <span>{authorName}</span>
+            <span>{byline}</span>
           </span>
           {branch && (
             <span className={styles.branch}>

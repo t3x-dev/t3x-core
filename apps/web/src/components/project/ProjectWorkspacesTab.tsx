@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WorkspaceChecksRedirect } from '@/components/checks/WorkspaceChecksRedirect';
 import { WorkspaceSnapshotReview } from '@/components/workspaces/WorkspaceSnapshotReview';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
@@ -18,13 +18,17 @@ import {
   workspaceLocation,
 } from '@/domain/project/repoPath';
 import { selectWorkspaceForBranch } from '@/domain/workspaces/navigation';
-import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
+import {
+  useProjectMaterials,
+  WorkspaceMaterialInventoryContext,
+} from '@/hooks/materials/useProjectMaterials';
 import { useRepositoryObjectAddressResolver } from '@/hooks/projects/useRepositoryObjectAddress';
-import { useBranches } from '@/hooks/shared/useBranches';
 import { useSession } from '@/hooks/shared/useSession';
-import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import { BranchLoadError } from './BranchLoadError';
+import { useRepositoryViewData } from './RepositoryRouteContext';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
@@ -89,8 +93,22 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
       activeNavigation.current === navigationScope &&
       navigationScope.request === request;
   }, [navigationScope]);
-  const projectMaterials = useProjectMaterials(projectId);
-  const projectWorkspaces = useProjectWorkspaces(projectId);
+  const [materialsProject, setMaterialsProject] = useState<string>();
+  const hasPinnedMaterials = usePinsStore(
+    (state) =>
+      state.currentProjectId === projectId && state.pins.some((pin) => pin.type === 'import')
+  );
+  const needsMaterials = materialsProject === projectId || hasPinnedMaterials;
+  const projectMaterials = useProjectMaterials(projectId, needsMaterials);
+  const openMaterials = () => setMaterialsProject(projectId);
+  const onSourceMaterialUploaded = async () => {
+    if (needsMaterials) await projectMaterials.refresh();
+    else openMaterials();
+  };
+  const { branches: projectBranches, workspaces: projectWorkspaces } =
+    useRepositoryViewData(projectId);
+  const revalidateWorkspaces = projectWorkspaces.revalidate;
+  useEffect(() => revalidateWorkspaces(), [revalidateWorkspaces]);
   const { getUser } = useSession();
   const sessionUserId = getUser()?.id ?? null;
   const branch = workspaceBranch ?? repositoryBranch(pathname, searchParams);
@@ -101,8 +119,9 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
     error: branchesError,
     refresh: refreshBranches,
     create: createBranch,
-  } = useBranches(projectId, true);
-  const branchHead = branch && Object.hasOwn(branchHeads, branch) ? branchHeads[branch] : null;
+  } = projectBranches;
+  const branchKnown = Object.hasOwn(branchHeads, branch ?? 'main');
+  const branchHead = branchKnown ? branchHeads[branch ?? 'main'] : null;
   const starterCandidate = useMemo(
     () =>
       getProjectWorkspaceStarterCandidate(
@@ -139,17 +158,42 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
     : branchWorkspace;
   const visibleCandidates = branch ? (selectedCandidate ? [selectedCandidate] : []) : candidates;
   const selectedWorkspaceId = branch ? (selectedCandidate?.id ?? null) : requestedWorkspaceId;
-  const missingBranch =
-    workspaceBranch && !branchesLoading && !branchesError && !branches.includes(workspaceBranch);
+  const hasMatchingPersistedWorkspace = Boolean(
+    selectedCandidate &&
+      selectedCandidate.revision !== undefined &&
+      (requestedWorkspaceId || selectedCandidate.status !== 'committed')
+  );
+  const missingBranch = branch && !branchesLoading && !branchesError && !branchKnown;
   const navigationError =
     projectWorkspaces.error ??
     (missingBranch
-      ? `Branch ${workspaceBranch} was not found in this project.`
+      ? `Branch ${branch} was not found in this project.`
       : requestedWorkspaceId && !requestedCandidate
         ? `Workspace ${requestedWorkspaceId} was not found in this project.`
         : requestedWorkspaceId && branch && requestedCandidate?.targetBranch !== branch
           ? `Workspace ${requestedWorkspaceId} belongs to ${requestedCandidate?.targetBranch}, not ${branch}.`
           : null);
+
+  const workbenchLoading =
+    (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
+    (Boolean(branch) && branchesLoading && !branchKnown && !hasMatchingPersistedWorkspace);
+
+  useEffect(() => {
+    markNavigationTiming('workspaces', 'shell');
+    if (
+      !workbenchLoading &&
+      !navigationError &&
+      !(branchesError && !branchKnown && !hasMatchingPersistedWorkspace)
+    ) {
+      markNavigationTiming('workspaces', 'ready');
+    }
+  }, [
+    workbenchLoading,
+    navigationError,
+    branchesError,
+    branchKnown,
+    hasMatchingPersistedWorkspace,
+  ]);
 
   const handleWorkspaceSelect = useCallback(
     (workspaceId: string) => {
@@ -231,32 +275,39 @@ function ProjectWorkspacesContent({ projectId, workspaceBranch }: ProjectWorkspa
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refreshBranches} />
-      {!(branchesError && !branches.length && !projectWorkspaces.workspaces.length) && (
-        <WorkspaceWorkbench
-          branchOptions={branches}
-          candidates={visibleCandidates}
-          errorMessage={navigationError ?? undefined}
-          projectId={projectId}
-          selectedWorkspaceId={selectedWorkspaceId}
-          viewState={
-            (projectWorkspaces.loading && projectWorkspaces.workspaces.length === 0) ||
-            (Boolean(branch) && branchesLoading && branches.length === 0)
-              ? 'loading'
-              : navigationError
-                ? 'error'
-                : 'ready'
-          }
-          onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
-          onSourceMaterialUploaded={projectMaterials.refresh}
-          onViewCommitInState={handleViewCommitInState}
-          onWorkspacesRefresh={projectWorkspaces.refresh}
-          onWorkspaceBranchChange={handleWorkspaceBranchChange}
-          onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
+    <WorkspaceMaterialInventoryContext.Provider
+      value={{
+        open: openMaterials,
+        loading: !needsMaterials || projectMaterials.loading,
+        error: projectMaterials.error,
+        retry: projectMaterials.refresh,
+      }}
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <BranchLoadError
+          error={branchesError}
+          loading={branchesLoading}
+          onRetry={refreshBranches}
         />
-      )}
-    </div>
+        {!(branchesError && !branchKnown && !hasMatchingPersistedWorkspace && !navigationError) && (
+          <WorkspaceWorkbench
+            branchOptions={branches}
+            candidates={visibleCandidates}
+            errorMessage={navigationError ?? undefined}
+            key={projectId}
+            projectId={projectId}
+            selectedWorkspaceId={selectedWorkspaceId}
+            viewState={workbenchLoading ? 'loading' : navigationError ? 'error' : 'ready'}
+            onSelectedWorkspaceChange={branch ? undefined : handleWorkspaceSelect}
+            onSourceMaterialUploaded={onSourceMaterialUploaded}
+            onViewCommitInState={handleViewCommitInState}
+            onWorkspacesRefresh={projectWorkspaces.refresh}
+            onWorkspaceBranchChange={handleWorkspaceBranchChange}
+            onCreateWorkspaceBranch={handleCreateWorkspaceBranch}
+          />
+        )}
+      </div>
+    </WorkspaceMaterialInventoryContext.Provider>
   );
 }
 

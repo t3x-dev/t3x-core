@@ -25,7 +25,7 @@ Use the Memories tool. Do not edit code, open a pull request, browse the product
 
 ## Evidence
 
-Read the latest completed `Full-stack E2E` workflow run on `dev`. The workflow file is `.github/workflows/full-stack-e2e.yml`. It already runs on every push to `dev`.
+Read the latest completed `CI - Full-Stack E2E Qualification` workflow run on `dev`. The workflow file is `.github/workflows/full-stack-e2e.yml`. It already runs on every push to `dev`.
 
 ```bash
 gh run list --workflow full-stack-e2e.yml --branch dev --limit 1 --json databaseId,url,conclusion,headSha,createdAt

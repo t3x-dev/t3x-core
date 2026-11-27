@@ -6,7 +6,7 @@ import {
   listStudioCandidates,
   removeStudioCandidate,
 } from '@/infrastructure/schemaStudio';
-export function useStudioCandidates(projectId: string) {
+export function useStudioCandidates(projectId: string, enabled = true) {
   const [result, setResult] = useState<{
     projectId: string;
     items: StudioCandidate[];
@@ -48,18 +48,19 @@ export function useStudioCandidates(projectId: string) {
     ++epoch.current;
     setResult(undefined);
     setPending(false);
-    void refresh();
     return () => {
       ++epoch.current;
     };
   }, [refresh]);
   useEffect(() => {
+    if (!enabled) return;
+    void refresh();
     const reload = () => void refresh();
     window.addEventListener('focus', reload);
     return () => {
       window.removeEventListener('focus', reload);
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
   async function mutate<T>(action: () => Promise<T>) {
     const current = epoch.current;
     setPending(true);
@@ -76,7 +77,7 @@ export function useStudioCandidates(projectId: string) {
   return {
     items: data?.items ?? [],
     error: data?.error,
-    loading: !data,
+    loading: enabled && !data,
     pending,
     refresh,
     add: (source: AddStudioCandidate) => mutate(() => addStudioCandidate(projectId, source)),

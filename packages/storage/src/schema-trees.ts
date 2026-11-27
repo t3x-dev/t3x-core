@@ -865,6 +865,17 @@ export const apiKeys = pgTable(
   })
 );
 
+export const repositoryAgentDelegations = pgTable('repository_agent_delegations', {
+  keyId: text('key_id')
+    .primaryKey()
+    .references(() => apiKeys.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull(),
+  revision: integer('revision').notNull().default(1),
+  branch: text('branch').notNull(),
+  branchOnly: boolean('branch_only').notNull(),
+  mode: text('mode').$type<'read' | 'prepare' | 'commit'>().notNull(),
+});
+
 export type ApiKeyRecord = typeof apiKeys.$inferSelect;
 export type ApiKeyInsert = typeof apiKeys.$inferInsert;
 

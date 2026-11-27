@@ -130,6 +130,7 @@ rows:
       non-trivial PR without DMs.
     acceptance_type: manual
     pr_filter_paths:
+      - .github/workflows/pr-validation.yml
       - .github/workflows/standards-*.yml
       - .github/ISSUE_TEMPLATE/**
       - .github/PULL_REQUEST_TEMPLATE.md

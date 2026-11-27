@@ -7,7 +7,7 @@ const root = new URL('../..', import.meta.url);
 test('full-stack E2E qualifies exact dev pushes, supports reruns, and produces attestations', () => {
   const workflow = readText('.github/workflows/full-stack-e2e.yml');
 
-  assert.match(workflow, /^name: Full-stack E2E$/m);
+  assert.match(workflow, /^name: CI - Full-Stack E2E Qualification$/m);
   assert.match(workflow, /^ {2}push:\n {4}branches:\n {6}- dev$/m);
   assert.match(workflow, /^\s+workflow_dispatch:$/m);
   assert.doesNotMatch(workflow, /^\s+pull_request:/m);
@@ -60,13 +60,6 @@ test('authenticated browser qualification uses a fail-closed isolated profile', 
   assert.match(runner, /waitForUrl\(`\$\{runnerUrl\}\/health`/);
   assert.match(runner, /authEnabled \? 'test-results\/full-e2e-auth'/);
   assert.match(runner, /auth_enabled: authEnabled/);
-});
-
-test('legacy local smoke is manual instead of a pull-request trigger', () => {
-  const workflow = readText('.github/workflows/local-smoke.yml');
-
-  assert.match(workflow, /^\s+workflow_dispatch: \{\}$/m);
-  assert.doesNotMatch(workflow, /^\s+pull_request:/m);
 });
 
 function readText(relativePath) {

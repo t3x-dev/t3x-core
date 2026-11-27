@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   guests: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   members: { data: undefined as unknown, error: null as Error | null, isLoading: false },
   canManageGuests: false,
+  namespaceCollaboration: vi.fn(),
   prs: vi.fn(),
   workspaces: vi.fn(),
 }));
@@ -25,14 +26,14 @@ vi.mock('@/hooks/accounts/useProjectCollaboration', () => ({
   }),
 }));
 vi.mock('@/hooks/accounts/useNamespaceCollaboration', () => ({
-  useNamespaceCollaboration: () => ({ membersQuery: mocks.members }),
+  useNamespaceCollaboration: mocks.namespaceCollaboration,
 }));
 vi.mock('@/infrastructure/pullRequests', () => ({ listProjectPullRequests: mocks.prs }));
 vi.mock('@/infrastructure/workspaces', () => ({ listProjectWorkspaces: mocks.workspaces }));
 
 beforeEach(() => {
-  mocks.prs.mockResolvedValue({ pull_requests: [], counts: { active: 0, merged: 0 } });
-  mocks.workspaces.mockResolvedValue([]);
+  mocks.prs.mockReset().mockResolvedValue({ pull_requests: [], counts: { active: 0, merged: 0 } });
+  mocks.workspaces.mockReset().mockResolvedValue([]);
   mocks.guests.data = undefined;
   mocks.guests.error = null;
   mocks.members.data = undefined;
@@ -40,6 +41,7 @@ beforeEach(() => {
   mocks.guests.isLoading = false;
   mocks.members.isLoading = false;
   mocks.canManageGuests = false;
+  mocks.namespaceCollaboration.mockReset().mockReturnValue({ membersQuery: mocks.members });
 });
 
 describe('ProjectCommunityTab', () => {
@@ -96,6 +98,34 @@ describe('ProjectCommunityTab', () => {
     expect(screen.queryByRole('link', { name: 'Manage access' })).not.toBeInTheDocument();
   });
 
+  it('starts the member read while guests are pending and hides members if access is denied', () => {
+    const principal = { kind: 'human', principal_id: 'user-1', display_name: 'Jordan' };
+    mocks.guests.isLoading = true;
+    mocks.members.data = { members: [{ principal, status: 'active', role: 'viewer' }] };
+    const { rerender } = render(
+      <ProjectCommunityTab projectId="project one" namespaceId="team-1" />
+    );
+
+    expect(mocks.namespaceCollaboration).toHaveBeenCalledWith({
+      namespaceId: 'team-1',
+      canReadMembers: true,
+      canManageInvitations: false,
+    });
+    expect(screen.getByText('Loading collaborators…')).toBeVisible();
+    expect(screen.queryByText('Jordan')).not.toBeInTheDocument();
+
+    mocks.guests.isLoading = false;
+    mocks.guests.error = new Error('Access denied');
+    rerender(<ProjectCommunityTab projectId="project one" namespaceId="team-1" />);
+    expect(mocks.namespaceCollaboration).toHaveBeenLastCalledWith({
+      namespaceId: null,
+      canReadMembers: false,
+      canManageInvitations: false,
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Project collaborators unavailable');
+    expect(screen.queryByText('Jordan')).not.toBeInTheDocument();
+  });
+
   it('links authorized collaborators directly to canonical repository access settings', () => {
     mocks.canManageGuests = true;
     render(<ProjectCommunityTab projectId="project one" />);
@@ -132,6 +162,20 @@ describe('ProjectCommunityTab', () => {
     );
     expect(screen.queryByText(/No pull requests or workspaces yet/)).not.toBeInTheDocument();
     expect(screen.queryByText('No collaborators visible.')).not.toBeInTheDocument();
+  });
+
+  it('keeps pull requests usable while Workspaces are still loading', async () => {
+    mocks.prs.mockResolvedValue({
+      pull_requests: [
+        { id: 'pr-1', number: 7, title: 'Available now', updated_at: '2026-09-01T00:00:00Z' },
+      ],
+    });
+    mocks.workspaces.mockReturnValue(new Promise(() => {}));
+    render(<ProjectCommunityTab projectId="project one" />);
+
+    expect(await screen.findByRole('link', { name: 'Open pull request' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Pull requests 1' }));
+    expect(screen.queryByText('Loading recent work…')).not.toBeInTheDocument();
   });
 
   it('opens a recent Workspace on its actual branch', async () => {

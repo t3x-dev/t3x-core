@@ -10,6 +10,11 @@ import type {
   RepositoryProfilePatch,
 } from '@t3x-dev/api-client';
 import { API_V1, ApiError, buildQueryString, fetchWithTimeout, handleResponse } from './core';
+import {
+  getSessionUserId,
+  subscribeSessionReadInvalidation,
+  subscribeSessionUser,
+} from './session';
 import { getSharedApiClient } from './sharedApiClient';
 import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
@@ -47,14 +52,184 @@ export async function listProjects(
   return data;
 }
 
-export async function listProjectPage(limit: number, cursor: string, namespace?: string) {
-  const query = buildQueryString({ limit, cursor, namespace });
-  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`);
+export interface ProjectPageFilters {
+  q?: string;
+  tag_query?: string;
+  editable?: true;
+  visibility?: Project['visibility'];
+  tags?: string[];
+  include_counts?: false;
+}
+
+export async function listProjectPage(
+  limit: number,
+  cursor: string,
+  namespace?: string,
+  filters?: ProjectPageFilters,
+  signal?: AbortSignal
+) {
+  const { tags, ...scope } = filters ?? {};
+  const query = new URLSearchParams(buildQueryString({ limit, cursor, namespace, ...scope }));
+  for (const tag of tags ?? []) query.append('tags', tag);
+  const res = await fetchWithTimeout(`${API_V1}/projects?${query}`, undefined, undefined, signal);
   return handleResponse<{ items: Project[]; next_cursor: string | null; has_more: boolean }>(res);
 }
 
-export async function getProject(projectId: string): Promise<ProjectDetail> {
-  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`);
+export const REPOSITORY_DIRECTORY_PAGE_SIZE = 20;
+const DIRECTORY_PAGE_MAX_AGE_MS = 30_000;
+const DIRECTORY_PAGE_PREFETCH_FRESH_MS = 5_000;
+
+type DirectoryPage = Awaited<ReturnType<typeof listProjectPage>>;
+interface DirectoryPageScope {
+  namespace?: string;
+  limit?: number;
+  filters?: ProjectPageFilters;
+}
+interface DirectoryPageEntry {
+  snapshot?: { page: DirectoryPage; loadedAt: number };
+  request?: { promise: Promise<DirectoryPage>; controller: AbortController; speculative: boolean };
+}
+
+const directoryPages = new Map<string, DirectoryPageEntry>();
+const DIRECTORY_PAGE_CACHE_LIMIT = 12;
+let watchingDirectorySession = false;
+let lastPrefetch: { key: string; at: number } | undefined;
+
+function directoryPageKey(userId: string, scope: DirectoryPageScope): string {
+  const { namespace, limit = REPOSITORY_DIRECTORY_PAGE_SIZE, filters } = scope;
+  return JSON.stringify([
+    userId,
+    namespace,
+    limit,
+    filters?.q,
+    filters?.tag_query,
+    filters?.editable,
+    filters?.visibility,
+    [...(filters?.tags ?? [])].sort(),
+    filters?.include_counts,
+  ]);
+}
+
+function invalidateDirectoryPage() {
+  for (const { request } of directoryPages.values()) request?.controller.abort();
+  directoryPages.clear();
+  lastPrefetch = undefined;
+}
+
+export function cancelRepositoryDirectoryPrefetch() {
+  for (const entry of directoryPages.values()) {
+    if (!entry.request?.speculative) continue;
+    const { controller } = entry.request;
+    entry.request = undefined;
+    controller.abort();
+  }
+}
+
+export function cancelRepositoryDirectoryRead(
+  userId: string,
+  scope: DirectoryPageScope = {}
+): void {
+  const entry = directoryPages.get(directoryPageKey(userId, scope));
+  if (!entry?.request) return;
+  const { controller } = entry.request;
+  entry.request = undefined;
+  controller.abort();
+}
+
+export function readCachedRepositoryDirectoryPage(userId: string, scope: DirectoryPageScope = {}) {
+  if (getSessionUserId() !== userId) return undefined;
+  const cached = directoryPages.get(directoryPageKey(userId, scope))?.snapshot;
+  return cached && Date.now() - cached.loadedAt < DIRECTORY_PAGE_MAX_AGE_MS
+    ? cached.page
+    : undefined;
+}
+
+export function prefetchDirectoryPage(userId: string, scope: DirectoryPageScope = {}) {
+  const key = directoryPageKey(userId, scope);
+  if (lastPrefetch?.key === key && Date.now() - lastPrefetch.at < DIRECTORY_PAGE_PREFETCH_FRESH_MS)
+    return;
+  if (lastPrefetch?.key !== key) cancelRepositoryDirectoryPrefetch();
+  lastPrefetch = { key, at: Date.now() };
+  void loadRepositoryDirectoryPage(userId, false, true, scope).catch(() => {});
+}
+
+export function loadRepositoryDirectoryPage(
+  userId: string,
+  force = false,
+  speculative = false,
+  scope: DirectoryPageScope = {}
+): Promise<DirectoryPage> {
+  if (!watchingDirectorySession) {
+    watchingDirectorySession = true;
+    subscribeSessionReadInvalidation(invalidateDirectoryPage);
+    let currentUser = getSessionUserId();
+    subscribeSessionUser(() => {
+      const userId = getSessionUserId();
+      if (currentUser !== userId) invalidateDirectoryPage();
+      currentUser = userId;
+    });
+  }
+  if (getSessionUserId() !== userId)
+    return Promise.reject(new ApiError('ABORTED', 'The repository list changed.'));
+
+  const key = directoryPageKey(userId, scope);
+  const entry = directoryPages.get(key) ?? {};
+  directoryPages.delete(key);
+  directoryPages.set(key, entry);
+  if (directoryPages.size > DIRECTORY_PAGE_CACHE_LIMIT) {
+    const oldest = directoryPages.keys().next().value!;
+    directoryPages.get(oldest)?.request?.controller.abort();
+    directoryPages.delete(oldest);
+  }
+  if (entry.request) {
+    if (!speculative) entry.request.speculative = false;
+    return entry.request.promise;
+  }
+  if (
+    !force &&
+    entry.snapshot &&
+    Date.now() - entry.snapshot.loadedAt < DIRECTORY_PAGE_PREFETCH_FRESH_MS
+  )
+    return Promise.resolve(entry.snapshot.page);
+
+  const controller = new AbortController();
+  const promise = listProjectPage(
+    scope.limit ?? REPOSITORY_DIRECTORY_PAGE_SIZE,
+    '',
+    scope.namespace,
+    scope.filters,
+    controller.signal
+  )
+    .then((page) => {
+      if (
+        controller.signal.aborted ||
+        getSessionUserId() !== userId ||
+        entry !== directoryPages.get(key)
+      )
+        throw new ApiError('ABORTED', 'The repository list changed.');
+      entry.snapshot = { page, loadedAt: Date.now() };
+      return page;
+    })
+    .catch((error: unknown) => {
+      if (entry.request?.controller === controller) entry.snapshot = undefined;
+      throw error;
+    })
+    .finally(() => {
+      if (entry.request?.controller === controller) entry.request = undefined;
+    });
+  entry.request = { promise, controller, speculative };
+  return promise;
+}
+
+async function afterRepositoryWrite<T>(write: Promise<T>): Promise<T> {
+  const result = await write;
+  invalidateDirectoryPage();
+  return result;
+}
+
+export async function getProject(projectId: string, includeStats = true): Promise<ProjectDetail> {
+  const query = includeStats ? '' : '?include_stats=false';
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}${query}`);
   return handleResponse<ProjectDetail>(res);
 }
 
@@ -70,14 +245,14 @@ export async function createProject(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, metadata, namespace, starter, ...profile }),
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export async function ensureDemoProject(): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects/demo-workspace`, {
     method: 'POST',
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export interface DeleteProjectResponse {
@@ -98,7 +273,7 @@ export async function deleteProject(
       method: 'DELETE',
     }
   );
-  return handleResponse<DeleteProjectResponse>(res);
+  return afterRepositoryWrite(handleResponse<DeleteProjectResponse>(res));
 }
 
 export async function restoreProject(projectId: string): Promise<Project> {
@@ -108,7 +283,7 @@ export async function restoreProject(projectId: string): Promise<Project> {
       method: 'POST',
     }
   );
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export interface UpdateProjectPayload {
@@ -129,7 +304,7 @@ export async function updateProject(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return handleResponse<Project>(res);
+  return afterRepositoryWrite(handleResponse<Project>(res));
 }
 
 export type ChangeProjectVisibilityPayload = ChangeProjectVisibilityInput;
@@ -139,7 +314,7 @@ export async function changeProjectVisibility(
   projectId: string,
   payload: ChangeProjectVisibilityPayload
 ): Promise<ChangeProjectVisibilityResponse> {
-  return getSharedApiClient().changeProjectVisibility(projectId, payload);
+  return afterRepositoryWrite(getSharedApiClient().changeProjectVisibility(projectId, payload));
 }
 
 // ============================================================================

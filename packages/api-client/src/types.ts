@@ -8,6 +8,7 @@ import type {
   ClaimView,
   MergeDecision as CoreMergeDecision,
   TransitionGraphViewV1 as CoreTransitionGraphViewV1,
+  TreeDiff,
 } from '@t3x-dev/core';
 
 // Common types
@@ -39,6 +40,7 @@ export interface Project {
   repository_profile?: import('./repository-profile').RepositoryProfile;
   /** Present on authorized project list and detail responses. */
   can_edit?: boolean;
+  can_manage_agent_access?: boolean;
   /** Delete capability returned by authorized project lists. */
   can_delete?: boolean;
   deleted_at?: string | null;
@@ -46,6 +48,7 @@ export interface Project {
   can_restore?: boolean;
   can_permanently_delete?: boolean;
   namespace?: string | null;
+  namespace_id?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
   project_id: string;
@@ -294,14 +297,21 @@ export interface CreatedRepositoryCommit {
   object: RepositoryCommitV2;
 }
 
-export interface StoredRepositoryCommit {
+export interface CommitDisplayFields {
+  committed_by?: TransitionActorRef | null;
+  decided_by?: TransitionActorRef | null;
+  operation_count?: number;
+  message?: string | null;
+}
+
+export interface StoredRepositoryCommit extends CommitDisplayFields {
   address_number?: string;
   digest: string;
   recorded_at: string;
   object: RepositoryCommitV2;
 }
 
-export interface CommitHistoryProjectionV2 {
+export interface CommitHistoryProjectionV2 extends CommitDisplayFields {
   address_number?: string;
   format: 'transition_v2';
   id: string;
@@ -373,6 +383,18 @@ export interface DiffChange {
   old_value?: unknown;
   new_value?: unknown;
 }
+
+interface ComparedCommit {
+  digest: string;
+  rationale: string | null;
+  actor: { kind: 'human' | 'agent' | 'service'; id: string };
+  recorded_at: string;
+}
+
+export type CommittedStateComparison = { base: ComparedCommit; target: ComparedCommit } & (
+  | { diff: TreeDiff }
+  | ({ kind: 'document' } & DiffResult)
+);
 
 export interface TwoWayDiffInput {
   base_commit_hash: string;
@@ -567,6 +589,34 @@ export interface GenerationResponse {
 export interface GenerationProviderCatalog {
   providers: string[];
   default: string;
+}
+
+export interface GenerationModelCatalog {
+  default_provider: string | null;
+  generation_provider_order: string[];
+  providers: Array<{
+    name: string;
+    label: string;
+    available: boolean;
+    default_model?: string | null;
+    models: Array<{
+      id: string;
+      label: string;
+      capabilities: string[];
+      max_output_tokens: number;
+    }>;
+  }>;
+}
+
+export interface ProjectSourceMaterial {
+  id: string;
+  project_id: string;
+  source_type: 'document' | 'url' | 'platform' | 'image';
+  title: string;
+  mime_type: string | null;
+  content_hash: string;
+  content_excerpt: string;
+  archived_at: string | null;
 }
 
 export interface SourceThreadMemory {
@@ -772,6 +822,11 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
   address_number?: string;
   can_request_override?: boolean;
+  recorded_outcome?: {
+    decision_digest: string;
+    outcome: 'accepted' | 'rejected' | 'overridden';
+    commit_digest?: string;
+  };
   schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;
@@ -795,9 +850,24 @@ export interface ListWorkspaceTransitionReviewSnapshotsResponse {
   snapshots: WorkspaceTransitionReviewSnapshotEnvelope[];
 }
 
+export interface OpenWorkspaceInput {
+  ref: string;
+  expected_head: string | null;
+  request_id: string;
+}
+
+export interface OpenWorkspaceResult {
+  workspace_id: string;
+  workspace_revision: number;
+  basis_ref_head: string | null;
+  head_commit_hash: string | null;
+  created: boolean;
+}
+
 /** Authenticated Repository Review Workspace operations. */
 export interface RepositoryWorkspaceCapability {
   authoring: WorkspaceAuthoringCapability;
+  open(projectId: string, input: OpenWorkspaceInput): Promise<OpenWorkspaceResult>;
   list(projectId: string): Promise<ListRepositoryWorkspacesResponse>;
   get(projectId: string, workspaceId: string): Promise<RepositoryWorkspaceEnvelope>;
   createExtractionProposal(
@@ -1142,6 +1212,18 @@ export interface ProposeTransitionResult {
   view: TransitionControlPlaneView;
 }
 
+export interface GenerateWorkspaceProposalInput {
+  request_id: string;
+  workspace_id: string;
+  if_revision: number;
+  posture?: 'source_only' | 'guided' | 'recommend';
+  instruction: string;
+  source_material_ids: string[];
+  source_turn_hashes?: string[];
+  provider?: string;
+  model?: string;
+}
+
 export interface InspectTransitionResult {
   transition_id: string;
   view: TransitionControlPlaneView;
@@ -1358,6 +1440,7 @@ export interface RepositoryAddress {
   project_id: string;
   name: string;
   namespace: string | null;
+  namespace_id?: string | null;
   canonical_path: string | null;
   path_status: 'ready' | 'pending_migration';
   redirect: boolean;

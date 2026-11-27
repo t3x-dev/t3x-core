@@ -99,6 +99,7 @@ const storageMock = vi.hoisted(() => {
           : []
       )
     ),
+    listTransitionCommandResults: vi.fn().mockResolvedValue([]),
     listTransitionReviewSnapshots: vi.fn(),
     upsertWorkspaceDraft: vi.fn(
       (
@@ -170,8 +171,10 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     getLatestTransitionReviewSnapshot: storageMock.getLatestTransitionReviewSnapshot,
     getTransitionProposalPreparation: storageMock.getTransitionProposalPreparation,
     getTransitionPolicyBinding: vi.fn(() => Promise.resolve(null)),
+    readAgentDelegation: vi.fn().mockResolvedValue(null),
     getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
+    listTransitionCommandResults: storageMock.listTransitionCommandResults,
     listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
@@ -453,7 +456,7 @@ describe('Workspace routes', () => {
         body: JSON.stringify({ content: { trees: [], relations: [] } }),
       }
     );
-    expect(reviewed.status).toBe(200);
+    expect(reviewed.status, await reviewed.clone().text()).toBe(200);
     expect(transitionMock.reviewWorkspaceTransition).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -718,6 +721,7 @@ describe('Workspace routes', () => {
           title: 'PRD audience handoff',
           schemaBindings: [{ schemaName: 'PRD Schema v2' }],
           sourceBundle: [],
+          schemaActivity: { hasEditCandidate: true, hasPendingTask: true },
         },
       }),
     });
@@ -727,12 +731,17 @@ describe('Workspace routes', () => {
     const listBody: ApiResponse = await listRes.json();
     expect(listBody.data.workspaces[0].id).toBe('workspace_prd_handoff');
     expect(listBody.data.workspaces[0].revision).toBe(1);
+    expect(listBody.data.workspaces[0].schemaActivity).toEqual({
+      hasEditCandidate: false,
+      hasPendingTask: false,
+    });
 
     const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
     expect(getRes.status).toBe(200);
     const getBody: ApiResponse = await getRes.json();
     expect(getBody.data.workspace.id).toBe('workspace_prd_handoff');
     expect(getBody.data.workspace.revision).toBe(1);
+    expect(getBody.data.workspace).not.toHaveProperty('schemaActivity');
   });
 
   it('rejects a pinned Schema whose definition hash does not match', async () => {

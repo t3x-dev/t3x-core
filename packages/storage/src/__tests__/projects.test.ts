@@ -127,6 +127,20 @@ describe('Projects Storage', () => {
   });
 
   describe('findProjects', () => {
+    it('searches directory tags before picking a cursor page', async () => {
+      const match = await insertProject(db, {
+        name: 'Directory search fixture',
+        repositoryProfile: { readme: '', tags: ['directory-test-tag'] },
+      });
+      const page = await findProjects(db, {
+        cursor: '',
+        limit: 20,
+        q: 'directory-test-tag',
+        directory_search: true,
+      });
+      expect(page.items.map((project) => project.projectId)).toEqual([match.projectId]);
+    });
+
     it('returns all projects with default options', async () => {
       // Create a few projects
       await insertProject(db, testData.project({ name: 'List Test 1' }));

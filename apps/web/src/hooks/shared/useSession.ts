@@ -6,13 +6,17 @@
  * @/infrastructure directly.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { postLogout } from '@/infrastructure/auth';
 import {
   clearSession as clearSessionInfra,
+  getSessionReadEpoch,
+  getSessionUserId,
   getSessionUser as getSessionUserInfra,
   type SessionUser,
   setSessionUser as setSessionUserInfra,
+  subscribeSessionReadInvalidation,
+  subscribeSessionUser,
 } from '@/infrastructure/session';
 
 export type { SessionUser };
@@ -29,4 +33,12 @@ export function useSession() {
     }
   }, []);
   return { getUser, setUser, clear };
+}
+
+export function useSessionUserId() {
+  return useSyncExternalStore(subscribeSessionUser, getSessionUserId, () => null);
+}
+
+export function useSessionReadEpoch() {
+  return useSyncExternalStore(subscribeSessionReadInvalidation, getSessionReadEpoch, () => 0);
 }

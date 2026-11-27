@@ -13,7 +13,7 @@ describe('CommitHistoryRow', () => {
   ])('uses an explicit missing description while retaining the commit identity %j', (message) => {
     render(
       <CommitHistoryRow
-        author={{ type: 'human' }}
+        byline="human"
         committedAt="2026-01-01"
         hash="sha256:abcdef123"
         message={message}
@@ -29,7 +29,7 @@ describe('CommitHistoryRow', () => {
     const onOpen = vi.fn();
     render(
       <CommitHistoryRow
-        author={{ type: 'human', name: 'W' }}
+        byline="W"
         branch="main"
         committedAt="2026-07-29T08:00:00.000Z"
         diffStats={{ addedCount: 1, modifiedCount: 2, removedCount: 0 }}
@@ -51,7 +51,7 @@ describe('CommitHistoryRow', () => {
     const onOpen = vi.fn();
     render(
       <CommitHistoryRow
-        author={{ type: 'human', name: 'W' }}
+        byline="W"
         branch="main"
         committedAt="2026-07-29T08:00:00.000Z"
         hash="sha256:root"

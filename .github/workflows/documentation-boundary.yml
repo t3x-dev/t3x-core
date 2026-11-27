@@ -1,4 +1,4 @@
-name: Documentation boundary
+name: CI - Documentation Boundaries
 on:
   pull_request:
   push:

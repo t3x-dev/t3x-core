@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavigationFeedback } from '@/components/layout/NavigationFeedback';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,13 +43,18 @@ import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPat
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { namespaceSettingsHref } from '@/domain/settingsLocation';
 import { useNamespaceAccounts } from '@/hooks/accounts/useNamespaceAccounts';
+import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { REPOSITORY_DIRECTORY_PAGE_SIZE } from '@/hooks/projects/repositoryDirectory';
 import { repositoryMutationError } from '@/hooks/projects/useDeletedProjects';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { prefetchDirectoryRepositoryAddress } from '@/hooks/projects/useRepositoryAddress';
 import { useRepositoryName } from '@/hooks/projects/useRepositoryName';
+import { useSessionReadEpoch, useSessionUserId } from '@/hooks/shared/useSession';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import palette from '@/styles/management-palette.module.css';
 import { cn } from '@/utils/cn';
 import { buildReturnTo } from '@/utils/navigationReturn';
+import { beginNavigationTiming, markNavigationTiming } from '@/utils/navigationTiming';
 import {
   orderProjectsByRecentOpen,
   readRecentProjectIds,
@@ -70,12 +76,35 @@ import { RepositoryTagPicker, repositoryTagOptions } from './RepositoryTagPicker
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50';
-const REPOSITORIES_PER_PAGE = 20;
+const REPOSITORIES_PER_PAGE = REPOSITORY_DIRECTORY_PAGE_SIZE;
 
-function openDirectoryRepository(project: ProjectSummary) {
-  const { details, cacheProject } = useProjectStore.getState();
-  if (!details[project.id]) cacheProject(project);
-  recordRecentProjectOpen(project.id);
+function useOpenDirectoryRepository() {
+  const userId = useSessionUserId();
+  const readEpoch = useSessionReadEpoch();
+  const { loadCommits } = useCommitsList();
+  return (project: ProjectSummary) => {
+    beginNavigationTiming('state');
+    const { details, cacheProject } = useProjectStore.getState();
+    if (!details[project.id]) cacheProject(project);
+    recordRecentProjectOpen(project.id);
+    if (project.canonical_path && project.path_status !== 'pending_migration') {
+      const head = loadCommits(project.id, 'main', 1);
+      const address = prefetchDirectoryRepositoryAddress(project.canonical_path);
+      // The destination may never mount, or the address may resolve to another project.
+      void head.catch(() => {});
+      void address?.catch(() => {});
+      useProjectStore.setState({
+        directoryStateEntry: {
+          project,
+          userId,
+          readEpoch,
+          expiresAt: Date.now() + 15_000,
+          head,
+          address,
+        },
+      });
+    }
+  };
 }
 
 function metricValue(value: number | undefined): number {
@@ -101,10 +130,12 @@ function ProjectMetrics({ project }: { project: ProjectSummary }) {
 
 function ProjectActions({
   onDelete,
+  onOpen,
   onRename,
   project,
 }: {
   onDelete: (project: ProjectSummary) => void;
+  onOpen: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
 }) {
@@ -118,10 +149,7 @@ function ProjectActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={cn(palette.scope, styles.menu)}>
         <DropdownMenuItem asChild>
-          <Link
-            href={repositoryLocation(path, '', '')}
-            onClick={() => openDirectoryRepository(project)}
-          >
+          <Link href={repositoryLocation(path, '', '')} onNavigate={() => onOpen(project)}>
             <FolderOpen aria-hidden="true" size={15} />
             Open repository
           </Link>
@@ -166,18 +194,22 @@ function ProjectActions({
 
 function ProjectRow({
   onDelete,
+  onOpen,
   onRename,
   project,
   selectedTags,
   onTag,
   showAccess,
+  showCounts,
 }: {
   onDelete: (project: ProjectSummary) => void;
   onRename: (project: ProjectSummary) => void;
   project: ProjectSummary;
+  onOpen: (project: ProjectSummary) => void;
   selectedTags: string[];
   onTag: (tag: string) => void;
   showAccess: boolean;
+  showCounts: boolean;
 }) {
   return (
     <article className={styles.repositoryRow}>
@@ -187,10 +219,11 @@ function ProjectRow({
           <Link
             href={repositoryLocation(getProjectRepoPath(project), '', '')}
             title={getProjectRepoPath(project)}
-            onClick={() => openDirectoryRepository(project)}
+            onNavigate={() => onOpen(project)}
             className={cn(styles.repositoryLink, focusRing)}
           >
             <h3>{project.name}</h3>
+            <NavigationFeedback />
           </Link>
           {project.visibility && <RepositoryVisibility value={project.visibility} />}
           {project.canEdit === false && <span className={styles.readOnly}>Read only</span>}
@@ -219,11 +252,11 @@ function ProjectRow({
                   : 'Read access'}
             </span>
           )}
-          <ProjectMetrics project={project} />
+          {showCounts && <ProjectMetrics project={project} />}
           <span>Created {project.updatedAt}</span>
         </div>
       </div>
-      <ProjectActions onDelete={onDelete} onRename={onRename} project={project} />
+      <ProjectActions onDelete={onDelete} onOpen={onOpen} onRename={onRename} project={project} />
     </article>
   );
 }
@@ -286,9 +319,16 @@ export function ProjectDirectoryPage({
   ownerSlug?: string;
   scope?: 'namespace' | 'accessible';
 }) {
+  const userId = useSessionUserId();
+  const directoryUserId = userId ?? undefined;
   return (
     <Suspense fallback={null}>
-      <ProjectDirectoryContent key={`${scope}:${ownerSlug}`} ownerSlug={ownerSlug} scope={scope} />
+      <ProjectDirectoryContent
+        key={JSON.stringify([scope, ownerSlug, userId])}
+        ownerSlug={ownerSlug}
+        scope={scope}
+        directoryUserId={directoryUserId}
+      />
     </Suspense>
   );
 }
@@ -296,11 +336,14 @@ export function ProjectDirectoryPage({
 function ProjectDirectoryContent({
   ownerSlug,
   scope,
+  directoryUserId,
 }: {
   ownerSlug: string;
   scope: 'namespace' | 'accessible';
+  directoryUserId?: string;
 }) {
   const accessible = scope === 'accessible';
+  const openDirectoryRepository = useOpenDirectoryRepository();
   const pathname = usePathname();
   const router = useRouter();
   const { accounts, activeAccount, selectNamespace } = useNamespaceAccounts();
@@ -331,6 +374,26 @@ function ProjectDirectoryContent({
   const activeHref = `${pathname}${activeParams.size ? `?${activeParams.toString()}` : ''}`;
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
+  const [query, setQuery] = useState('');
+  const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
+  const [visibility, setVisibility] = useState<'all' | (typeof visibilityOptions)[number]['value']>(
+    'all'
+  );
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
+  const serverFiltersAvailable = Boolean(directoryUserId && directoryView === 'all');
+  const serverFiltering = serverFiltersAvailable && hasFilter;
+  const namespace = accessible ? undefined : ownerSlug;
+  const filters = serverFiltering
+    ? {
+        search: query.trim(),
+        visibility: visibility === 'all' ? undefined : visibility,
+        tags: selectedTags,
+      }
+    : {};
+  const countScope = JSON.stringify([namespace, filters]);
+  const [requestedCounts, setRequestedCounts] = useState<string>();
+  const showFirstPageCounts = requestedCounts === countScope;
   const {
     error,
     hasMore,
@@ -340,11 +403,26 @@ function ProjectDirectoryContent({
     refresh: refreshProjects,
     remove: removeProject,
     rename: renameProject,
-  } = useProjects(REPOSITORIES_PER_PAGE, accessible ? undefined : ownerSlug, 'on-demand');
-  const [query, setQuery] = useState('');
-  const [directoryView, setDirectoryView] = useState<'all' | 'recent'>('all');
-  const [visibility, setVisibility] = useState('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  } = useProjects(REPOSITORIES_PER_PAGE, namespace, 'on-demand', {
+    directoryUserId,
+    deferCounts: true,
+    enabled: !deletedView,
+    ...filters,
+  });
+  const counts = useProjects(REPOSITORIES_PER_PAGE, namespace, 'on-demand', {
+    directoryUserId,
+    enabled: !deletedView && showFirstPageCounts,
+    ...filters,
+  });
+  const countedProjects = useMemo(() => {
+    const byId = new Map<string, ProjectSummary>();
+    for (const item of [...projects, ...counts.projects]) {
+      if (item.commits_count !== undefined && item.branches_count !== undefined)
+        byId.set(item.project_id, apiProjectToSummary(item));
+    }
+    return byId;
+  }, [projects, counts.projects]);
+
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [sort, setSort] = useState('created');
   const [page, setPage] = useState(1);
@@ -373,11 +451,12 @@ function ProjectDirectoryContent({
     : '/onboarding/namespace';
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
+  const refreshCounts = counts.refresh;
 
   const handleRefreshProjects = useCallback(async () => {
     setPage(1);
-    await refreshProjects();
-  }, [refreshProjects]);
+    await Promise.all([refreshProjects(), showFirstPageCounts ? refreshCounts() : undefined]);
+  }, [refreshProjects, refreshCounts, showFirstPageCounts]);
 
   const openRenameDialog = useCallback((project: ProjectSummary) => {
     setRenameTarget(project);
@@ -461,6 +540,11 @@ function ProjectDirectoryContent({
     () => orderProjectsByRecentOpen(projectSummaries, recentProjectIds),
     [projectSummaries, recentProjectIds]
   );
+  const [unfilteredSize, setUnfilteredSize] = useState<string>();
+  useEffect(() => {
+    if (!serverFiltering && !loading && !error)
+      setUnfilteredSize(`${projects.length}${hasMore ? '+' : ''}`);
+  }, [error, hasMore, loading, projects.length, serverFiltering]);
   const tags = useMemo(() => repositoryTagOptions(projects), [projects]);
   const filteredProjects = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -484,14 +568,37 @@ function ProjectDirectoryContent({
     currentPage * REPOSITORIES_PER_PAGE
   );
   const hasLoadedProjects = projectSummaries.length > 0;
-  const hasFilter = Boolean(query.trim() || selectedTags.length || visibility !== 'all');
-  const needsCompleteList = hasFilter || directoryView === 'recent' || sort === 'name';
+  useEffect(() => {
+    if (deletedView) return;
+    markNavigationTiming('repositories', 'shell');
+    if (!error && (displayed.length > 0 || !loading)) markNavigationTiming('repositories', 'ready');
+  }, [deletedView, displayed.length, error, loading]);
+  const allCount = serverFiltering
+    ? (unfilteredSize ?? '…')
+    : `${projectSummaries.length}${hasMore ? '+' : ''}`;
+  const needsCompleteList =
+    (!serverFiltering && hasFilter) || directoryView === 'recent' || sort === 'name';
   const resultsPending = needsCompleteList && hasMore && !error;
   useEffect(() => {
-    if (!deletedView && (needsCompleteList || tagPickerOpen) && hasMore && !loading && !error) {
+    if (
+      !deletedView &&
+      (needsCompleteList || (tagPickerOpen && !serverFiltersAvailable)) &&
+      hasMore &&
+      !loading &&
+      !error
+    ) {
       void loadMore();
     }
-  }, [deletedView, error, hasMore, loadMore, loading, needsCompleteList, tagPickerOpen]);
+  }, [
+    deletedView,
+    error,
+    hasMore,
+    loadMore,
+    loading,
+    needsCompleteList,
+    serverFiltersAvailable,
+    tagPickerOpen,
+  ]);
 
   async function nextPage() {
     const targetPage = currentPage + 1;
@@ -562,11 +669,7 @@ function ProjectDirectoryContent({
               <div className={styles.titleRow}>
                 <h1>
                   {accessible ? 'Your repositories' : 'Repositories'}{' '}
-                  <span>
-                    {loading && !hasLoadedProjects
-                      ? '…'
-                      : `${projectSummaries.length}${hasMore ? '+' : ''}`}
-                  </span>
+                  <span>{loading && !hasLoadedProjects && !unfilteredSize ? '…' : allCount}</span>
                 </h1>
                 <div className={styles.titleActions}>
                   {!accessible && (
@@ -609,11 +712,7 @@ function ProjectDirectoryContent({
                     setPage(1);
                   }}
                 >
-                  All repositories{' '}
-                  <span>
-                    {projectSummaries.length}
-                    {hasMore ? '+' : ''}
-                  </span>
+                  All repositories <span>{allCount}</span>
                 </button>
                 <button
                   type="button"
@@ -637,6 +736,7 @@ function ProjectDirectoryContent({
                   <Input
                     id="directory-search"
                     type="search"
+                    maxLength={200}
                     aria-controls="repository-list"
                     onChange={(event) => {
                       setQuery(event.target.value);
@@ -651,7 +751,9 @@ function ProjectDirectoryContent({
                   label="Filter by visibility"
                   value={visibility}
                   onValueChange={(value) => {
-                    setVisibility(value);
+                    setVisibility(
+                      visibilityOptions.find((option) => option.value === value)?.value ?? 'all'
+                    );
                     setPage(1);
                   }}
                   options={[{ value: 'all', label: 'All visibility' }, ...visibilityOptions]}
@@ -659,7 +761,8 @@ function ProjectDirectoryContent({
                 <RepositoryTagPicker
                   className={styles.tagFilter}
                   onOpenChange={setTagPickerOpen}
-                  loading={hasMore && !error}
+                  loading={!serverFiltersAvailable && hasMore && !error}
+                  remoteSearch={serverFiltersAvailable}
                   selected={selectedTags}
                   onChange={(values) => {
                     setSelectedTags(values);
@@ -708,7 +811,7 @@ function ProjectDirectoryContent({
                         key={project.id}
                         href={repositoryLocation(getProjectRepoPath(project), '', '')}
                         title={`${project.namespace ?? ownerSlug}/${project.name}`}
-                        onClick={() => openDirectoryRepository(project)}
+                        onNavigate={() => openDirectoryRepository(project)}
                       >
                         <RepositoryMark id={project.id} icon={project.repositoryProfile?.icon} />
                         <span>
@@ -716,6 +819,7 @@ function ProjectDirectoryContent({
                           <span>{project.namespace ?? ownerSlug}</span>
                         </span>
                         <ArrowRight aria-hidden="true" size={15} />
+                        <NavigationFeedback />
                       </Link>
                     ))}
                   </div>
@@ -751,12 +855,36 @@ function ProjectDirectoryContent({
                         ? 'List unavailable'
                         : `${filteredProjects.length}${hasMore ? '+' : ''} ${hasFilter ? 'matching ' : ''}repositories`}
                   </output>
-                  {hasFilter && (
-                    <button type="button" onClick={clearFilters}>
-                      Clear filters
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {currentPage === 1 &&
+                      displayed.some((project) => !countedProjects.has(project.id)) &&
+                      directoryView === 'all' &&
+                      sort === 'created' &&
+                      !resultsPending && (
+                        <Button
+                          onClick={() => {
+                            if (showFirstPageCounts) void counts.refresh();
+                            else setRequestedCounts(countScope);
+                          }}
+                          disabled={showFirstPageCounts && counts.loading}
+                          variant="ghost"
+                          size="sm"
+                        >
+                          {showFirstPageCounts && counts.loading
+                            ? 'Loading repository counts…'
+                            : 'Load repository counts'}
+                        </Button>
+                      )}
+                    {hasFilter && (
+                      <button type="button" onClick={clearFilters}>
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {showFirstPageCounts && counts.error && !error && (
+                  <p role="alert">{counts.error}</p>
+                )}
                 {resultsPending || (loading && !hasLoadedProjects) ? (
                   <output className={styles.loading}>Loading repositories...</output>
                 ) : error && !hasLoadedProjects ? (
@@ -765,7 +893,7 @@ function ProjectDirectoryContent({
                     onRetry={handleRefreshProjects}
                     retrying={loading}
                   />
-                ) : !hasLoadedProjects ? (
+                ) : !hasLoadedProjects && !hasFilter && directoryView === 'all' ? (
                   <EmptyDirectory newRepositoryPath={newRepositoryPath} />
                 ) : (
                   <div className={styles.repositories} id="repository-list" aria-busy={loading}>
@@ -773,8 +901,17 @@ function ProjectDirectoryContent({
                       displayed.map((project) => (
                         <ProjectRow
                           key={project.id}
-                          project={project}
+                          project={{
+                            ...project,
+                            commitsCount:
+                              countedProjects.get(project.id)?.commitsCount ?? project.commitsCount,
+                            branchesCount:
+                              countedProjects.get(project.id)?.branchesCount ??
+                              project.branchesCount,
+                          }}
+                          showCounts={countedProjects.has(project.id)}
                           onDelete={openDeleteDialog}
+                          onOpen={openDirectoryRepository}
                           onRename={openRenameDialog}
                           selectedTags={selectedTags}
                           onTag={changeTag}

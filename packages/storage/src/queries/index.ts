@@ -62,6 +62,7 @@ export {
   CollaborationStorageError,
   type CollaborationStorageErrorCode,
   createPostgresCollaborationLifecycleUnitOfWork,
+  lockCollaborationNamespace,
   type PostgresCollaborationLifecycleTransaction,
   type PostgresCollaborationLifecycleUnitOfWork,
   type StoredCollaborationInvitationDto,
@@ -150,6 +151,7 @@ export {
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
+  findSchemaStartupWorkspace,
   findWorkspaceDraft,
   findWorkspaceDraftForOwner,
   findWorkspaceDraftOwner,
@@ -389,6 +391,7 @@ export {
   findPullRequestByNumber,
   listPullRequestActivity,
   listPullRequestChecks,
+  listPullRequestPage,
   listPullRequestsByProject,
   type PullRequestActivityType,
   type PullRequestCheckKind,
@@ -419,10 +422,12 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
+export * from './repository-agent-delegations';
 export * from './repository-object-addresses';
 export * from './repository-paths';
 // Runs (Engine → Runner → n8n flow)
 export {
+  acknowledgeRepositoryRun,
   type ConfigurationStats,
   type CreateRunInput,
   deleteRun,
@@ -436,6 +441,7 @@ export {
   listRuns,
   markRunAsTimeout,
   type RunStatus,
+  reserveRepositoryRun,
   type UpdateRunInput,
   updateRun,
 } from './runs';
@@ -497,6 +503,7 @@ export {
   hasConversationSourceCommitReferences,
   listConversationCommitReferences,
 } from './source-evidence-references';
+export * from './source-ingestion';
 // Source Text Revisions
 export {
   findLatestSourceTextRevisionByTurn,

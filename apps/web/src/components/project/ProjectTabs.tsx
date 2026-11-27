@@ -5,8 +5,10 @@ import {
   type ProjectTabId,
   projectTabKeepsWorkspace,
 } from '@/components/project/projectTabModel';
+import { usePrefetchRepositorySchema } from '@/components/project/RepositoryRouteContext';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
 import { cn } from '@/utils/cn';
+import { beginNavigationTiming } from '@/utils/navigationTiming';
 
 export interface ProjectTabsProps {
   activeTab: ProjectTabId;
@@ -27,6 +29,7 @@ export function ProjectTabs({
   stacked = false,
   workspaceId,
 }: ProjectTabsProps) {
+  const prefetchSchema = usePrefetchRepositorySchema();
   return (
     <nav
       aria-label="Project views"
@@ -80,6 +83,16 @@ export function ProjectTabs({
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
             href={href}
+            prefetch={!selected && (tab.id === 'state' || tab.id === 'schemas') ? undefined : false}
+            onNavigate={() => {
+              if (selected) return;
+              beginNavigationTiming(tab.id);
+              if (tab.id === 'schemas')
+                prefetchSchema?.(
+                  branch ?? (workspaceId || projectIdNavigation ? null : 'main'),
+                  workspaceId
+                );
+            }}
             key={tab.id}
             scroll={false}
           >

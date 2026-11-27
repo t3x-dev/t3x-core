@@ -7,13 +7,23 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { collectResult, diffCommits, runOperation, type TreeDiff } from '@t3x-dev/core';
+import {
+  collectResult,
+  decodeRepositorySemanticState,
+  diffCommits,
+  REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+  runOperation,
+  type State,
+  yopsStateCodec,
+} from '@t3x-dev/core';
+import { getVerifiedTransitionCommitGraph } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { compareDocuments } from '../lib/document-diff';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertRepositoryCommitAccess } from '../lib/project-access';
-import { getRepositorySemanticCommit } from '../lib/repository-state-transition';
 import { buildPipelineContext } from '../ops/context';
 import { diffOp } from '../ops/diff';
+import { ErrorResponseSchema } from '../schemas/common';
 
 // ============================================================================
 // Schemas
@@ -29,6 +39,7 @@ const TwoWayBodySchema = z.object({
   base_commit_hash: z.string().optional(),
   target_commit_hash: z.string().optional(),
   project_id: z.string().optional(),
+  representation: z.literal('auto').optional(),
   // Mode 2: turn hash
   baseTurnHash: z.string().optional(),
   targetTurnHash: z.string().optional(),
@@ -66,6 +77,30 @@ const FrameBodySchema = z.object({
 // ============================================================================
 // Routes
 // ============================================================================
+
+function missingCommitDetails(digest: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(digest)
+    ? { protocol_code: 'COMMIT_NOT_FOUND' as const }
+    : undefined;
+}
+
+function semanticDocument(state: State) {
+  const { value } = state;
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN
+  )
+    return null;
+  try {
+    return decodeRepositorySemanticState(state);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'UNSUPPORTED_SEMANTICS')
+      return null;
+    throw error;
+  }
+}
 
 const twoWayRoute = createRoute({
   method: 'post',
@@ -108,14 +143,7 @@ const twoWayRoute = createRoute({
     },
     404: {
       description: 'Not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -225,14 +253,7 @@ const frameRoute = createRoute({
     },
     404: {
       description: 'Not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -277,49 +298,79 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       c,
       db,
       body.base_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
       c,
       db,
       body.target_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 
-    const baseCommit = await getRepositorySemanticCommit(db, body.base_commit_hash, baseProjectId);
-    const targetCommit = await getRepositorySemanticCommit(
-      db,
-      body.target_commit_hash,
-      targetProjectId
-    );
-
-    if (baseCommit && targetCommit) {
-      const diff: TreeDiff = diffCommits(baseCommit.semanticContent, targetCommit.semanticContent);
-
-      const commitMeta = (commit: typeof baseCommit) => ({
-        digest: commit.digest,
-        rationale: commit.rationale,
-        actor: commit.actor,
-        recorded_at: commit.recordedAt,
-      });
-
-      return c.json(
-        {
-          success: true as const,
-          data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
-        },
-        200
+    const [base, target] = await Promise.all([
+      getVerifiedTransitionCommitGraph(db, baseProjectId, body.base_commit_hash),
+      getVerifiedTransitionCommitGraph(db, targetProjectId, body.target_commit_hash),
+    ]);
+    if (!base || !target)
+      return errorResponse(
+        c,
+        'NOT_FOUND',
+        'Comparison Commit not found.',
+        missingCommitDetails(!base ? body.base_commit_hash : body.target_commit_hash)
       );
-    } else {
-      if (!baseCommit) {
-        return errorResponse(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`);
-      }
-      if (!targetCommit) {
-        return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
-      }
+    const states = [base.state, target.state];
+    if (
+      states.some(
+        ({ codec }) =>
+          codec.mediaType !== yopsStateCodec.mediaType || codec.version !== yopsStateCodec.version
+      )
+    )
+      return errorResponse(
+        c,
+        'UNSUPPORTED_OP',
+        'Two-way comparison requires YOps document States.'
+      );
+
+    const meta = (graph: typeof base, digest: string) => ({
+      digest,
+      rationale:
+        graph.proposal.predicate.rationale.mode === 'unspecified'
+          ? null
+          : graph.proposal.predicate.rationale.value,
+      actor: { kind: graph.proposal.actor.kind, id: graph.proposal.actor.id },
+      recorded_at: graph.recordedAt,
+    });
+    const commits = {
+      base: meta(base, body.base_commit_hash),
+      target: meta(target, body.target_commit_hash),
+    };
+    const semanticBase = semanticDocument(base.state);
+    const semanticTarget = semanticDocument(target.state);
+    if (semanticBase && semanticTarget) {
+      const diff = diffCommits(semanticBase, semanticTarget);
+      return c.json({ success: true as const, data: { diff, ...commits } }, 200);
     }
+    if (body.representation !== 'auto')
+      return errorResponse(
+        c,
+        'UNSUPPORTED_OP',
+        'Request representation=auto to compare ordinary YOps documents.'
+      );
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          kind: 'document',
+          ...commits,
+          ...compareDocuments(base.state.value, target.state.value),
+        },
+      },
+      200
+    );
   }
   // Removed legacy sentence/segment diff modes. Returning success with a
   // placeholder made callers believe they had a real structured diff.
@@ -336,8 +387,6 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       'Provide either (base_commit_hash, target_commit_hash), (baseTurnHash, targetTurnHash), or (baseId, baseSegments, targetId, targetSegments)'
     );
   }
-
-  return errorResponse(c, 'INVALID_REQUEST', 'Unsupported two-way diff request.');
 });
 
 /**
@@ -386,14 +435,16 @@ diffRoutes.openapi(frameRoute, async (c) => {
       c,
       db,
       body.base_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
       c,
       db,
       body.target_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 

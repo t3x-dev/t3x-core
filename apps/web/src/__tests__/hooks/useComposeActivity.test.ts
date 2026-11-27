@@ -1,24 +1,38 @@
 // @vitest-environment jsdom
+import { T3xApiError } from '@t3x-dev/api-client';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { expect, it, vi } from 'vitest';
 import { composeDraftChangeCards } from '@/domain/workspaces/composeDraftChanges';
 import { useComposeActivity } from '@/hooks/workspaces/useComposeActivity';
+import {
+  WorkspaceActivityCacheContext,
+  type WorkspaceActivitySnapshot,
+} from '@/hooks/workspaces/workspaceActivityCache';
+import { ApiError } from '@/infrastructure/core';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { deferred } from './deferred';
 
-const { read, publish, reconcile, prepareReconciliation, decideReconciliation } = vi.hoisted(
-  () => ({
+const { read, publish, publishCandidate, reconcile, prepareReconciliation, decideReconciliation } =
+  vi.hoisted(() => ({
     read: vi.fn(),
     publish: vi.fn(),
+    publishCandidate: vi.fn(),
     reconcile: vi.fn(),
     prepareReconciliation: vi.fn(),
     decideReconciliation: vi.fn(),
-  })
-);
+  }));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({
     workspaces: {
-      authoring: { read, publish, reconcile, prepareReconciliation, decideReconciliation },
+      authoring: {
+        read,
+        publish,
+        publishCandidate,
+        reconcile,
+        prepareReconciliation,
+        decideReconciliation,
+      },
     },
   }),
 }));
@@ -461,6 +475,43 @@ it('acknowledges a save before refresh and rejects a read older than the receipt
   expect(publish).toHaveBeenCalledTimes(1);
 });
 
+it('keeps one Draft activity poll in flight when a reply takes multiple intervals', async () => {
+  read.mockReset();
+  const interval = vi.spyOn(window, 'setInterval');
+  const first = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 0,
+  };
+  read.mockResolvedValue(first);
+  const candidate = { id: 'ws', projectId: 'p', revision: 1 } as WorkspaceCandidate;
+  const view = renderHook(() => useComposeActivity(candidate, true));
+  try {
+    await waitFor(() => expect(view.result.current.view).toEqual(first));
+    const poll = interval.mock.calls.find(([, delay]) => delay === 5000)?.[0] as () => void;
+    let finish!: (value: typeof first) => void;
+    read.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    act(() => {
+      poll();
+      poll();
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+    await act(async () => finish(first));
+    await act(async () => poll());
+    expect(read).toHaveBeenCalledTimes(3);
+  } finally {
+    view.unmount();
+    interval.mockRestore();
+  }
+});
+
 it('detects branch-head changes even when the composition revision stays at zero', async () => {
   read.mockReset();
   const interval = vi.spyOn(window, 'setInterval');
@@ -609,5 +660,97 @@ it('projects scalar history and the net draft onto their snapshot object while p
   });
   expect(result.current.inspectedAction?.actionId).toBe('a1');
   expect(read).toHaveBeenLastCalledWith('p', 'ws', { action_id: 'a1', node_id: 'actual-done-id' });
+  unmount();
+});
+
+it('shows a cached saved Draft on return and removes it when revalidation denies access', async () => {
+  const cache = { current: null as WorkspaceActivitySnapshot | null };
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(WorkspaceActivityCacheContext.Provider, { value: cache }, children);
+  const candidate = {
+    id: 'ws',
+    projectId: 'p',
+    targetBranch: 'main',
+    baseCommitHash: null,
+    revision: 5,
+  } as WorkspaceCandidate;
+  const saved = {
+    actions: [],
+    netDiff: [],
+    selected: null,
+    nextBeforeSequence: null,
+    compositionRevision: 1,
+    workspaceRevision: 5,
+  };
+
+  read.mockReset().mockResolvedValueOnce(saved);
+  const first = renderHook(() => useComposeActivity(candidate, true), { wrapper });
+  await waitFor(() => expect(first.result.current.view).toEqual(saved));
+  first.unmount();
+
+  read.mockReturnValueOnce(deferred<unknown>().promise);
+  const newer = renderHook(() => useComposeActivity({ ...candidate, revision: 6 }, true), {
+    wrapper,
+  });
+  expect(newer.result.current.view).toBeNull();
+  newer.unmount();
+
+  const revalidation = deferred<unknown>();
+  read.mockReturnValueOnce(revalidation.promise);
+  const next = renderHook(() => useComposeActivity(candidate, true), { wrapper });
+  expect(next.result.current.view).toEqual(saved);
+  await act(async () => revalidation.reject(new T3xApiError('FORBIDDEN', 'Access expired', 403)));
+  expect(next.result.current.view).toBeNull();
+  expect(next.result.current.error).toBe('Access expired');
+  expect(cache.current).toBeNull();
+  next.unmount();
+});
+
+it.each([
+  true,
+  false,
+])('looks up the exact publication after a timeout (confirmed: %s)', async (matches) => {
+  const initial = {
+    actions: [],
+    selected: null,
+    netDiff: [],
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 0,
+  };
+  const action = {
+    actionId: 'publication',
+    sequence: 1,
+    beforeRevision: 0,
+    afterRevision: 1,
+    operations: [],
+    generation: { transitionId: matches ? 'candidate' : 'other' },
+  };
+  read
+    .mockReset()
+    .mockResolvedValueOnce(initial)
+    .mockResolvedValueOnce({
+      ...initial,
+      workspaceRevision: 2,
+      compositionRevision: 1,
+      selected: { action, cards: [] },
+    })
+    .mockResolvedValue(initial);
+  publishCandidate.mockReset().mockRejectedValueOnce(new ApiError('TIMEOUT', 'Request timed out'));
+  const { result, unmount } = renderHook(() =>
+    useComposeActivity({ id: 'ws', projectId: 'p' } as WorkspaceCandidate, true)
+  );
+  await waitFor(() => expect(result.current.view).toEqual(initial));
+  const confirming = vi.fn();
+  await act(async () => {
+    const save = result.current.publishCandidate('candidate', 'publication', confirming);
+    if (matches) await expect(save).resolves.toMatchObject({ kind: 'reused', action });
+    else await expect(save).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+  expect(confirming).toHaveBeenCalledOnce();
+  expect(read).toHaveBeenCalledWith('p', 'ws', { action_id: 'publication', limit: 1 });
+  expect(publishCandidate).toHaveBeenCalledExactlyOnceWith('p', 'ws', 'candidate', {
+    request_id: 'publication',
+  });
   unmount();
 });

@@ -329,6 +329,12 @@
       "reason": "Ingest appends durable source material."
     },
     {
+      "file": "packages/api/src/routes/source-ingestion.openapi.ts",
+      "owner": "source_thread",
+      "compatibility": "retained",
+      "reason": "Agent Source ingestion creates durable source threads and appends turns with request receipts."
+    },
+    {
       "file": "packages/api/src/routes/workspaces.openapi.ts",
       "owner": "repository_review",
       "compatibility": "retained",

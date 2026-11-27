@@ -14,6 +14,7 @@ const project = {
   project_id: 'proj_settings',
   namespace: 'team',
   name: 'demo',
+  can_edit: true,
   created_at: '2026-10-20T00:00:00Z',
   metadata: { description: 'Original description' },
 } as ProjectDetail;
@@ -32,7 +33,7 @@ beforeEach(() => {
 it('shows rename feedback when editing, blocks an unavailable name, and clears it on discard', async () => {
   const onSave = vi.fn();
   render(<ProjectGeneralSettings project={project} onSave={onSave} />);
-  await waitFor(() => expect(mocks.checkName).toHaveBeenCalled());
+  expect(mocks.checkName).not.toHaveBeenCalled();
   expect(screen.queryByText(/Final repository name/)).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByRole('textbox', { name: 'Repository name' }), {
@@ -67,4 +68,28 @@ it('can save a description without renaming and keeps a failed save visible for 
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('Repository details saved'));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('shows read-only General fields and loads counts separately when requested', () => {
+  const onSave = vi.fn();
+  const onLoadStats = vi.fn();
+  render(
+    <ProjectGeneralSettings
+      project={{ ...project, can_edit: false }}
+      hasStats={false}
+      onSave={onSave}
+      onLoadStats={onLoadStats}
+    />
+  );
+
+  const name = screen.getByRole('textbox', { name: 'Repository name' });
+  expect(name).toHaveValue('demo');
+  expect(name).toHaveAttribute('readonly');
+  expect(screen.getByRole('textbox', { name: 'Description' })).toHaveAttribute('readonly');
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  fireEvent.submit(name.closest('form')!);
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.queryByText('Commits')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load repository counts' }));
+  expect(onLoadStats).toHaveBeenCalledOnce();
 });

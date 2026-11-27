@@ -10,6 +10,7 @@ import {
   listProjectPullRequests,
   type MergeProjectPullRequestInput,
   mergeProjectPullRequest,
+  type ProjectPullRequestListOptions,
   rerunProjectPullRequestReadiness,
 } from '@/infrastructure/pullRequests';
 
@@ -19,11 +20,12 @@ export type {
   ApiProjectPullRequestCheck,
   ApiProjectPullRequestDetail,
   ApiPullRequestMergeReview,
+  ProjectPullRequestListOptions,
 } from '@/infrastructure/pullRequests';
 
 export function fetchProjectPullRequests(
   projectId: string,
-  options: { query?: string; status?: 'active' | 'merged' | 'all' } = {}
+  options: ProjectPullRequestListOptions = {}
 ) {
   return listProjectPullRequests(projectId, options);
 }

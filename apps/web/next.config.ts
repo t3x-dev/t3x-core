@@ -5,7 +5,7 @@ import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 // Load .env from monorepo root so NEXT_PUBLIC_* vars are available in local dev
 const rootEnvPath = path.resolve(__dirname, '../../.env');
-if (fs.existsSync(rootEnvPath)) {
+if (process.env.T3X_E2E_MCP_ISOLATED !== '1' && fs.existsSync(rootEnvPath)) {
   for (const line of fs.readFileSync(rootEnvPath, 'utf8').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
@@ -29,6 +29,17 @@ if (proxyUrl) {
 }
 
 const nextConfig: NextConfig = {
+  // Next dev otherwise prints the raw request URL before Web can discard legacy task text.
+  logging: {
+    incomingRequests: {
+      ignore: [
+        /^\/settings\/agent-access(?:\/|\?|$)/,
+        /^\/api\/v1\/mcp-delegations(?:\/|\?|$)/,
+        /^\/api\/mcp-oauth\/token(?:\?|$)/,
+        /^\/login\?.*callbackUrl=/i,
+      ],
+    },
+  },
   // Output standalone for Docker deployment
   output: 'standalone',
   // Transpile workspace packages
@@ -45,6 +56,22 @@ const nextConfig: NextConfig = {
   },
   // Hide the dev indicator floating ball (N button) in development
   devIndicators: false,
+  async headers() {
+    return [
+      {
+        source: '/settings/agent-access/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
+      {
+        source: '/login',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
+    ];
+  },
   async rewrites() {
     const apiOrigin = (process.env.T3X_API_URL || 'http://localhost:8000').replace(/\/$/, '');
     return [{ source: '/ws', destination: `${apiOrigin}/ws` }];

@@ -9,6 +9,8 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
   value: vi.fn(),
 });
 
+import { clearAllCache } from '@/hooks/shared/useQuery';
+
 const pullRequestApi = vi.hoisted(() => ({
   closePullRequest: vi.fn(),
   createPullRequest: vi.fn(),
@@ -82,6 +84,7 @@ const emptyBaseCompareCandidate = {
 };
 
 beforeEach(() => {
+  clearAllCache();
   localStorage.clear();
   vi.clearAllMocks();
   changePreview.mockReturnValue({ changes: undefined, error: null, loading: false });
@@ -302,6 +305,34 @@ describe('ProjectReviewsTab', () => {
     expect(pullRequestApi.fetchPullRequests).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'New pull request' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox')).toBeEnabled();
+  });
+
+  it('cancels an obsolete list page when switching filters', async () => {
+    const page = {
+      pull_requests: [],
+      counts: { active: 51, merged: 2 },
+      page: { next_before: 32, total: 51, state_counts: { open: 51, merged: 1, closed: 1 } },
+    };
+    pullRequestApi.fetchPullRequests
+      .mockResolvedValueOnce(page)
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce({
+        ...page,
+        page: { ...page.page, next_before: null, total: 0 },
+      });
+    render(<ProjectReviewsTab projectId="large-private-repo" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Next page' }));
+    const [, older] = pullRequestApi.fetchPullRequests.mock.lastCall!;
+    expect(older).toMatchObject({ limit: 20, before: 32, status: 'active' });
+    expect(older.signal.aborted).toBe(false);
+    fireEvent.click(screen.getByRole('tab', { name: /Merged/ }));
+    expect(older.signal.aborted).toBe(true);
+    expect(pullRequestApi.fetchPullRequests).toHaveBeenLastCalledWith(
+      'large-private-repo',
+      expect.objectContaining({ limit: 20, before: undefined, state: 'merged' })
+    );
+    expect(await screen.findByRole('heading', { name: 'No merged pull requests' })).toBeVisible();
   });
 
   it('opens a compare-first create flow with available PR branches', () => {

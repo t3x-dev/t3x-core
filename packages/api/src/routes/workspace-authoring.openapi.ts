@@ -1,8 +1,15 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { AssistantSchemaSettingsInputSchema } from '@t3x-dev/api-client';
 import type { DraftDocument } from '@t3x-dev/application';
-import { type DraftYOp, DraftYOpSchema } from '@t3x-dev/application';
-import { ConflictError, DraftAuthoringConflictError, NotFoundError } from '@t3x-dev/storage';
+import { type DraftYOp, DraftYOpSchema, restoreDocumentOperations } from '@t3x-dev/application';
+import { YOPS_STATE_CODEC_VERSION, YOPS_STATE_MEDIA_TYPE } from '@t3x-dev/core';
+import {
+  ConflictError,
+  DraftAuthoringConflictError,
+  findWorkspaceDraft,
+  getVerifiedTransitionCommitGraph,
+  NotFoundError,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
@@ -21,6 +28,7 @@ import {
   initializeWorkspaceAuthoring,
   publishWorkspaceAuthoringAction,
   readWorkspaceAuthoring,
+  workspaceAuthoringState,
 } from '../lib/workspace-authoring';
 import { prepareWorkspaceAuthoringReview } from '../lib/workspace-authoring-review';
 import { publishWorkspaceGeneration } from '../lib/workspace-generation-publication';
@@ -28,9 +36,12 @@ import {
   decideWorkspaceReconciliation,
   prepareWorkspaceReconciliation,
   reconcileWorkspaceAuthoring,
+  validateResolvedDocument,
   WorkspaceReconciliationConflictError,
   WorkspaceReconciliationValidationError,
 } from '../lib/workspace-reconciliation';
+import { captureWorkspaceSchema } from '../lib/workspace-schema-review';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema } from '../schemas/common';
 
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
@@ -94,6 +105,30 @@ const initialize = createRoute({
                     context.addIssue({ code: 'custom', message: 'Expected a JSON document' });
                 })
                 .optional(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses,
+});
+const restoreContent = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/authoring/content-restores',
+  tags: ['Workspaces'],
+  request: {
+    params: Params,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              request_id: Identity,
+              source_commit_digest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+              expected_workspace_revision: z.number().int().positive(),
+              expected_ref_head: RefHead,
             })
             .strict(),
         },
@@ -367,6 +402,88 @@ workspaceAuthoringRoutes.openapi(initialize, async (c) => {
     200
   );
 });
+workspaceAuthoringRoutes.openapi(restoreContent, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const input = c.req.valid('json');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:edit');
+  if (access instanceof Response) return access;
+  const principal = requireTransitionAuthority({
+    apiKey: transitionApiKey(c),
+    projectId,
+    scope: 'transition:propose',
+  });
+  const graph = await getVerifiedTransitionCommitGraph(db, projectId, input.source_commit_digest);
+  if (!graph)
+    return errorResponse(c, 'COMMIT_NOT_FOUND', 'Historical Commit not found in project.');
+  if (
+    graph.state.codec.mediaType !== YOPS_STATE_MEDIA_TYPE ||
+    graph.state.codec.version !== YOPS_STATE_CODEC_VERSION
+  )
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      'This State codec is unsupported by Workspace authoring.'
+    );
+  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  if (!draft?.workspace_state)
+    return errorResponse(c, 'WORKSPACE_NOT_FOUND', 'Workspace not found.');
+  const { ledger, basis } = workspaceAuthoringState(draft.workspace_state);
+  if (basis.refHead !== input.expected_ref_head)
+    throw new DraftAuthoringConflictError('Workspace basis changed.');
+  // Always derive from the pinned base. Initial publication requires revision zero;
+  // a replay reconstructs the same request even after later edits.
+  const document = graph.state.value as DraftDocument;
+  const operations = restoreDocumentOperations(ledger.base, document);
+  const workspace = draft.workspace_state;
+  let schemaHash: string | null = null;
+  let issues: WorkspaceReconciliationValidationError['issues'] = [];
+  try {
+    const snapshot = await captureWorkspaceSchema(db, projectId, workspace);
+    schemaHash = snapshot.schemaHash;
+    if (snapshot.status === 'unbound') {
+      issues = [
+        { code: 'SCHEMA_UNBOUND', path: '$', message: 'Bind a Schema before preparing Review.' },
+      ];
+    } else {
+      await validateResolvedDocument(db, projectId, workspace, document, snapshot);
+    }
+  } catch (error) {
+    if (error instanceof WorkspaceReconciliationValidationError) issues = error.issues;
+    else if (error instanceof DraftAuthoringConflictError)
+      issues = [{ code: 'BOUND_SCHEMA_UNAVAILABLE', path: '$', message: error.message }];
+    else throw error;
+  }
+  const result = await publishWorkspaceAuthoringAction(db, {
+    projectId,
+    workspaceId,
+    actor: principal.actor,
+    channel: principal.actor.kind === 'human' ? 'manual' : 'mcp',
+    actionId: input.request_id,
+    expectedWorkspaceRevision: input.expected_workspace_revision,
+    expectedRevision: 0,
+    expectedRefHead: input.expected_ref_head,
+    reason: `Restore Content from Commit ${input.source_commit_digest} (State ${graph.commit.result.digest})`,
+    operations,
+  });
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        kind: result.value.kind,
+        workspaceRevision: result.draft.revision,
+        compositionRevision: result.value.ledger.compositionRevision,
+        sourceCommitDigest: input.source_commit_digest,
+        sourceStateDigest: graph.commit.result.digest,
+        schemaHash,
+        issues,
+        ...('action' in result.value ? { action: result.value.action } : {}),
+        ...('receipt' in result.value ? { receipt: result.value.receipt } : {}),
+      },
+    },
+    200
+  );
+});
 workspaceAuthoringRoutes.openapi(publish, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -609,6 +726,7 @@ const publishCandidate = createRoute({
 workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
   const { projectId, workspaceId, transitionId } = c.req.valid('param');
   const body = c.req.valid('json');
+  const started = performance.now();
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
@@ -617,6 +735,7 @@ workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
     projectId,
     scope: 'transition:propose',
   });
+  const timings: Record<string, number> = { access_ms: performance.now() - started };
   const result = await publishWorkspaceGeneration({
     db,
     projectId,
@@ -624,6 +743,18 @@ workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
     transitionId,
     requestId: body.request_id,
     actor: principal.actor,
+    timings,
+  }).finally(() => {
+    pinoLogger.info(
+      {
+        event: 'workspace.candidate_publication',
+        request_id: body.request_id,
+        transition_id: transitionId,
+        total_ms: performance.now() - started,
+        ...timings,
+      },
+      'Workspace candidate publication timings'
+    );
   });
   return c.json(
     {

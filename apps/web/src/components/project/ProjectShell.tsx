@@ -1,7 +1,7 @@
 'use client';
 
 import type { RepositoryProfile } from '@t3x-dev/api-client';
-import { type ReactNode, useEffect } from 'react';
+import { createContext, type ReactNode, useContext, useEffect } from 'react';
 import { getProjectTabLabel, type ProjectTabId } from '@/components/project/projectTabModel';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
@@ -9,6 +9,8 @@ import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidatio
 import { rememberRepositorySettingsReturn } from '@/utils/repositorySettingsReturn';
 import workbench from './RepositoryWorkbench.module.css';
 import { repositoryWorkbenchTracks } from './repositoryWorkbenchLayout';
+
+export const ProjectShellLayoutContext = createContext(false);
 
 export interface ProjectShellProject {
   id?: string;
@@ -31,6 +33,7 @@ export interface ProjectShellProps {
   activeTab: ProjectTabId;
   branch?: string | null;
   projectIdNavigation?: boolean;
+  hideUnknownVisibility?: boolean;
   pullRequestNumber?: number;
   ownerSlug?: string;
   immersive?: boolean;
@@ -45,18 +48,22 @@ export function ProjectShell({
   branch,
   children,
   immersive = false,
+  hideUnknownVisibility = false,
   project,
   ownerSlug,
   pullRequestNumber,
   workspaceId,
   pageTitle,
 }: ProjectShellProps) {
+  const hasLayoutShell = useContext(ProjectShellLayoutContext);
   const visibilityLabel =
     project.visibility === 'public'
       ? 'Public'
       : project.visibility === 'unlisted'
         ? 'Unlisted'
-        : 'Private';
+        : project.visibility === 'private' || !hideUnknownVisibility
+          ? 'Private'
+          : undefined;
   const repoPath = getProjectRepoPath(project);
   const idNavigation = !project.canonical_path;
   const settingsHref = `${repoPath}/settings`;
@@ -83,6 +90,9 @@ export function ProjectShell({
       if (document.title === title) document.title = previousTitle;
     };
   }, [pageTitle, title]);
+
+  // Route content still owns its exact object title when the layout owns navigation.
+  if (hasLayoutShell) return children;
 
   const newRepositoryHref = actualOwner ? `/${encodeURIComponent(actualOwner)}/new` : '/';
   return (

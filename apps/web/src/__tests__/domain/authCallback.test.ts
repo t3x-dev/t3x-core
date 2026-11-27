@@ -22,6 +22,12 @@ describe('safeAuthCallbackUrl', () => {
   it('uses the requested local fallback', () => {
     expect(safeAuthCallbackUrl('https://attacker.example', '/chat')).toBe('/chat');
   });
+
+  it('strips legacy task text from a saved consent login callback', () => {
+    expect(safeAuthCallbackUrl('/settings/agent-access/authorize?state=opaque&task=private')).toBe(
+      '/settings/agent-access/authorize?state=opaque'
+    );
+  });
 });
 
 describe('postAuthDestination', () => {

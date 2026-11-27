@@ -31,7 +31,8 @@ vi.mock('../db.js', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('@t3x-dev/api-client', () => ({
+vi.mock('@t3x-dev/api-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@t3x-dev/api-client')>()),
   createClient: vi.fn(() => mockApiClient),
 }));
 
@@ -68,7 +69,8 @@ vi.mock('@t3x-dev/storage', () => ({
   updateLeafOutput: vi.fn(),
 }));
 
-vi.mock('@t3x-dev/core', () => ({
+vi.mock('@t3x-dev/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@t3x-dev/core')>()),
   ALL_LEAF_TYPES: [
     'tweet',
     'linkedin',

@@ -1,6 +1,8 @@
 'use client';
 import type { SchemaCatalogPage, SchemaReleasePresentationReference } from '@t3x-dev/api-client';
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@/hooks/shared/useQuery';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import {
   fetchSchemaCatalog,
   fetchSchemaCollections,
@@ -15,14 +17,14 @@ export function useSchemaCatalog(projectId: string | null, query: string, enable
   const [retry, setRetry] = useState(0);
   const [morePending, setMorePending] = useState(false);
   const epoch = useRef(0);
-  const inFlight = useRef(false);
+  const inFlight = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
     const current = ++epoch.current;
-    inFlight.current = false;
     setMorePending(false);
     setResult(undefined);
     if (!enabled) return;
-    fetchSchemaCatalog(projectId, query)
+    const request = new AbortController();
+    fetchSchemaCatalog(projectId, query, request.signal)
       .then((data) => {
         if (epoch.current === current) setResult({ key, data });
       })
@@ -32,18 +34,22 @@ export function useSchemaCatalog(projectId: string | null, query: string, enable
       });
     return () => {
       ++epoch.current;
+      request.abort();
+      inFlight.current?.abort();
+      inFlight.current = undefined;
     };
   }, [projectId, query, key, enabled, retry]);
   const current = result?.key === key ? result : undefined;
   async function loadMore() {
     if (!current?.data?.next_cursor || inFlight.current || !enabled) return;
-    inFlight.current = true;
+    const request = new AbortController();
+    inFlight.current = request;
     setMorePending(true);
     const requestEpoch = epoch.current;
     const params = new URLSearchParams(query);
     params.set('cursor', current.data.next_cursor);
     try {
-      const page = await fetchSchemaCatalog(projectId, params.toString());
+      const page = await fetchSchemaCatalog(projectId, params.toString(), request.signal);
       if (epoch.current !== requestEpoch) return;
       setResult((previous) => {
         if (previous?.key !== key || !previous.data) return previous;
@@ -67,7 +73,7 @@ export function useSchemaCatalog(projectId: string | null, query: string, enable
         );
     } finally {
       if (epoch.current === requestEpoch) {
-        inFlight.current = false;
+        inFlight.current = undefined;
         setMorePending(false);
       }
     }
@@ -81,22 +87,22 @@ export function useSchemaCatalog(projectId: string | null, query: string, enable
     retry: () => setRetry((value) => value + 1),
   };
 }
-export function useSchemaCollections() {
-  const [items, setItems] = useState<Awaited<ReturnType<typeof fetchSchemaCollections>>>([]);
-  useEffect(() => {
-    let cancelled = false;
-    fetchSchemaCollections()
-      .then((result) => {
-        if (!cancelled) setItems(result);
-      })
-      .catch(() => {
-        /* Browse remains available without editorial collections. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return items;
+const collectionReads = new Map<string | null, ReturnType<typeof fetchSchemaCollections>>();
+
+export function useSchemaCollections(enabled = true) {
+  const userId = useSessionUserId();
+  const { data } = useQuery({
+    queryKey: ['explore-schema-collections', userId],
+    enabled,
+    queryFn: () => {
+      const current = collectionReads.get(userId);
+      if (current) return current;
+      const request = fetchSchemaCollections().finally(() => collectionReads.delete(userId));
+      collectionReads.set(userId, request);
+      return request;
+    },
+  });
+  return data ?? [];
 }
 export function useSchemaIntroduction(reference?: SchemaReleasePresentationReference | null) {
   const projectId = reference?.projectId;

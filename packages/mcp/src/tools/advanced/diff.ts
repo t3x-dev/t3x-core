@@ -20,7 +20,7 @@ export const diffDef: ToolDef = {
     'Compare two commits and return a structured diff.',
     '',
     'Returns identical nodes, modified nodes (with slot-level diffs),',
-    'nodes only in base, nodes only in target, and relation changes.',
+    'nodes only in base, nodes only in target, and relation changes. In API mode ordinary YOps documents return JSON Pointer changes with exact before/after values.',
     '',
     'Example:',
     '  { "base": "sha256:aaa", "target": "sha256:bbb" }',
@@ -69,7 +69,7 @@ export const diffHandler: ToolHandler = async (args) => {
   if (isApiBackend()) {
     const client = getApiClient();
     return ok(
-      await client.twoWayDiff({
+      await client.compareCommittedStates({
         base_commit_hash: base,
         target_commit_hash: target,
         project_id: projectId,

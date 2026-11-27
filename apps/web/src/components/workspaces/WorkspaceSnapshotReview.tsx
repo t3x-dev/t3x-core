@@ -104,11 +104,14 @@ export function WorkspaceSnapshotReview({
   const laterSnapshot = state.laterResult?.snapshot;
   const outcomeSnapshot = laterSnapshot ?? snapshot;
   const outcomeView = outcomeSnapshot?.transition;
-  const rejected =
-    outcomeView?.mode === 'transition' &&
-    outcomeView.decision?.observation === 'supplied' &&
-    outcomeView.decision.outcome === 'rejected';
-  const commit = outcomeSnapshot?.objects?.commit?.digest;
+  const recorded = state.laterResult?.recorded_outcome ?? state.data?.recorded_outcome;
+  const decision =
+    recorded?.outcome ??
+    (outcomeView?.mode === 'transition' && outcomeView.decision?.observation === 'supplied'
+      ? outcomeView.decision.outcome
+      : undefined);
+  const rejected = decision === 'rejected';
+  const commit = recorded?.commit_digest ?? outcomeSnapshot?.objects?.commit?.digest;
   const commitAddress = useRepositoryObjectAddress(
     repositoryPath ? projectId : undefined,
     'commit',
@@ -221,7 +224,7 @@ export function WorkspaceSnapshotReview({
         />
       }
       contentValidation={schemaReview?.contentValidation}
-      historical={Boolean(laterSnapshot)}
+      historical={Boolean(laterSnapshot || recorded || (decision && !commit))}
       branch={branch ?? null}
       busy={
         state.deciding ||
@@ -295,6 +298,12 @@ export function WorkspaceSnapshotReview({
             'Committed. This snapshot stays available for reference.'
           ) : rejected ? (
             'Rejected. The Draft is retained for editing; the branch was not changed.'
+          ) : decision ? (
+            decision === 'overridden' ? (
+              'Override recorded. No commit has been recorded for this Review.'
+            ) : (
+              'Accepted. No commit has been recorded for this Review.'
+            )
           ) : (
             'Content, Schema and check results belong to this fixed snapshot.'
           )

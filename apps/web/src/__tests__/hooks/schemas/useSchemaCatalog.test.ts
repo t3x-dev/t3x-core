@@ -38,7 +38,9 @@ describe('catalog request isolation', () => {
     act(() => {
       void result.current.loadMore();
     });
+    const request = mocks.catalog.mock.lastCall?.[2];
     rerender({ project: 'b' });
+    expect(request?.aborted).toBe(true);
     expect(result.current.data).toBeUndefined();
     await waitFor(() => expect(result.current.data?.items[0]?.release.artifactVersionId).toBe('b'));
     await act(async () => {
@@ -59,7 +61,11 @@ describe('catalog request isolation', () => {
       await Promise.all([result.current.loadMore(), result.current.loadMore()]);
     });
     expect(mocks.catalog).toHaveBeenCalledTimes(3);
-    expect(mocks.catalog).toHaveBeenLastCalledWith('p', 'q=release&cursor=next');
+    expect(mocks.catalog).toHaveBeenLastCalledWith(
+      'p',
+      'q=release&cursor=next',
+      expect.any(AbortSignal)
+    );
     expect(result.current.data?.items).toHaveLength(2);
   });
   it('never shows a previous release introduction while a new pin is loading', async () => {

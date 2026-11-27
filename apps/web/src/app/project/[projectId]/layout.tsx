@@ -1,7 +1,10 @@
 'use client';
 
-import { use } from 'react';
+import { usePathname } from 'next/navigation';
+import { use, useEffect } from 'react';
+import { ProjectDetailProvider } from '@/components/project/ProjectDetailContext';
 import { ProjectRouteShell } from '@/components/project/ProjectRouteShell';
+import { ensureSettingsNavigationTiming } from '@/utils/navigationTiming';
 
 export default function ProjectLayout({
   children,
@@ -11,5 +14,14 @@ export default function ProjectLayout({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = use(params);
-  return <ProjectRouteShell projectId={projectId}>{children}</ProjectRouteShell>;
+  const pathname = usePathname();
+  const settings = /^\/project\/[^/]+\/settings\/?$/.test(pathname);
+  useEffect(() => {
+    if (settings) ensureSettingsNavigationTiming();
+  }, [settings]);
+  return (
+    <ProjectDetailProvider projectId={projectId} settings={settings}>
+      <ProjectRouteShell projectId={projectId}>{children}</ProjectRouteShell>
+    </ProjectDetailProvider>
+  );
 }

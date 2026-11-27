@@ -10,16 +10,18 @@
  * reading those values need no change.
  */
 
-import type { RepositoryProfile } from '@t3x-dev/api-client';
+import type { RepositoryAddress, RepositoryProfile } from '@t3x-dev/api-client';
 import { create } from 'zustand';
-import type { Project, ProjectVisibility } from '@/types/api';
+import type { ApiCommit, Project, ProjectVisibility } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
   repositoryProfile?: RepositoryProfile;
   canEdit?: boolean;
+  canManageAgentAccess?: boolean;
   canDelete?: boolean;
   namespace?: string | null;
+  namespaceId?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
   id: string;
@@ -39,7 +41,17 @@ export interface ProjectSummary {
   visibility?: ProjectVisibility;
 }
 
+export interface DirectoryStateEntry {
+  project: ProjectSummary;
+  userId: string | null;
+  readEpoch: number;
+  expiresAt: number;
+  head: Promise<ApiCommit[]>;
+  address?: Promise<RepositoryAddress>;
+}
+
 type ProjectStore = {
+  directoryStateEntry: DirectoryStateEntry | null;
   details: Record<string, ProjectSummary>;
   cacheProject: (project: ProjectSummary) => void;
   projects: ProjectSummary[];
@@ -86,9 +98,11 @@ const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
 export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   repositoryProfile: project.repository_profile,
   canEdit: project.can_edit,
+  canManageAgentAccess: project.can_manage_agent_access,
   canDelete: project.can_delete,
   id: project.project_id,
   namespace: project.namespace,
+  namespaceId: project.namespace_id,
   canonical_path: project.canonical_path,
   path_status: project.path_status,
   name: project.name,
@@ -108,6 +122,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
+  directoryStateEntry: null,
   details: {},
   cacheProject: (project) =>
     set((state) => ({ details: { ...state.details, [project.id]: project } })),
@@ -132,7 +147,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set((state) => {
       const details = { ...state.details };
       delete details[id];
-      return { projects: state.projects.filter((p) => p.id !== id), details };
+      return {
+        projects: state.projects.filter((p) => p.id !== id),
+        details,
+        directoryStateEntry:
+          state.directoryStateEntry?.project.id === id ? null : state.directoryStateEntry,
+      };
     });
     return existing;
   },

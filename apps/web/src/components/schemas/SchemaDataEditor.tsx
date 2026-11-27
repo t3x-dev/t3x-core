@@ -58,6 +58,7 @@ import {
 import { schemaSourceRelations } from '@/domain/schemas/schemaSourceRelations';
 import type { SchemaSourceIdentity } from '@/hooks/schemas/useSchemaSourceIdentities';
 import type { SchemaSaveState } from '@/types/schemas';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import styles from './SchemaDataEditor.module.css';
 import {
   SchemaDefinitionStructure,
@@ -131,6 +132,7 @@ export function SchemaDataEditor({
   onComposeSources,
   onValidationChange,
   initialDefinition,
+  definitionReceivedAt,
   initiallyDirty = false,
   onCreateBlank,
   onChooseSources,
@@ -173,6 +175,7 @@ export function SchemaDataEditor({
   wholeSchemaSource?: SchemaSourcePin;
   onComposeSources?: (sourceId?: string) => void;
   initialDefinition?: SchemaDefinition;
+  definitionReceivedAt?: number;
   initiallyDirty?: boolean;
   onCreateBlank?: () => void;
   onChooseSources?: () => void;
@@ -269,6 +272,30 @@ export function SchemaDataEditor({
     autoSave,
     saving,
   ]);
+  useEffect(() => {
+    if (!definition || loaded.current !== revisionKey) return;
+    const frame = requestAnimationFrame(() => markNavigationTiming('schemas', 'ready'));
+    return () => cancelAnimationFrame(frame);
+  }, [definition, revisionKey]);
+  const measuredDefinition = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (
+      !definition ||
+      loaded.current !== revisionKey ||
+      definitionReceivedAt === undefined ||
+      measuredDefinition.current === definitionReceivedAt ||
+      typeof performance.measure !== 'function'
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      measuredDefinition.current = definitionReceivedAt;
+      performance.measure('t3x:schema-definition-to-editor-frame', {
+        start: definitionReceivedAt,
+        end: performance.now(),
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [definition, definitionReceivedAt, revisionKey]);
   useEffect(() => {
     onValidationChange?.(!!validationError);
   }, [validationError, onValidationChange]);

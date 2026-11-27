@@ -18,6 +18,12 @@ import { setupTestDB, testData } from './setup';
 let mockDB: AnyDB;
 const providerMock = vi.hoisted(() => ({
   runLocalEsphomeConfigValidation: vi.fn(),
+  workspaceOwnerFromContext: vi.fn(),
+}));
+
+vi.mock('../middleware/workspace-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../middleware/workspace-access')>()),
+  workspaceOwnerFromContext: providerMock.workspaceOwnerFromContext,
 }));
 
 vi.mock('../lib/db', () => ({
@@ -61,6 +67,7 @@ describe('Workspace validation routes', () => {
       await deleteProject(mockDB, project.projectId);
     }
     providerMock.runLocalEsphomeConfigValidation.mockReset();
+    providerMock.workspaceOwnerFromContext.mockReset();
   });
 
   const postValidationRun = (projectId: string, body: Record<string, unknown> = {}) =>
@@ -69,6 +76,59 @@ describe('Workspace validation routes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+  it('retains the exact captured input if the Draft advances while the provider runs', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Exact validation race' })
+    );
+    const owner = { kind: 'human' as const, id: 'validation-owner' };
+    providerMock.workspaceOwnerFromContext.mockReturnValue(owner);
+    const input = {
+      project_id: project.projectId,
+      workspace_id: 'workspace_esphome',
+      title: 'Exact ESPHome Draft',
+      owner,
+      workspace_state: { device: { esphome: { name: 'original-device' } } },
+    };
+    const initial = await upsertWorkspaceDraft(mockDB, input);
+    const current = await upsertWorkspaceDraft(mockDB, input, initial.revision);
+    const stale = await postValidationRun(project.projectId, {
+      expected_workspace_revision: initial.revision,
+    });
+    expect(stale.status).toBe(409);
+    expect(providerMock.runLocalEsphomeConfigValidation).not.toHaveBeenCalled();
+
+    providerMock.runLocalEsphomeConfigValidation.mockImplementationOnce(async ({ deviceYaml }) => {
+      expect(deviceYaml).toContain('name: original-device');
+      await upsertWorkspaceDraft(
+        mockDB,
+        {
+          ...input,
+          workspace_state: { device: { esphome: { name: 'changed-device' } } },
+        },
+        current.revision
+      );
+      return localProviderResult({});
+    });
+    const response = await postValidationRun(project.projectId, {
+      expected_workspace_revision: current.revision,
+    });
+    const { data }: ApiResponse = await response.json();
+    expect(response.status).toBe(201);
+    expect(data.run.result_json.draft_revision).toEqual({
+      workspace_revision: current.revision,
+      composition_revision: null,
+    });
+    expect(data.run.result_json).not.toHaveProperty('private_workspace_owner');
+    const path = `/v1/workspace-validation-runs/${data.run.id}`;
+    expect(((await (await app.request(path)).json()) as ApiResponse).data).toEqual(data);
+    providerMock.workspaceOwnerFromContext.mockReturnValue({
+      kind: 'human',
+      id: 'different-owner',
+    });
+    expect((await app.request(path)).status).toBe(404);
+  });
 
   it('runs ESPHome workspace validation and persists a passed result', async () => {
     const project = await createEsphomeProject('ESPHome Runtime');

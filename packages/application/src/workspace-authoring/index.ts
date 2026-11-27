@@ -1,5 +1,10 @@
 export { type NativeYOp as DraftYOp, NativeYOpSchema as DraftYOpSchema } from '@t3x-dev/core';
-export { importLegacyDocument, publishDraftAction, restoreNodeToAction } from './commands';
+export {
+  importLegacyDocument,
+  publishDraftAction,
+  restoreDocumentOperations,
+  restoreNodeToAction,
+} from './commands';
 export { compileDraftComposition } from './compilation';
 export type { WorkspaceDraftSavePath } from './inventory';
 export {

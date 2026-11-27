@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
+import { RepositoryProjectPicker } from '@/components/project/RepositoryProjectPicker';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { evaluationCompareHref, evaluationDeployHref } from '@/domain/evaluationLocation';
-import { useProjects } from '@/hooks/projects/useProjects';
 import { useQuery } from '@/hooks/shared/useQuery';
 import {
   type ComparisonResult,
@@ -181,38 +181,18 @@ function ComparePageContent() {
   const projectId = params.get('project')?.trim() ?? '';
   const saved = params.get('saved');
   const router = useRouter();
-  const { projects, loading, error, refresh } = useProjects(100, undefined, true);
-  const listed = projects.some((project) => project.project_id === projectId);
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-        <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          Project
-          <select
-            className="max-w-full rounded-md border bg-background px-2 py-1.5"
-            value={projectId}
-            onChange={(event) =>
-              router.push(
-                evaluationCompareHref(event.target.value, !projectId && saved ? { saved } : {})
-              )
-            }
-          >
-            <option value="">Choose a project</option>
-            {projectId && !listed && <option value={projectId}>{projectId}</option>}
-            {projects.map((project) => (
-              <option key={project.project_id} value={project.project_id}>
-                {project.namespace ? `${project.namespace}/${project.name}` : project.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {loading && <span className="text-sm text-muted-foreground">Loading projects…</span>}
-        {error && (
-          <Button variant="ghost" size="sm" onClick={() => void refresh()}>
-            Retry project list
-          </Button>
-        )}
+        <RepositoryProjectPicker
+          id="comparison-project"
+          label="Project"
+          value={projectId}
+          onChange={(id) =>
+            router.push(evaluationCompareHref(id, !projectId && saved ? { saved } : {}))
+          }
+        />
       </div>
       <div className="min-h-0 flex-1">
         {projectId ? (
@@ -221,11 +201,7 @@ function ComparePageContent() {
           <div className="space-y-2 p-6">
             <h1 className="text-lg font-medium">A/B Test Comparison</h1>
             <p className="text-sm text-muted-foreground">
-              {error
-                ? 'Could not load projects.'
-                : !loading && projects.length === 0
-                  ? 'There are no accessible projects to compare.'
-                  : 'Choose a project to see its configurations and saved comparisons.'}
+              Choose a project to see its configurations and saved comparisons.
             </p>
             <Link href="/repositories" className="text-sm underline">
               Browse repositories

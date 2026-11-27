@@ -9,31 +9,29 @@ import {
 
 /** Clear previous results immediately when the route changes; late responses cannot replace them. */
 export function useExploreResource<T>(
-  load: (key: string) => Promise<T>,
+  load: (key: string, signal: AbortSignal) => Promise<T>,
   key: string,
   enabled = true
 ) {
   const [result, setResult] = useState<{ key: string; data?: T; error?: string }>();
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    let active = true;
     if (!enabled) return;
+    const request = new AbortController();
     setResult(undefined);
-    void load(key).then(
+    void load(key, request.signal).then(
       (data) => {
-        if (active) setResult({ key, data });
+        if (!request.signal.aborted) setResult({ key, data });
       },
       (error: unknown) => {
-        if (active)
+        if (!request.signal.aborted)
           setResult({
             key,
             error: error instanceof Error ? error.message : 'Could not load this content.',
           });
       }
     );
-    return () => {
-      active = false;
-    };
+    return () => request.abort();
   }, [load, key, enabled, attempt]);
   const current = result?.key === key ? result : undefined;
   return {
@@ -45,29 +43,34 @@ export function useExploreResource<T>(
 }
 export function useExplorePage<
   T extends { items: Array<{ projectId: string }>; next_cursor: string | null; has_more: boolean },
->(load: (query: string) => Promise<T>, query: string, enabled = true) {
+>(load: (query: string, signal: AbortSignal) => Promise<T>, query: string, enabled = true) {
   const first = useExploreResource(load, query, enabled);
   const [more, setMore] = useState<{ first: T; page: T; error?: string }>();
   const [pending, setPending] = useState(false);
   const generation = useRef(0);
-  const inFlight = useRef(false);
+  const inFlight = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
     generation.current++;
-    inFlight.current = false;
     setPending(false);
     setMore(undefined);
+    return () => {
+      generation.current++;
+      inFlight.current?.abort();
+      inFlight.current = undefined;
+    };
   }, [query, enabled, first.data]);
   const current = more?.first === first.data ? more : undefined;
   const data = current?.page ?? first.data;
   async function loadMore() {
     if (!first.data || !data?.next_cursor || inFlight.current || !enabled) return;
     const epoch = generation.current;
-    inFlight.current = true;
+    const request = new AbortController();
+    inFlight.current = request;
     setPending(true);
     const params = new URLSearchParams(query);
     params.set('cursor', data.next_cursor);
     try {
-      const page = await load(params.toString());
+      const page = await load(params.toString(), request.signal);
       if (epoch !== generation.current) return;
       const items = [
         ...new Map([...data.items, ...page.items].map((item) => [item.projectId, item])).values(),
@@ -82,7 +85,7 @@ export function useExplorePage<
         });
     } finally {
       if (epoch === generation.current) {
-        inFlight.current = false;
+        inFlight.current = undefined;
         setPending(false);
       }
     }

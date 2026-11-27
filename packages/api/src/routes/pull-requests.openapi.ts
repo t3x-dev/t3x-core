@@ -25,6 +25,7 @@ import {
   getYOpsForTransitionCommit,
   listPullRequestActivity,
   listPullRequestChecks,
+  listPullRequestPage,
   listPullRequestsByProject,
   type PullRequestStatus,
   replacePullRequestChecks,
@@ -201,6 +202,17 @@ const PullRequestListResponseSchema = z.object({
     active: z.number().int().nonnegative(),
     merged: z.number().int().nonnegative(),
   }),
+  page: z
+    .object({
+      next_before: z.number().int().positive().nullable(),
+      total: z.number().int().nonnegative(),
+      state_counts: z.object({
+        open: z.number().int().nonnegative(),
+        merged: z.number().int().nonnegative(),
+        closed: z.number().int().nonnegative(),
+      }),
+    })
+    .optional(),
 });
 
 const PullRequestCompareResponseSchema = z.object({
@@ -583,6 +595,18 @@ async function buildCompareCandidates(
   );
 }
 
+function toPullRequestListItem(
+  item: StoredPullRequest,
+  branchesByName: ReadonlyMap<string, Branch>
+) {
+  return {
+    ...toApiPullRequest(item),
+    readiness_current:
+      branchesByName.get(item.sourceBranch)?.headCommitHash === item.sourceCommitHash &&
+      branchesByName.get(item.targetBranch)?.headCommitHash === item.targetBaseCommitHash,
+  };
+}
+
 const listPullRequestsRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/pull-requests',
@@ -593,6 +617,11 @@ const listPullRequestsRoute = createRoute({
     query: z.object({
       status: z.enum(['active', 'merged', 'all']).default('active'),
       query: z.string().optional(),
+      state: z
+        .enum(['draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed'])
+        .optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+      before: z.coerce.number().int().min(1).max(2147483647).optional(),
     }),
   },
   responses: {
@@ -612,9 +641,48 @@ const listPullRequestsRoute = createRoute({
 // @ts-expect-error - OpenAPI handler return type
 pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
-  const { query, status } = c.req.valid('query');
+  const { query, status, state, limit, before } = c.req.valid('query');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
+
+  if (limit !== undefined || before !== undefined || state !== undefined) {
+    const statuses = state
+      ? [state]
+      : status === 'all'
+        ? undefined
+        : status === 'merged'
+          ? FINISHED_STATUSES
+          : ACTIVE_STATUSES;
+    const result = await listPullRequestPage(db, projectId, {
+      statuses,
+      query,
+      before,
+      limit: limit ?? 20,
+    });
+    const branchesByName = result.items.length
+      ? new Map(
+          (await findBranchesByProject(db, { projectId })).map((branch) => [branch.name, branch])
+        )
+      : new Map<string, Branch>();
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          pull_requests: result.items.map((item) => toPullRequestListItem(item, branchesByName)),
+          counts: {
+            active: result.stateCounts.open,
+            merged: result.stateCounts.merged + result.stateCounts.closed,
+          },
+          page: {
+            next_before: result.nextBefore,
+            total: result.total,
+            state_counts: result.stateCounts,
+          },
+        },
+      },
+      200
+    );
+  }
 
   const all = await listPullRequestsByProject(db, projectId);
   const active = all.filter((item) => ACTIVE_STATUSES.includes(item.status as PullRequestStatus));
@@ -647,12 +715,7 @@ pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
     {
       success: true as const,
       data: {
-        pull_requests: filtered.map((item) => ({
-          ...toApiPullRequest(item),
-          readiness_current:
-            branchesByName.get(item.sourceBranch)?.headCommitHash === item.sourceCommitHash &&
-            branchesByName.get(item.targetBranch)?.headCommitHash === item.targetBaseCommitHash,
-        })),
+        pull_requests: filtered.map((item) => toPullRequestListItem(item, branchesByName)),
         counts: { active: active.length, merged: finished.length },
       },
     },

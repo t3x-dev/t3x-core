@@ -5,7 +5,7 @@
  * components do not import `@/infrastructure/*` directly.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
@@ -22,7 +22,21 @@ import {
   PROJECT_RESTORED_EVENT,
   type ProjectDeletedDetail,
 } from '@/hooks/shared/deleteEvents';
-import { deleteProject, listProjectPage, listProjects } from '@/infrastructure/projects';
+import { ApiError } from '@/infrastructure/core';
+import {
+  cancelRepositoryDirectoryPrefetch,
+  cancelRepositoryDirectoryRead,
+  deleteProject,
+  listProjectPage,
+  listProjects,
+  loadRepositoryDirectoryPage,
+  readCachedRepositoryDirectoryPage,
+} from '@/infrastructure/projects';
+import {
+  getSessionReadEpoch,
+  getSessionUserId,
+  subscribeSessionReadInvalidation,
+} from '@/infrastructure/session';
 import type { Project } from '@/infrastructure/types';
 
 export interface UseProjectsResult {
@@ -40,58 +54,156 @@ export interface UseProjectsResult {
 export function useProjects(
   limit = 50,
   namespaceSlug?: string,
-  mode: boolean | 'on-demand' = false
+  mode: boolean | 'on-demand' = false,
+  {
+    search,
+    tagSearch,
+    editableOnly = false,
+    visibility,
+    tags,
+    enabled = true,
+    directoryUserId,
+    deferCounts = false,
+  }: {
+    search?: string;
+    tagSearch?: string;
+    editableOnly?: boolean;
+    visibility?: Project['visibility'];
+    tags?: string[];
+    enabled?: boolean;
+    directoryUserId?: string;
+    deferCounts?: boolean;
+  } = {}
 ): UseProjectsResult {
+  const epoch = useSyncExternalStore(
+    subscribeSessionReadInvalidation,
+    getSessionReadEpoch,
+    () => 0
+  );
+  const q = search?.trim() || undefined;
+  const tag_query = tagSearch?.trim() || undefined;
+  const filters = useMemo(
+    () =>
+      q || tag_query || editableOnly || visibility || tags?.length
+        ? { q, tag_query, editable: editableOnly ? (true as const) : undefined, visibility, tags }
+        : undefined,
+    [q, tag_query, editableOnly, visibility, tags]
+  );
+  const directoryScope = useMemo(
+    () => ({
+      namespace: namespaceSlug,
+      limit,
+      filters: deferCounts ? { ...filters, include_counts: false as const } : filters,
+    }),
+    [namespaceSlug, limit, filters, deferCounts]
+  );
+  const scopeKey = JSON.stringify([mode, directoryUserId, directoryScope]);
+  const cached =
+    enabled && directoryUserId
+      ? readCachedRepositoryDirectoryPage(directoryUserId, directoryScope)
+      : undefined;
+  const [projectsEpoch, setProjectsEpoch] = useState(getSessionReadEpoch);
+  const [projectsScope, setProjectsScope] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const activePage = useRef<AbortController | undefined>(undefined);
   const nextPageRequest = useRef<number | null>(null);
+  const fetchPage = useCallback(
+    (cursor: string, signal: AbortSignal) =>
+      listProjectPage(
+        limit,
+        cursor,
+        namespaceSlug,
+        cursor ? filters : directoryScope.filters,
+        signal
+      ),
+    [limit, namespaceSlug, filters, directoryScope]
+  );
 
-  const refresh = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      if (mode === 'on-demand') {
-        const data = await listProjectPage(limit, '', namespaceSlug);
-        if (requestId !== requestIdRef.current) return;
-        setProjects(data.items);
-        setNextCursor(data.next_cursor);
+  const refreshFirstPage = useCallback(
+    async (force: boolean) => {
+      if (!enabled) return;
+      const requestId = ++requestIdRef.current;
+      const readEpoch = getSessionReadEpoch();
+      activePage.current?.abort();
+      const controller = new AbortController();
+      activePage.current = controller;
+      setLoading(true);
+      try {
+        if (mode === 'on-demand') {
+          const data = directoryUserId
+            ? await loadRepositoryDirectoryPage(directoryUserId, force, false, directoryScope)
+            : await fetchPage('', controller.signal);
+          if (
+            requestId !== requestIdRef.current ||
+            (directoryUserId && getSessionUserId() !== directoryUserId)
+          )
+            return;
+          if (readEpoch !== getSessionReadEpoch()) return;
+          setProjectsEpoch(readEpoch);
+          setProjectsScope(scopeKey);
+          setProjects(data.items);
+          setNextCursor(data.next_cursor);
+          setError(null);
+          return;
+        }
+        const collected = new Map<string, Project>();
+        let offset = 0;
+        for (;;) {
+          const data = await listProjects(limit, offset, namespaceSlug);
+          if (requestId !== requestIdRef.current || readEpoch !== getSessionReadEpoch()) return;
+          const rows = data.projects ?? [];
+          const previousSize = collected.size;
+          for (const project of rows) collected.set(project.project_id, project);
+          if (!mode || rows.length < limit) break;
+          if (collected.size === previousSize)
+            throw new Error('Repository pagination did not advance. Please refresh.');
+          offset += rows.length;
+        }
+        setProjectsEpoch(readEpoch);
+        setProjectsScope(scopeKey);
+        setProjects([...collected.values()]);
         setError(null);
-        return;
-      }
-      const collected = new Map<string, Project>();
-      let offset = 0;
-      for (;;) {
-        const data = await listProjects(limit, offset, namespaceSlug);
+      } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        const rows = data.projects ?? [];
-        const previousSize = collected.size;
-        for (const project of rows) collected.set(project.project_id, project);
-        if (!mode || rows.length < limit) break;
-        if (collected.size === previousSize)
-          throw new Error('Repository pagination did not advance. Please refresh.');
-        offset += rows.length;
+        if (
+          err instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'SESSION_NOT_CURRENT'].includes(err.code)
+        ) {
+          setProjects([]);
+          setNextCursor(null);
+        }
+        setError(formatUserFacingError(err, 'Failed to load projects.'));
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false);
       }
-      setProjects([...collected.values()]);
-      setError(null);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      setError(formatUserFacingError(err, 'Failed to load projects.'));
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [limit, namespaceSlug, mode]);
+    },
+    [limit, namespaceSlug, mode, enabled, fetchPage, directoryUserId, directoryScope, scopeKey]
+  );
+  const refresh = useCallback(() => refreshFirstPage(true), [refreshFirstPage]);
 
   const loadMore = useCallback(async () => {
     const requestId = requestIdRef.current;
-    if (!nextCursor || loading || nextPageRequest.current === requestId) return false;
+    const readEpoch = getSessionReadEpoch();
+    if (
+      projectsEpoch !== readEpoch ||
+      projectsScope !== scopeKey ||
+      !enabled ||
+      !nextCursor ||
+      loading ||
+      nextPageRequest.current === requestId
+    )
+      return false;
     nextPageRequest.current = requestId;
+    const controller = new AbortController();
+    activePage.current = controller;
     setLoading(true);
     try {
-      const data = await listProjectPage(limit, nextCursor, namespaceSlug);
-      if (requestId !== requestIdRef.current) return false;
+      const data = await fetchPage(nextCursor, controller.signal);
+      if (requestId !== requestIdRef.current || readEpoch !== getSessionReadEpoch()) return false;
       if (data.next_cursor === nextCursor)
         throw new Error('Repository pagination did not advance. Please refresh.');
       setProjects((previous) => {
@@ -103,8 +215,16 @@ export function useProjects(
       setError(null);
       return data.items.length > 0;
     } catch (err) {
-      if (requestId === requestIdRef.current)
+      if (requestId === requestIdRef.current) {
+        if (
+          err instanceof ApiError &&
+          ['UNAUTHORIZED', 'FORBIDDEN', 'SESSION_NOT_CURRENT'].includes(err.code)
+        ) {
+          setProjects([]);
+          setNextCursor(null);
+        }
         setError(formatUserFacingError(err, 'Failed to load more projects.'));
+      }
       return false;
     } finally {
       if (requestId === requestIdRef.current) {
@@ -112,16 +232,25 @@ export function useProjects(
         setLoading(false);
       }
     }
-  }, [limit, namespaceSlug, nextCursor, loading]);
+  }, [enabled, fetchPage, nextCursor, loading, projectsEpoch, projectsScope, scopeKey]);
 
   useEffect(() => {
-    setProjects([]);
-    setNextCursor(null);
-    void refresh();
+    setError(null);
+    setLoading(enabled);
+    if (enabled && (q || tag_query || visibility || tags?.length)) {
+      cancelRepositoryDirectoryPrefetch();
+    }
+    let searchTimer: ReturnType<typeof setTimeout> | undefined;
+    if (q || tag_query) searchTimer = setTimeout(() => void refreshFirstPage(false), 250);
+    else void refreshFirstPage(false);
     return () => {
+      clearTimeout(searchTimer);
       requestIdRef.current += 1;
+      activePage.current?.abort();
+      if (enabled && directoryUserId)
+        cancelRepositoryDirectoryRead(directoryUserId, directoryScope);
     };
-  }, [refresh]);
+  }, [enabled, q, tag_query, refreshFirstPage, directoryUserId, directoryScope, visibility, tags]);
 
   useEffect(() => {
     const restored = () => {
@@ -186,12 +315,17 @@ export function useProjects(
     return project;
   }, []);
 
+  const invalidated = projectsEpoch !== epoch;
+  const matchesScope = projectsScope === scopeKey;
   return {
-    projects,
-    loading,
-    error,
+    projects: !enabled || invalidated ? [] : matchesScope ? projects : (cached?.items ?? []),
+    loading: enabled && (loading || (!matchesScope && !cached && !error)),
+    error: invalidated ? (error ?? 'Your access changed. Refresh to load this data.') : error,
     refresh,
-    hasMore: nextCursor !== null,
+    hasMore:
+      enabled &&
+      !invalidated &&
+      (matchesScope ? nextCursor !== null : Boolean(cached?.next_cursor)),
     loadMore,
     remove,
     create,

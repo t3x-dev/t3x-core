@@ -1,4 +1,4 @@
-name: Release
+name: Release - Record and Publish
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
         required: true
         type: string
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency: Release-${{ github.ref }}
 
 permissions:
   contents: read

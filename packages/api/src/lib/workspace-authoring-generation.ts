@@ -165,7 +165,8 @@ export async function resolveWorkspaceGenerationBasis(
   db: AnyDB,
   projectId: string,
   workspaceId: string,
-  value: unknown
+  value: unknown,
+  loadedDraft?: Awaited<ReturnType<typeof findWorkspaceDraft>>
 ) {
   if (
     !value ||
@@ -175,7 +176,8 @@ export async function resolveWorkspaceGenerationBasis(
     throw new TypeError('Invalid Workspace generation preparation');
   const candidate = value as WorkspaceGenerationPreparation;
   parseProposalGenerationPreparation(candidate.generation);
-  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const draft =
+    loadedDraft === undefined ? await findWorkspaceDraft(db, projectId, workspaceId) : loadedDraft;
   if (!draft?.workspace_state)
     throw new DraftAuthoringConflictError('Generation workspace no longer exists');
   const current = workspaceAuthoringState(draft.workspace_state);

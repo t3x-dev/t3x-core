@@ -7,6 +7,9 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { safeAuthCallbackUrl } from '@/domain/authCallback';
+import { isAgentEntry } from '@/domain/mcpDelegation';
+import { schemaDocumentHeaders } from '@/domain/schemas/schemaDocumentRoute';
 
 /** Paths that are always public (even when auth is enabled) */
 const PUBLIC_PATHS = ['/login', '/api', '/share', '/invite'];
@@ -16,21 +19,38 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const clean = new URL(request.url);
+  if (isAgentEntry(pathname) && clean.searchParams.has('task')) {
+    clean.searchParams.delete('task');
+  } else if (pathname === '/login') {
+    const original = clean.searchParams.get('callbackUrl');
+    const callback = safeAuthCallbackUrl(original);
+    if (original && original !== callback && isAgentEntry(callback.split(/[?#]/, 1)[0])) {
+      clean.searchParams.set('callbackUrl', callback);
+    }
+  }
+  if (clean.href !== request.url) {
+    const response = NextResponse.redirect(clean);
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   const authDisabled =
     process.env.AUTH_DISABLED?.toLowerCase() === 'true' ||
     process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
 
+  const next = () => NextResponse.next({ request: { headers: schemaDocumentHeaders(request) } });
+
   // Auth is ENABLED by default (secure by default).
   // Only disabled when AUTH_DISABLED is explicitly set to 'true'.
   if (authDisabled) {
-    return NextResponse.next();
+    return next();
   }
 
-  const { pathname } = request.nextUrl;
-
   // Allow public paths
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
+  if (pathname === '/.well-known/oauth-authorization-server' || isPublicPath(pathname)) {
+    return next();
   }
 
   // Allow static assets and Next.js internals
@@ -39,7 +59,7 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/favicon') ||
     pathname === '/robots.txt'
   ) {
-    return NextResponse.next();
+    return next();
   }
 
   // Check for local auth session cookie
@@ -51,7 +71,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return next();
 }
 
 export const config = {

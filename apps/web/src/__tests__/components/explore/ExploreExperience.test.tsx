@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   catalog: vi.fn(),
+  collections: vi.fn(),
   publicProjects: vi.fn(),
   publicProject: vi.fn(),
   release: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@/infrastructure/explore', () => ({
 }));
 vi.mock('@/hooks/schemas/useSchemaCatalog', () => ({
   useSchemaCatalog: mocks.catalog,
-  useSchemaCollections: () => [{ id: 'work-life', title: 'Work & Life', tags: ['care'] }],
+  useSchemaCollections: mocks.collections,
   useSchemaIntroduction: () => ({}),
   useSchemaReleaseReading: () => ({ data: { readme: '# Schema', manifest: {} } }),
 }));
@@ -51,6 +52,7 @@ const item = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.query = '';
+  mocks.collections.mockReturnValue([{ id: 'work-life', title: 'Work & Life', tags: ['care'] }]);
   mocks.catalog.mockReturnValue({
     loading: false,
     data: { items: [item], has_more: false },
@@ -134,7 +136,8 @@ it('resolves a release directly even when it is not on a loaded catalog page', a
   render(<ExploreExperience />);
   expect(await screen.findByRole('heading', { name: 'Care checklist' })).toBeInTheDocument();
   expect(mocks.release).toHaveBeenCalledWith(
-    'canonicalName=t3x%2Fcare-checklist&version=1.0.0&expectedHash=sha256%3Aexact'
+    'canonicalName=t3x%2Fcare-checklist&version=1.0.0&expectedHash=sha256%3Aexact',
+    expect.any(AbortSignal)
   );
   await waitFor(() =>
     expect(mocks.replace).toHaveBeenCalledWith('/explore/schemas/t3x/care-checklist/1.0.0', {
@@ -162,7 +165,10 @@ it('uses the short path identity and retains Browse context on the way back', as
     />
   );
   expect(await screen.findByRole('heading', { name: 'Care checklist' })).toBeInTheDocument();
-  expect(mocks.release).toHaveBeenCalledWith('canonicalName=t3x%2Fcare-checklist&version=1.0.0');
+  expect(mocks.release).toHaveBeenCalledWith(
+    'canonicalName=t3x%2Fcare-checklist&version=1.0.0',
+    expect.any(AbortSignal)
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Back to Browse' }));
   expect(mocks.push).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
 });
@@ -196,4 +202,49 @@ it('uses Discover as the default URL and lets the Browse path override a stale v
   render(<ExploreExperience pageView="browse" />);
   expect(screen.getByRole('main', { name: 'Browse' })).toBeInTheDocument();
   expect(mocks.replace).toHaveBeenCalledWith('/explore/browse?q=care', { scroll: false });
+});
+
+it('keeps the project results usable while only the Schema section retries', async () => {
+  const retrySchema = vi.fn();
+  mocks.catalog.mockReturnValue({
+    loading: false,
+    error: 'Could not load schemas',
+    retry: retrySchema,
+  });
+  render(<ExploreExperience pageView="browse" />);
+
+  const schemas = screen.getByRole('region', { name: 'Schema results' });
+  const projects = screen.getByRole('region', { name: 'Project results' });
+  expect(within(schemas).getByRole('alert')).toHaveTextContent('Could not load schemas');
+  expect(
+    await within(projects).findByRole('button', { name: 'Garden', exact: true })
+  ).toBeVisible();
+  fireEvent.click(within(schemas).getByRole('button', { name: 'Try again' }));
+  expect(retrySchema).toHaveBeenCalledOnce();
+  expect(mocks.publicProjects).toHaveBeenCalledOnce();
+});
+
+it('retries only the public projects and cancels an obsolete results request', async () => {
+  mocks.publicProjects
+    .mockRejectedValueOnce(new Error('Could not load projects'))
+    .mockImplementationOnce(() => new Promise(() => {}));
+  const view = render(<ExploreExperience pageView="browse" />);
+
+  const schemas = screen.getByRole('region', { name: 'Schema results' });
+  const projects = screen.getByRole('region', { name: 'Project results' });
+  expect(await within(projects).findByRole('alert')).toHaveTextContent('Could not load projects');
+  expect(within(schemas).getByRole('button', { name: 'Explore Care checklist' })).toBeVisible();
+  fireEvent.click(within(projects).getByRole('button', { name: 'Try again' }));
+  expect(mocks.publicProjects).toHaveBeenCalledTimes(2);
+  const signal = mocks.publicProjects.mock.lastCall?.[1];
+  expect(signal?.aborted).toBe(false);
+  view.unmount();
+  expect(signal?.aborted).toBe(true);
+});
+
+it('does not fetch Schema collections on a projects-only Browse page', async () => {
+  mocks.query = 'type=projects';
+  render(<ExploreExperience pageView="browse" />);
+  expect(mocks.collections).toHaveBeenCalledWith(false);
+  expect(await screen.findByRole('button', { name: 'Garden', exact: true })).toBeVisible();
 });

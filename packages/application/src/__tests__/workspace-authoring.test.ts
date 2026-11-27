@@ -17,6 +17,7 @@ import {
   previewCompensate,
   publishDraftAction,
   replayToRevision,
+  restoreDocumentOperations,
   restoreNodeToAction,
   selectedActionView,
   WORKSPACE_DRAFT_SAVE_PATHS,
@@ -298,6 +299,20 @@ describe('publishDraftAction guards', () => {
     expect(result.ledger.actions).toHaveLength(1);
     expect(result.action.channel).toBe('import');
     expect(currentComposition(result.ledger)).toMatchObject({ allocation: 99, extra: 'kept' });
+  });
+
+  it('restores exact top-level keys, absence, null and sequence order', () => {
+    const base = { 'a/b': [1, 2], remove: null, empty: false };
+    const historical = { 'a/b': [2, 1], added: null, empty: '' };
+    const next = mustPublish(createDraftActionLedger(base), {
+      actionId: 'restore',
+      channel: 'mcp',
+      actor: MCP,
+      operations: restoreDocumentOperations(base, historical),
+    });
+    expect(currentComposition(next)).toEqual(historical);
+    expect(restoreDocumentOperations(historical, historical)).toEqual([]);
+    expect(() => restoreDocumentOperations(base, 42)).toThrow(/mapping/);
   });
 
   it('restores a historical value by appending a current-state change', () => {

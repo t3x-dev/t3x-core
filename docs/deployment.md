@@ -37,6 +37,44 @@ docker compose --profile agent-demo up -d --build
 Auth is on by default for Docker and self-hosted runs. The first WebUI visit
 uses the built-in username/password login at `/login`.
 
+## MCP Service
+
+Run MCP over Streamable HTTP as a separate service alongside an
+authentication-enabled T3X API. Build the image from the Core repository root
+at the revision qualified for the test environment.
+
+```bash
+docker build -f apps/mcp/Dockerfile -t t3x-mcp:staging .
+```
+
+Use [the staging environment template](../apps/mcp/staging.env.example) for
+runtime settings. Set the API URL and public MCP URL to the staging domains.
+The image selects the HTTP transport and API backend, listens on
+`0.0.0.0:3001` by default, and accepts an injected `PORT`. The staging
+profile allows Draft changes and Commit read-back. Human Review preparation,
+approval, and Commit remain in Web.
+
+For Railway, create a separate service sourced from the reviewed Core revision
+or its OCI image. When building from source, use the repository root as the
+build context and set `RAILWAY_DOCKERFILE_PATH=/apps/mcp/Dockerfile`. Set
+the service health check path to `/health`. Deploy this service separately
+from the Cloud API and WebUI sync.
+[Railway Dockerfile configuration](https://docs.railway.com/builds/dockerfiles#custom-dockerfile-path)
+
+Terminate TLS at the hosting proxy and forward `/mcp` without rewriting the
+public `Host` or the client's `Authorization` header. Keep the service port
+private behind the proxy. For local development, use the
+[MCP loopback setup](../apps/mcp/README.md#streamable-http).
+The public URL must have the exact `/mcp` path without credentials, a query, or
+a fragment. If the client sends `Origin`, it must match the configured public
+origin. Keep credentials in client secret configuration and avoid logging
+authorization headers at the proxy.
+
+Use `/health` for process liveness. The hosted qualification checks should
+also use a Streamable HTTP client to initialize, list tools, and call
+`t3x_context` with a test Agent token. Revoke the token through the API or WebUI
+and verify that the next MCP request returns `401`.
+
 ## Source Development
 
 Use source development when changing the repository itself:
@@ -144,6 +182,15 @@ built-in-template seed workflow. `inspectPostgresSchema`,
 additional schema work around this storage-owned job. These are integration
 contracts of the internal storage package; they do not add a stable public npm
 release surface.
+
+When upgrading an OAuth deployment from storage schema 90, drain all API
+replicas that can write consent decisions before running the schema 91
+migration. Resume traffic with the upgraded API and Web. The migration closes
+requests identifiable from existing approval receipts and preserves the
+remaining exchange window for each live code. Pre-upgrade cancellations and
+receipts purged before migration cannot be reconstructed. An old link in
+either group can open a fresh consent screen. Preserve the database lookup
+keys and closed-request markers together in backups and restores.
 
 For existing v83–v85 databases, the standalone job and API bootstrap
 upgrade directly to v86. The upgrade installs any missing portable delivery

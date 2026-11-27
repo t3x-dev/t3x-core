@@ -4,6 +4,7 @@ import { LLMProviderError } from '@t3x-dev/core';
 import {
   ConflictError,
   DecisionNotAuthorizedError,
+  findWorkspaceDraftForOwner,
   TransitionCommandConflictError,
   TransitionCommandIntegrityError,
   TransitionHeadConflictError,
@@ -16,7 +17,9 @@ import {
 } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, TransitionProtocolError } from '@t3x-dev/transition';
 import type { Context } from 'hono';
+import { isAuthenticationDisabled } from '../lib/auth-config';
 import { getDB } from '../lib/db';
+import { DelegatedDraftHumanDecisionRequired } from '../lib/delegated-draft-authorship';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   createInferenceRuntime,
@@ -80,6 +83,7 @@ import {
   WorkspaceTransitionSchemaUnavailableError,
 } from '../lib/workspace-transition';
 import { pinoLogger } from '../middleware/logger';
+import { workspaceOwnerFromContext } from '../middleware/workspace-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const TransitionIdSchema = z.string().regex(/^trn_[0-9a-f]{32}$/);
@@ -460,6 +464,7 @@ function controlPlaneError(c: Context, error: unknown) {
     error instanceof TransitionScopeDeniedError ||
     error instanceof TransitionProjectScopeDeniedError ||
     error instanceof GenerationHumanDecisionRequiredError ||
+    error instanceof DelegatedDraftHumanDecisionRequired ||
     error instanceof TransitionAutomatedOverrideDeniedError ||
     error instanceof DecisionNotAuthorizedError
   ) {
@@ -1042,6 +1047,17 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
         synchronizeWorkspaces: true,
         ...(workspaceProjection === undefined ? {} : { workspaceProjection }),
       });
+      // Project-scoped Commit authority does not authorize a private Draft projection.
+      const workspaceId = result.workspace?.id;
+      const owner = workspaceOwnerFromContext(c);
+      const workspace =
+        result.workspace &&
+        (isAuthenticationDisabled() ||
+          (owner &&
+            typeof workspaceId === 'string' &&
+            (await findWorkspaceDraftForOwner(db, projectId, workspaceId, owner))))
+          ? result.workspace
+          : undefined;
       return c.json(
         {
           success: true as const,
@@ -1051,7 +1067,7 @@ export function createTransitionControlPlaneRoutes(options?: TransitionControlPl
             commit_digest: result.commitDigest,
             commit: result.commit,
             transition: result.view,
-            ...(result.workspace === undefined ? {} : { workspace: result.workspace }),
+            ...(workspace === undefined ? {} : { workspace }),
           },
         },
         200

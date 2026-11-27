@@ -28,6 +28,12 @@ export function getProjectIdRepoPath(projectId: string): string {
   return `/project/${encodeURIComponent(projectId)}`;
 }
 
+export function repositoryAgentAccessHref(repositoryPath: string, branch = 'main'): string {
+  const query = new URLSearchParams({ view: 'agent-access' });
+  if (branch && branch !== 'main') query.set('targetBranch', branch);
+  return `${repositoryPath}/settings?${query}`;
+}
+
 /** Call from a resolved repository route, where the first two segments are the address. */
 export function getCanonicalRepositoryPath(pathname: string): string | undefined {
   return pathname.startsWith('/project/') ? undefined : pathname.split('/').slice(0, 3).join('/');

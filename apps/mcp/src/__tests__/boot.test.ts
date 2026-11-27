@@ -16,10 +16,10 @@ describe('mcp server boot', () => {
     expect(server).toBeDefined();
     expect(Array.isArray(tools)).toBe(true);
 
-    // Current surface: 5 core + 3 advanced = 8 tools.
+    // Current surface: 8 core + 3 advanced = 11 tools.
     // If this drops, a tool was silently unregistered — investigate before
     // weakening the assertion.
-    expect(tools.length).toBe(8);
+    expect(tools.length).toBe(11);
 
     const names = tools.map((t) => t.name);
     const critical = [
@@ -28,6 +28,9 @@ describe('mcp server boot', () => {
       't3x_edit',
       't3x_extract',
       't3x_generate',
+      't3x_resolve_repository',
+      't3x_committed_state',
+      't3x_open_workspace',
       't3x_diff',
       't3x_merge',
       't3x_admin',
@@ -40,7 +43,7 @@ describe('mcp server boot', () => {
   it('filters to the core toolset when advanced is omitted', () => {
     const { tools } = createMcpServer({ toolsets: ['core'] });
 
-    expect(tools.length).toBe(5);
+    expect(tools.length).toBe(8);
     const names = tools.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining(['t3x_query', 't3x_commit', 't3x_edit', 't3x_extract', 't3x_generate'])
@@ -61,6 +64,8 @@ describe('mcp server boot', () => {
       'attach_statement',
       'decide_transition',
       'commit_transition',
+      't3x_draft_review',
+      't3x_commit_result',
     ]);
   });
 
@@ -68,6 +73,6 @@ describe('mcp server boot', () => {
     const { tools } = createMcpServer({ toolsets: ['core', 'core'] });
     const names = tools.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(tools.length).toBe(5);
+    expect(tools.length).toBe(8);
   });
 });

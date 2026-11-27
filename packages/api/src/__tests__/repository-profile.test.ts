@@ -217,6 +217,65 @@ describe('project-scoped repository information', () => {
     expect((await read(id)).repository_profile).toEqual({ ...p.repository_profile, icon: null });
   });
 
+  it('searches saved tags in the namespace before paginating', async () => {
+    const first = await create({
+      name: 'Tag-first',
+      tags: ['Release-中文'],
+    });
+    const second = await create({
+      name: 'Tag-second',
+      tags: ['Release-notes'],
+    });
+    await create({ name: 'Tag-unrelated', tags: ['different'] });
+
+    const path = '/v1/projects?namespace=profile-tests&limit=1&tag_query=release&cursor=';
+    const response = await appFor().request(path);
+    expect(response.status).toBe(200);
+    const page = (await response.json()).data;
+    expect(page.items).toHaveLength(1);
+    expect(page.has_more).toBe(true);
+    const next = await appFor().request(`${path}${encodeURIComponent(page.next_cursor)}`);
+    expect(next.status).toBe(200);
+    const nextPage = (await next.json()).data;
+    expect(nextPage.has_more).toBe(false);
+    expect(new Set([...page.items, ...nextPage.items].map((item) => item.project_id))).toEqual(
+      new Set([first.project_id, second.project_id])
+    );
+    const lean = await appFor().request(`${path}&include_counts=false`);
+    expect(lean.status).toBe(200);
+    const leanPage = (await lean.json()).data;
+    expect(leanPage.next_cursor).toBe(page.next_cursor);
+    expect(leanPage.items[0]).toMatchObject({
+      project_id: page.items[0].project_id,
+      can_edit: true,
+      canonical_path: page.items[0].canonical_path,
+    });
+    expect(leanPage.items[0]).not.toHaveProperty('commits_count');
+    expect(page.items[0]).toHaveProperty('commits_count', 0);
+    const denied = await appFor('profile-outsider').request(`${path}&include_counts=false`);
+    expect(denied.status).toBe(403);
+  });
+
+  it('filters accessible repository pages by visibility and any selected exact tag', async () => {
+    const first = await create({ name: 'Exact-private', tags: ['字句', 'optional'] });
+    const second = await create({ name: 'Secondary-private', tags: ['extra'] });
+    const publicRepo = await create({ name: 'Exact-public', tags: ['字句'] });
+    await db
+      .update(projects)
+      .set({ visibility: 'public' })
+      .where(eq(projects.projectId, publicRepo.project_id));
+    const query = new URLSearchParams({ visibility: 'private', cursor: '', limit: '20' });
+    query.append('tags', '字句');
+    query.append('tags', 'extra');
+    const response = await appFor().request(`/v1/projects?${query}`);
+    expect(response.status).toBe(200);
+    const { items, has_more } = (await response.json()).data;
+    expect(new Set(items.map((item: { project_id: string }) => item.project_id))).toEqual(
+      new Set([first.project_id, second.project_id])
+    );
+    expect(has_more).toBe(false);
+  });
+
   it('enforces existing read/edit permissions on direct requests', async () => {
     const p = await create({ name: 'Permissions' });
     for (const role of ['viewer', 'editor'])
@@ -231,6 +290,25 @@ describe('project-scoped repository information', () => {
       });
     expect((await read(p.project_id, appFor('profile-viewer'))).can_edit).toBe(false);
     expect((await read(p.project_id, appFor('profile-editor'))).can_edit).toBe(true);
+    const generalPath = `/v1/projects/${p.project_id}?include_stats=false`;
+    for (const [role, canEdit] of [
+      ['viewer', false],
+      ['editor', true],
+    ] as const) {
+      const res = await appFor(`profile-${role}`).request(generalPath);
+      expect(res.status).toBe(200);
+      const { data } = await res.json();
+      expect(data).toMatchObject({
+        project_id: p.project_id,
+        name: 'Permissions',
+        can_edit: canEdit,
+      });
+      expect(data).not.toHaveProperty('commits_count');
+      expect(data).not.toHaveProperty('branches_count');
+    }
+    expect((await appFor('profile-outsider').request(generalPath)).ok).toBe(false);
+    expect((await read(p.project_id)).branches_count).toBe(1);
+
     expect(
       (
         await put(

@@ -10,14 +10,16 @@ import { stateOverviewRoutes } from './state-overview.openapi';
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { CommittedSchemaBindingSchema } from '@t3x-dev/api-client';
 import { exportCommittedState, StateExportIntegrityError } from '@t3x-dev/application';
 import type { SemanticContent } from '@t3x-dev/core';
-import { validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
+import { projectCommitV2, validateTree, YOPS_STATE_MEDIA_TYPE, yvalueToTrees } from '@t3x-dev/core';
 import {
   ensureMainBranch,
   findBranchesByProject,
   findConversationById,
   findRepositoryObjectAddress,
+  findTransitionCommitReceipt,
   getCommitHistoryEntry,
   getRepositoryDecisionAuditByDigest,
   getTransitionRefHead,
@@ -40,7 +42,6 @@ import {
   createRepositoryYOpsStateFromSemanticContent,
   decodeRepositorySemanticContentState,
   getRepositoryConversationEvidence,
-  getRepositorySemanticCommit,
   RepositoryStateDecisionDeniedError,
   RepositoryStateDomainUnsupportedError,
   TransitionReviewStaleError,
@@ -54,6 +55,7 @@ import {
   transitionApiKey,
 } from '../lib/transition-authority';
 import { synchronizeCleanBranchWorkspaces } from '../lib/workspace-reconciliation';
+import { readCommittedSchemaBinding } from '../lib/workspace-schema-review';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import {
   ErrorResponseSchema,
@@ -69,6 +71,59 @@ export const commitRoutes = new OpenAPIHono({
 });
 commitRoutes.route('/', statePresentationRoutes);
 commitRoutes.route('/', stateOverviewRoutes);
+
+const getCommittedSchemaBindingRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/commits/{hash}/schema-binding',
+  tags: ['Commits'],
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      hash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Historical Schema binding evidence',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(CommittedSchemaBindingSchema) },
+      },
+    },
+    403: { description: 'Project access denied' },
+    404: {
+      description: 'Commit unavailable',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+commitRoutes.openapi(getCommittedSchemaBindingRoute, async (c) => {
+  const { projectId, hash } = c.req.valid('param');
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId, 'project:read');
+  if (access instanceof Response) return access;
+  const result = await readCommittedSchemaBinding(db, projectId, hash);
+  if (!result) {
+    return errorResponse(c, 'NOT_FOUND', 'Commit not found in project', {
+      protocol_code: 'COMMIT_NOT_FOUND',
+    });
+  }
+  const data =
+    result.status === 'bound'
+      ? CommittedSchemaBindingSchema.parse({
+          commit_digest: hash,
+          status: result.status,
+          schema_hash: result.schemaHash,
+          identities: result.bindings.map((binding) => ({
+            canonical_name: binding.canonicalName,
+            version: binding.version,
+            composition_id: binding.compositionId,
+            composition_revision: binding.compositionRevision,
+            root_key: binding.rootKey,
+          })),
+        })
+      : { commit_digest: hash, status: result.status };
+  return c.json({ success: true as const, data }, 200);
+});
 
 const getCommitChangesRoute = createRoute({
   method: 'get',
@@ -284,7 +339,15 @@ const CreatedCommitV2ResponseSchema = z.object({
   ref_name: z.string(),
   object: CommitV2ObjectSchema,
 });
+const CommitActorSchema = z.object({ kind: z.enum(['agent', 'human', 'service']), id: z.string() });
+const CommitDisplayFields = {
+  committed_by: CommitActorSchema.nullable().optional(),
+  decided_by: CommitActorSchema.nullable().optional(),
+  operation_count: z.number().int().nonnegative().optional(),
+  message: z.string().nullable().optional(),
+};
 const StoredCommitV2ResponseSchema = z.object({
+  ...CommitDisplayFields,
   address_number: z.string().optional(),
   digest: DigestSchema,
   recorded_at: z.string(),
@@ -296,6 +359,7 @@ const DescriptorBaseSchema = z.object({
 });
 
 const CommitHistoryProjectionSchema = z.object({
+  ...CommitDisplayFields,
   address_number: z.string().optional(),
   format: z.literal('transition_v2'),
   id: z.string(),
@@ -324,7 +388,7 @@ type VerifiedCommitGraph = NonNullable<
   Awaited<ReturnType<typeof getVerifiedTransitionCommitGraph>>
 >;
 type CommitHistoryEntry = NonNullable<Awaited<ReturnType<typeof getCommitHistoryEntry>>>;
-type RepositoryDB = Parameters<typeof getRepositorySemanticCommit>[0];
+type RepositoryDB = Parameters<typeof getVerifiedTransitionCommitGraph>[0];
 
 function proposalMessage(graph: VerifiedCommitGraph): string | null {
   const intent = graph.proposal.predicate.intent;
@@ -347,17 +411,26 @@ function semanticContentFromTransitionState(state: VerifiedCommitGraph['state'])
   }
 }
 
-async function getRepositorySemanticCommitIfSupported(
+async function commitReadFields(
   db: RepositoryDB,
-  digest: string,
-  projectId: string
+  projectId: string,
+  graph: VerifiedCommitGraph,
+  receipt: Awaited<ReturnType<typeof findTransitionCommitReceipt>>
 ) {
-  try {
-    return await getRepositorySemanticCommit(db, digest, projectId);
-  } catch (error) {
-    if (error instanceof RepositoryStateDomainUnsupportedError) return null;
-    throw error;
-  }
+  const audit = await getRepositoryDecisionAuditByDigest(
+    db,
+    projectId,
+    graph.commit.decision.digest
+  );
+  return {
+    project_id: projectId,
+    branch: audit?.refName ?? 'unknown',
+    committed_by: receipt?.actor ?? null,
+    decided_by: audit?.actor ?? null,
+    operation_count: graph.effect.operations.length,
+    content: semanticContentFromTransitionState(graph.state),
+    message: proposalMessage(graph),
+  };
 }
 
 // ============================================================
@@ -560,7 +633,13 @@ const getCommitRoute = createRoute({
   summary: 'Get a commit by hash',
   request: {
     params: HashParamSchema,
-    query: z.object({ project_id: z.string().min(1) }),
+    query: z.object({
+      project_id: z.string().min(1),
+      transition_id: z
+        .string()
+        .regex(/^trn_[0-9a-f]{32}$/)
+        .optional(),
+    }),
   },
   responses: {
     200: {
@@ -584,20 +663,24 @@ const getCommitRoute = createRoute({
 
 commitRoutes.openapi(getCommitRoute, async (c) => {
   const { hash } = c.req.valid('param');
-  const { project_id: projectId } = c.req.valid('query');
+  const { project_id: projectId, transition_id: transitionId } = c.req.valid('query');
   const db = await getDB();
 
   try {
     const accessResult = await assertProjectAccess(c, db, projectId);
     if (accessResult instanceof Response) return accessResult;
+    const receipt = await findTransitionCommitReceipt(db, projectId, hash);
+    if (transitionId !== undefined && receipt?.transitionId !== transitionId) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', 'Commit not found for this Transition.');
+    }
     const graph = await getVerifiedTransitionCommitGraph(db, projectId, hash);
     if (!graph) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
-    const semanticCommit = await getRepositorySemanticCommitIfSupported(db, hash, projectId);
-    const address = await findRepositoryObjectAddress(db, projectId, 'commit', { id: hash });
-    const content =
-      semanticCommit?.semanticContent ?? semanticContentFromTransitionState(graph.state);
+    const [fields, address] = await Promise.all([
+      commitReadFields(db, projectId, graph, receipt),
+      findRepositoryObjectAddress(db, projectId, 'commit', { id: hash }),
+    ]);
     return c.json(
       {
         success: true as const,
@@ -611,10 +694,7 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
             schema: graph.commit.schema,
             parents: graph.commit.parents.map((parent) => parent.digest),
             committed_at: graph.recordedAt,
-            content,
-            project_id: projectId,
-            message: semanticCommit?.intent ?? proposalMessage(graph),
-            branch: await commitOriginBranch(db, projectId, graph.commit.decision.digest),
+            ...fields,
             sources: null,
             provenance: { method: 'transition_v2' },
           },
@@ -628,30 +708,17 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
   }
 });
 
-async function commitOriginBranch(db: RepositoryDB, projectId: string, decisionDigest: string) {
-  const audit = await getRepositoryDecisionAuditByDigest(db, projectId, decisionDigest);
-  // Never attribute an imported/unattributed Commit to the currently viewed branch.
-  return audit?.refName ?? 'unknown';
-}
-
 async function withSemanticCommitFields(
   db: RepositoryDB,
   projectId: string,
   entry: CommitHistoryEntry
 ) {
-  const semanticCommit = await getRepositorySemanticCommitIfSupported(db, entry.id, projectId);
-  const graph = semanticCommit?.intent
-    ? null
-    : await getVerifiedTransitionCommitGraph(db, projectId, entry.id);
-  return {
-    ...entry,
-    branch: await commitOriginBranch(db, projectId, entry.assurance.decision.digest),
-    content:
-      semanticCommit?.semanticContent ??
-      (graph ? semanticContentFromTransitionState(graph.state) : undefined),
-    message: semanticCommit?.intent ?? (graph ? proposalMessage(graph) : null),
-    project_id: projectId,
-  };
+  const [graph, receipt] = await Promise.all([
+    getVerifiedTransitionCommitGraph(db, projectId, entry.id),
+    findTransitionCommitReceipt(db, projectId, entry.id),
+  ]);
+  if (!graph) throw new Error(`Missing Commit graph for ${entry.id}`);
+  return { ...entry, ...(await commitReadFields(db, projectId, graph, receipt)) };
 }
 
 async function listCommitHistoryForRef(
@@ -669,7 +736,10 @@ async function listCommitHistoryForRef(
     const digest = stack.shift()!;
     if (seen.has(digest)) continue;
     seen.add(digest);
-    const entry = await getCommitHistoryEntry(db, projectId, digest);
+    const entry =
+      digest === head.head
+        ? projectCommitV2(head.commit, head.recordedAt)
+        : await getCommitHistoryEntry(db, projectId, digest);
     if (!entry) continue;
     commits.push(await withSemanticCommitFields(db, projectId, entry));
     stack.push(...entry.parents);

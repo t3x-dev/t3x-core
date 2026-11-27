@@ -24,11 +24,13 @@ export type ProjectVisibility = 'private' | 'unlisted' | 'public';
 export interface Project {
   repository_profile?: RepositoryProfile;
   can_edit?: boolean;
+  can_manage_agent_access?: boolean;
   can_delete?: boolean;
   deleted_at?: string | null;
   can_restore?: boolean;
   can_permanently_delete?: boolean;
   namespace?: string | null;
+  namespace_id?: string | null;
   canonical_path?: string | null;
   path_status?: 'ready' | 'pending_migration';
   project_id: string;

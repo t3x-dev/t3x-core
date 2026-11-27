@@ -1,6 +1,7 @@
 import { type AnyDB, findMaterialsByIds } from '@t3x-dev/storage';
 import type { ProtocolValue } from '@t3x-dev/transition';
 import type { ProvenanceIndex } from '@t3x-dev/yschema';
+import { isMachineIngestedMaterial } from './source-attachments';
 
 function leafPaths(value: ProtocolValue, prefix = ''): string[] {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -34,6 +35,7 @@ export async function workspaceProvenance(
     const material = materials.find((item) => item.id === source.materialId);
     if (
       material?.project_id !== projectId ||
+      isMachineIngestedMaterial(material) ||
       (typeof source.hash === 'string' && source.hash !== material.content_hash)
     )
       return [];

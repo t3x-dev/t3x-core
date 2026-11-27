@@ -53,6 +53,7 @@ import {
   databaseRateLimitStore,
   type RateLimitStore,
 } from './middleware/rate-limit';
+import { repositoryDelegationMiddleware } from './middleware/repository-delegation';
 import { requestIdMiddleware } from './middleware/request-id';
 import { responseCachePolicyMiddleware } from './middleware/response-cache-policy';
 import { workspaceAccessMiddleware } from './middleware/workspace-access';
@@ -68,6 +69,7 @@ import {
   collaborationReadRoutes,
   commitRoutes,
   comparisonsRoutes,
+  configuredRunsRoutes,
   contextRoutes,
   conversationRoutes,
   createProjectVisibilityRoutes,
@@ -110,6 +112,7 @@ import {
   skillArtifactRoutes,
   sourceChatDraftReplyRoutes,
   sourceEvidenceRoutes,
+  sourceIngestionRoutes,
   sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
@@ -127,6 +130,7 @@ import {
   yschemaPrdSmokeRoutes,
   yschemaValidationRoutes,
 } from './routes';
+import { mcpDelegationRoutes } from './routes/mcp-delegations.openapi';
 import { repositoryObjectAddressRoutes } from './routes/repository-object-addresses.openapi';
 import { repositoryPathRoutes } from './routes/repository-paths.openapi';
 import { createWsRoute } from './routes/ws';
@@ -218,6 +222,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   }
 
   app.use('*', createRateLimitL2(rateLimitStore));
+  app.use('*', repositoryDelegationMiddleware);
 
   // Health check at root (not under /api)
   app.route('/', healthRoutes);
@@ -286,16 +291,19 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', skillArtifactRoutes); // /v1/projects/:projectId/commits/:commitHash/artifacts/skill
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
+  api.route('/', configuredRunsRoutes);
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
+  api.route('/', mcpDelegationRoutes);
   api.route('/', transitionPolicyBindingRoutes);
   api.route('/', createTransitionControlPlaneRoutes(transitionControlPlane));
   api.route('/', shareRoutes);
   api.route('/', sourceChatDraftReplyRoutes);
   api.route('/', sourceTextRevisionRoutes);
   api.route('/', sourceEvidenceRoutes);
+  api.route('/', sourceIngestionRoutes);
   api.route('/', comparisonsRoutes);
   api.route('/', templatesRoutes);
   api.route('/', webhooksRoutes);
@@ -401,6 +409,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       },
       { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
+      { name: 'MCP authorization', description: 'OAuth consent and repository Agent access' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },
       { name: 'Share', description: 'Share link management (create, resolve, revoke)' },
       { name: 'Comparisons', description: 'Saved A/B comparison snapshots' },

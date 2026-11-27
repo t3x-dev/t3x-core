@@ -13,11 +13,11 @@
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/index.ts",
-      "lines": 330
+      "lines": 337
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/lifecycle.ts",
-      "lines": 882
+      "lines": 928
     },
     {
       "path": "packages/api/src/lib/transition-control-plane/materialize.ts",
@@ -29,10 +29,10 @@
     }
   ],
   "apiRouteAuthorization": {
-    "routeFiles": 81,
-    "filesUsingGetDB": 72,
-    "filesUsingAssertProjectAccess": 57,
-    "filesUsingRequireTransitionAuthority": 6,
+    "routeFiles": 84,
+    "filesUsingGetDB": 75,
+    "filesUsingAssertProjectAccess": 59,
+    "filesUsingRequireTransitionAuthority": 7,
     "getDBWithoutProjectAccess": [
       "packages/api/src/routes/auth-local.openapi.ts",
       "packages/api/src/routes/auth-me.openapi.ts",
@@ -41,6 +41,7 @@
       "packages/api/src/routes/diff.openapi.ts",
       "packages/api/src/routes/health.openapi.ts",
       "packages/api/src/routes/llm.openapi.ts",
+      "packages/api/src/routes/mcp-delegations.openapi.ts",
       "packages/api/src/routes/namespaces.openapi.ts",
       "packages/api/src/routes/notifications.openapi.ts",
       "packages/api/src/routes/providers.openapi.ts",
@@ -201,6 +202,7 @@
     ]
   },
   "reviewSnapshotReferences": [
+    "apps/web/src/app/[owner]/[repository]/RepositoryLayoutClient.tsx",
     "apps/web/src/app/[owner]/[repository]/[[...repoPath]]/page.tsx",
     "apps/web/src/app/project/[projectId]/page.tsx",
     "apps/web/src/components/checks/WorkspaceChecksRedirect.tsx",

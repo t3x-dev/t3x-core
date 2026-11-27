@@ -6,26 +6,47 @@ import {
 } from '@t3x-dev/api-client';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export async function fetchPublicProjects(query: string) {
+export async function fetchPublicProjects(query: string, signal?: AbortSignal) {
   return PublicProjectPageSchema.parse(
-    await handleResponse(await fetchWithTimeout(`${API_V1}/explore/projects?${query}`))
-  );
-}
-export async function fetchPublicProject(projectId: string) {
-  return PublicProjectDetailSchema.parse(
     await handleResponse(
-      await fetchWithTimeout(`${API_V1}/explore/projects/${encodeURIComponent(projectId)}`)
+      await fetchWithTimeout(`${API_V1}/explore/projects?${query}`, undefined, undefined, signal)
     )
   );
 }
-export async function fetchSchemaTargets(query: string) {
-  return SchemaTargetPageSchema.parse(
-    await handleResponse(await fetchWithTimeout(`${API_V1}/explore/schema-targets?${query}`))
+export async function fetchPublicProject(projectId: string, signal?: AbortSignal) {
+  return PublicProjectDetailSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/explore/projects/${encodeURIComponent(projectId)}`,
+        undefined,
+        undefined,
+        signal
+      )
+    )
   );
 }
-export async function fetchExploreRelease(query: string) {
+export async function fetchSchemaTargets(query: string, signal?: AbortSignal) {
+  return SchemaTargetPageSchema.parse(
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/explore/schema-targets?${query}`,
+        undefined,
+        undefined,
+        signal
+      )
+    )
+  );
+}
+export async function fetchExploreRelease(query: string, signal?: AbortSignal) {
   const result = ExploreSchemaReleaseSchema.parse(
-    await handleResponse(await fetchWithTimeout(`${API_V1}/explore/schema-release?${query}`))
+    await handleResponse(
+      await fetchWithTimeout(
+        `${API_V1}/explore/schema-release?${query}`,
+        undefined,
+        undefined,
+        signal
+      )
+    )
   );
   const params = new URLSearchParams(query);
   const expectedHash = params.get('expectedHash');

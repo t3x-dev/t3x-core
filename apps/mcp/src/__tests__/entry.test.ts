@@ -51,11 +51,13 @@ describe('apps/mcp entrypoint', () => {
 
     console.error = mockConsoleError;
     process.exit = mockProcessExit as typeof process.exit;
+    vi.stubEnv('T3X_MCP_CAPABILITIES', undefined);
     delete process.env.T3X_TOOLSETS;
     delete process.env.T3X_TRANSPORT;
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalToolsets !== undefined) {
       process.env.T3X_TOOLSETS = originalToolsets;
     } else {
@@ -75,7 +77,10 @@ describe('apps/mcp entrypoint', () => {
   it('defaults to the core toolset over stdio', async () => {
     await import('../index.ts');
 
-    expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['core'] });
+    expect(mockCreateMcpServer).toHaveBeenCalledWith({
+      toolsets: ['core'],
+      onDiagnostic: expect.any(Function),
+    });
     expect(stdioTransportInstances).toHaveLength(1);
     expect(mockConnect).toHaveBeenCalledWith(stdioTransportInstances[0]);
   });
@@ -85,7 +90,10 @@ describe('apps/mcp entrypoint', () => {
 
     await import('../index.ts');
 
-    expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['core', 'advanced'] });
+    expect(mockCreateMcpServer).toHaveBeenCalledWith({
+      toolsets: ['core', 'advanced'],
+      onDiagnostic: expect.any(Function),
+    });
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
@@ -94,7 +102,10 @@ describe('apps/mcp entrypoint', () => {
 
     await import('../index.ts');
 
-    expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['transition'] });
+    expect(mockCreateMcpServer).toHaveBeenCalledWith({
+      toolsets: ['transition'],
+      onDiagnostic: expect.any(Function),
+    });
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
@@ -118,18 +129,20 @@ describe('apps/mcp entrypoint', () => {
     expect(mockCreateMcpServer).not.toHaveBeenCalled();
     expect(mockConnect).not.toHaveBeenCalled();
     expect(mockConsoleError).toHaveBeenCalledWith(
-      'Unsupported T3X_TOOLSETS value(s): legacy-transition. Use only: core, advanced, transition.'
+      'Unsupported T3X_TOOLSETS value. Use only: core, advanced, transition.'
     );
   });
 
-  it('fails fast for unsupported http transport', async () => {
+  it('requires the authenticated capability profile for HTTP transport', async () => {
     process.env.T3X_TRANSPORT = 'http';
 
     await expect(import('../index.ts')).rejects.toThrow('process.exit:1');
 
-    expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['core'] });
+    expect(mockCreateMcpServer).not.toHaveBeenCalled();
     expect(mockConnect).not.toHaveBeenCalled();
-    expect(mockConsoleError).toHaveBeenCalledWith('HTTP transport not yet implemented. Use stdio.');
+    expect(mockConsoleError).toHaveBeenCalledWith(
+      'HTTP transport requires T3X_MCP_BACKEND=api and T3X_MCP_CAPABILITIES.'
+    );
   });
 
   it('fails fast for unknown transports', async () => {
@@ -138,8 +151,6 @@ describe('apps/mcp entrypoint', () => {
     await expect(import('../index.ts')).rejects.toThrow('process.exit:1');
 
     expect(mockConnect).not.toHaveBeenCalled();
-    expect(mockConsoleError).toHaveBeenCalledWith(
-      'Unknown transport: websocket. Use "stdio" or "http".'
-    );
+    expect(mockConsoleError).toHaveBeenCalledWith('Unknown T3X_TRANSPORT. Use stdio or http.');
   });
 });

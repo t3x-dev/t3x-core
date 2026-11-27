@@ -2,25 +2,58 @@
 
 import type {
   SaveStudioSchemaEditCandidateInput,
-  StudioSchemaEditCandidate,
+  StudioSchemaEditCandidateRead,
 } from '@t3x-dev/api-client';
 import { canonicalJson } from '@t3x-dev/yops';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useSessionReadEpoch } from '@/hooks/shared/useSession';
 import {
   readStudioSchemaEditCandidate,
   saveStudioSchemaEditCandidate,
 } from '@/infrastructure/schemaStudio';
-import { getSessionUser } from '@/infrastructure/session';
+import { getSessionReadEpoch, getSessionUser } from '@/infrastructure/session';
 import { notifySchemaCandidateUpdated } from '@/utils/schemaCandidateEvents';
+import {
+  cachedStudioDraft,
+  readStudioDraft,
+  StudioPreviewCacheContext,
+  studioDraftKey,
+} from './studioPreviewCache';
 
 export function useStudioSchemaEditCandidate(
   projectId: string,
   workspaceId: string,
-  workspaceRevision?: number
+  workspaceRevision?: number,
+  confirmedEmpty = false,
+  previewBranch?: string,
+  initial?: StudioSchemaEditCandidateRead
 ) {
   const sessionId = useRef(getSessionUser()?.id ?? null);
   const sameSession = () => (getSessionUser()?.id ?? null) === sessionId.current;
-  const key = `${projectId}:${workspaceId}:${workspaceRevision ?? 'unknown'}`;
+  const readEpoch = useSessionReadEpoch();
+  const key = JSON.stringify([
+    sessionId.current,
+    projectId,
+    workspaceId,
+    workspaceRevision,
+    previewBranch,
+  ]);
+  const cache = useContext(StudioPreviewCacheContext);
+  const previewRevision = previewBranch ? workspaceRevision : undefined;
+  const reusable =
+    !confirmedEmpty && workspaceRevision !== undefined && previewBranch
+      ? cachedStudioDraft(
+          cache,
+          studioDraftKey(
+            sessionId.current,
+            projectId,
+            workspaceId,
+            workspaceRevision,
+            previewBranch,
+            readEpoch
+          )
+        )?.data
+      : undefined;
   const epoch = useRef(0);
   const activeKey = useRef(key);
   activeKey.current = key;
@@ -41,7 +74,8 @@ export function useStudioSchemaEditCandidate(
   >(undefined);
   const [result, setResult] = useState<{
     key: string;
-    candidate: StudioSchemaEditCandidate | null;
+    candidate: StudioSchemaEditCandidateRead | null;
+    readEpoch?: number;
     error?: string;
   }>();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -63,6 +97,7 @@ export function useStudioSchemaEditCandidate(
       return;
     const current = epoch.current;
     const token = ++readRequest.current;
+    const startedReadEpoch = getSessionReadEpoch();
     const isCurrent = () =>
       mounted.current &&
       activeKey.current === key &&
@@ -70,30 +105,52 @@ export function useStudioSchemaEditCandidate(
       sameSession() &&
       token === readRequest.current;
     try {
-      const candidate = await readStudioSchemaEditCandidate(projectId, workspaceId);
-      if (isCurrent()) setResult({ key, candidate });
+      const cacheKey =
+        previewRevision !== undefined && previewBranch
+          ? studioDraftKey(
+              sessionId.current,
+              projectId,
+              workspaceId,
+              previewRevision,
+              previewBranch,
+              startedReadEpoch
+            )
+          : undefined;
+      const candidate = await (cacheKey
+        ? readStudioDraft(cache, cacheKey)
+        : readStudioSchemaEditCandidate(projectId, workspaceId));
+      if (!isCurrent()) return;
+      const prefetched = cacheKey ? cachedStudioDraft(cache, cacheKey) : undefined;
+      if (prefetched) prefetched.fromNavigation = false;
+      setResult({
+        key,
+        candidate,
+        readEpoch: previewRevision === undefined ? undefined : startedReadEpoch,
+      });
     } catch (error) {
-      if (isCurrent())
+      if (isCurrent()) {
         setResult({
           key,
           candidate: null,
           error: error instanceof Error ? error.message : 'Schema edit candidate unavailable',
         });
+      }
     }
-  }, [key, projectId, workspaceId]);
+  }, [cache, key, previewBranch, previewRevision, projectId, workspaceId]);
 
   useEffect(() => {
     mounted.current = true;
     ++epoch.current;
     setResult(undefined);
     setPendingKey(null);
-    void refresh();
+    if (initial) setResult({ key, candidate: initial, readEpoch: getSessionReadEpoch() });
+    else if (!confirmedEmpty) void refresh();
     return () => {
       mounted.current = false;
       ++epoch.current;
       ++readRequest.current;
     };
-  }, [refresh]);
+  }, [refresh, confirmedEmpty, initial, key]);
 
   useEffect(() => {
     const updated = (event: Event) => {
@@ -114,7 +171,9 @@ export function useStudioSchemaEditCandidate(
         /* Ignore unrelated malformed notifications. */
       }
     };
-    const focus = () => void refresh();
+    const focus = () => {
+      if (!confirmedEmpty) void refresh();
+    };
     window.addEventListener('focus', focus);
     window.addEventListener('t3x-schema-candidate-updated', updated);
     window.addEventListener('storage', storage);
@@ -125,13 +184,17 @@ export function useStudioSchemaEditCandidate(
       window.removeEventListener('storage', storage);
       window.removeEventListener('t3x:session-changed', focus);
     };
-  }, [projectId, workspaceId, refresh]);
+  }, [projectId, workspaceId, refresh, confirmedEmpty]);
 
   const current = result?.key === key ? result : undefined;
+  const accessChanged = current?.readEpoch !== undefined && current.readEpoch !== readEpoch;
   return {
-    candidate: current?.candidate ?? null,
-    error: current?.error,
-    loading: Boolean(projectId && workspaceId) && !current,
+    candidate: accessChanged ? null : current ? current.candidate : (initial ?? reusable ?? null),
+    error: accessChanged
+      ? 'Session access changed. Reload the Schema before editing.'
+      : current?.error,
+    loading:
+      Boolean(projectId && workspaceId) && !confirmedEmpty && !current && !initial && !reusable,
     pending: pendingKey === key,
     refresh,
     save: (input: SaveStudioSchemaEditCandidateInput) => {

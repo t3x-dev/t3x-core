@@ -26,6 +26,7 @@ import styles from './ProjectCommunityTab.module.css';
 interface ProjectCommunityTabProps {
   branch?: string | null;
   projectId: string;
+  namespaceId?: string | null;
 }
 
 interface CommunityDestination {
@@ -35,24 +36,41 @@ interface CommunityDestination {
   label: string;
 }
 
-export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabProps) {
+export function ProjectCommunityTab({
+  projectId,
+  branch,
+  namespaceId: resolvedNamespaceId,
+}: ProjectCommunityTabProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filter, setFilter] = useState<'all' | 'prs' | 'workspaces'>('all');
   const [pullRequestsExpanded, setPullRequestsExpanded] = useState(false);
   const [workspacesExpanded, setWorkspacesExpanded] = useState(false);
-  const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId);
-  const namespaceId = guestsQuery.data?.namespace_id ?? null;
+  const { guestsQuery, canManageGuests } = useProjectCollaboration(projectId, {
+    includeInvitations: false,
+  });
+  const confirmedNamespaceId = guestsQuery.data?.namespace_id;
+  const namespaceId =
+    confirmedNamespaceId ?? (guestsQuery.error ? null : (resolvedNamespaceId ?? null));
   const { membersQuery } = useNamespaceCollaboration({
     namespaceId,
     canReadMembers: !!namespaceId,
     canManageInvitations: false,
   });
-  const { pullRequests, workspaces, activityError, activityLoading } =
+  const { pullRequests: pullRequestRead, workspaces: workspaceRead } =
     useProjectCommunityActivity(projectId);
+  const pullRequests = pullRequestRead.data ?? [];
+  const workspaces = workspaceRead.data ?? [];
+  const activityLoading =
+    (filter !== 'workspaces' && pullRequestRead.isLoading) ||
+    (filter !== 'prs' && workspaceRead.isLoading);
+  const activityError =
+    (filter !== 'workspaces' && pullRequestRead.error) || (filter !== 'prs' && workspaceRead.error);
 
   const collaborators = new Map<string, { name: string; scopes: string[] }>();
-  for (const member of membersQuery.data?.members ?? []) {
+  // Wait for the project response to confirm the namespace before showing members.
+  const members = confirmedNamespaceId ? (membersQuery.data?.members ?? []) : [];
+  for (const member of members) {
     if (member.status !== 'active') continue;
     collaborators.set(`${member.principal.kind}:${member.principal.principal_id}`, {
       name: member.principal.display_name ?? member.principal.principal_id,
@@ -143,18 +161,23 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           <fieldset className={styles.filters} aria-label="Filter recent work">
             {(
               [
-                ['all', 'All', pullRequests.length + workspaces.length],
-                ['prs', 'Pull requests', pullRequests.length],
-                ['workspaces', 'Workspaces', workspaces.length],
+                [
+                  'all',
+                  'All',
+                  pullRequests.length + workspaces.length,
+                  pullRequestRead.isLoading || workspaceRead.isLoading,
+                ],
+                ['prs', 'Pull requests', pullRequests.length, pullRequestRead.isLoading],
+                ['workspaces', 'Workspaces', workspaces.length, workspaceRead.isLoading],
               ] as const
-            ).map(([key, label, count]) => (
+            ).map(([key, label, count, loading]) => (
               <button
                 key={key}
                 type="button"
                 aria-pressed={filter === key}
                 onClick={() => setFilter(key)}
               >
-                {label} <span>{activityLoading ? '…' : count}</span>
+                {label} <span>{loading ? '…' : count}</span>
               </button>
             ))}
           </fieldset>
@@ -163,11 +186,12 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           ) : null}
           {activityError ? (
             <p className={styles.message} role="alert">
-              {activityError}
+              Some project objects could not be loaded.
             </p>
           ) : null}
           {!activityLoading &&
           !activityError &&
+          filter === 'all' &&
           pullRequests.length === 0 &&
           workspaces.length === 0 ? (
             <p className={styles.message}>
@@ -266,8 +290,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
           {!activityLoading &&
           !activityError &&
           filter !== 'all' &&
-          (filter === 'prs' ? pullRequests.length : workspaces.length) === 0 &&
-          pullRequests.length + workspaces.length > 0 ? (
+          (filter === 'prs' ? pullRequests.length : workspaces.length) === 0 ? (
             <p className={styles.message}>
               No {filter === 'prs' ? 'pull requests' : 'workspaces'} available.
             </p>
@@ -296,7 +319,7 @@ export function ProjectCommunityTab({ projectId, branch }: ProjectCommunityTabPr
               Project collaborators unavailable or access denied.
             </p>
           ) : null}
-          {membersQuery.error ? (
+          {confirmedNamespaceId && membersQuery.error ? (
             <p className={styles.message} role="alert">
               Namespace members unavailable or access denied.
             </p>

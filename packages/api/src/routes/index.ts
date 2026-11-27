@@ -14,6 +14,7 @@ export { collaborationInvitationRoutes } from './collaboration-invitations.opena
 export { collaborationReadRoutes } from './collaboration-reads.openapi';
 export { commitRoutes } from './commits.openapi';
 export { comparisonsRoutes } from './comparisons.openapi';
+export { configuredRunsRoutes } from './configured-runs.openapi';
 export { contextRoutes } from './context.openapi';
 export { conversationRoutes } from './conversations.openapi';
 export { curateRoutes } from './curate.openapi';
@@ -56,6 +57,7 @@ export { shareRoutes } from './share.openapi';
 export { skillArtifactRoutes } from './skill-artifacts.openapi';
 export { sourceChatDraftReplyRoutes } from './source-chat-draft-replies.openapi';
 export { sourceEvidenceRoutes } from './source-evidence.openapi';
+export { sourceIngestionRoutes } from './source-ingestion.openapi';
 export { sourceTextRevisionRoutes } from './source-text-revisions.openapi';
 export { statusRoutes } from './status.openapi';
 export { templatesRoutes } from './templates.openapi';

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProjectDetailProvider } from '@/components/project/ProjectDetailContext';
 import { useProjectSettings } from '@/hooks/projects/useProjectSettings';
 
 const replace = vi.hoisted(() => vi.fn());
@@ -38,6 +40,44 @@ describe('useProjectSettings', () => {
     fetchProject.mockReset().mockResolvedValue(project);
     updateProject.mockReset();
     deleteProject.mockReset();
+  });
+
+  it('uses the repository layout detail without a second request', async () => {
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(ProjectDetailProvider, { projectId: 'proj_1', children });
+    const { result } = renderHook(() => useProjectSettings('proj_1'), { wrapper });
+
+    await waitFor(() => expect(result.current.project?.name).toBe('tree-demo'));
+    expect(fetchProject).toHaveBeenCalledExactlyOnceWith('proj_1');
+  });
+
+  it('shows authorized General details before loading counts and preserves a newer save', async () => {
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(ProjectDetailProvider, { projectId: 'proj_1', settings: true, children });
+    const { result } = renderHook(() => useProjectSettings('proj_1'), { wrapper });
+
+    await waitFor(() => expect(result.current.project?.name).toBe('tree-demo'));
+    expect(fetchProject).toHaveBeenCalledExactlyOnceWith('proj_1', false);
+    expect(result.current.hasStats).toBe(false);
+
+    let finishStats!: (value: unknown) => void;
+    fetchProject.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishStats = resolve;
+        })
+    );
+    act(() => result.current.loadStats());
+    expect(result.current.project?.metadata?.description).toBe('old');
+    expect(result.current.statsLoading).toBe(true);
+    expect(fetchProject).toHaveBeenLastCalledWith('proj_1');
+
+    updateProject.mockResolvedValueOnce({ ...project, metadata: { description: 'saved' } });
+    await act(() => result.current.saveGeneral({ name: project.name, description: 'saved' }));
+    await act(async () => finishStats({ ...project, commits_count: 3 }));
+    expect(result.current.hasStats).toBe(true);
+    expect(result.current.project?.commits_count).toBe(3);
+    expect(result.current.project?.metadata?.description).toBe('saved');
   });
 
   it('preserves unrelated metadata keys when saving the description', async () => {

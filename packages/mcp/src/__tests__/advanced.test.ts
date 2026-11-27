@@ -7,6 +7,7 @@ const mockDB = {
 };
 const mockApiClient = {
   createProject: vi.fn(),
+  createBranch: vi.fn(),
   createMergeDraft: vi.fn(),
   getMergeDraft: vi.fn(),
   updateMergeDraft: vi.fn(),
@@ -772,6 +773,38 @@ describe('t3x_admin handler', () => {
     expect(data.branch_id).toBe('branch_feat');
     expect(data.name).toBe('feature-x');
     expect(data.parent_branch).toBe('main');
+  });
+
+  it('create_branch: forwards a pinned Commit and the parent ref to the API verbatim', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    const input = {
+      project_id: 'proj_test1',
+      name: 'historical-fork',
+      parent_branch: 'main',
+      head_commit_hash: 'sha256:historical',
+      description: 'Start from a historical Commit',
+    };
+    const branch = { ...input, branch_id: 'branch_api' };
+    mockApiClient.createBranch.mockResolvedValueOnce(branch);
+
+    const result = await adminHandler({ action: 'create_branch', ...input });
+
+    expect(mockApiClient.createBranch).toHaveBeenCalledWith(input);
+    expect(JSON.parse(result.content[0].text)).toEqual(branch);
+  });
+
+  it('create_branch: rejects an exact head on the legacy local path before opening storage', async () => {
+    const { getDB } = await import('../db.js');
+    const result = await adminHandler({
+      action: 'create_branch',
+      project_id: 'proj_test1',
+      name: 'historical-fork',
+      head_commit_hash: 'sha256:historical',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('T3X_MCP_BACKEND=api');
+    expect(getDB).not.toHaveBeenCalled();
   });
 
   // -- create_pin --

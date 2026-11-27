@@ -688,7 +688,17 @@ it('generates incrementally over saved manual edits, then publishes one verified
     requestId: 'publish',
     actor,
   };
-  const saved = await publishWorkspaceGeneration(input);
+  const timings = {};
+  const saved = await publishWorkspaceGeneration({ ...input, timings });
+  expect(timings).toMatchObject({
+    candidate_read_ms: expect.any(Number),
+    workspace_read_ms: expect.any(Number),
+    lock_acquire_ms: expect.any(Number),
+    lock_held_ms: expect.any(Number),
+    head_validation_ms: expect.any(Number),
+    source_validation_ms: expect.any(Number),
+    schema_validation_ms: expect.any(Number),
+  });
   expect(saved.value.kind).toBe('published');
   expect(saved.value.ledger.actions).toHaveLength(2);
   expect(saved.value.ledger.actions[1].generation?.transitionId).toBe(proposed.view.transitionId);
@@ -859,4 +869,21 @@ it('accepts original project user turns as evidence and rejects assistant self-c
   await expect(
     resolveProposalGenerationSources(db, other.projectId, [], [original.turnHash])
   ).rejects.toThrow();
+});
+
+it('does not treat Agent-ingested material as original evidence', async () => {
+  const data = await fixture('Machine-ingested material');
+  const material = await createMaterial(db, {
+    project_id: data.projectId,
+    source_type: 'document',
+    content_text: 'Machine-supplied material.',
+    content_hash: 'machine-ingested-fixture',
+    created_by: 'agent:api-key:key_ingestion',
+  });
+  await expect(resolveProposalGenerationSources(db, data.projectId, [material.id])).rejects.toThrow(
+    ProposalGenerationContextError
+  );
+  expect(
+    await resolveProposalGenerationSources(db, data.projectId, [data.material.id])
+  ).toHaveLength(1);
 });

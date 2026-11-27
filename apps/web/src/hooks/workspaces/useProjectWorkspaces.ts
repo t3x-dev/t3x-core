@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { useSessionUserId } from '@/hooks/shared/useSession';
 import { fetchProjectWorkspaces } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { resolveWebSocketBase } from '@/utils/apiBase';
 
+const WORKSPACE_LIST_FRESH_MS = 30_000;
 const REALTIME_RECONNECT_DELAY = 5000;
 const MAX_SEEN_EVENT_IDS = 200;
 const WORKSPACE_INVALIDATION_EVENTS = new Set([
@@ -18,13 +20,16 @@ export interface UseProjectWorkspacesResult {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  revalidate: () => void;
 }
 
 export function useProjectWorkspaces(
   projectId: string | null | undefined,
-  enabled = true
+  enabled = true,
+  initialWorkspaces?: WorkspaceCandidate[]
 ): UseProjectWorkspacesResult {
-  const key = JSON.stringify([projectId, enabled]);
+  const userId = useSessionUserId();
+  const key = JSON.stringify([userId, projectId, enabled]);
   const available = Boolean(projectId && enabled);
   const [snapshot, setSnapshot] = useState<{
     key: string;
@@ -36,16 +41,18 @@ export function useProjectWorkspaces(
   activeKey.current = key;
   const mounted = useRef(false);
   const request = useRef(0);
+  const lastRead = useRef<{ key: string; completedAt: number | null } | null>(null);
 
   const load = useCallback(
     async (showLoading: boolean) => {
       if (!projectId || !enabled || !mounted.current || activeKey.current !== key) return;
       const token = ++request.current;
+      lastRead.current = { key, completedAt: null };
       const isCurrent = () =>
         mounted.current && activeKey.current === key && token === request.current;
       setSnapshot((current) => ({
         key,
-        workspaces: current?.key === key ? current.workspaces : [],
+        workspaces: current?.key === key ? current.workspaces : (initialWorkspaces ?? []),
         loading: showLoading || (current?.key === key ? current.loading : true),
         error: null,
       }));
@@ -56,26 +63,37 @@ export function useProjectWorkspaces(
         if (isCurrent())
           setSnapshot((current) => ({
             key,
-            workspaces: current?.key === key ? current.workspaces : [],
+            workspaces: current?.key === key ? current.workspaces : (initialWorkspaces ?? []),
             loading: false,
             error: formatUserFacingError(err, 'Failed to load workspaces.'),
           }));
+      } finally {
+        if (isCurrent()) lastRead.current = { key, completedAt: Date.now() };
       }
     },
-    [enabled, key, projectId]
+    [enabled, initialWorkspaces, key, projectId]
   );
 
   const refresh = useCallback(() => load(true), [load]);
+  const revalidate = useCallback(() => {
+    const read = lastRead.current;
+    if (
+      read?.key === key &&
+      read.completedAt !== null &&
+      Date.now() - read.completedAt >= WORKSPACE_LIST_FRESH_MS
+    )
+      void load(false);
+  }, [key, load]);
 
   useEffect(() => {
     mounted.current = true;
-    if (available) void refresh();
+    if (available && !initialWorkspaces) void refresh();
     else setSnapshot(undefined);
     return () => {
       mounted.current = false;
       ++request.current;
     };
-  }, [available, refresh]);
+  }, [available, initialWorkspaces, refresh]);
 
   useEffect(() => {
     if (!projectId || !enabled) return;
@@ -167,9 +185,10 @@ export function useProjectWorkspaces(
 
   const current = available && snapshot?.key === key ? snapshot : undefined;
   return {
-    workspaces: current?.workspaces ?? [],
-    loading: available && (current?.loading ?? true),
+    workspaces: current?.workspaces ?? initialWorkspaces ?? [],
+    loading: available && (current?.loading ?? !initialWorkspaces),
     error: current?.error ?? null,
     refresh,
+    revalidate,
   };
 }

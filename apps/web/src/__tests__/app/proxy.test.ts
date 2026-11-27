@@ -62,4 +62,42 @@ describe('proxy auth gating', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
   });
+
+  it('allows OAuth discovery before login and keeps consent behind the session gate', () => {
+    process.env.AUTH_DISABLED = 'false';
+
+    expect(proxy(createRequest('/.well-known/oauth-authorization-server')).status).toBe(200);
+    const consent = proxy(createRequest('/settings/agent-access/authorize?client_id=editorial'));
+    expect(consent.status).toBe(307);
+    expect(consent.headers.get('location')).toBe(
+      'http://localhost/login?callbackUrl=%2Fsettings%2Fagent-access%2Fauthorize%3Fclient_id%3Deditorial'
+    );
+  });
+
+  it('removes legacy chat text before redirecting to login or rendering consent', () => {
+    for (const cookie of [undefined, 't3x-session=test-key']) {
+      const result = proxy(
+        createRequest(
+          '/settings/agent-access/authorize?state=keep&task=private-instruction&task=more',
+          cookie
+        )
+      );
+      expect(result.headers.get('location')).toBe(
+        'http://localhost/settings/agent-access/authorize?state=keep'
+      );
+      expect(result.headers.get('referrer-policy')).toBe('no-referrer');
+    }
+  });
+
+  it('reopens a bookmarked login return URL without propagating its legacy task', () => {
+    const callbackUrl = '/settings/agent-access/authorize?client_id=one&task=legacy';
+    const result = proxy(createRequest('/login?' + new URLSearchParams({ callbackUrl })));
+    const clean = new URL(result.headers.get('location')!);
+    expect(clean.pathname).toBe('/login');
+    expect(clean.searchParams.get('callbackUrl')).toBe(
+      '/settings/agent-access/authorize?client_id=one'
+    );
+    expect(result.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(proxy(createRequest(clean.pathname + clean.search)).status).toBe(200);
+  });
 });

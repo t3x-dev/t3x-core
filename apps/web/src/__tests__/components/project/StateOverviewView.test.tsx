@@ -100,6 +100,30 @@ it('reads current committed content without requesting the overview again', () =
   expect(screen.queryByText('Loading committed State…')).not.toBeInTheDocument();
 });
 
+it.each([
+  'repository',
+  'version',
+] as const)('labels the recorded decision maker on the %s State', (introductionSource) => {
+  render(
+    <StateOverviewView
+      {...props}
+      introductionSource={introductionSource}
+      commit={{
+        ...commit,
+        committed_by: null,
+        decided_by: { kind: 'human', id: 'reviewer' },
+        operation_count: 1,
+        message: 'Reviewed changes',
+      }}
+    />
+  );
+  const region = screen.getByRole('region', {
+    name: introductionSource === 'version' ? 'Viewed version' : 'Current version',
+  });
+  expect(region).toHaveTextContent('Decided by human reviewer');
+  expect(region).toHaveTextContent('Reviewed changes');
+});
+
 it('keeps historical State readable while its introduction loads or fails', () => {
   const retry = vi.fn();
   overview.mockReturnValue({ data: undefined, loading: true, retry });

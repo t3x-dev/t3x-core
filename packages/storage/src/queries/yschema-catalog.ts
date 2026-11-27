@@ -167,6 +167,14 @@ export async function listYSchemaCatalogReleases(
       status: v.status,
       createdAt: v.createdAt,
       pathCount: v.pathCount,
+      capabilities: sql<Pick<YSchemaCatalogRelease['definition'], 'provides' | 'requires'>>`(
+        select jsonb_build_object(
+          'provides', coalesce(jsonb_agg(${cap.capability}) filter (where ${cap.direction} = 'provides'), '[]'::jsonb),
+          'requires', coalesce(jsonb_agg(${cap.capability}) filter (where ${cap.direction} = 'requires'), '[]'::jsonb)
+        )
+        from ${cap}
+        where ${cap.artifactVersionId} = ${v.artifactVersionId}
+      )`,
       // Bounded names only, never slot values, README, samples or arbitrary manifest data.
       nodes: sql<Array<{ path: string; slots: string[] }>>`coalesce((
         select jsonb_agg(jsonb_build_object('path', section.key, 'slots', coalesce((
@@ -209,10 +217,6 @@ export async function listYSchemaCatalogReleases(
     .where(and(...conditions))
     .orderBy(desc(v.createdAt), desc(v.artifactVersionId))
     .limit(limit + 1);
-  const ids = rows.slice(0, limit).map((row) => row.artifactVersionId);
-  const capabilities = ids.length
-    ? await db.select().from(cap).where(inArray(cap.artifactVersionId, ids))
-    : [];
   return toCursorPage(
     rows.map((row) => ({
       identity: {
@@ -240,18 +244,8 @@ export async function listYSchemaCatalogReleases(
       definition: {
         pathCount: row.pathCount,
         nodes: row.nodes,
-        provides: capabilities
-          .filter(
-            (c) => c.artifactVersionId === row.artifactVersionId && c.direction === 'provides'
-          )
-          .map((c) => c.capability)
-          .sort(),
-        requires: capabilities
-          .filter(
-            (c) => c.artifactVersionId === row.artifactVersionId && c.direction === 'requires'
-          )
-          .map((c) => c.capability)
-          .sort(),
+        provides: row.capabilities.provides.sort(),
+        requires: row.capabilities.requires.sort(),
       },
       formats: ['json', 'yaml'] as ['json', 'yaml'],
       validation: 'not-run' as const,

@@ -19,13 +19,24 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { HistoryChangeInspector } from '@/components/history/HistoryChangeInspector';
 import historyStyles from '@/components/history/HistoryStructure.module.css';
 import { StateNodeHistoryPanel } from '@/components/history/StateNodeHistoryPanel';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { useRepositoryViewData } from '@/components/project/RepositoryRouteContext';
+import {
+  RepositoryAddressContext,
+  useRepositoryViewData,
+} from '@/components/project/RepositoryRouteContext';
 import { StateCodeView } from '@/components/project/StateCodeView';
 import { StateOverviewView } from '@/components/project/StateOverviewView';
 import { StatePrdReader } from '@/components/project/StatePrdReader';
@@ -46,13 +57,14 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitByline, commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import { commitStructureHref, historyCommitHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
   getProjectIdHistoryPath,
   getProjectIdRepoPath,
   getProjectIdWorkspacePath,
+  repositoryAgentAccessHref,
   repositoryBranch,
   repositoryBranchHref,
   workspaceLocation,
@@ -101,6 +113,7 @@ import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, safeInternalReturnTo } from '@/utils/navigationReturn';
+import { markNavigationTiming } from '@/utils/navigationTiming';
 import { BranchLoadError } from './BranchLoadError';
 import { StateArtifactDialog } from './StateArtifactDialog';
 import { StateEmptyContent } from './StateEmptyContent';
@@ -124,6 +137,7 @@ interface ProjectStateTabProps {
   repositoryPath?: string;
   repositoryProfile?: import('@t3x-dev/api-client').RepositoryProfile;
   canEditRepository?: boolean;
+  canManageAgentAccess?: boolean;
   initialView?: ProjectStateView;
   onRunValidation?: (commitHash: string, schemaName: string) => Promise<void> | void;
   projectId: string;
@@ -135,7 +149,10 @@ interface ProjectStateTabProps {
   projectVisibility?: string;
   validation?: YSchemaValidationSummary | null;
   validationError?: string | null;
+  validationLoading?: boolean;
   validationRunning?: boolean;
+  detailsError?: string;
+  onRetryDetails?: () => void;
 }
 
 interface StateSnapshot {
@@ -196,9 +213,13 @@ export function ProjectStateTab({
   projectVisibility,
   repositoryProfile,
   canEditRepository = false,
+  canManageAgentAccess = false,
   validation,
   validationError,
+  validationLoading = false,
   validationRunning = false,
+  detailsError,
+  onRetryDetails,
 }: ProjectStateTabProps) {
   const saveRepositoryProfile = useRepositoryProfile(projectId);
   const saveRepositoryDescription = useRepositoryDescription(projectId);
@@ -259,6 +280,14 @@ export function ProjectStateTab({
     error: branchesError,
     refresh,
   } = projectBranches;
+  const { directoryStateEntry } = useContext(RepositoryAddressContext);
+  const directoryHead =
+    directoryStateEntry?.project.id === projectId &&
+    branchFocus === 'main' &&
+    !focusedCommitHash &&
+    snapshotRefreshVersion === 0
+      ? directoryStateEntry.head
+      : undefined;
   const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
@@ -318,30 +347,64 @@ export function ProjectStateTab({
 
   const snapshotTargetHead = focusedCommitHash ?? branchHeads[branchFocus];
   const loadedSnapshotScope = useRef('');
+  const initialBranchRead = useRef<{
+    scope: string;
+    promise: Promise<ApiCommit[]>;
+    fromDirectory: boolean;
+  } | null>(null);
   const waitingForBranch =
     snapshotTargetHead === undefined &&
     !inspectedHeadByBranchRef.current[branchScope] &&
     branchesLoading;
 
   useEffect(() => {
+    if (initialBranchRead.current?.scope !== selectionScope) initialBranchRead.current = null;
+    if (initialBranchRead.current?.fromDirectory && !directoryHead) {
+      initialBranchRead.current = null;
+      loadedSnapshotScope.current = '';
+      delete inspectedHeadByBranchRef.current[branchScope];
+    }
     if (!snapshotEnabled) return;
 
     const selectedHead =
       focusedCommitHash ?? inspectedHeadByBranchRef.current[branchScope] ?? snapshotTargetHead;
     const scopePrefix = `${selectionScope}:`;
     if (loadedSnapshotScope.current === `${scopePrefix}${selectedHead ?? ''}`) return;
-    // The registered pointer is authoritative. Wait for it before falling back to history.
-    if (waitingForBranch) return;
+    // The branch-filtered endpoint starts at the verified ref head, so the selector
+    // inventory can finish independently without starting a second snapshot request.
+    if ((waitingForBranch || directoryHead) && !initialBranchRead.current) {
+      initialBranchRead.current = {
+        scope: selectionScope,
+        promise: directoryHead ?? loadCommits(projectId, branchFocus, 1),
+        fromDirectory: Boolean(directoryHead),
+      };
+    }
+    const initialRead = initialBranchRead.current?.promise;
     let cancelled = false;
     const load = async () => {
       setSnapshot({ ...EMPTY_SNAPSHOT, scope: selectionScope });
       try {
-        if (!selectedHead && branchesError) throw new Error(branchesError);
+        if (!selectedHead && !initialRead && branchesError) throw new Error(branchesError);
         const requestedBranch = branchFocus || 'main';
-        const branchHeadHash = selectedHead;
+        let branchHeadHash: string | null | undefined = selectedHead;
         let commits: ApiCommit[] = [];
         let headCommit: ApiCommit | null = null;
-        if (branchHeadHash) {
+        if (initialRead) {
+          const [head] = await initialRead;
+          headCommit = head ?? null;
+          // A registered head that changed since the click takes precedence.
+          if (
+            initialRead === directoryHead &&
+            selectedHead !== undefined &&
+            selectedHead !== (head?.hash ?? null)
+          ) {
+            headCommit = selectedHead ? await loadCommit(selectedHead, projectId) : null;
+            if (headCommit && headCommit.hash !== selectedHead)
+              throw new Error('Branch HEAD response does not match the registered branch pointer.');
+          }
+          branchHeadHash = headCommit?.hash ?? null;
+          commits = headCommit ? [headCommit] : [];
+        } else if (branchHeadHash) {
           headCommit = await loadCommit(branchHeadHash, projectId);
           if (headCommit.hash !== branchHeadHash) {
             throw new Error('Branch HEAD response does not match the registered branch pointer.');
@@ -371,6 +434,8 @@ export function ProjectStateTab({
           throw new Error('Commit response does not match the selected project and branch.');
         }
         if (!cancelled) {
+          if (!headCommit && initialRead && initialRead !== directoryHead)
+            initialBranchRead.current = null;
           if (headCommit && !focusedCommitHash && !inspectedHeadByBranchRef.current[branchScope]) {
             inspectedHeadByBranchRef.current[branchScope] = headCommit.hash;
           }
@@ -402,6 +467,7 @@ export function ProjectStateTab({
   }, [
     branchFocus,
     branchScope,
+    directoryHead,
     waitingForBranch,
     branchesError,
     selectionScope,
@@ -724,7 +790,9 @@ export function ProjectStateTab({
               : nativeReview.error
                 ? 'Validation evidence unavailable'
                 : 'No validation recorded'
-        : stateReadinessLabel(validationReady);
+        : validationLoading
+          ? 'Loading validation'
+          : stateReadinessLabel(validationReady);
   const lastCheckedLabel =
     freshnessChecking || branchesLoading
       ? 'Checking…'
@@ -736,6 +804,12 @@ export function ProjectStateTab({
   const stateLoadError = branchBlocksState
     ? 'Retry the branch list above to load committed State.'
     : snapshot.primaryError;
+  useEffect(() => {
+    markNavigationTiming('state', 'shell');
+    if (snapshotEnabled && !snapshot.loading && !snapshot.primaryError) {
+      markNavigationTiming('state', 'ready');
+    }
+  }, [snapshotEnabled, snapshot.loading, snapshot.primaryError]);
   const retryState = () => setSnapshotRefreshVersion((version) => version + 1);
   return (
     <section
@@ -749,6 +823,22 @@ export function ProjectStateTab({
         />
       </div>
 
+      {detailsError ? (
+        <Alert
+          title="Repository details unavailable"
+          tone="warning"
+          layout="banner"
+          actions={
+            onRetryDetails ? (
+              <Button size="sm" variant="outline" onClick={onRetryDetails}>
+                Retry details
+              </Button>
+            ) : undefined
+          }
+        >
+          {detailsError}
+        </Alert>
+      ) : null}
       {activeView === 'canvas' ? (
         <BranchLoadError error={branchesError} loading={branchesLoading} onRetry={refresh} />
       ) : null}
@@ -778,11 +868,16 @@ export function ProjectStateTab({
                 headCommitHash={branchHeads[inspectedBranch] ?? null}
                 sourceCommitHash={focusedCommitHash}
                 historyHref={historyHref}
+                agentAccessHref={repositoryAgentAccessHref(
+                  repositoryPath ?? getProjectIdRepoPath(projectId),
+                  inspectedBranch
+                )}
                 historical={Boolean(focusedCommitHash)}
                 onBranchChange={updateBranchFocus}
                 onCreateBranch={handleCreateBranch}
                 workspaceHref={workspaceHref}
                 canProposeChanges={canEditRepository}
+                canManageAgentAccess={canManageAgentAccess}
               />
               <StatePageFrame
                 projectName={projectName}
@@ -988,14 +1083,9 @@ export function ProjectStateTab({
                     <div className={inspectionStyles.commitSummary}>
                       <GitCommit aria-hidden="true" />
                       <Link href={historyCommitHref(historyHref, headCommit)}>
-                        {commitTitle(headCommit.message)}
+                        {commitTitle(headCommit.message, headCommit.operation_count)}
                       </Link>
-                      <span>
-                        {headCommit.author?.name ||
-                          headCommit.author?.id ||
-                          headCommit.author?.type ||
-                          'Author not recorded'}
-                      </span>
+                      <span>{commitByline(headCommit)}</span>
                       <time dateTime={headCommit.committed_at}>
                         {relativeTime(headCommit.committed_at)}
                       </time>
@@ -1871,7 +1961,7 @@ function StateFieldTracePanel({
           <ComposeChangeReason
             heading="Commit details"
             reason={changeReason || 'No commit reason recorded.'}
-            channelLabel={stateInspectorAuthorLabel(headCommit)}
+            channelLabel={commitByline(headCommit)}
             timestamp={headCommit.committed_at}
           />
         ) : (
@@ -2347,7 +2437,7 @@ function StateSelectedNodeInspector({
   nodeHistoryEnabled: boolean;
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
-  const authorLabel = stateInspectorAuthorLabel(headCommit);
+  const authorLabel = commitByline(headCommit);
   const sourceLabel = stateInspectorSourceLabel(row, headCommit);
   const diffTone = stateInspectorDiffTone(row?.diff?.kind);
   const beforeValue = row ? stateInspectorBeforeValue(row) : '';
@@ -3135,15 +3225,6 @@ function stateInspectorWhyText(row: StateStructureRow, changeReason: string): st
   if (row.status === 'missing') return row.statusLabel;
   if (row.status !== 'unchanged') return changeReason || row.statusLabel;
   return 'No direct change recorded for this node.';
-}
-
-function stateInspectorAuthorLabel(headCommit: ApiCommit): string {
-  return (
-    headCommit.author?.name?.trim() ||
-    headCommit.author?.id?.trim() ||
-    headCommit.author?.type?.trim() ||
-    'Unrecorded author'
-  );
 }
 
 function stateInspectorSourceLabel(row: StateStructureRow | null, headCommit: ApiCommit): string {

@@ -26,6 +26,7 @@ import {
   insertWorkspaceDeployment,
   listWorkspaceDeliveries,
   listWorkspaceDeployments,
+  withWorkspaceDeploymentLock,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -179,50 +180,52 @@ workspaceDeliveryRoutes.openapi(deployRoute, async (c) => {
   const requestDigest = createHash('sha256')
     .update(JSON.stringify({ deliveryId: input.deliveryId, environment: input.environment }))
     .digest('hex');
-  const existing = await findWorkspaceDeployment(
-    db,
-    projectId,
-    workspaceId,
-    input.environment,
-    input.idempotencyKey
-  );
-  if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
-    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
-  const receipt = await findWorkspaceDeliveryById(db, projectId, workspaceId, input.deliveryId);
-  if (
-    !receipt ||
-    receipt.status !== 'prepared' ||
-    receipt.adapter !== 't3x.portable/v1' ||
-    receipt.format !== 'bundle' ||
-    !receipt.artifactDigest
-  )
-    return errorResponse(c, 'NOT_FOUND', 'Prepared portable artifact not found');
-  const current = (
-    await listWorkspaceDeployments(db, projectId, workspaceId, input.environment)
-  )[0];
-  const deployment =
-    existing ??
-    (await insertWorkspaceDeployment(db, {
-      id: randomUUID(),
+  return withWorkspaceDeploymentLock(db, projectId, workspaceId, input.environment, async (tx) => {
+    const existing = await findWorkspaceDeployment(
+      tx,
       projectId,
       workspaceId,
-      environment: input.environment,
-      kind: 'deploy',
-      deliveryId: receipt.id,
-      artifactDigest: receipt.artifactDigest,
-      previousArtifactDigest: current?.actualArtifactDigest ?? null,
-      idempotencyKey: input.idempotencyKey,
-      requestDigest,
-      adapter: 't3x.fixed-slot/v1',
-      desiredArtifactDigest: receipt.artifactDigest,
-      actualArtifactDigest: receipt.artifactDigest,
-    }));
-  if (deployment.requestDigest !== requestDigest)
-    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
-  return c.json(
-    { success: true as const, data: { deployment: serializeDeployment(deployment) } },
-    200
-  );
+      input.environment,
+      input.idempotencyKey
+    );
+    if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
+      return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
+    const receipt = await findWorkspaceDeliveryById(tx, projectId, workspaceId, input.deliveryId);
+    if (
+      !receipt ||
+      receipt.status !== 'prepared' ||
+      receipt.adapter !== 't3x.portable/v1' ||
+      receipt.format !== 'bundle' ||
+      !receipt.artifactDigest
+    )
+      return errorResponse(c, 'NOT_FOUND', 'Prepared portable artifact not found');
+    const current = (
+      await listWorkspaceDeployments(tx, projectId, workspaceId, input.environment)
+    )[0];
+    const deployment =
+      existing ??
+      (await insertWorkspaceDeployment(tx, {
+        id: randomUUID(),
+        projectId,
+        workspaceId,
+        environment: input.environment,
+        kind: 'deploy',
+        deliveryId: receipt.id,
+        artifactDigest: receipt.artifactDigest,
+        previousArtifactDigest: current?.actualArtifactDigest ?? null,
+        idempotencyKey: input.idempotencyKey,
+        requestDigest,
+        adapter: 't3x.fixed-slot/v1',
+        desiredArtifactDigest: receipt.artifactDigest,
+        actualArtifactDigest: receipt.artifactDigest,
+      }));
+    if (deployment.requestDigest !== requestDigest)
+      return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another deployment');
+    return c.json(
+      { success: true as const, data: { deployment: serializeDeployment(deployment) } },
+      200
+    );
+  });
 });
 
 const rollbackRoute = createRoute({
@@ -252,47 +255,50 @@ workspaceDeliveryRoutes.openapi(rollbackRoute, async (c) => {
   if (access instanceof Response) return access;
   c.header('Cache-Control', 'private, no-store');
   const target = await findWorkspaceDeploymentById(db, projectId, workspaceId, input.deploymentId);
-  if (!target) return errorResponse(c, 'NOT_FOUND', 'Deployment version not found');
+  if (!target || (input.environment !== undefined && input.environment !== target.environment))
+    return errorResponse(c, 'NOT_FOUND', 'Deployment version not found in the requested slot');
   const requestDigest = createHash('sha256')
     .update(JSON.stringify({ deploymentId: input.deploymentId }))
     .digest('hex');
-  const existing = await findWorkspaceDeployment(
-    db,
-    projectId,
-    workspaceId,
-    target.environment,
-    input.idempotencyKey
-  );
-  if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
-    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
-  const current = (
-    await listWorkspaceDeployments(db, projectId, workspaceId, target.environment)
-  )[0];
-  if (!existing && current?.actualArtifactDigest === target.actualArtifactDigest)
-    return errorResponse(c, 'CONFLICT', 'The selected artifact is already deployed');
-  const deployment =
-    existing ??
-    (await insertWorkspaceDeployment(db, {
-      id: randomUUID(),
+  return withWorkspaceDeploymentLock(db, projectId, workspaceId, target.environment, async (tx) => {
+    const existing = await findWorkspaceDeployment(
+      tx,
       projectId,
       workspaceId,
-      environment: target.environment,
-      kind: 'rollback',
-      deliveryId: target.deliveryId,
-      artifactDigest: target.actualArtifactDigest,
-      previousArtifactDigest: current?.actualArtifactDigest ?? null,
-      idempotencyKey: input.idempotencyKey,
-      requestDigest,
-      adapter: 't3x.fixed-slot/v1',
-      desiredArtifactDigest: target.actualArtifactDigest,
-      actualArtifactDigest: target.actualArtifactDigest,
-    }));
-  if (deployment.requestDigest !== requestDigest)
-    return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
-  return c.json(
-    { success: true as const, data: { deployment: serializeDeployment(deployment) } },
-    200
-  );
+      target.environment,
+      input.idempotencyKey
+    );
+    if (existing?.requestDigest !== undefined && existing.requestDigest !== requestDigest)
+      return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
+    const current = (
+      await listWorkspaceDeployments(tx, projectId, workspaceId, target.environment)
+    )[0];
+    if (!existing && current?.actualArtifactDigest === target.actualArtifactDigest)
+      return errorResponse(c, 'CONFLICT', 'The selected artifact is already deployed');
+    const deployment =
+      existing ??
+      (await insertWorkspaceDeployment(tx, {
+        id: randomUUID(),
+        projectId,
+        workspaceId,
+        environment: target.environment,
+        kind: 'rollback',
+        deliveryId: target.deliveryId,
+        artifactDigest: target.actualArtifactDigest,
+        previousArtifactDigest: current?.actualArtifactDigest ?? null,
+        idempotencyKey: input.idempotencyKey,
+        requestDigest,
+        adapter: 't3x.fixed-slot/v1',
+        desiredArtifactDigest: target.actualArtifactDigest,
+        actualArtifactDigest: target.actualArtifactDigest,
+      }));
+    if (deployment.requestDigest !== requestDigest)
+      return errorResponse(c, 'CONFLICT', 'Idempotency key identifies another rollback');
+    return c.json(
+      { success: true as const, data: { deployment: serializeDeployment(deployment) } },
+      200
+    );
+  });
 });
 
 const prepareDeliveryRoute = createRoute({

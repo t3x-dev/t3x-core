@@ -6,6 +6,6 @@
 import { getProject } from '@/infrastructure/projects';
 import type { ProjectDetail } from '@/infrastructure/types';
 
-export function fetchProject(projectId: string): Promise<ProjectDetail> {
-  return getProject(projectId);
+export function fetchProject(projectId: string, includeStats?: boolean): Promise<ProjectDetail> {
+  return getProject(projectId, includeStats);
 }

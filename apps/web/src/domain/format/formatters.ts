@@ -1,3 +1,5 @@
+import type { CommitDisplayFields } from '@t3x-dev/api-client';
+
 /**
  * Shared text formatters used across pages.
  *
@@ -15,9 +17,31 @@ export function commitHashLabel(hash: string): string {
   return `hash:${shortHash(hash)}`;
 }
 
+export function commitByline(
+  commit: CommitDisplayFields & {
+    author?: { type: string; name?: string; id?: string } | null;
+  }
+): string {
+  const actor = commit.committed_by ?? commit.decided_by;
+  if (actor) {
+    const label = actor.id.startsWith(`${actor.kind}:`) ? actor.id : `${actor.kind} ${actor.id}`;
+    return `${commit.committed_by ? 'Committed' : 'Decided'} by ${label}`;
+  }
+  const legacy = commit.author;
+  return (
+    legacy?.name ||
+    legacy?.id ||
+    (legacy?.type === 'unknown' ? null : legacy?.type) ||
+    'Author not recorded'
+  );
+}
+
 /** A conversation title is source context, never a substitute for a committed description. */
-export function commitTitle(message: string | null | undefined): string {
-  return message?.trim() || 'No commit message';
+export function commitTitle(message: string | null | undefined, operationCount?: number): string {
+  if (message?.trim()) return message.trim();
+  return operationCount === undefined
+    ? 'No commit message'
+    : `Recorded effect · ${operationCount} operation${operationCount === 1 ? '' : 's'}`;
 }
 
 /** Human-friendly relative time string from an ISO-8601 timestamp. */

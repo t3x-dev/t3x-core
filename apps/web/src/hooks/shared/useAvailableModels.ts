@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
 
-export type GenerationProviderAvailabilityError = 'api_unavailable';
+export type GenerationProviderAvailabilityError = 'api_unavailable' | 'timeout' | 'upstream_error';
 
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];
@@ -100,7 +100,7 @@ export function resolveAvailableModelSelection(
   return { provider, model };
 }
 
-export function useAvailableModels(): {
+export function useAvailableModels(enabled = true): {
   providers: LLMProviderInfo[];
   loading: boolean;
   loadModels: () => Promise<{ providers: LLMProviderInfo[] }>;
@@ -123,6 +123,7 @@ export function useAvailableModels(): {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     setLoading(true);
     setAvailabilityError(null);
@@ -132,11 +133,14 @@ export function useAvailableModels(): {
         setProviders(getUsableProviders(data));
         setBackendDefaultProvider(data.default_provider);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
         setProviders([]);
         setBackendDefaultProvider(null);
-        setAvailabilityError('api_unavailable');
+        const code = error instanceof Error && 'code' in error ? error.code : undefined;
+        if (code === 'TIMEOUT' || code === 'DATA_LOAD_TIMEOUT') setAvailabilityError('timeout');
+        else if (code === 'MODEL_UPSTREAM_UNAVAILABLE') setAvailabilityError('upstream_error');
+        else setAvailabilityError('api_unavailable');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -144,16 +148,17 @@ export function useAvailableModels(): {
     return () => {
       cancelled = true;
     };
-  }, [revision]);
+  }, [enabled, revision]);
 
   useEffect(() => {
+    if (!enabled) return;
     window.addEventListener('focus', refresh);
     window.addEventListener('t3x:provider-configuration-changed', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('t3x:provider-configuration-changed', refresh);
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {

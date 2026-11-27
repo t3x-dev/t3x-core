@@ -10,6 +10,7 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const mocks = vi.hoisted(() => ({
   branchesError: null as string | null,
+  branchesLoading: false,
   userId: 'user_test_a',
   query: 'tab=workspaces',
   workspaces: [] as WorkspaceCandidate[],
@@ -38,7 +39,8 @@ vi.mock('@/components/workspaces/WorkspaceSnapshotReview', () => ({
     </section>
   ),
 }));
-vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+vi.mock('@/hooks/materials/useProjectMaterials', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/materials/useProjectMaterials')>()),
   useProjectMaterials: () => ({ materials: [], refresh: mocks.refresh }),
 }));
 vi.mock('@/hooks/shared/useSession', () => ({
@@ -48,7 +50,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branchHeads: mocks.branchHeads,
     branches: Object.keys(mocks.branchHeads),
-    loading: false,
+    loading: mocks.branchesLoading,
     error: mocks.branchesError,
     refresh: mocks.refresh,
     create: mocks.create,
@@ -60,6 +62,7 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
     loading: false,
     error: null,
     refresh: mocks.refresh,
+    revalidate: vi.fn(),
   }),
 }));
 vi.mock('@/components/workspaces/WorkspaceWorkbench', () => ({
@@ -88,6 +91,7 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.branchesError = null;
+    mocks.branchesLoading = false;
     mocks.userId = 'user_test_a';
     mocks.query = 'tab=workspaces';
     mocks.workspaces = [];
@@ -106,6 +110,16 @@ describe('ProjectWorkspacesTab navigation and persisted drafts', () => {
   it('gives each authenticated user a private starter Workspace ID', () => {
     render(<ProjectWorkspacesTab projectId="proj_test" />);
     expect(mocks.props.candidates[0].id).toBe('workspace_branch:main:human:user_test_a');
+  });
+  it('opens an explicitly selected saved Workspace while the branch picker is still loading', () => {
+    mocks.query = 'tab=workspaces&branch=main&workspace=saved';
+    mocks.branchHeads = {};
+    mocks.branchesLoading = true;
+    mocks.workspaces = [draft('saved')];
+    render(<ProjectWorkspacesTab projectId="proj_test" />);
+    expect(mocks.props.viewState).toBe('ready');
+    expect(mocks.props.selectedWorkspaceId).toBe('saved');
+    expect(mocks.props.branchOptions).toEqual([]);
   });
   it('preserves the explicitly requested draft when several share a branch', () => {
     mocks.workspaces = [draft('first'), draft('requested')];

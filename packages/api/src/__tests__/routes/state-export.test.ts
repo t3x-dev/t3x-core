@@ -1,3 +1,4 @@
+import { T3xApiError, T3xClient } from '@t3x-dev/api-client';
 import { createYOpsState } from '@t3x-dev/core';
 import { type AnyDB, ensureMainBranch, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -10,9 +11,15 @@ let mockDB: AnyDB;
 vi.mock('../../lib/db', () => ({ getDB: vi.fn(() => Promise.resolve(mockDB)) }));
 
 import { commitRoutes } from '../../routes/commits.openapi';
+import { diffRoutes } from '../../routes/diff.openapi';
+import { stateOverviewRoutes } from '../../routes/state-overview.openapi';
+import { statePresentationRoutes } from '../../routes/state-presentations.openapi';
 
 const app = new Hono();
 app.route('/', commitRoutes);
+app.route('/', diffRoutes);
+app.route('/', stateOverviewRoutes);
+app.route('/', statePresentationRoutes);
 let cleanup: () => Promise<void>;
 let projectId: string;
 let digest: string;
@@ -88,5 +95,49 @@ it('denies exports when authentication is enabled and no principal is provided',
   } finally {
     if (previous === undefined) delete process.env.AUTH_DISABLED;
     else process.env.AUTH_DISABLED = previous;
+  }
+});
+
+it('reports insufficient historical evidence separately from a missing Commit', async () => {
+  const base = `/v1/projects/${projectId}/commits`;
+  const response = await app.request(`${base}/${encodeURIComponent(digest)}/schema-binding`);
+  expect(response.status).toBe(200);
+  expect((await response.json()).data).toEqual({ commit_digest: digest, status: 'unknown' });
+  const missing = await app.request(
+    `${base}/${encodeURIComponent(`sha256:${'e'.repeat(64)}`)}/schema-binding`
+  );
+  expect(missing.status).toBe(404);
+  expect((await missing.json()).error).toMatchObject({
+    code: 'NOT_FOUND',
+    details: { protocol_code: 'COMMIT_NOT_FOUND' },
+  });
+});
+
+it('identifies the same absent digest through each project-scoped client read', async () => {
+  const client = new T3xClient({
+    baseUrl: 'http://localhost',
+    fetch: async (input, init) => app.request(new Request(input, init)),
+  });
+  const missing = `sha256:${'e'.repeat(64)}`;
+  const reads = [
+    client.getCommit(projectId, missing),
+    client.getStateOverview(projectId, missing),
+    client.exportCommitState(projectId, missing, 'json'),
+    client.getStatePresentation(projectId, missing),
+    client.getCommittedSchemaBinding(projectId, missing),
+    client.compareCommittedStates({
+      project_id: projectId,
+      base_commit_hash: digest,
+      target_commit_hash: missing,
+    }),
+  ];
+  for (const result of await Promise.allSettled(reads)) {
+    expect(result.status).toBe('rejected');
+    if (result.status === 'rejected') {
+      const error = result.reason;
+      expect(error).toBeInstanceOf(T3xApiError);
+      expect(error.status).toBe(404);
+      expect(error.details?.protocol_code ?? error.code).toBe('COMMIT_NOT_FOUND');
+    }
   }
 });

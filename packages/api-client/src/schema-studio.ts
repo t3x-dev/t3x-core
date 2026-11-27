@@ -450,6 +450,25 @@ export const WorkspaceSchemaDefinitionSnapshotSchema = z
         message: 'Schema snapshot status does not match its definition, hash and bindings.',
       });
   });
+const CommittedSchemaIdentitySchema = z.object({
+  canonical_name: z.string().optional(),
+  version: z.string().optional(),
+  composition_id: z.string().optional(),
+  composition_revision: z.number().int().optional(),
+  root_key: z.string().optional(),
+});
+const committedSchemaDigest = z.object({ commit_digest: digest });
+export const CommittedSchemaBindingSchema = z.discriminatedUnion('status', [
+  committedSchemaDigest.extend({
+    status: z.literal('bound'),
+    schema_hash: digest,
+    identities: z.array(CommittedSchemaIdentitySchema),
+  }),
+  committedSchemaDigest.extend({ status: z.literal('unbound') }),
+  committedSchemaDigest.extend({ status: z.literal('unknown') }),
+]);
+export type CommittedSchemaBinding = z.infer<typeof CommittedSchemaBindingSchema>;
+
 export const WorkspaceFullSchemaReviewSchema = z
   .object({
     schema: z.literal('t3x.application/workspace-schema-review/v1'),
@@ -523,6 +542,44 @@ export const StudioSchemaEditCandidateSchema = z.object({
   retryKey: z.string().min(1),
   requestDigest: digest,
 });
+
+export const StudioSchemaEditCandidateReadSchema = StudioSchemaEditCandidateSchema.extend({
+  draftPreview: z
+    .object({
+      candidateIds: z.array(z.string()),
+      base: StudioPreviewSchema.optional(),
+      saved: StudioPreviewSchema,
+    })
+    .optional(),
+});
+
+const SchemaStartupAddressSchema = z.object({
+  project_id: z.string(),
+  name: z.string(),
+  namespace: z.string().nullable(),
+  canonical_path: z.string().nullable(),
+  path_status: z.enum(['ready', 'pending_migration']),
+  redirect: z.boolean(),
+});
+
+export const RepositorySchemaStartupSchema = z.object({
+  userId: z.string().nullable(),
+  address: SchemaStartupAddressSchema,
+  project: SchemaStartupAddressSchema.extend({
+    created_at: z.string(),
+    visibility: z.enum(['public', 'unlisted', 'private']),
+    can_edit: z.boolean(),
+  }),
+  branch: z.object({ name: z.string(), headCommitHash: z.string().nullable() }).nullable(),
+  workspace: z.record(z.string(), z.unknown()).nullable(),
+  candidate: StudioSchemaEditCandidateReadSchema.optional(),
+  boundPreview: StudioPreviewSchema.optional(),
+  pending: WorkspaceSchemaPendingViewSchema.optional(),
+});
+
+export type RepositorySchemaStartup = z.infer<typeof RepositorySchemaStartupSchema>;
+
+export type StudioSchemaEditCandidateRead = z.infer<typeof StudioSchemaEditCandidateReadSchema>;
 
 export const StudioSchemaEditCandidateSaveResultSchema = z.object({
   outcome: z.enum(['created', 'updated', 'reused']),

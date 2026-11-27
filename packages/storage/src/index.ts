@@ -74,6 +74,13 @@ export {
 export { type CleanupOptions, cleanupOldEvents } from './jobs/cleanup-events';
 // Query functions
 export * from './queries';
+export * from './queries/mcp-authorization-attempts';
+export {
+  pendingMcpApproval,
+  redeemMcpAuthorizationCode,
+  storeMcpAuthorizationCode,
+} from './queries/mcp-authorization-codes';
+export * from './queries/mcp-preselections';
 // Local provider credentials stored in global_settings
 export {
   deleteProviderCredential,

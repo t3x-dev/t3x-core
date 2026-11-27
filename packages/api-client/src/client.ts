@@ -1,5 +1,32 @@
+import {
+  type SchemaCatalogPage,
+  SchemaCatalogPageSchema,
+  type SchemaReleaseReading,
+  SchemaReleaseReadingSchema,
+} from './schema-catalog';
+import {
+  type CommittedSchemaBinding,
+  CommittedSchemaBindingSchema,
+  type SaveStudioSchemaEditCandidateInput,
+  type SchemaPreparationInput,
+  type SchemaPreparationPreview,
+  SchemaPreparationPreviewSchema,
+  type StudioPreview,
+  type StudioPreviewInput,
+  StudioPreviewSchema,
+  type StudioSchemaEditCandidate,
+  type StudioSchemaEditCandidateSaveResult,
+  StudioSchemaEditCandidateSaveResultSchema,
+  StudioSchemaEditCandidateSchema,
+} from './schema-studio';
+import {
+  type SourceIngestionInput,
+  type SourceIngestionReceipt,
+  SourceIngestionReceiptSchema,
+} from './source-ingestion.js';
 import { type StateOverview, StateOverviewSchema } from './state-overview';
 import {
+  StateAuthorRevisionSchema,
   type StatePresentationInput,
   type StatePresentationResult,
   StatePresentationResultSchema,
@@ -7,6 +34,8 @@ import {
 import type { ListProjectsParams, RepositoryAddress, RepositoryNameCheck } from './types';
 import {
   type WorkspaceDeliveryInput,
+  type WorkspaceDeliveryList,
+  WorkspaceDeliveryListSchema,
   type WorkspaceDeliveryResult,
   WorkspaceDeliveryResultSchema,
   type WorkspaceDeploymentInput,
@@ -14,6 +43,11 @@ import {
   WorkspaceDeploymentResultSchema,
   type WorkspaceRollbackInput,
 } from './workspace-delivery.js';
+import {
+  type RunWorkspaceValidationInput,
+  type WorkspaceValidationDetails,
+  WorkspaceValidationDetailsSchema,
+} from './workspace-validation.js';
 /**
  * T3X API Client
  *
@@ -57,9 +91,24 @@ import {
   UpsertProjectGuestResponseSchema,
 } from './collaboration.js';
 import {
+  type CommitYSchemaRun,
+  CommitYSchemaRunSchema,
+  type CreateCommitYSchemaRunInput,
+} from './commit-yschema-run.js';
+import { type CredentialContext, CredentialContextSchema } from './credential-context.js';
+import {
   type DeploymentCapabilities,
   DeploymentCapabilitiesSchema,
 } from './deployment-capabilities.js';
+import {
+  type ListRepositoryRunsInput,
+  type RepositoryRunDetails,
+  RepositoryRunDetailsSchema,
+  RepositoryRunReceiptSchema,
+  type RepositoryRunsPage,
+  RepositoryRunsPageSchema,
+  type RepositoryRunTriggerInput,
+} from './repository-runs.js';
 import { type StateExportArtifact, StateExportArtifactSchema } from './state-export.js';
 import { transitionResponseSchemas } from './transition-runtime.js';
 import type {
@@ -76,6 +125,7 @@ import type {
   CommitRepositoryStateInput,
   CommitTransitionInput,
   CommitTransitionResult,
+  CommittedStateComparison,
   ContextParams,
   ContextResult,
   Conversation,
@@ -98,7 +148,9 @@ import type {
   ExportCfpackInput,
   ExportLedgerInput,
   GenerateLeafInput,
+  GenerateWorkspaceProposalInput,
   GenerationCapability,
+  GenerationModelCatalog,
   GenerationProviderCatalog,
   GenerationRequest,
   GenerationResponse,
@@ -128,6 +180,7 @@ import type {
   Pin,
   PlatformImportResult,
   Project,
+  ProjectSourceMaterial,
   ProjectWithStats,
   ProjectYSchemaVersionHistory,
   ProposeTransitionInput,
@@ -177,11 +230,20 @@ export class T3xApiError extends Error {
     public code: string,
     message: string,
     public status: number,
-    public details?: Record<string, unknown>
+    public details?: Record<string, unknown>,
+    public requestId?: string
   ) {
     super(message);
     this.name = 'T3xApiError';
   }
+}
+
+function sourceIngestionPath(projectId: string, requestId: string): string {
+  return `/v1/projects/${encodeURIComponent(projectId)}/source-ingestions/${encodeURIComponent(requestId)}`;
+}
+
+function schemaStudioPath(projectId: string): string {
+  return `/v1/projects/${encodeURIComponent(projectId)}/schema-studio`;
 }
 
 export class T3xClient {
@@ -227,6 +289,8 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/authoring`;
     this.workspaces = Object.freeze<RepositoryWorkspaceCapability>({
       authoring: Object.freeze({
+        restoreContent: (projectId, workspaceId, input) =>
+          this.request('POST', `${authoringPath(projectId, workspaceId)}/content-restores`, input),
         reconcile: (projectId, workspaceId, input) =>
           this.request('POST', `${authoringPath(projectId, workspaceId)}/reconciliation`, input),
         prepareReconciliation: (projectId, workspaceId, input) =>
@@ -269,6 +333,8 @@ export class T3xClient {
             input
           ),
       } satisfies import('./workspace-authoring').WorkspaceAuthoringCapability),
+      open: (projectId, input) =>
+        this.request('POST', `/v1/projects/${encodeURIComponent(projectId)}/workspaces`, input),
       list: (projectId) => this.listRepositoryWorkspaces(projectId),
       get: (projectId, workspaceId) => this.getRepositoryWorkspace(projectId, workspaceId),
       createExtractionProposal: (projectId, workspaceId, input) =>
@@ -311,11 +377,38 @@ export class T3xClient {
       signal: options?.signal,
     });
 
-    const data = (await response.json()) as ApiResponse<T>;
+    const requestId = response.headers?.get('X-Request-Id') ?? undefined;
+    const data = (await response.json().catch((error: unknown) => {
+      if (options?.signal?.aborted) throw error;
+      if (error instanceof SyntaxError) return undefined;
+      throw new T3xApiError(
+        'UPSTREAM_RESPONSE_INTERRUPTED',
+        'The API response was interrupted.',
+        response.status,
+        undefined,
+        requestId
+      );
+    })) as ApiResponse<T> | undefined;
 
-    if (!response.ok || !data.success) {
-      const error = !data.success ? data.error : { code: 'UNKNOWN', message: 'Unknown error' };
-      throw new T3xApiError(error.code, error.message, response.status, error.details);
+    if (
+      data?.success === false &&
+      typeof data.error?.code === 'string' &&
+      typeof data.error.message === 'string'
+    ) {
+      const { code, message, details } = data.error;
+      throw new T3xApiError(code, message, response.status, details, requestId);
+    }
+    if (data?.success === true && !response.ok) {
+      throw new T3xApiError('UNKNOWN', 'Unknown error', response.status, undefined, requestId);
+    }
+    if (data?.success !== true) {
+      throw new T3xApiError(
+        response.ok ? 'INVALID_RESPONSE' : 'UPSTREAM_HTTP_ERROR',
+        'API returned an unexpected response.',
+        response.status,
+        undefined,
+        requestId
+      );
     }
 
     const payload = (data as ApiSuccessResponse<T>).data;
@@ -328,7 +421,8 @@ export class T3xClient {
           'INVALID_RESPONSE',
           'API response did not match the client runtime schema',
           response.status,
-          { issues: error.issues }
+          { issues: error.issues },
+          requestId
         );
       }
       throw error;
@@ -378,6 +472,18 @@ export class T3xClient {
 
   async status(): Promise<StatusResponse> {
     return this.request<StatusResponse>('GET', '/v1/status');
+  }
+
+  /** Current credential binding and scopes; capability checks remain per operation. */
+  async getCredentialContext(): Promise<CredentialContext> {
+    return this.request<CredentialContext>(
+      'GET',
+      '/v1/auth/me/credential',
+      undefined,
+      undefined,
+      undefined,
+      CredentialContextSchema
+    );
   }
 
   /** Public deployment-scoped capabilities; never actor entitlements. */
@@ -812,6 +918,46 @@ export class T3xClient {
     );
   }
 
+  async getSourceIngestionReceipt(
+    projectId: string,
+    requestId: string
+  ): Promise<SourceIngestionReceipt> {
+    return this.request(
+      'GET',
+      sourceIngestionPath(projectId, requestId),
+      undefined,
+      undefined,
+      undefined,
+      SourceIngestionReceiptSchema
+    );
+  }
+
+  async ingestSource(
+    projectId: string,
+    requestId: string,
+    input: SourceIngestionInput
+  ): Promise<SourceIngestionReceipt> {
+    return this.request(
+      'POST',
+      sourceIngestionPath(projectId, requestId),
+      input,
+      undefined,
+      undefined,
+      SourceIngestionReceiptSchema
+    );
+  }
+
+  async listProjectSourceMaterials(projectId: string): Promise<ProjectSourceMaterial[]> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(projectId)}/materials`);
+  }
+
+  async getProjectSourceMaterial(projectId: string, materialId: string) {
+    return this.request<ProjectSourceMaterial & { content_text: string }>(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+    );
+  }
+
   async getLegacyYOpsEvidence(
     projectId: string,
     conversationId: string,
@@ -941,6 +1087,92 @@ export class T3xClient {
     );
   }
 
+  async getCommitForTransition(
+    projectId: string,
+    digest: string,
+    transitionId: string
+  ): Promise<StoredRepositoryCommit> {
+    const { commit } = await this.request<{ commit: StoredRepositoryCommit }>(
+      'GET',
+      `/v1/commits/${encodeURIComponent(digest)}`,
+      undefined,
+      { project_id: projectId, transition_id: transitionId }
+    );
+    return commit;
+  }
+
+  async createCommitYSchemaRun(
+    projectId: string,
+    input: CreateCommitYSchemaRunInput
+  ): Promise<CommitYSchemaRun> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/yschema-validation/runs`,
+      input,
+      undefined,
+      undefined,
+      CommitYSchemaRunSchema
+    );
+  }
+
+  async getCommitYSchemaRun(runId: string): Promise<CommitYSchemaRun> {
+    return this.request(
+      'GET',
+      `/v1/yschema-validation-runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      CommitYSchemaRunSchema
+    );
+  }
+
+  async triggerRepositoryRun(projectId: string, input: RepositoryRunTriggerInput) {
+    return this.request<ReturnType<typeof RepositoryRunReceiptSchema.parse>>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/repository-runs`,
+      input,
+      undefined,
+      undefined,
+      RepositoryRunReceiptSchema
+    );
+  }
+
+  async listRepositoryRuns(input: ListRepositoryRunsInput): Promise<RepositoryRunsPage> {
+    return this.request(
+      'GET',
+      '/v1/runs',
+      undefined,
+      { ...input },
+      undefined,
+      RepositoryRunsPageSchema
+    );
+  }
+
+  async getRepositoryRun(runId: string): Promise<RepositoryRunDetails> {
+    return this.request(
+      'GET',
+      `/v1/runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      RepositoryRunDetailsSchema
+    );
+  }
+
+  async getCommittedSchemaBinding(
+    projectId: string,
+    commitDigest: string
+  ): Promise<CommittedSchemaBinding> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/commits/${encodeURIComponent(commitDigest)}/schema-binding`,
+      undefined,
+      undefined,
+      undefined,
+      CommittedSchemaBindingSchema
+    );
+  }
+
   async getStateOverview(
     projectId: string,
     commitDigest: string,
@@ -973,6 +1205,22 @@ export class T3xClient {
       StatePresentationResultSchema
     );
   }
+  async reviseStatePresentation(
+    projectId: string,
+    refName: string,
+    expectedHead: string,
+    presentation: StatePresentationInput
+  ) {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/refs/${encodeURIComponent(refName)}/presentation-revisions`,
+      { expectedHead, presentation },
+      undefined,
+      undefined,
+      StateAuthorRevisionSchema
+    );
+  }
+
   async publishStatePresentation(
     projectId: string,
     commitDigest: string,
@@ -985,6 +1233,20 @@ export class T3xClient {
       undefined,
       undefined,
       StatePresentationResultSchema
+    );
+  }
+
+  async listWorkspaceDeliveries(
+    projectId: string,
+    workspaceId: string
+  ): Promise<WorkspaceDeliveryList> {
+    return this.request(
+      'GET',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/deliveries`,
+      undefined,
+      undefined,
+      undefined,
+      WorkspaceDeliveryListSchema
     );
   }
 
@@ -1058,7 +1320,10 @@ export class T3xClient {
   // Branches
   // ============================================
 
-  async listBranches(projectId: string, params?: PaginationParams): Promise<ListBranchesResponse> {
+  async listBranches(
+    projectId: string,
+    params?: PaginationParams & { initialize_main?: '0' }
+  ): Promise<ListBranchesResponse> {
     return this.request<ListBranchesResponse>('GET', '/v1/branches', undefined, {
       project_id: projectId,
       ...params,
@@ -1137,6 +1402,10 @@ export class T3xClient {
   // Diff
   // ============================================
 
+  async compareCommittedStates(input: TwoWayDiffInput): Promise<CommittedStateComparison> {
+    return this.request('POST', '/v1/diff/two-way', { ...input, representation: 'auto' });
+  }
+
   async twoWayDiff(input: TwoWayDiffInput): Promise<DiffResult> {
     return this.request<DiffResult>('POST', '/v1/diff/two-way', input);
   }
@@ -1193,6 +1462,10 @@ export class T3xClient {
 
   async listGenerationProviders(): Promise<GenerationProviderCatalog> {
     return this.request<GenerationProviderCatalog>('GET', '/v1/chat/providers');
+  }
+
+  async listGenerationModels(): Promise<GenerationModelCatalog> {
+    return this.request('GET', '/v1/llm/models');
   }
 
   /** @deprecated Use generation.complete() or generate(). */
@@ -1364,6 +1637,32 @@ export class T3xClient {
     );
   }
 
+  async runWorkspaceValidation(
+    projectId: string,
+    workspaceId: string,
+    input: RunWorkspaceValidationInput
+  ): Promise<WorkspaceValidationDetails> {
+    return this.request(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/validation-runs`,
+      input,
+      undefined,
+      undefined,
+      WorkspaceValidationDetailsSchema
+    );
+  }
+
+  async getWorkspaceValidationRun(runId: string): Promise<WorkspaceValidationDetails> {
+    return this.request(
+      'GET',
+      `/v1/workspace-validation-runs/${encodeURIComponent(runId)}`,
+      undefined,
+      undefined,
+      undefined,
+      WorkspaceValidationDetailsSchema
+    );
+  }
+
   async createWorkspaceExtractionProposal(
     projectId: string,
     workspaceId: string,
@@ -1477,6 +1776,20 @@ export class T3xClient {
     );
   }
 
+  async generateWorkspaceProposal(
+    projectId: string,
+    input: GenerateWorkspaceProposalInput
+  ): Promise<ProposeTransitionResult> {
+    return this.request<ProposeTransitionResult>(
+      'POST',
+      `/v1/projects/${encodeURIComponent(projectId)}/proposal-generations`,
+      input,
+      undefined,
+      undefined,
+      transitionResponseSchemas.propose
+    );
+  }
+
   async inspectTransition(
     projectId: string,
     transitionId: string,
@@ -1556,6 +1869,36 @@ export class T3xClient {
   // YSchema Composition Registry
   // ============================================
 
+  async listSchemaCatalog(
+    params: {
+      projectId?: string;
+      canonical_name?: string;
+      q?: string;
+      cursor?: string;
+      limit?: number;
+    } = {}
+  ): Promise<SchemaCatalogPage> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/yschema/catalog`
+      : '/v1/yschema/catalog';
+    return this.request('GET', path, undefined, query, undefined, SchemaCatalogPageSchema);
+  }
+
+  async readSchemaRegistryRelease(params: {
+    projectId?: string;
+    sourceProjectId?: string;
+    canonicalName: string;
+    version: string;
+    expectedHash: string;
+  }): Promise<SchemaReleaseReading> {
+    const { projectId, ...query } = params;
+    const path = projectId
+      ? `/v1/projects/${encodeURIComponent(projectId)}/schema-studio/source`
+      : '/v1/explore/schema-release';
+    return this.request('GET', path, undefined, query, undefined, SchemaReleaseReadingSchema);
+  }
+
   async listYSchemaArtifacts(
     params: ListYSchemaArtifactsParams = {}
   ): Promise<YSchemaArtifactRegistryPage> {
@@ -1580,6 +1923,57 @@ export class T3xClient {
       `/v1/projects/${encodeURIComponent(projectId)}/yschema/versions`,
       undefined,
       { family }
+    );
+  }
+
+  async readStudioSchemaEditCandidate(projectId: string, workspaceId: string) {
+    return this.request<StudioSchemaEditCandidate>(
+      'GET',
+      `${schemaStudioPath(projectId)}/edit-candidates/${encodeURIComponent(workspaceId)}`,
+      undefined,
+      undefined,
+      undefined,
+      StudioSchemaEditCandidateSchema
+    );
+  }
+
+  async saveStudioSchemaEditCandidate(
+    projectId: string,
+    input: SaveStudioSchemaEditCandidateInput
+  ) {
+    return this.request<StudioSchemaEditCandidateSaveResult>(
+      'PUT',
+      `${schemaStudioPath(projectId)}/edit-candidates/${encodeURIComponent(input.workspaceId)}`,
+      input,
+      undefined,
+      undefined,
+      StudioSchemaEditCandidateSaveResultSchema
+    );
+  }
+
+  async previewStudioSchema(projectId: string, input: StudioPreviewInput) {
+    return this.request<StudioPreview>(
+      'POST',
+      `${schemaStudioPath(projectId)}/preview`,
+      input,
+      undefined,
+      undefined,
+      StudioPreviewSchema
+    );
+  }
+
+  async previewStudioSchemaPreparation(
+    projectId: string,
+    workspaceId: string,
+    input: SchemaPreparationInput
+  ) {
+    return this.request<SchemaPreparationPreview>(
+      'POST',
+      `${schemaStudioPath(projectId)}/preparation/${encodeURIComponent(workspaceId)}/preview`,
+      input,
+      undefined,
+      undefined,
+      SchemaPreparationPreviewSchema
     );
   }
 

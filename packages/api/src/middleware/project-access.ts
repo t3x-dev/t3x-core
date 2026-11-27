@@ -11,11 +11,13 @@ import { createError } from '../lib/errors';
 import {
   assertProjectAccess,
   assertProjectAccessIncludingDeleted,
+  assertProjectEditAndRead,
   assertProjectReadWithEditPermission,
 } from '../lib/project-access';
 import {
   isPendingSchemaRead,
   isProjectDetailRead,
+  isSchemaPreviewRead,
   timeRepositoryRead,
 } from '../lib/repository-read-timing';
 import { findProjectRouteAction } from '../lib/route-action-policy';
@@ -33,7 +35,20 @@ export async function projectAccessMiddleware(c: Context<AppEnv>, next: Next) {
       assertProjectReadWithEditPermission(c, db, projectId)
     );
     if (access instanceof Response) return access;
-    c.set('repositoryReadAccess', { projectId, canEdit: access.canEdit === true });
+    c.set('repositoryReadAccess', {
+      projectId,
+      canEdit: access.canEdit === true,
+      canManageAgentAccess: access.canManageAgentAccess === true,
+      project: access.project,
+    });
+    return next();
+  }
+  if (action === 'project:edit' && isSchemaPreviewRead(c)) {
+    const access = await timeRepositoryRead(c, 'project_access', () =>
+      assertProjectEditAndRead(c, db, projectId)
+    );
+    if (access instanceof Response) return access;
+    c.set('repositoryReadAccess', { projectId });
     return next();
   }
   // The application gate must use the same lifecycle lookup as the handlers.

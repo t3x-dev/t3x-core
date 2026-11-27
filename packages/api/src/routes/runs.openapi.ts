@@ -31,9 +31,10 @@ import {
 import { randomUUID } from 'crypto';
 import { twoProportionZTest, twoSampleTTest } from '../lib/ab-test';
 import { getDB } from '../lib/db';
+import { dispatchRunnerRun } from '../lib/dispatch-runner-run';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess, assertResourceProjectAccess } from '../lib/project-access';
-import { runnerServiceAuthenticationError, runnerServiceToken } from '../lib/runner-service-auth';
+import { runnerServiceAuthenticationError } from '../lib/runner-service-auth';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -49,21 +50,6 @@ import {
   RunListResponse,
   UpdateRunRequest,
 } from '../schemas/run-contracts';
-
-// Runner URL (t3x-runner service)
-const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
-
-const DEFAULT_ENGINE_CALLBACK_BASE = 'http://t3x-api:8000';
-const DEFAULT_ENGINE_CALLBACK_PATH = '/api/v1/runs/ingest';
-
-// This Engine's callback URL for Runner to call back
-const ENGINE_CALLBACK_URL =
-  process.env.ENGINE_CALLBACK_URL ||
-  new URL(DEFAULT_ENGINE_CALLBACK_PATH, DEFAULT_ENGINE_CALLBACK_BASE).toString();
-
-// Runner's callback URL for n8n to call back
-const RUNNER_CALLBACK_URL =
-  process.env.RUNNER_CALLBACK_URL || 'http://t3x-runner:8080/callbacks/n8n';
 
 export const runsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -167,8 +153,6 @@ runsRoutes.openapi(createRunRoute, async (c) => {
       commit_ref: input.commit_ref,
       leaf: resolvedLeaf,
       inputs: input.inputs,
-      callback_url: RUNNER_CALLBACK_URL,
-      engine_callback_url: ENGINE_CALLBACK_URL,
       workflow: input.workflow,
     };
 
@@ -176,15 +160,7 @@ runsRoutes.openapi(createRunRoute, async (c) => {
     let warning: string | undefined;
 
     try {
-      const runnerResponse = await fetch(`${RUNNER_URL}/runs`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(runnerServiceToken() ? { Authorization: 'Bearer ' + runnerServiceToken() } : {}),
-        },
-        body: JSON.stringify(runnerPayload),
-        signal: AbortSignal.timeout(10000),
-      });
+      const runnerResponse = await dispatchRunnerRun(runnerPayload);
 
       if (runnerResponse.ok) {
         const runnerData = (await runnerResponse.json()) as {

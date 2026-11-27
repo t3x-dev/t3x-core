@@ -21,6 +21,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import Link from 'next/link';
+import { NavigationFeedback } from '@/components/layout/NavigationFeedback';
 import { T3XMark } from '@/components/layout/T3XMark';
 import {
   getProjectTabSegment,
@@ -31,8 +32,11 @@ import {
 import { RepositoryMark } from '@/components/project/RepositoryIdentity';
 import { Button } from '@/components/ui/button';
 import { repositoryLocation } from '@/domain/project/repositoryLocation';
-import { usePendingInvitations } from '@/hooks/accounts/usePendingInvitations';
+import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
+import { prefetchRepositoryDirectoryPage } from '@/hooks/projects/repositoryDirectory';
 import palette from '@/styles/management-palette.module.css';
+import { markInteraction } from '@/utils/interactionTiming';
+import { beginNavigationTiming } from '@/utils/navigationTiming';
 import styles from './DiscoverHeader.module.css';
 
 const tabIcons: Record<ProjectTabId, LucideIcon> = {
@@ -88,7 +92,8 @@ export function DiscoverHeader({
   repositoriesNavigation?: boolean;
 }) {
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
-  const hasPendingInvitations = usePendingInvitations(!authDisabled);
+  const { invitations } = useInvitationInbox();
+  const hasPendingInvitations = invitations.length > 0;
   const isExplore = !namespaceTab && !repoPath && !repositoriesNavigation;
   const exploreView = exploreNavigation?.view ?? 'discover';
   const discoverHref = exploreNavigation?.discoverHref ?? '/explore';
@@ -100,6 +105,8 @@ export function DiscoverHeader({
     : owner
       ? `/${encodeURIComponent(owner)}`
       : '/';
+  const prefetchNamespace =
+    owner && !repositoriesNavigation ? () => prefetchRepositoryDirectoryPage(owner) : undefined;
   const homeHref = authDisabled ? '/t3x-dev' : '/';
   const createLabel = newProjectHref === '/' ? 'Browse repositories' : 'New repository';
   const OwnerIcon =
@@ -150,6 +157,16 @@ export function DiscoverHeader({
               <Link
                 className={`${styles.owner}${!projectName ? ` ${styles.currentContext}` : ''}`}
                 href={ownerHref}
+                onPointerEnter={projectName ? prefetchNamespace : undefined}
+                onFocus={projectName ? prefetchNamespace : undefined}
+                onNavigate={
+                  projectName && prefetchNamespace
+                    ? () => {
+                        beginNavigationTiming('repositories');
+                        prefetchNamespace();
+                      }
+                    : undefined
+                }
               >
                 {owner && !repositoriesNavigation ? (
                   <OwnerIcon aria-hidden="true" />
@@ -199,15 +216,29 @@ export function DiscoverHeader({
               aria-current={isExplore && exploreView === 'discover' ? 'page' : undefined}
             >
               Discover
+              <NavigationFeedback />
             </Link>
             <Link
               href={browseHref}
               aria-current={isExplore && exploreView === 'browse' ? 'page' : undefined}
             >
               Browse
+              <NavigationFeedback />
             </Link>
-            <Link href="/repositories" aria-current={repositoriesNavigation ? 'page' : undefined}>
+            <Link
+              href="/repositories"
+              onNavigate={() => beginNavigationTiming('repositories')}
+              aria-current={repositoriesNavigation ? 'page' : undefined}
+              onPointerEnter={
+                repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()
+              }
+              onFocus={repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()}
+              onPointerDown={
+                repositoriesNavigation ? undefined : () => prefetchRepositoryDirectoryPage()
+              }
+            >
               Your repositories
+              <NavigationFeedback />
             </Link>
           </nav>
           <div className={styles.actions}>
@@ -215,10 +246,12 @@ export function DiscoverHeader({
               <Button asChild variant="ghost" size="icon-sm" className={styles.account}>
                 <Link
                   href="/invitations"
+                  onClick={() => markInteraction('invitations', 'click')}
                   aria-label={hasPendingInvitations ? 'Invitations, pending' : 'Invitations'}
                   title="Invitations"
                 >
                   <Mail aria-hidden="true" />
+                  <NavigationFeedback />
                   {hasPendingInvitations && (
                     <span className={styles.invitationDot} aria-hidden="true" />
                   )}
@@ -254,12 +287,31 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tab.href}
+                    onPointerEnter={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? prefetchNamespace
+                        : undefined
+                    }
+                    onFocus={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? prefetchNamespace
+                        : undefined
+                    }
+                    onNavigate={
+                      tab.id === 'repositories' && namespaceTab !== 'repositories'
+                        ? () => {
+                            beginNavigationTiming('repositories');
+                            prefetchNamespace?.();
+                          }
+                        : undefined
+                    }
                     scroll={false}
                     className={styles.tab}
                     aria-current={namespaceTab === tab.id ? 'page' : undefined}
                   >
                     <Icon aria-hidden="true" />
                     {tab.label}
+                    <NavigationFeedback />
                   </Link>
                 );
               })
@@ -271,7 +323,10 @@ export function DiscoverHeader({
                   <Link
                     key={tab.id}
                     href={tabHref(tab.id)}
-                    onNavigate={tab.id === 'settings' && !selected ? onSettingsNavigate : undefined}
+                    onNavigate={() => {
+                      if (!selected) beginNavigationTiming(tab.id);
+                      if (tab.id === 'settings' && !selected) onSettingsNavigate?.();
+                    }}
                     scroll={false}
                     className={styles.tab}
                     aria-label={tab.label}
@@ -279,6 +334,7 @@ export function DiscoverHeader({
                   >
                     <Icon aria-hidden="true" />
                     {tab.label}
+                    <NavigationFeedback />
                   </Link>
                 );
               })}

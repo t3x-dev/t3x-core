@@ -2,10 +2,13 @@ import {
   type AnyDB,
   findWorkspaceDraft,
   findYSchemaCompositionSnapshot,
+  insertBranch,
+  insertPersonalNamespace,
   insertProject,
   saveYSchemaCompositionSnapshot,
   upsertWorkspaceDraft,
   upsertYSchemaArtifactVersion,
+  users,
 } from '@t3x-dev/storage';
 import { normalizeYSchemaObject, sha256CompositionValue } from '@t3x-dev/yschema';
 import { type Context, Hono } from 'hono';
@@ -14,7 +17,8 @@ import { setupTestDB, testData } from './setup';
 
 let db: AnyDB, cleanup: () => Promise<void>, project: string;
 vi.mock('../lib/db', () => ({ getDB: () => Promise.resolve(db) }));
-vi.mock('../lib/project-access', () => ({
+vi.mock('../lib/project-access', async (original) => ({
+  ...(await original<typeof import('../lib/project-access')>()),
   getProjectAccessPrincipal: () => undefined,
   assertProjectAccess: async () => ({ projectId: project }),
 }));
@@ -72,7 +76,18 @@ beforeAll(async () => {
   const setup = await setupTestDB();
   db = setup.db;
   cleanup = setup.cleanup;
-  project = (await insertProject(db, testData.project({ name: 'Schema combinations' }))).projectId;
+  await db.insert(users).values([{ id: 'startup-owner' }, { id: 'startup-other' }]);
+  const namespace = await insertPersonalNamespace(db, {
+    slug: 'schema-startup',
+    ownerUserId: 'startup-owner',
+  });
+  project = (
+    await insertProject(db, {
+      ...testData.project({ name: 'combinations' }),
+      namespaceId: namespace.namespaceId,
+    })
+  ).projectId;
+  await insertBranch(db, { projectId: project, name: 'main' });
   a = await source('combine_a', { checklist: { slots: { title: { type: 'string' } } } }, true);
   b = await source('combine_b', { owner: { slots: { name: { type: 'string' } } } });
   c = await source('combine_c', { checklist: { slots: { title: { type: 'number' } } } });
@@ -92,6 +107,7 @@ beforeAll(async () => {
 afterAll(async () => cleanup?.());
 it('retains a whole Release origin through edits and recovers only a matching legacy receipt', async () => {
   const workspaceId = 'release-origin';
+  await insertBranch(db, { projectId: project, name: workspaceId });
   await upsertWorkspaceDraft(db, {
     project_id: project,
     workspace_id: workspaceId,
@@ -129,6 +145,47 @@ it('retains a whole Release origin through edits and recovers only a matching le
   });
   expect(preview.status, JSON.stringify(preview.body)).toBe(200);
   const result = preview.body.data;
+  const before = await findWorkspaceDraft(db, project, workspaceId);
+  const combined = await request(
+    `edit-candidates/${workspaceId}?previewWorkspaceRevision=${result.workspace.revision}`
+  );
+  expect(combined.status, JSON.stringify(combined.body)).toBe(200);
+  expect(combined.body.data.draftPreview).toMatchObject({
+    candidateIds: [a],
+    base: { schema: initial.schema },
+    saved: { schema: result.schema, reviewHash: result.reviewHash, freshness: result.freshness },
+  });
+  const startupUrl = '/v1/repositories/schema-startup/combinations/schema-startup';
+  const startup = await app.request(`${startupUrl}?branch=${workspaceId}`);
+  expect(startup.status).toBe(200);
+  expect(startup.headers.get('cache-control')).toBe('private, no-store');
+  expect((await startup.json()).data).toMatchObject({
+    address: { project_id: project, canonical_path: '/schema-startup/combinations' },
+    workspace: { revision: result.workspace.revision, targetBranch: workspaceId },
+    candidate: { draftPreview: combined.body.data.draftPreview },
+  });
+  const wrongBranch = await app.request(`${startupUrl}?branch=main&workspace=${workspaceId}`);
+  expect((await wrongBranch.json()).data).toMatchObject({ workspace: null });
+
+  const previousAuth = process.env.AUTH_DISABLED;
+  process.env.AUTH_DISABLED = 'false';
+  try {
+    const other = new Hono();
+    other.use('*', async (context, next) => {
+      context.set('apiKey', { id: 'startup-other-key', user_id: 'startup-other' });
+      await next();
+    });
+    other.route('/', schemaStudioRoutes);
+    const denied = await other.request(`${startupUrl}?branch=${workspaceId}`);
+    expect(denied.status).toBe(403);
+  } finally {
+    process.env.AUTH_DISABLED = previousAuth;
+  }
+  const stale = await request(
+    `edit-candidates/${workspaceId}?previewWorkspaceRevision=${result.workspace.revision - 1}`
+  );
+  expect(stale.status).toBe(409);
+  expect(await findWorkspaceDraft(db, project, workspaceId)).toEqual(before);
   expect(result.origins.checklist).toMatchObject({
     kind: 'derived',
     sources: [{ kind: 'module', source: initial.sources[0] }, { kind: 'local' }],

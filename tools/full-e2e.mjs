@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import net from 'node:net';
@@ -23,6 +24,7 @@ const skipBuild = runnerArgs.includes('--skip-build');
 const keepData = runnerArgs.includes('--keep-data') || process.env.T3X_E2E_KEEP_DATA === '1';
 const authEnabled = runnerArgs.includes('--auth-enabled');
 const allowExternal = process.env.T3X_E2E_ALLOW_EXTERNAL === '1';
+const isolatedMcp = process.env.T3X_E2E_MCP_ISOLATED === '1';
 const unknownArgs = runnerArgs.filter(
   (arg) => !['--skip-build', '--keep-data', '--auth-enabled'].includes(arg)
 );
@@ -31,6 +33,15 @@ if (unknownArgs.length > 0) {
   throw new Error(`Unknown full E2E runner argument(s): ${unknownArgs.join(', ')}`);
 }
 
+if (isolatedMcp && (!authEnabled || process.env.DATABASE_URL || process.env.T3X_E2E_DATA_DIR)) {
+  throw new Error(
+    'Isolated MCP qualification requires authentication and a fresh embedded database.'
+  );
+}
+
+const oauthDelegation = isolatedMcp && process.env.T3X_E2E_MCP_PHASE === 'oauth-delegation';
+const mcpPort = process.env.T3X_E2E_MCP_PORT ?? '8317';
+let oauthWebDir;
 const apiPort = process.env.T3X_E2E_API_PORT ?? '8100';
 const webPort = process.env.T3X_E2E_WEB_PORT ?? '3100';
 const runnerPort = process.env.T3X_E2E_RUNNER_PORT ?? '8200';
@@ -78,6 +89,39 @@ const runtimeEnv = {
   WEBUI_URL: webUrl,
 };
 
+if (oauthDelegation) {
+  const callbackPort = process.env.T3X_E2E_MCP_CALLBACK_PORT ?? '38497';
+  const callback = `http://127.0.0.1:${callbackPort}/oauth/callback`;
+  Object.assign(runtimeEnv, {
+    T3X_MCP_OAUTH_ISSUER: webUrl,
+    T3X_MCP_RESOURCE_URL: `http://127.0.0.1:${mcpPort}/mcp`,
+    T3X_MCP_OAUTH_SECRET: randomBytes(32).toString('base64url'),
+    T3X_MCP_OAUTH_CLIENTS: JSON.stringify([
+      {
+        client_id: 't3x-qualification-chat',
+        client_name: 'Qualification Chat',
+        redirect_uris: [callback],
+      },
+      {
+        client_id: 't3x-qualification-launcher',
+        client_name: 'Qualification Launcher',
+        redirect_uris: [callback],
+        connection_start_uri: new URL('/connect', callback).href,
+      },
+    ]),
+    T3X_E2E_MCP_CALLBACK_URL: callback,
+  });
+}
+
+if (runtimeEnv.T3X_E2E_MCP_PHASE === 'repository-runs') {
+  const webhookPort = process.env.T3X_E2E_WEBHOOK_PORT ?? '18267';
+  runtimeEnv.N8N_WEBHOOK_URL = `http://127.0.0.1:${webhookPort}/webhook`;
+  runtimeEnv.RUNNER_CALLBACK_URL = `${runnerUrl}/callbacks/n8n`;
+  runtimeEnv.T3X_REPOSITORY_RUN_WEBHOOKS = JSON.stringify({
+    configured_run_fixture: 'evaluate-v1',
+  });
+}
+
 if (!allowExternal) {
   Object.assign(runtimeEnv, {
     ANTHROPIC_API_KEY: '',
@@ -91,13 +135,17 @@ if (!allowExternal) {
 let testExitCode = 1;
 let status = 'failed';
 let caughtError = null;
+let interruptExitCode;
+let activeCommand;
+const interruption = new AbortController();
 
 const interrupt = (signal) => {
-  void stopChildren()
-    .catch((error) => console.error(`[full-e2e] Shutdown failed: ${error.message}`))
-    .finally(() => {
-      process.exitCode = signal === 'SIGINT' ? 130 : 143;
-    });
+  if (interruptExitCode !== undefined) return;
+  interruptExitCode = signal === 'SIGINT' ? 130 : 143;
+  interruption.abort(new Error(`Run cancelled by ${signal}.`));
+  void stopChildren().catch((error) =>
+    console.error(`[full-e2e] Shutdown failed: ${error.message}`)
+  );
 };
 process.once('SIGINT', () => interrupt('SIGINT'));
 process.once('SIGTERM', () => interrupt('SIGTERM'));
@@ -106,13 +154,27 @@ try {
   await assertPortAvailable(Number(apiPort), 'API', 'T3X_E2E_API_PORT');
   await assertPortAvailable(Number(webPort), 'WebUI', 'T3X_E2E_WEB_PORT');
   await assertPortAvailable(Number(runnerPort), 'Runner', 'T3X_E2E_RUNNER_PORT');
+  if (oauthDelegation) {
+    await assertPortAvailable(Number(mcpPort), 'MCP', 'T3X_E2E_MCP_PORT');
+    await assertPortAvailable(
+      Number(new URL(runtimeEnv.T3X_E2E_MCP_CALLBACK_URL).port),
+      'OAuth client',
+      'T3X_E2E_MCP_CALLBACK_PORT'
+    );
+  }
   if (!runtimeEnv.DATABASE_URL) {
     await assertPortAvailable(Number(pgPort), 'embedded PostgreSQL', 'T3X_E2E_PG_PORT');
   }
 
   if (!skipBuild) {
     await runCommand('pnpm', ['build:api-server'], runtimeEnv);
-    await runCommand('pnpm', ['build:webui'], runtimeEnv);
+    if (oauthDelegation)
+      await runCommand(
+        'pnpm',
+        ['exec', 'turbo', 'run', 'build', '--filter=@t3x-dev/mcp', '--filter=@t3x-dev/runner'],
+        runtimeEnv
+      );
+    else await runCommand('pnpm', ['build:webui'], runtimeEnv);
   }
 
   if (runtimeEnv.DATABASE_URL) {
@@ -129,23 +191,91 @@ try {
   children.push(runner);
   await waitForUrl(`${runnerUrl}/health`, runner, 90_000);
 
+  const apiEntry =
+    isolatedMcp && runtimeEnv.T3X_E2E_MCP_PHASE === 'transition-statement'
+      ? 'tools/fixtures/mcp-statement-api.mjs'
+      : 'apps/api/dist/index.js';
   const api = startLoggedProcess(
     'api',
     'node',
-    ['tools/dev-package-runner.mjs', 'api', 'node', 'apps/api/dist/index.js'],
+    [
+      path.join(repoRoot, 'tools/dev-package-runner.mjs'),
+      'api',
+      'node',
+      path.join(repoRoot, apiEntry),
+    ],
     {
       ...runtimeEnv,
       PORT: apiPort,
-    }
+    },
+    isolatedMcp ? dataDir : repoRoot
   );
   children.push(api);
   await waitForUrl(`${apiUrl}/health`, api, 90_000);
+  if (isolatedMcp) {
+    const anonymous = await fetch(`${apiUrl}/api/v1/projects`, {
+      signal: AbortSignal.any([interruption.signal, AbortSignal.timeout(5000)]),
+    });
+    await anonymous.body?.cancel();
+    if (anonymous.status !== 401)
+      throw new Error('MCP qualification API did not require credentials.');
+  }
 
-  const web = startLoggedProcess('webui', 'pnpm', ['--filter', 't3x-webui', 'start'], {
-    ...runtimeEnv,
-    HOSTNAME: '127.0.0.1',
-    PORT: webPort,
-  });
+  let web;
+  if (oauthDelegation) {
+    const mcp = startLoggedProcess('mcp', 'node', ['apps/mcp/dist/index.js'], {
+      ...runtimeEnv,
+      T3X_TRANSPORT: 'http',
+      T3X_API_URL: `${apiUrl}/api`,
+      T3X_MCP_BACKEND: 'api',
+      PORT: mcpPort,
+    });
+    children.push(mcp);
+    await waitForUrl(`http://127.0.0.1:${mcpPort}/health`, mcp, 90_000);
+    // A separate checkout of the Web sources isolates Next's generated types and build files
+    // from a running developer preview. The API, MCP, issuer and database are all local to this run.
+    const outputRoot = path.join(repoRoot, 'test-results');
+    await fsp.mkdir(outputRoot, { recursive: true });
+    oauthWebDir = await fsp.mkdtemp(path.join(outputRoot, 'oauth-web-'));
+    const webSource = path.join(repoRoot, 'apps/web');
+    for (const item of [
+      'src',
+      'public',
+      'package.json',
+      'tsconfig.json',
+      'next-env.d.ts',
+      'next.config.ts',
+      'postcss.config.mjs',
+    ]) {
+      await fsp.cp(path.join(webSource, item), path.join(oauthWebDir, item), { recursive: true });
+    }
+    await fsp.symlink(
+      path.join(webSource, 'node_modules'),
+      path.join(oauthWebDir, 'node_modules'),
+      'junction'
+    );
+    web = startLoggedProcess(
+      'webui',
+      'node',
+      [
+        path.join(webSource, 'node_modules/next/dist/bin/next'),
+        'dev',
+        oauthWebDir,
+        '--hostname',
+        '127.0.0.1',
+        '--port',
+        webPort,
+      ],
+      { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+    );
+  } else {
+    web = startLoggedProcess(
+      'webui',
+      'pnpm',
+      ['--filter', 't3x-webui', 'start', '--hostname', '127.0.0.1'],
+      { ...runtimeEnv, HOSTNAME: '127.0.0.1', PORT: webPort }
+    );
+  }
   children.push(web);
   await waitForUrl(webUrl, web, 90_000);
 
@@ -162,6 +292,7 @@ try {
 } finally {
   try {
     await stopChildren();
+    if (oauthWebDir) await fsp.rm(oauthWebDir, { recursive: true, force: true });
     if (ownsDataDir && !keepData) {
       await fsp.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       dataRetained = false;
@@ -181,9 +312,10 @@ try {
     schema_version: 1,
     started_at: startedAt,
     finished_at: new Date().toISOString(),
-    status,
+    status: interruptExitCode === undefined ? status : 'cancelled',
     auth_enabled: authEnabled,
     test_exit_code: testExitCode,
+    ...(interruptExitCode !== undefined && { interrupt_exit_code: interruptExitCode }),
     api_url: apiUrl,
     webui_url: webUrl,
     runner_url: runnerUrl,
@@ -204,11 +336,7 @@ try {
   );
 }
 
-if (caughtError) {
-  process.exitCode = 1;
-} else {
-  process.exitCode = testExitCode;
-}
+process.exitCode = interruptExitCode ?? (caughtError ? 1 : testExitCode);
 
 async function assertPortAvailable(port, label, envName) {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -242,17 +370,19 @@ async function waitForUrl(url, child, timeoutMs) {
   let lastError = null;
 
   while (Date.now() < deadline) {
+    interruption.signal.throwIfAborted();
     if (child.exitCode !== null) {
       throw new Error(`${child.label} exited before ${url} became ready (code ${child.exitCode}).`);
     }
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: interruption.signal });
       if (response.ok || (response.status >= 300 && response.status < 400)) {
         console.log(`[full-e2e] ${child.label} ready at ${url}`);
         return;
       }
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
+      interruption.signal.throwIfAborted();
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -265,11 +395,12 @@ async function waitForUrl(url, child, timeoutMs) {
   );
 }
 
-function startLoggedProcess(label, command, args, env) {
+function startLoggedProcess(label, command, args, env, cwd = repoRoot) {
+  interruption.signal.throwIfAborted();
   const logPath = path.join(artifactDir, `${label}.log`);
   const log = fs.createWriteStream(logPath, { flags: 'w' });
   const child = spawn(command, args, {
-    cwd: repoRoot,
+    cwd,
     detached: process.platform !== 'win32',
     env,
     shell: process.platform === 'win32',
@@ -290,16 +421,20 @@ function startLoggedProcess(label, command, args, env) {
 }
 
 async function runCommand(command, args, env, { allowFailure = false } = {}) {
+  interruption.signal.throwIfAborted();
   console.log(`[full-e2e] Running: ${command} ${args.join(' ')}`);
   const code = await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
+      detached: process.platform !== 'win32',
       env,
       shell: process.platform === 'win32',
       stdio: 'inherit',
     });
+    activeCommand = child;
     child.once('error', reject);
     child.once('close', (exitCode, signal) => {
+      if (activeCommand === child && !interruption.signal.aborted) activeCommand = undefined;
       if (signal) {
         reject(new Error(`${command} terminated by ${signal}.`));
         return;
@@ -308,6 +443,7 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
     });
   });
 
+  interruption.signal.throwIfAborted();
   if (code !== 0 && !allowFailure) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${code}.`);
   }
@@ -315,6 +451,6 @@ async function runCommand(command, args, env, { allowFailure = false } = {}) {
 }
 
 function stopChildren() {
-  stopping ??= stopProcessGroups(children);
+  stopping ??= stopProcessGroups(activeCommand ? [...children, activeCommand] : children);
   return stopping;
 }

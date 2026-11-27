@@ -8,6 +8,7 @@ import {
   fetchProjectPullRequestMergeReview,
   fetchProjectPullRequests,
   openProjectPullRequest,
+  type ProjectPullRequestListOptions,
   rerunPullRequestReadiness,
   savePullRequestMergeDecision,
 } from '@/queries/projectPullRequests';
@@ -20,9 +21,11 @@ export type {
 } from '@/queries/projectPullRequests';
 
 export function useProjectPullRequestsApi() {
-  const fetchPullRequests = useCallback((projectId: string) => {
-    return fetchProjectPullRequests(projectId, { status: 'all' });
-  }, []);
+  const fetchPullRequests = useCallback(
+    (projectId: string, options: ProjectPullRequestListOptions) =>
+      fetchProjectPullRequests(projectId, options),
+    []
+  );
 
   const fetchPullRequest = useCallback((projectId: string, number: number) => {
     return fetchProjectPullRequest(projectId, number);

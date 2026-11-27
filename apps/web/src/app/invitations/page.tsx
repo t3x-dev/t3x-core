@@ -4,11 +4,13 @@ import type { ReceivedCollaborationInvitation } from '@t3x-dev/api-client';
 import { CheckCircle2, Inbox, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { useInvitationInbox } from '@/hooks/accounts/usePendingInvitations';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
+import { markInteraction } from '@/utils/interactionTiming';
 
 function invitationTarget(item: ReceivedCollaborationInvitation): string {
   return item.project ? `${item.namespace.slug}/${item.project.name}` : item.namespace.display_name;
@@ -22,38 +24,23 @@ function invitationHref(item: ReceivedCollaborationInvitation): string {
 
 export function InvitationsPageContent() {
   const client = getSharedApiClient();
-  const [invitations, setInvitations] = useState<ReceivedCollaborationInvitation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { invitations, loading, error, refresh, refreshOnEntry, remove } = useInvitationInbox();
+  useEffect(() => {
+    markInteraction('invitations', 'mount');
+    refreshOnEntry();
+  }, [refreshOnEntry]);
+  useEffect(() => {
+    if (!loading && !error) markInteraction('invitations', 'ready');
+  }, [loading, error]);
   const [actions, setActions] = useState<Record<string, { error?: string } | undefined>>({});
   const [accepted, setAccepted] = useState<ReceivedCollaborationInvitation | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setInvitations((await client.listReceivedCollaborationInvitations()).invitations);
-    } catch (loadError) {
-      setError(formatUserFacingError(loadError, 'Failed to load invitations.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   async function accept(item: ReceivedCollaborationInvitation) {
     const id = item.invitation.invitation_id;
     setActions((current) => ({ ...current, [id]: {} }));
     try {
       await client.acceptCollaborationInvitationById(item.invitation.invitation_id);
-      setInvitations((current) =>
-        current.filter(
-          (candidate) => candidate.invitation.invitation_id !== item.invitation.invitation_id
-        )
-      );
+      remove(id);
       setAccepted(item);
       setActions((current) => ({ ...current, [id]: undefined }));
       toast.success('Invitation accepted');
@@ -70,11 +57,7 @@ export function InvitationsPageContent() {
     setActions((current) => ({ ...current, [id]: {} }));
     try {
       await client.declineCollaborationInvitation(item.invitation.invitation_id);
-      setInvitations((current) =>
-        current.filter(
-          (candidate) => candidate.invitation.invitation_id !== item.invitation.invitation_id
-        )
-      );
+      remove(id);
       setActions((current) => ({ ...current, [id]: undefined }));
       toast.success('Invitation declined');
     } catch (declineError) {
@@ -121,8 +104,8 @@ export function InvitationsPageContent() {
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-[var(--status-error)]/30 p-6 text-sm text-[var(--status-error)]">
-            <p>{error}</p>
-            <Button className="mt-4" size="sm" variant="outline" onClick={() => void load()}>
+            <p>{formatUserFacingError(error, 'Failed to load invitations.')}</p>
+            <Button className="mt-4" size="sm" variant="outline" onClick={refresh}>
               Try again
             </Button>
           </div>

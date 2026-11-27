@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import type { StudioSchemaEditCandidate } from '@t3x-dev/api-client';
+import type { StudioSchemaEditCandidateRead } from '@t3x-dev/api-client';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { WorkspacePendingSchemaReview } from '@/components/workspaces/WorkspacePendingSchemaReview';
@@ -12,7 +12,7 @@ vi.mock('@/hooks/workspaces/useWorkspaceSchemaEditingRequests', () => ({
 vi.mock('@/components/workspaces/WorkspaceReviewCodeView', () => ({
   WorkspaceReviewCodeView: ({ yamlText }: { yamlText: string }) => <pre>{yamlText}</pre>,
 }));
-const candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidate;
+const candidate = { candidateId: 'edit-1', revision: 2 } as StudioSchemaEditCandidateRead;
 const props = {
   projectId: 'p',
   workspaceId: 'w',
@@ -33,7 +33,9 @@ const result = {
     },
   },
 };
-beforeEach(() => requests.read.mockReset().mockResolvedValue(result));
+beforeEach(() => {
+  requests.read.mockReset().mockResolvedValue(result);
+});
 
 it('shows the saved candidate changes, YAML and definition without preparing it', async () => {
   const { rerender } = render(<WorkspacePendingSchemaReview {...props} />);
@@ -45,6 +47,37 @@ it('shows the saved candidate changes, YAML and definition without preparing it'
   rerender(<WorkspacePendingSchemaReview {...props} pane="rendered" />);
   expect(screen.getByText('aaa')).toBeVisible();
   expect(requests.read).toHaveBeenCalledTimes(1);
+});
+
+function withBundledPreview(workspaceRevision: number) {
+  return {
+    ...candidate,
+    draftPreview: {
+      candidateIds: [],
+      saved: {
+        ...result.preview,
+        workspace: { ...result.preview.workspace, id: 'w', revision: workspaceRevision },
+        freshness: { candidateId: candidate.candidateId, candidateRevision: candidate.revision },
+      },
+    } as StudioSchemaEditCandidateRead['draftPreview'],
+  };
+}
+
+it('uses the bundled preview for the inspected revision without issuing the old read', () => {
+  render(<WorkspacePendingSchemaReview {...props} candidate={withBundledPreview(8)} />);
+
+  expect(screen.getByRole('button', { name: 'Inspect nodes/aaa/description' })).toBeVisible();
+  expect(requests.read).not.toHaveBeenCalled();
+});
+
+it('does not show a bundled preview for another Workspace revision', () => {
+  requests.read.mockReturnValue(new Promise(() => {}));
+  render(<WorkspacePendingSchemaReview {...props} candidate={withBundledPreview(9)} />);
+
+  expect(screen.getByText('Loading saved Schema changes…')).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Inspect nodes/aaa/description' })
+  ).not.toBeInTheDocument();
 });
 
 it.each([

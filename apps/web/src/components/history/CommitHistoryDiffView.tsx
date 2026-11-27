@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { stateYamlLinePaths } from '@/domain/diff/stateYamlReview';
 import { buildStructuredStateDiff } from '@/domain/diff/structuredStateDiff';
-import { commitTitle, formatDate, shortHash } from '@/domain/format/formatters';
+import { commitByline, commitTitle, formatDate, shortHash } from '@/domain/format/formatters';
 import { buildCanonicalStateYaml } from '@/domain/project/stateViewModel';
 import type { ApiCommit } from '@/types/api';
 import styles from './CommitHistoryDiffView.module.css';
@@ -130,14 +130,9 @@ export function CommitHistoryDiffCard({
             <ArrowUpRight aria-hidden="true" size={14} /> Commit list
           </button>
         </div>
-        <h2>{commitTitle(commit.message)}</h2>
+        <h2>{commitTitle(commit.message, commit.operation_count)}</h2>
         <div className={listStyles.commitMeta}>
-          <span>
-            {commit.author?.name ||
-              commit.author?.id ||
-              commit.author?.type ||
-              'Author not recorded'}
-          </span>
+          <span>{commitByline(commit)}</span>
           <time dateTime={commit.committed_at}>{formatDate(commit.committed_at)}</time>
           <span>{commit.branch || 'Detached'}</span>
         </div>

@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, max, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type NewPullRequest,
@@ -220,6 +220,66 @@ export async function listPullRequestsByProject(
         : eq(pullRequests.projectId, projectId)
     )
     .orderBy(desc(pullRequests.number));
+}
+
+export async function listPullRequestPage(
+  db: AnyDB,
+  projectId: string,
+  input: { statuses?: PullRequestStatus[]; query?: string; before?: number; limit: number }
+) {
+  const project = eq(pullRequests.projectId, projectId);
+  const status = input.statuses?.length ? inArray(pullRequests.status, input.statuses) : sql`true`;
+  const query = input.query?.trim();
+  const escaped = query?.replace(/[\\%_]/g, '\\$&');
+  const numeric = query && /^#?\d+$/.test(query) ? Number(query.replace('#', '')) : undefined;
+  const byNumber =
+    numeric !== undefined && numeric <= 2_147_483_647
+      ? eq(pullRequests.number, numeric)
+      : sql`false`;
+  const matching = escaped
+    ? query?.startsWith('#') && numeric !== undefined
+      ? byNumber
+      : or(
+          byNumber,
+          sql`concat_ws(' ', ${pullRequests.title}, nullif(${pullRequests.description}, ''),
+            ${pullRequests.sourceBranch}, ${pullRequests.targetBranch}, ${pullRequests.authorId},
+            ${pullRequests.reviewOwnerId}) ilike ${`%${escaped}%`}`
+        )
+    : sql`true`;
+  const [rows, [counts]] = await Promise.all([
+    db
+      .select()
+      .from(pullRequests)
+      .where(
+        and(
+          project,
+          status,
+          matching,
+          input.before ? lt(pullRequests.number, input.before) : undefined
+        )
+      )
+      .orderBy(desc(pullRequests.number))
+      .limit(input.limit + 1),
+    db
+      .select({
+        open: sql<number>`count(*) filter (where ${pullRequests.status} not in ('closed', 'merged'))`.mapWith(
+          Number
+        ),
+        merged: sql<number>`count(*) filter (where ${pullRequests.status} = 'merged')`.mapWith(
+          Number
+        ),
+        closed: sql<number>`count(*) filter (where ${pullRequests.status} = 'closed')`.mapWith(
+          Number
+        ),
+        total: sql<number>`count(*) filter (where ${status} and ${matching})`.mapWith(Number),
+      })
+      .from(pullRequests)
+      .where(project),
+  ]);
+  const items = rows.slice(0, input.limit);
+  const nextBefore = rows.length > input.limit ? (items.at(-1)?.number ?? null) : null;
+  const { total, ...stateCounts } = counts!;
+  return { items, nextBefore, total, stateCounts };
 }
 
 export async function updatePullRequest(

@@ -234,6 +234,11 @@
   font-weight: 600;
 }
 
+.tab:has(> [data-navigation-pending]) {
+  background-color: var(--accent-commit-soft);
+  color: var(--text-primary);
+}
+
 .globalNav a[aria-current="page"],
 .header a:hover {
   color: var(--text-primary);
@@ -311,4 +316,14 @@
   .tab {
     transition: none;
   }
+}
+
+.globalNav a:active,
+.globalNav a:has([data-navigation-pending]),
+.tab:active,
+.tab:has([data-navigation-pending]),
+.account:active,
+.account:has([data-navigation-pending]) {
+  color: var(--accent-commit);
+  background-color: var(--surface-secondary);
 }

@@ -8,6 +8,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { CredentialContextSchema } from '@t3x-dev/api-client';
 import { getAllModels, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   findAccountsByUser,
@@ -54,6 +55,44 @@ const capabilitiesRoute = createRoute({
 authMeRoutes.openapi(capabilitiesRoute, (c) => {
   c.header('Cache-Control', 'private, no-store');
   return c.json({ success: true as const, data: { operator: hasOperatorAccess(c) } });
+});
+
+const credentialContextRoute = createRoute({
+  method: 'get',
+  path: '/v1/auth/me/credential',
+  tags: ['Auth'],
+  summary: 'Read the authenticated credential type, binding, and Transition scopes',
+  responses: {
+    200: {
+      description: 'Credential context for the current request',
+      content: { 'application/json': { schema: SuccessResponseSchema(CredentialContextSchema) } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+authMeRoutes.openapi(credentialContextRoute, (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  const principal = getRequestPrincipal(c);
+  if (!principal || principal.ingress !== 'http') {
+    return c.json(createError('UNAUTHORIZED', 'An authenticated credential is required'), 401);
+  }
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        actor_kind: principal.actor.kind,
+        credential_kind: principal.credential.kind,
+        project_id: principal.credential.projectId,
+        namespace_id: principal.credential.namespaceId,
+        transition_scopes: [...principal.scopes],
+      },
+    },
+    200
+  );
 });
 
 // ============================================================
