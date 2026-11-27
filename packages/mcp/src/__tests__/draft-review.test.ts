@@ -93,13 +93,14 @@ describe('Draft Review MCP tool', () => {
 
   it('reports policy absence without treating the Transition as a fixed Review', async () => {
     prepareReview.mockResolvedValue({
-      view: { ...prepared.view, precondition: { policy_digest: null } },
+      view: { ...prepared.view, precondition: { policy_digest: null, ref_name: 'editorial' } },
     });
     const result = await draftReviewHandler(prepare);
     expect(result.isError).toBe(true);
     expect(JSON.parse(result.content[0]!.text)).toMatchObject({
       error: {
         code: 'REVIEW_SNAPSHOT_POLICY_REQUIRED',
+        message: expect.stringMatching(/editorial.*Complete authorization.*saved Draft/),
         details: { transition_id: review.transition_id, checks: transition.checks },
       },
     });

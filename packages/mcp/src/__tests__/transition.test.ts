@@ -311,7 +311,14 @@ describe('Transition MCP tools', () => {
   it('maps inspect and verify without collapsing the task-oriented view', async () => {
     apiClient.inspectTransition.mockResolvedValue({
       transition_id: 'trn_1',
-      view: { transition: { mode: 'transition', checks: { replay: { outcomes: ['verified'] } } } },
+      view: {
+        precondition: REVIEW_PRECONDITION,
+        transition: {
+          mode: 'transition',
+          capabilities: { accept: { disposition: 'allowed', reasons: [] } },
+          checks: { replay: { outcomes: ['verified'] } },
+        },
+      },
     });
     apiClient.verifyTransition.mockResolvedValue({
       transition_id: 'trn_1',
@@ -336,10 +343,52 @@ describe('Transition MCP tools', () => {
       request_id: 'verify:1',
     });
     expect(parse(inspected)).toMatchObject({ view: { transition: { mode: 'transition' } } });
+    expect(parse(inspected)).not.toHaveProperty('next_action');
     expect(parse(verified)).toMatchObject({
       statements: [{ source: 'server:replay' }],
       operational_results: [{ outcome: 'failed', code: 'TIMEOUT' }],
     });
+  });
+
+  it.each([
+    [null, 'POLICY_CONTEXT_REQUIRED', 'Complete authorization'],
+    [
+      REVIEW_PRECONDITION.policy_digest,
+      'POLICY_CONTEXT_REQUIRED',
+      'actor, policy and observation context',
+    ],
+    [REVIEW_PRECONDITION.policy_digest, 'SELF_APPROVAL_FORBIDDEN', 'independent reviewer'],
+  ])('explains the observed policy condition without changing the saved work (%s, %s)', async (digest, code, hint) => {
+    const view = {
+      precondition: { ...REVIEW_PRECONDITION, policy_digest: digest },
+      transition: { capabilities: { accept: { reasons: [{ code }] } } },
+    };
+    apiClient.inspectTransition.mockResolvedValue({ view, transition_id: 'trn_1' });
+    const result = parse(
+      await inspectTransitionHandler({ project_id: 'p', transition_id: 'trn_1' })
+    );
+    expect(result).toMatchObject({ view, next_action: expect.stringContaining(hint) });
+    expect(result.next_action).toContain('main');
+    expect(apiClient.proposeTransition).not.toHaveBeenCalled();
+    expect(apiClient.decideTransition).not.toHaveBeenCalled();
+    expect(apiClient.commitTransition).not.toHaveBeenCalled();
+  });
+
+  it('directs a copied null policy digest back to inspection before a Decision write', async () => {
+    const result = await decideTransitionHandler({
+      project_id: 'p',
+      transition_id: 'trn_1',
+      request_id: 'req',
+      outcome: 'accepted',
+      precondition: { ...REVIEW_PRECONDITION, policy_digest: null },
+    });
+    expect(parse(result)).toMatchObject({
+      error: {
+        code: 'INVALID_REQUEST',
+        message: expect.stringContaining('Inspect this same Transition'),
+      },
+    });
+    expect(apiClient.decideTransition).not.toHaveBeenCalled();
   });
 
   it('attaches only predicate content and graph roles, never an issuer envelope', async () => {
