@@ -29,6 +29,17 @@ if (proxyUrl) {
 }
 
 const nextConfig: NextConfig = {
+  // Next dev otherwise prints the raw request URL before Web can discard legacy task text.
+  logging: {
+    incomingRequests: {
+      ignore: [
+        /^\/settings\/agent-access(?:\/|\?|$)/,
+        /^\/api\/v1\/mcp-delegations(?:\/|\?|$)/,
+        /^\/api\/mcp-oauth\/token(?:\?|$)/,
+        /^\/login\?.*callbackUrl=/i,
+      ],
+    },
+  },
   // Output standalone for Docker deployment
   output: 'standalone',
   // Transpile workspace packages
@@ -48,12 +59,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/settings/agent-access/authorize',
+        source: '/settings/agent-access/:path*',
         headers: [
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
           { key: 'Referrer-Policy', value: 'no-referrer' },
           { key: 'Cache-Control', value: 'no-store' },
         ],
+      },
+      {
+        source: '/login',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
       },
     ];
   },

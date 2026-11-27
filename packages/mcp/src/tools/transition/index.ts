@@ -19,6 +19,10 @@ import {
 
 export const API_BACKEND_REQUIRED = 'API_BACKEND_REQUIRED' as const;
 
+export function policyRecovery(ref: string) {
+  return `Ask the repository owner or an authorized administrator to check the applicable acceptance policy for branch "${ref}". For an eligible existing delegation, use Settings → Agent access → Complete authorization.`;
+}
+
 export async function withTransitionApi(
   action: (client: T3xClient) => Promise<unknown>
 ): Promise<ToolResult> {
@@ -250,7 +254,26 @@ export const inspectTransitionHandler: ToolHandler = async (args) =>
     if (!projectId || !transitionId) {
       throw new T3xApiError('INVALID_ARGUMENT', 'project_id and transition_id are required.', 400);
     }
-    return client.inspectTransition(projectId, transitionId);
+    const result = await client.inspectTransition(projectId, transitionId);
+    const { precondition, transition } = result.view;
+    const accept = transition.capabilities.accept;
+    if (accept.reasons.some(({ code }) => code === 'POLICY_CONTEXT_REQUIRED')) {
+      const guidance =
+        precondition.policy_digest === null
+          ? policyRecovery(precondition.ref_name)
+          : `Ask an authorized reviewer to check the actor, policy and observation context for branch "${precondition.ref_name}".`;
+      return {
+        ...result,
+        next_action: `${guidance} Inspect this same Transition again before deciding. Use the updated exact precondition.`,
+      };
+    }
+    if (accept.reasons.some(({ code }) => code === 'SELF_APPROVAL_FORBIDDEN')) {
+      return {
+        ...result,
+        next_action: `Ask an independent reviewer authorized on branch "${precondition.ref_name}" to review this exact change and record the Decision.`,
+      };
+    }
+    return result;
   });
 
 export const verifyTransitionDef: ToolDef = {
@@ -426,6 +449,13 @@ export const decideTransitionHandler: ToolHandler = async (args) =>
       throw new T3xApiError(
         'INVALID_ARGUMENT',
         'Only an overridden Decision accepts a rationale.',
+        400
+      );
+    }
+    if (precondition.policy_digest === null) {
+      throw new T3xApiError(
+        'INVALID_REQUEST',
+        'This precondition has no policy_digest. Inspect this same Transition, follow its policy guidance, and copy the complete updated precondition before deciding.',
         400
       );
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Bot,
   Box,
   Circle,
   HelpCircle,
@@ -17,6 +18,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useDeploymentCapabilities } from '@/components/deployment/DeploymentCapabilitiesProvider';
 import { DiscoverHeader } from '@/components/schemas/DiscoverHeader';
 import { SettingsReturnLink } from '@/components/settings/SettingsReturnLink';
+import { authorizationPage, connectAgentPage } from '@/domain/mcpDelegation';
 import { useSettingsNamespace } from '@/hooks/settings/useSettingsNamespace';
 import { useSession } from '@/hooks/shared/useSession';
 import palette from '@/styles/management-palette.module.css';
@@ -49,6 +51,7 @@ const PERSONAL_NAV: SettingsNavItem[] = [
     icon: KeyRound,
     activePaths: ['/settings/api-tokens', '/settings/access'],
   },
+  { href: connectAgentPage, label: 'Connect an Agent', icon: Bot, activePaths: [connectAgentPage] },
   {
     href: '/settings/usage',
     label: 'Usage',
@@ -241,7 +244,7 @@ function SettingsLayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (pathname === '/settings/agent-access/authorize') return children;
+  if (pathname === authorizationPage || pathname === connectAgentPage) return children;
   return (
     <Suspense fallback={null}>
       <SettingsLayoutContent>{children}</SettingsLayoutContent>

@@ -27,6 +27,8 @@ import {
   type AnyDB,
   ConflictError,
   DraftAuthoringConflictError,
+  findDraftReviewSnapshot,
+  findRepositoryObjectAddress,
   findWorkspaceDraft,
   getTransitionProposalPreparation,
   getTransitionRefHead,
@@ -627,9 +629,31 @@ export async function readWorkspaceAuthoring(
         return { status: 'unknown' as const, schemaHash: null, definition: null, bindings: [] };
       }
     ));
+  // Action and node pages enrich activity details only; look up Review for the Draft itself.
+  const fixedReviewId =
+    !input.actionId &&
+    !input.nodeId &&
+    input.beforeSequence === undefined &&
+    basis.refHead === head.head
+      ? await findDraftReviewSnapshot(db, {
+          ...input,
+          workspaceRevision: draft.revision,
+          compositionRevision: ledger.compositionRevision,
+          basis,
+        })
+      : null;
+  const fixedReview = fixedReviewId
+    ? {
+        snapshotId: fixedReviewId,
+        number: (
+          await findRepositoryObjectAddress(db, input.projectId, 'review', { id: fixedReviewId })
+        )?.number,
+      }
+    : undefined;
   return {
     schema: 't3x.application/workspace-authoring-view/v1' as const,
     projectionVersion: 1,
+    fixedReview,
     workspaceRevision: draft.revision,
     compositionRevision: ledger.compositionRevision,
     basis: { refName: basis.refName, refHead: basis.refHead, baseDigest: basis.baseDigest },

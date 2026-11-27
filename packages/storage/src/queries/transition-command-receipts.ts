@@ -1,5 +1,9 @@
-import { type ProposalStatement, parseSerializedTransitionObject } from '@t3x-dev/core';
-import { and, eq } from 'drizzle-orm';
+import {
+  describeTransitionObject,
+  type ProposalStatement,
+  parseSerializedTransitionObject,
+} from '@t3x-dev/core';
+import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type TransitionCommandReceiptRecord,
@@ -144,6 +148,44 @@ export async function findTransitionCommandReceipt(
     )
     .limit(1);
   return row === undefined ? null : receipt(row);
+}
+
+/** Read command results for this Transition even after its target ref has advanced. */
+export async function listTransitionCommandResults(
+  db: AnyDB,
+  projectId: string,
+  transitionId: string
+) {
+  const rows = await db
+    .select({
+      requestDigest: transitionCommandReceipts.requestDigest,
+      resultDigest: transitionCommandReceipts.resultDigest,
+      canonicalJson: transitionObjects.canonicalJson,
+    })
+    .from(transitionCommandReceipts)
+    .innerJoin(
+      transitionObjects,
+      eq(transitionObjects.digest, transitionCommandReceipts.resultDigest)
+    )
+    .where(
+      and(
+        eq(transitionCommandReceipts.projectId, projectId),
+        eq(transitionCommandReceipts.transitionId, transitionId)
+      )
+    )
+    .orderBy(
+      desc(transitionCommandReceipts.createdAt),
+      desc(transitionCommandReceipts.resultDigest)
+    );
+  return rows.map(({ requestDigest, resultDigest, canonicalJson }) => {
+    const result = parseSerializedTransitionObject(canonicalJson);
+    if (describeTransitionObject(result).digest !== resultDigest) {
+      throw new TransitionCommandIntegrityError(
+        `Transition command result ${resultDigest} failed identity verification`
+      );
+    }
+    return { requestDigest, resultDigest, result };
+  });
 }
 
 /** Locate the application preparation for an exact committed object, not the latest ref. */

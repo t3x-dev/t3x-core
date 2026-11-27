@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { type McpOAuthConfig, mcpOAuthConfig, repositoryModeForCapabilities } from './mcp-oauth';
 
@@ -10,7 +10,7 @@ export const scopeAllows = (cap: WorkMode, mode: WorkMode) =>
 
 export class AuthorizationError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 503,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 429 | 503,
     message: string
   ) {
     super(message);
@@ -21,6 +21,7 @@ const registration = z.object({
   client_id: z.string().min(1).max(256),
   client_name: z.string().trim().min(1).max(100),
   redirect_uris: z.array(z.string().url()).min(1),
+  connection_start_uri: z.string().url().optional(),
 });
 
 export function issuerConfig() {
@@ -45,22 +46,30 @@ function validRedirect(value: string) {
   );
 }
 
-export function registeredClient(clientId: string | null, redirect: string | null) {
-  let configured: z.infer<typeof registration>[];
+export function registeredClients() {
   try {
-    configured = z.array(registration).parse(JSON.parse(process.env.T3X_MCP_OAUTH_CLIENTS || '[]'));
+    const clients = z
+      .array(registration)
+      .parse(JSON.parse(process.env.T3X_MCP_OAUTH_CLIENTS || '[]'));
+    if (
+      new Set(clients.map((client) => client.client_id)).size !== clients.length ||
+      clients.some(
+        ({ connection_start_uri: start }) =>
+          start && (!validRedirect(start) || new URL(start).searchParams.has('preselection'))
+      )
+    )
+      throw new Error('Invalid OAuth client registration');
+    return clients.filter((client) => client.redirect_uris.some(validRedirect));
   } catch {
     throw new AuthorizationError(503, 'The deployment OAuth client registry is unavailable.');
   }
-  const exact = configured.filter((client) => client.client_id === clientId);
-  if (
-    exact.length !== 1 ||
-    !redirect ||
-    !exact[0].redirect_uris.includes(redirect) ||
-    !validRedirect(redirect)
-  )
+}
+
+export function registeredClient(clientId: string | null, redirect: string | null) {
+  const client = registeredClients().find((entry) => entry.client_id === clientId);
+  if (!client || !redirect || !client.redirect_uris.includes(redirect) || !validRedirect(redirect))
     throw new AuthorizationError(400, 'Unknown OAuth client or unregistered callback.');
-  return exact[0];
+  return client;
 }
 
 export function checkParameters(params: URLSearchParams) {
@@ -98,6 +107,7 @@ export function authorizationRequest(params: URLSearchParams, config: McpOAuthCo
     state: params.get('state'),
     repository: params.get('repository'),
     branch: params.get('branch'),
+    preselection: params.get('preselection'),
   };
 }
 
@@ -120,6 +130,25 @@ export const authorizationCode = (nonce: string, secret: string) =>
     .update(nonce)
     .digest('base64url');
 export const digest = (value: string) => createHash('sha256').update(value).digest('base64url');
+export function signConsentPreview(attempt: string, userId: string, terms: string, secret: string) {
+  const signature = createHmac('sha256', Buffer.from(secret, 'base64url'))
+    .update(JSON.stringify(['t3x:consent-preview:v1', attempt, userId, terms]))
+    .digest('base64url');
+  return terms + '.' + signature;
+}
+
+export function validConsentPreview(
+  value: string,
+  attempt: string,
+  userId: string,
+  secret: string
+) {
+  if (!/^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  return timingSafeEqual(
+    Buffer.from(value),
+    Buffer.from(signConsentPreview(attempt, userId, value.slice(0, 43), secret))
+  );
+}
 // The database stores a credential sealed with both the one-time code and an issuer secret.
 export const codeSecret = (code: string, secret: string) =>
   createHmac('sha256', Buffer.from(secret, 'base64url'))

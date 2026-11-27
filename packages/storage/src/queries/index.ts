@@ -62,6 +62,7 @@ export {
   CollaborationStorageError,
   type CollaborationStorageErrorCode,
   createPostgresCollaborationLifecycleUnitOfWork,
+  lockCollaborationNamespace,
   type PostgresCollaborationLifecycleTransaction,
   type PostgresCollaborationLifecycleUnitOfWork,
   type StoredCollaborationInvitationDto,

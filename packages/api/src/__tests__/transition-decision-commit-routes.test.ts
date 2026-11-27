@@ -1,6 +1,7 @@
 import {
   type ApiKey,
   createAcceptancePolicyResource,
+  createYOpsState,
   parseAcceptancePolicy,
   type StatementObservation,
 } from '@t3x-dev/core';
@@ -46,16 +47,25 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import type { TransitionControlPlaneOptions } from '../lib/transition-control-plane';
+import { commitRepositoryYOpsState } from '../lib/repository-state-transition';
+import {
+  inspectTransition,
+  type TransitionControlPlaneOptions,
+} from '../lib/transition-control-plane';
 import {
   commitTransition,
   decideTransition,
   type TransitionReviewPrecondition,
   TransitionReviewStaleError,
 } from '../lib/transition-control-plane/lifecycle';
+import {
+  buildWorkspaceReviewArtifacts,
+  persistWorkspaceReviewArtifacts,
+} from '../lib/workspace-review-artifacts';
 import { createWorkspaceSourceRunnerProvider } from '../lib/workspace-source-transition';
 import type { LocalOciCommandExecutor } from '../lib/workspace-validation/local-oci-provider';
 import { createTransitionControlPlaneRoutes } from '../routes/transition-control-plane.openapi';
+import { workspaceRoutes } from '../routes/workspaces.openapi';
 
 type WirePrecondition = {
   workspace_revision: number;
@@ -98,6 +108,23 @@ function app(apiKey: ApiKey, options?: TransitionControlPlaneOptions) {
   });
   instance.route('/', createTransitionControlPlaneRoutes(options));
   return instance;
+}
+
+async function pinReview(projectId: string, transitionId: string) {
+  const inspection = await inspectTransition({ db: mockDB, projectId, transitionId });
+  const artifacts = buildWorkspaceReviewArtifacts({ inspection, createdAt: inspection.createdAt });
+  await persistWorkspaceReviewArtifacts(mockDB, artifacts);
+  const { workspaceId, snapshotId } = artifacts.reviewSnapshot;
+  const instance = new Hono().route('/', workspaceRoutes);
+  return async () => {
+    const response = await instance.request(
+      `/v1/projects/${projectId}/workspaces/${workspaceId}/transition/review-snapshots/${snapshotId}`
+    );
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    expect(data.snapshot).toEqual(artifacts.reviewSnapshot);
+    return data.recorded_outcome;
+  };
 }
 
 function policy(allowSelfApproval = false) {
@@ -335,6 +362,8 @@ describe('Transition Decision and Commit routes', () => {
       requestId: 'verify:decision-commit',
       apiKey: writer,
     });
+    const readPinned = await pinReview(project.projectId, proposed.transitionId);
+    await expect(readPinned()).resolves.toBeUndefined();
     expect(precondition.review_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
 
     const staleReview = await decide({
@@ -377,6 +406,10 @@ describe('Transition Decision and Commit routes', () => {
         decision: { actor: unknown };
       };
     };
+    await expect(readPinned()).resolves.toEqual({
+      outcome: 'accepted',
+      decision_digest: acceptedPayload.data.decision_digest,
+    });
     expect(acceptedPayload.data.reused).toBe(false);
     expect(acceptedPayload.data.review_digest).toBe(precondition.review_digest);
     expect(acceptedPayload.data.decision.actor).toEqual({ kind: 'human', id: 'user:reviewer' });
@@ -423,6 +456,11 @@ describe('Transition Decision and Commit routes', () => {
     };
     expect(committedPayload.data.reused).toBe(false);
     expect(committedPayload.data.workspace.status).toBe('committed');
+    await expect(readPinned()).resolves.toEqual({
+      outcome: 'accepted',
+      decision_digest: acceptedPayload.data.decision_digest,
+      commit_digest: committedPayload.data.commit_digest,
+    });
 
     const committedRetry = await commit({
       projectId: project.projectId,
@@ -452,6 +490,19 @@ describe('Transition Decision and Commit routes', () => {
       apiKey: committer,
     });
     expect(conflictingCommit.status).toBe(409);
+    const later = await commitRepositoryYOpsState({
+      db: mockDB,
+      projectId: project.projectId,
+      refName: 'main',
+      expectedHead: committedPayload.data.commit_digest,
+      target: createYOpsState({ later: true }),
+      actor: { kind: 'human', id: 'user:next-author' },
+      intent: 'Advance the branch after this Review',
+    });
+    expect(later.commitDigest).not.toBe(committedPayload.data.commit_digest);
+    await expect(readPinned()).resolves.toMatchObject({
+      commit_digest: committedPayload.data.commit_digest,
+    });
   });
 
   it('rolls back CommitV2 ref advance workspace state and receipt when projection fails', async () => {
@@ -807,6 +858,7 @@ describe('Transition Decision and Commit routes', () => {
     const acceptOnly = key(project.projectId, 'accept-only', 'human', ['transition:decide:accept']);
     const rejectOnly = key(project.projectId, 'reject-only', 'human', ['transition:decide:reject']);
 
+    const readPinned = await pinReview(project.projectId, proposed.transitionId);
     const missingReplay = await decide({
       projectId: project.projectId,
       transitionId: proposed.transitionId,
@@ -838,6 +890,10 @@ describe('Transition Decision and Commit routes', () => {
     expect(rejected.status).toBe(200);
     const rejectedPayload = (await rejected.json()) as { data: { decision_digest: string } };
 
+    await expect(readPinned()).resolves.toEqual({
+      outcome: 'rejected',
+      decision_digest: rejectedPayload.data.decision_digest,
+    });
     const commitOnly = key(project.projectId, 'commit-only', 'service', [
       'transition:commit:create',
     ]);

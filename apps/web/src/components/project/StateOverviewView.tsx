@@ -23,7 +23,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { StateAuthorReadme } from '@/components/project/StateAuthorReadme';
 import { StateValueReader } from '@/components/project/StateValueReader';
 import { Button } from '@/components/ui/button';
-import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitByline, commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import { historyCommitHref } from '@/domain/project/objectLocation';
 import { buildStatePointRows } from '@/domain/project/stateViewModel';
 import { useStateOverview } from '@/hooks/commits/useStateOverview';
@@ -482,18 +482,15 @@ export function StateOverviewView({
                 <>
                   {commitHref ? (
                     <Link className={styles.commitMessage} href={commitHref}>
-                      {commitTitle(currentCommit.message)}
+                      {commitTitle(currentCommit.message, currentCommit.operation_count)}
                     </Link>
                   ) : (
-                    <p className={styles.commitMessage}>{commitTitle(currentCommit.message)}</p>
+                    <p className={styles.commitMessage}>
+                      {commitTitle(currentCommit.message, currentCommit.operation_count)}
+                    </p>
                   )}
                   <div className={styles.commitMeta}>
-                    <span>
-                      {currentCommit.author?.name ||
-                        currentCommit.author?.id ||
-                        currentCommit.author?.type ||
-                        'Author not recorded'}
-                    </span>
+                    <span>{commitByline(currentCommit)}</span>
                     {currentCommit.committed_at &&
                     Number.isFinite(Date.parse(currentCommit.committed_at)) ? (
                       <time

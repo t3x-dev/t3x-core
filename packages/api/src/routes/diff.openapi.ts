@@ -23,6 +23,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertRepositoryCommitAccess } from '../lib/project-access';
 import { buildPipelineContext } from '../ops/context';
 import { diffOp } from '../ops/diff';
+import { ErrorResponseSchema } from '../schemas/common';
 
 // ============================================================================
 // Schemas
@@ -76,6 +77,12 @@ const FrameBodySchema = z.object({
 // ============================================================================
 // Routes
 // ============================================================================
+
+function missingCommitDetails(digest: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(digest)
+    ? { protocol_code: 'COMMIT_NOT_FOUND' as const }
+    : undefined;
+}
 
 function semanticDocument(state: State) {
   const { value } = state;
@@ -136,14 +143,7 @@ const twoWayRoute = createRoute({
     },
     404: {
       description: 'Not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -253,14 +253,7 @@ const frameRoute = createRoute({
     },
     404: {
       description: 'Not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            success: z.literal(false),
-            error: z.object({ code: z.string(), message: z.string() }),
-          }),
-        },
-      },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -305,14 +298,16 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       c,
       db,
       body.base_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
       c,
       db,
       body.target_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 
@@ -320,7 +315,13 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       getVerifiedTransitionCommitGraph(db, baseProjectId, body.base_commit_hash),
       getVerifiedTransitionCommitGraph(db, targetProjectId, body.target_commit_hash),
     ]);
-    if (!base || !target) return errorResponse(c, 'NOT_FOUND', 'Comparison Commit not found.');
+    if (!base || !target)
+      return errorResponse(
+        c,
+        'NOT_FOUND',
+        'Comparison Commit not found.',
+        missingCommitDetails(!base ? body.base_commit_hash : body.target_commit_hash)
+      );
     const states = [base.state, target.state];
     if (
       states.some(
@@ -434,14 +435,16 @@ diffRoutes.openapi(frameRoute, async (c) => {
       c,
       db,
       body.base_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.base_commit_hash)
     );
     if (baseProjectId instanceof Response) return baseProjectId;
     const targetProjectId = await assertRepositoryCommitAccess(
       c,
       db,
       body.target_commit_hash,
-      body.project_id
+      body.project_id,
+      missingCommitDetails(body.target_commit_hash)
     );
     if (targetProjectId instanceof Response) return targetProjectId;
 

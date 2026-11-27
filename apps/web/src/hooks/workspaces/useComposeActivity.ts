@@ -335,19 +335,21 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
       void getSharedApiClient()
         .workspaces.authoring.read(candidate.projectId, candidate.id, { limit: 1 })
         .then((next) => {
+          const inspected = viewRef.current;
+          if (!isActive() || token !== scope.poll || readVersion !== scope.read || !inspected)
+            return;
           if (
-            isActive() &&
-            token === scope.poll &&
-            readVersion === scope.read &&
-            viewRef.current &&
-            (next.workspaceRevision !== viewRef.current.workspaceRevision ||
-              next.compositionRevision !== viewRef.current.compositionRevision ||
-              next.basis?.refHead !== viewRef.current.basis?.refHead ||
-              next.synchronization?.currentRefHead !==
-                viewRef.current.synchronization?.currentRefHead)
+            next.workspaceRevision !== inspected.workspaceRevision ||
+            next.compositionRevision !== inspected.compositionRevision ||
+            next.basis?.refHead !== inspected.basis?.refHead ||
+            next.basis?.refName !== inspected.basis?.refName ||
+            next.basis?.baseDigest !== inspected.basis?.baseDigest ||
+            next.synchronization?.currentRefHead !== inspected.synchronization?.currentRefHead
           ) {
             if (cache?.current?.key === cacheKey) cache.current = null;
             setNewActivity(next);
+          } else if (next.fixedReview?.snapshotId !== inspected.fixedReview?.snapshotId) {
+            setView({ ...inspected, fixedReview: next.fixedReview });
           }
         })
         .catch(() => {

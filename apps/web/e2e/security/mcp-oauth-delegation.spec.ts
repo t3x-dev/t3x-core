@@ -1,10 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { expect, type Page, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
+import { ChatTasks, fixtureChat } from '../fixtures/mcp-oauth-chat';
 import { API_BASE } from '../fixtures/api-helpers';
 import {
   account,
@@ -57,8 +57,26 @@ async function connectBearer(token: string) {
   return {
     call: (name: string, args: Record<string, unknown>) =>
       client.callTool({ name, arguments: args }) as Promise<ToolResult>,
+    listTools: async () =>
+      (await client.listTools()).tools as {
+        name: string;
+        inputSchema: { properties?: Record<string, { enum?: string[] }> };
+      }[],
     close: () => client.close(),
   };
+}
+
+async function waitForReviewRequestBudget(request: APIRequestContext, session?: string) {
+  // Browser and MCP clients in this suite share the deployment's per-IP request window.
+  const budget = await request.get(API_BASE + '/auth/me/credential', {
+    headers: session ? { Authorization: 'Bearer ' + session } : {},
+  });
+  expect([200, 401, 429]).toContain(budget.status());
+  const remaining = Number(budget.headers()['x-ratelimit-remaining']);
+  const reset = Number(budget.headers()['x-ratelimit-reset']) * 1000;
+  if (remaining < 90 && reset > Date.now()) {
+    await delay(Math.min(61_000, reset - Date.now() + 150));
+  }
 }
 
 async function prepare(client: ToolClient, project_id: string, workspace_id: string) {
@@ -112,81 +130,6 @@ async function acceptAndCommit(
   return commit_digest;
 }
 
-type Pending = {
-  state: string;
-  task: string;
-  repository?: string;
-  branch: string;
-  result: string;
-  authUrl?: URL;
-  code?: string;
-};
-function fixtureChat() {
-  const path = '/chat/' + randomUUID();
-  const transcript: { task: string; result: string }[] = [];
-  let pending: Pending | undefined;
-  let consentCount = 0;
-  const chatUrl = new URL(path, callback).href;
-  const server = createServer((request, response) => {
-    const url = new URL(request.url || '/', callback.origin);
-    response.setHeader('Cache-Control', 'no-store');
-    if (request.method !== 'GET' || request.headers.host !== callback.host || !pending) {
-      response.writeHead(404).end();
-      return;
-    }
-    if (url.pathname === callback.pathname) {
-      if (
-        url.searchParams.get('state') !== pending.state ||
-        url.searchParams.get('iss') !== issuer ||
-        !url.searchParams.get('code') ||
-        pending.code
-      ) {
-        response.writeHead(400).end();
-        return;
-      }
-      pending.code = url.searchParams.get('code')!;
-      response.writeHead(303, { Location: path }).end();
-      return;
-    }
-    if (url.pathname === '/connect' && pending.authUrl && !pending.code) {
-      consentCount++;
-      response.writeHead(302, { Location: pending.authUrl.href }).end();
-      return;
-    }
-    if (url.pathname !== path) {
-      response.writeHead(404).end();
-      return;
-    }
-    // All fixture transcript text is served as text; navigation links have fixed paths.
-    response.writeHead(200, {
-      'Content-Type': 'text/html; charset=UTF-8',
-      'Referrer-Policy': 'no-referrer',
-    });
-    const escaped = (s: string) =>
-      s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    response.end(
-      '<main>' +
-        transcript
-          .map((turn) => '<p>' + escaped(turn.task) + '</p><p>' + escaped(turn.result) + '</p>')
-          .join('') +
-        (pending.code ? '' : '<a href="/connect">Authorize in T3X</a>') +
-        '</main>'
-    );
-  });
-  return {
-    chatUrl,
-    server,
-    begin(job: Pending) {
-      pending = job;
-      transcript.push(job);
-    },
-    record(task: string, result: string) {
-      transcript.push({ task, result });
-    },
-    count: () => consentCount,
-  };
-}
-
 async function authorize(
   page: Page,
   host: ReturnType<typeof fixtureChat>,
@@ -197,17 +140,12 @@ async function authorize(
     branch?: string;
     expectedDetail?: RegExp;
     signIn?: { username: string; password: string };
+    run?: (token: string) => Promise<string>;
   }
 ) {
-  const job: Pending = {
-    state: randomUUID(),
-    task,
-    repository: options.repository,
-    branch: options.branch || 'main',
-    result: '',
-  };
-  host.begin(job);
-  let tokens: { access_token: string } | undefined;
+  const job = host.tasks.start(task);
+  const chatUrl = host.chatUrl(job.chat);
+  let authUrl: URL | undefined;
   let verifier = '';
   const provider = {
     redirectUrl: callback.href,
@@ -218,9 +156,13 @@ async function authorize(
     },
     clientInformation: () => ({ client_id: clientId, issuer, token_endpoint_auth_method: 'none' }),
     state: () => job.state,
-    tokens: () => tokens,
+    tokens: () => {
+      const token = host.tasks.find(job.state)?.token;
+      return token ? { access_token: token } : undefined;
+    },
     saveTokens: (value: { access_token: string }) => {
-      tokens = value;
+      if (!host.tasks.storeToken(job.state, value.access_token))
+        throw new Error('This task no longer accepts the credential.');
     },
     saveCodeVerifier: (value: string) => {
       verifier = value;
@@ -231,20 +173,37 @@ async function authorize(
       expect(url.searchParams.get('resource')).toBe(resource.href);
       expect(url.searchParams.get('code_challenge_method')).toBe('S256');
       expect(url.searchParams.get('scope')).toBe('repository:commit');
-      if (job.repository) url.searchParams.set('repository', job.repository);
-      url.searchParams.set('branch', job.branch);
-      url.searchParams.set('task', job.task);
-      job.authUrl = url;
+      if (options.repository) url.searchParams.set('repository', options.repository);
+      url.searchParams.set('branch', options.branch || 'main');
+      expect(url.searchParams.has('task')).toBe(false);
+      authUrl = url;
     },
   };
   const transport = new StreamableHTTPClientTransport(resource, { authProvider: provider });
+  host.connections.set(job.state, {
+    url: () => authUrl,
+    exchange: (code) => transport.finishAuth(code),
+    run:
+      options.run ??
+      (async (token) => {
+        const verified = await connectBearer(token);
+        try {
+          const context = await invoke<{ project_id: string }>(verified, 't3x_context', {});
+          if (options.chooseId && context.project_id !== options.chooseId)
+            throw new Error('This connection belongs to another repository.');
+          return 'Connected to ' + context.project_id;
+        } finally {
+          await verified.close();
+        }
+      }),
+  });
   const client = new Client(clientInfo);
   try {
     // The real HTTP 401 challenge drives SDK discovery and PKCE generation.
     await expect(client.connect(transport)).rejects.toThrow();
-    expect(job.authUrl, 'the SDK opened an authorization request').toBeDefined();
+    expect(authUrl, 'the SDK opened an authorization request').toBeDefined();
     if (options.signIn) await page.context().clearCookies();
-    await page.goto(host.chatUrl);
+    await page.goto(chatUrl);
     await page.getByRole('link', { name: 'Authorize in T3X' }).click();
     if (options.signIn) {
       await expect(page).toHaveURL((url) => {
@@ -253,7 +212,7 @@ async function authorize(
           url.origin === issuer &&
           url.pathname === '/login' &&
           returnTo !== null &&
-          new URL(returnTo, issuer).href === job.authUrl?.href
+          new URL(returnTo, issuer).href === authUrl?.href
         );
       });
       await page.getByLabel('Username').fill(options.signIn.username);
@@ -268,19 +227,19 @@ async function authorize(
         .screenshot({ path: test.info().outputPath('choose-repository.png') });
       await picker.selectOption(options.chooseId);
     } else {
-      await expect(page.getByText(job.repository!, { exact: true })).toBeVisible();
+      await expect(page.getByText(options.repository!, { exact: true })).toBeVisible();
       await expect(page.getByRole('combobox', { name: 'Repository' })).toHaveCount(0);
       if (host.count() === 1)
         await page.locator('article').screenshot({ path: test.info().outputPath('consent.png') });
     }
     if (options.expectedDetail) await expect(page.getByText(options.expectedDetail)).toBeVisible();
     await page.getByRole('button', { name: /Authorize and start|Complete authorization/ }).click();
-    await expect(page).toHaveURL(host.chatUrl);
+    await expect(page).toHaveURL(chatUrl, { timeout: 40_000 });
     await expect(page.getByText(task, { exact: true })).toBeVisible();
-    if (!job.code) throw new Error('The callback did not resume its pending task.');
-    await transport.finishAuth(job.code);
-    if (!tokens?.access_token) throw new Error('The client did not receive an MCP access token.');
-    return { job, token: tokens.access_token };
+    const finished = host.tasks.find(job.state);
+    if (!finished?.token || finished.stage !== 'done')
+      throw new Error('The original chat did not complete its authenticated continuation.');
+    return { job: finished, token: finished.token };
   } finally {
     await client.close();
   }
@@ -304,7 +263,6 @@ async function previewSchemaReadiness(
     state: randomUUID(),
     repository,
     branch: 'main',
-    task: 'Prepare the first editorial plan.',
   });
   const [response] = await Promise.all([
     page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/mcp-delegations/consent'),
@@ -325,7 +283,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
   page,
   request,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const identity = account('oauth');
   const owner = await registerBrowser(page, identity);
   const { project_id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
@@ -365,7 +323,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     );
   });
   const human = await connectBearer(owner.session);
-  const host = fixtureChat();
+  const host = fixtureChat(callback, issuer);
   if (callback.hostname !== '127.0.0.1' || callback.protocol !== 'http:')
     throw new Error('The test callback must be local loopback.');
   host.server.listen(Number(callback.port), '127.0.0.1');
@@ -395,27 +353,6 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       branch_name: 'main',
       rules: { commit: { require_independent_review: true } },
     });
-    const message = 'Update the editorial plan and commit it.';
-    const { job, token } = await authorize(page, host, message, { repository, signIn: identity });
-    const agent = await connectBearer(token);
-    clients.push(agent);
-    expect(await invoke(agent, 't3x_context', {})).toMatchObject({
-      actor_kind: 'agent',
-      project_id,
-    });
-    expect(
-      (
-        await request.get(API_BASE + '/auth/me/credential', {
-          headers: { Authorization: 'Bearer ' + token },
-        })
-      ).status()
-    ).toBe(401);
-    const { workspace_id } = await invoke<{ workspace_id: string }>(agent, 't3x_open_workspace', {
-      project_id,
-      ref: 'main',
-      expected_head: base,
-      request_id: randomUUID(),
-    });
     const prd = {
       title: 'December editorial plan',
       summary: { problem: 'Organize topics', audience: 'Editors', outcome: 'Approved plan' },
@@ -427,44 +364,152 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
         },
       },
     };
-    await invoke(agent, 't3x_edit', {
-      mode: 'draft',
-      project_id,
-      workspace_id,
-      request_id: randomUUID(),
-      ...(await revisions(agent, project_id, workspace_id)),
-      operations: [{ set: { path: 'prd', value: prd } }],
+    const message = 'Update the editorial plan and commit it.';
+    let agentCommit = '';
+    let agentReviewNumber = '';
+    const { job, token } = await authorize(page, host, message, {
+      repository,
+      signIn: identity,
+      async run(token) {
+        const agent = await connectBearer(token);
+        try {
+          expect(await invoke(agent, 't3x_context', {})).toMatchObject({
+            actor_kind: 'agent',
+            credential_kind: 'mcp',
+            project_id,
+            transition_scopes: expect.arrayContaining([
+              'transition:propose',
+              'transition:verify',
+              'transition:decide:accept',
+              'transition:commit:create',
+              'transition:ref:advance',
+            ]),
+          });
+          expect(
+            await invoke(agent, 't3x_resolve_repository', { repository, ref: 'main' })
+          ).toMatchObject({ project_id, ref: 'main', head_commit_hash: base });
+          const tools = await agent.listTools();
+          const reviewActions = tools.find((tool) => tool.name === 't3x_draft_review');
+          const decisions = tools.find((tool) => tool.name === 'decide_transition');
+          expect(reviewActions?.inputSchema.properties?.action?.enum).toContain('prepare');
+          expect(decisions?.inputSchema.properties?.outcome?.enum).toContain('accepted');
+          expect(tools.some((tool) => tool.name === 'commit_transition')).toBe(true);
+          const { workspace_id } = await invoke<{ workspace_id: string }>(
+            agent,
+            't3x_open_workspace',
+            {
+              project_id,
+              ref: 'main',
+              expected_head: base,
+              request_id: randomUUID(),
+            }
+          );
+          await invoke(agent, 't3x_edit', {
+            mode: 'draft',
+            project_id,
+            workspace_id,
+            request_id: randomUUID(),
+            ...(await revisions(agent, project_id, workspace_id)),
+            operations: [{ set: { path: 'prd', value: prd } }],
+          });
+          const review = await prepare(agent, project_id, workspace_id);
+          expect(
+            await invoke(agent, 't3x_draft_review', {
+              action: 'read',
+              project_id,
+              workspace_id,
+              snapshot_id: review.review.snapshot_id,
+            })
+          ).toMatchObject({ snapshot_digest: review.review.snapshot_digest });
+          const commit = await acceptAndCommit(agent, project_id, review, base);
+          agentReviewNumber = review.review.address_number;
+          expect(
+            await invoke(agent, 't3x_commit_result', {
+              project_id,
+              transition_id: review.view.transition_id,
+              commit_digest: commit,
+            })
+          ).toMatchObject({
+            commit: { digest: commit },
+            branch: { head_commit_hash: commit },
+          });
+          const result = await invoke<{ value: { prd: { title: string } } }>(
+            agent,
+            't3x_committed_state',
+            { action: 'read', project_id, commit_digest: commit }
+          );
+          expect(result.value.prd).toMatchObject(prd);
+          agentCommit = commit;
+          return 'Committed ' + result.value.prd.title + ' at ' + commit;
+        } finally {
+          await agent.close();
+        }
+      },
     });
-    const review = await prepare(agent, project_id, workspace_id);
-    expect(
-      await invoke(agent, 't3x_draft_review', {
-        action: 'read',
-        project_id,
-        workspace_id,
-        snapshot_id: review.review.snapshot_id,
-      })
-    ).toMatchObject({ snapshot_digest: review.review.snapshot_digest });
-    const commit = await acceptAndCommit(agent, project_id, review, base);
-    expect(
-      await invoke(agent, 't3x_commit_result', {
-        project_id,
-        transition_id: review.view.transition_id,
-        commit_digest: commit,
-      })
-    ).toMatchObject({
-      commit: { digest: commit },
-      branch: { head_commit_hash: commit },
+    await expect(page.getByText(job.result!, { exact: true })).toBeVisible();
+    await waitForReviewRequestBudget(request, owner.session);
+    await test.step('reopen the fixed Review after the Agent commit', async () => {
+      const reviewPage = await page.context().newPage();
+      try {
+        await reviewPage.goto(`${issuer}/${repository}/reviews/${agentReviewNumber}`);
+        await reviewPage.getByRole('button', { name: 'Refresh', exact: true }).click();
+        await expect(reviewPage.getByRole('heading', { name: 'Recorded review' })).toBeVisible();
+        await expect(reviewPage.getByRole('button', { name: 'Approve and commit' })).toHaveCount(0);
+        await expect(reviewPage.getByRole('button', { name: 'Reject change' })).toHaveCount(0);
+        await expect(
+          reviewPage.getByRole('link', { name: 'View commit in History' })
+        ).toHaveAttribute('href', new RegExp(encodeURIComponent(agentCommit)));
+        await expect(reviewPage.getByText('Committed. This snapshot stays available for reference.')).toBeVisible();
+        await reviewPage.screenshot({
+          path: test.info().outputPath('fixed-review-after-mcp-commit.png'),
+        });
+      } finally {
+        await reviewPage.close();
+      }
     });
-    const result = await invoke<{ value: { prd: { title: string } } }>(
-      agent,
-      't3x_committed_state',
-      { action: 'read', project_id, commit_digest: commit }
-    );
-    expect(result.value.prd).toMatchObject(prd);
-    job.result = 'Committed ' + result.value.prd.title + ' at ' + commit;
-    await page.reload();
-    await expect(page.getByText(job.result, { exact: true })).toBeVisible();
-
+    await test.step('identify the Agent commit in State and History', async () => {
+      const pinned = await page.request.get(
+        `${issuer}/api/v1/commits/${encodeURIComponent(agentCommit)}?project_id=${project_id}`
+      );
+      expect(pinned.ok()).toBe(true);
+      const { commit } = (await pinned.json()).data;
+      expect(commit.committed_by.kind).toBe('agent');
+      expect(commit.committed_by.id).toMatch(/^agent:/);
+      expect(commit.operation_count).toBeGreaterThan(0);
+      const title =
+        commit.message?.trim() ||
+        `Recorded effect · ${commit.operation_count} operation${commit.operation_count === 1 ? '' : 's'}`;
+      const byline = 'Committed by ' + commit.committed_by.id;
+      const versionPage = await page.context().newPage();
+      try {
+        await versionPage.goto(
+          `${issuer}/${repository}/commits/${commit.address_number}?view=overview`
+        );
+        const version = versionPage.getByRole('region', { name: 'Viewed version' });
+        await expect(version).toContainText(byline);
+        await expect(version).toContainText(title);
+        await versionPage.screenshot({ path: test.info().outputPath('mcp03-state.png') });
+        await versionPage.goto(`${issuer}/${repository}/history/${commit.address_number}`);
+        const list = versionPage.getByRole('region', { name: 'Commit list' });
+        await expect(list.locator(`[data-commit-hash="${agentCommit}"]`)).toContainText(byline);
+        await expect(versionPage.getByRole('region', { name: 'Selected commit' })).toContainText(
+          byline
+        );
+        await expect(versionPage.getByRole('heading', { name: title, exact: true })).toBeVisible();
+        await versionPage.screenshot({ path: test.info().outputPath('mcp03-history.png') });
+      } finally {
+        await versionPage.close();
+      }
+    });
+    const agent = await connectBearer(token);
+    clients.push(agent);
+    expect(
+      (
+        await request.get(API_BASE + '/auth/me/credential', {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+      ).status()
+    ).toBe(401);
     const reused = await connectBearer(token);
     clients.push(reused);
     const branches = await invoke<Array<{ name: string }>>(reused, 't3x_query', {
@@ -473,7 +518,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     });
     expect(branches.some((branch) => branch.name === 'main')).toBe(true);
     const followup = 'List branches using the current connection.';
-    host.record(followup, branches.map((branch) => branch.name).join(', '));
+    host.tasks.record(job.chat, followup, branches.map((branch) => branch.name).join(', '));
     await page.reload();
     await expect(page.getByText(followup, { exact: true })).toBeVisible();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
@@ -485,6 +530,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     });
     expect(denied.isError).toBe(true);
 
+    await waitForReviewRequestBudget(request, owner.session);
     const otherGrant = await authorize(page, host, 'List the repository branches.', {
       chooseId: other.project_id,
       expectedDetail: /reviewer must approve/i,
@@ -518,6 +564,40 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       protectedScope.project_id,
       protectedScope.workspace_id
     );
+    await test.step('open the Agent-prepared fixed Review from its current Draft', async () => {
+      const reviewPage = await page.context().newPage();
+      try {
+        const root = `${issuer}/${identity.namespace}/reviewed`;
+        const query = new URLSearchParams({
+          workspace: protectedWorkspace.workspace_id,
+          workspaceMode: 'review',
+        });
+        await reviewPage.goto(`${root}/branches/main/workspaces?${query}`);
+        const open = reviewPage.getByRole('link', { name: 'Open fixed review' });
+        const path = '/reviews/' + protectedReview.review.address_number;
+        await expect(open).toHaveAttribute('href', new RegExp(path + '(?:\\?|$)'));
+        await reviewPage.screenshot({
+          path: test.info().outputPath('current-draft-fixed-review.png'),
+        });
+        const mutations: string[] = [];
+        reviewPage.on('request', (request) => {
+          if (
+            request.method() !== 'GET' &&
+            request.url().includes('/api/') &&
+            request.url().includes('/workspaces/')
+          )
+            mutations.push(request.url());
+        });
+        await open.click();
+        await expect(reviewPage).toHaveURL((url) => url.pathname === new URL(root + path).pathname);
+        await expect(
+          reviewPage.getByRole('heading', { name: /Fixed snapshot · Workspace r/ })
+        ).toBeVisible();
+        expect(mutations).toEqual([]);
+      } finally {
+        await reviewPage.close();
+      }
+    });
     const selfApproval = await second.call('decide_transition', {
       project_id: other.project_id,
       transition_id: protectedReview.view.transition_id,
@@ -543,17 +623,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     await authorize(page, host, 'Read the latest editorial plan.', { repository });
     expect(host.count()).toBe(3);
     await test.step('repair a pre-issued Agent token and resume its checked Draft', async () => {
-      // All three clients and both browsers share one real IP quota in this isolated stack.
-      // Start the separate legacy journey with enough budget for its guarded writes.
-      const budget = await request.get(API_BASE + '/auth/me/credential', {
-        headers: { Authorization: 'Bearer ' + owner.session },
-      });
-      expect([200, 429]).toContain(budget.status());
-      const remaining = Number(budget.headers()['x-ratelimit-remaining']);
-      const reset = Number(budget.headers()['x-ratelimit-reset']) * 1000;
-      if (remaining < 90 && reset > Date.now()) {
-        await delay(Math.min(61_000, reset - Date.now() + 150));
-      }
+      await waitForReviewRequestBudget(request, owner.session);
       await page.goto(issuer + '/' + identity.namespace);
       const { project_id: id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
         name: 'uat-recovery',
@@ -657,5 +727,324 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
     await Promise.allSettled(clients.map((client) => client.close()));
     host.server.closeAllConnections();
     await new Promise<void>((done) => host.server.close(() => done()));
+    host.tasks.dispose();
   }
+});
+
+test('the host recovers the original task and suppresses stale continuations', async () => {
+  const tasks = new ChatTasks();
+  const first = tasks.start('First chat');
+  const second = tasks.start('Second chat');
+  let writes = 0;
+  const run = async () => 'completed ' + ++writes;
+  try {
+    expect(tasks.beginExchange(first.state)).toBe(true);
+    expect(tasks.storeToken(first.state, 'synthetic-only')).toBe(true);
+    const restarted = new ChatTasks(tasks.directory);
+    await Promise.all([restarted.recover(first.state, run), restarted.resume(first.state, run)]);
+    expect(restarted.find(first.state)?.result).toBe('completed 1');
+    expect(restarted.find(second.state)?.stage).toBe('waiting');
+    expect(restarted.beginExchange(first.state)).toBe(false);
+
+    const newState = restarted.retry(second.state, 'Revised second task');
+    expect(restarted.find(newState)?.id).toBe(second.id);
+    expect(restarted.beginExchange(second.state)).toBe(false);
+    expect(restarted.beginExchange(newState)).toBe(true);
+    expect(restarted.cancel(newState)).toBe(true);
+    expect(restarted.storeToken(newState, 'synthetic-only')).toBe(false);
+    await restarted.resume(newState, run);
+
+    const third = restarted.start('Interrupted write');
+    restarted.beginExchange(third.state);
+    restarted.storeToken(third.state, 'synthetic-only');
+    let finish!: () => void;
+    const inFlight = restarted.resume(third.state, async () => {
+      writes++;
+      await new Promise<void>((done) => {
+        finish = done;
+      });
+      return 'late result';
+    });
+    const recovery = new ChatTasks(tasks.directory);
+    await recovery.recover(third.state, run);
+    finish();
+    await inFlight;
+    expect(recovery.find(third.state)?.stage).toBe('uncertain');
+    expect(writes).toBe(2);
+  } finally {
+    tasks.dispose();
+  }
+});
+
+function oauthQuery(repository?: string) {
+  const verifier = randomBytes(32).toString('base64url');
+  const query = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: callback.href,
+    response_type: 'code',
+    code_challenge_method: 'S256',
+    code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+    resource: resource.href,
+    scope: 'repository:commit',
+    state: randomUUID(),
+    ...(repository ? { repository } : {}),
+  });
+  return { verifier, query };
+}
+
+test('Web preselection and Chat consent share one guarded repository approval', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const route = issuer + '/api/v1/mcp-delegations';
+  const consent = (query: URLSearchParams) => route + '/consent?' + query;
+  const screen = (query: URLSearchParams) => issuer + '/settings/agent-access/authorize?' + query;
+  const origin = { Origin: issuer };
+  const legacy = oauthQuery().query;
+  legacy.set('task', 'fixture-private-instruction');
+  await page.goto(screen(legacy));
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === '/login' &&
+      !new URL(url.searchParams.get('callbackUrl')!, issuer).searchParams.has('task')
+  );
+  expect(decodeURIComponent(page.url()).includes('fixture-private-instruction')).toBe(false);
+
+  const accountA = account('coordinate');
+  const owner = await registerBrowser(page, accountA);
+  const { project_id: projectId } = await owner.actor<{ project_id: string }>('POST', '/projects', {
+    name: 'personal',
+    namespace: accountA.namespace,
+  });
+  const repository = accountA.namespace + '/personal';
+  const listGrants = async () =>
+    (await (await page.request.get(route + '?projectId=' + projectId)).json()).grants;
+
+  await page.goto(issuer + '/' + repository + '/settings?view=agent-access');
+  await page.getByRole('link', { name: 'Connect an Agent' }).click();
+  await expect(page.getByRole('combobox', { name: 'Repository' })).toHaveValue(projectId);
+  await page.getByRole('combobox', { name: 'Agent', exact: true }).selectOption(clientId);
+  await page
+    .locator('article')
+    .screenshot({ path: test.info().outputPath('web-direct-selection.png') });
+  const saved = page.waitForResponse(
+    (res) =>
+      new URL(res.url()).pathname.endsWith('/preselections') && res.request().method() === 'POST'
+  );
+  await page.getByRole('button', { name: 'Continue in client' }).click();
+  const selection = (await (await saved).json()) as { id: string };
+  await expect(page.getByText(/Selection saved for/)).toBeVisible();
+  await expect(page.getByText(resource.href, { exact: true })).toBeVisible();
+  await page.locator('article').screenshot({ path: test.info().outputPath('manual-oauth-connection.png') });
+  expect(await listGrants()).toHaveLength(0);
+
+  const { query } = oauthQuery();
+  const consentPage = await page.context().newPage();
+  await consentPage.goto(screen(query));
+  const savedPicker = consentPage.getByRole('combobox', { name: 'Use this saved selection' });
+  await expect(savedPicker).toHaveValue('');
+  await savedPicker.selectOption(selection.id);
+  await expect(consentPage.getByText(/Edit content on all branches/)).toBeVisible();
+  await consentPage.getByText('Advanced settings', { exact: true }).click();
+  await consentPage.getByRole('combobox', { name: 'Writable branches' }).selectOption('current');
+  await expect(consentPage.getByText('Read this repository. Edit content only on main.')).toBeVisible();
+  await consentPage.getByRole('combobox', { name: 'Agent actions' }).selectOption('read');
+  await expect(consentPage.getByText('Read this repository.', { exact: true })).toBeVisible();
+  await consentPage.setViewportSize({ width: 390, height: 844 });
+  await consentPage.locator('article').screenshot({ path: test.info().outputPath('narrow-consent.png') });
+  expect(await consentPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true
+  );
+
+  // Use the registered callback without retaining its code or full URL in diagnostics.
+  await consentPage.route(callback.origin + '/**', (request) =>
+    request.fulfill({ status: 200, body: 'Returned to client' })
+  );
+  await consentPage.getByRole('button', { name: 'Authorize and start' }).click();
+  await expect(consentPage.getByText('Returned to client')).toBeVisible();
+  await consentPage.close();
+  await page.bringToFront();
+  await expect(page.getByText(/This selection was used to authorize/)).toBeVisible();
+  await expect(page.getByText(/Selection expires/)).toHaveCount(0);
+  await page.locator('article').screenshot({ path: test.info().outputPath('used-selection.png') });
+  await page.getByRole('link', { name: 'View repository Agent access' }).click();
+  await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'agent-access');
+  const active = (await listGrants()).filter((grant: { revoked: boolean }) => !grant.revoked);
+  expect(active).toHaveLength(1);
+  expect(active[0].mode).toBe('read');
+
+  const explicit = oauthQuery().query;
+  explicit.set('preselection', selection.id);
+  expect((await page.request.get(consent(explicit))).ok()).toBe(false);
+
+  const otherContext = await browser.newContext({ baseURL: issuer });
+  try {
+    const other = await registerBrowser(await otherContext.newPage(), account('colead'));
+    const person = await other.actor<{ id: string }>('GET', '/auth/me');
+    await owner.actor('PUT', '/projects/' + projectId + '/guests', {
+      principal: { kind: 'human', principal_id: person.id },
+      role: 'admin',
+      expires_at: null,
+    });
+    const attempt = oauthQuery(repository).query;
+    const endpoint = consent(attempt);
+    const preview = await (await page.request.get(endpoint)).json();
+    const approve = {
+      decision: 'approve',
+      previewVersion: preview.previewVersion,
+      projectId,
+      branch: 'main',
+      branchOnly: false,
+      mode: 'commit',
+      days: 7,
+    };
+    const cancel = { decision: 'cancel', previewVersion: preview.previewVersion };
+    for (const data of [approve, cancel]) {
+      expect((await otherContext.request.post(endpoint, { data, headers: origin })).status()).toBe(
+        404
+      );
+    }
+    expect((await (await page.request.get(endpoint)).json()).status).toBe('pending');
+    expect((await page.request.post(endpoint, { data: cancel, headers: origin })).ok()).toBe(true);
+    expect((await page.request.post(endpoint, { data: approve, headers: origin })).status()).toBe(
+      409
+    );
+    await page.goto(screen(attempt));
+    await expect(page.getByText(/cancelled/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Authorize and start' })).toHaveCount(0);
+    expect((await listGrants()).filter((g: { revoked: boolean }) => !g.revoked)[0].id).toBe(
+      active[0].id
+    );
+
+    const earlier = oauthQuery(repository).query;
+    const later = oauthQuery(repository).query;
+    const old = await (await page.request.get(consent(earlier))).json();
+    const fresh = await (await page.request.get(consent(later))).json();
+    const decision = (params: URLSearchParams, version: string) =>
+      page.request.post(consent(params), {
+        headers: origin,
+        data: { ...approve, previewVersion: version },
+      });
+    expect((await decision(later, fresh.previewVersion)).ok()).toBe(true);
+    expect((await decision(earlier, old.previewVersion)).status()).toBe(409);
+    expect((await decision(later, fresh.previewVersion)).ok()).toBe(true);
+    const current = (await listGrants()).filter((g: { revoked: boolean }) => !g.revoked);
+    expect(current).toHaveLength(1);
+    expect(current[0].id).not.toBe(active[0].id);
+  } finally {
+    await otherContext.close();
+  }
+});
+
+test('a registered Web launcher carries its preselection through PKCE to the selected repository', async ({
+  page,
+  request,
+}) => {
+  const identity = account('launcher');
+  const owner = await registerBrowser(page, identity);
+  const { project_id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
+    name: 'personal',
+    namespace: identity.namespace,
+  });
+  const { query, verifier } = oauthQuery();
+  const launcher = 't3x-qualification-launcher';
+  query.set('client_id', launcher);
+  query.set('scope', 'repository:read');
+  let receivedCode = '';
+  // The fixture owns the client pages. Web, consent, token exchange and MCP use the live stack.
+  await page.route(callback.origin + '/connect?*', async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.size !== 1 || !params.get('preselection')) return route.abort();
+    query.set('preselection', params.get('preselection')!);
+    return route.fulfill({
+      status: 302,
+      headers: { location: issuer + '/settings/agent-access/authorize?' + query },
+    });
+  });
+  await page.route(callback.href + '?*', async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get('iss') !== issuer || params.get('state') !== query.get('state'))
+      return route.abort();
+    receivedCode = params.get('code') ?? '';
+    return route.fulfill({ body: 'Returned to launcher' });
+  });
+  await page.goto(issuer + '/settings/agent-access');
+  await page.getByRole('combobox', { name: 'Repository' }).selectOption(project_id);
+  await page.getByRole('combobox', { name: 'Agent', exact: true }).selectOption(launcher);
+  await page.getByRole('button', { name: 'Continue in client' }).click();
+  await expect(page.getByRole('heading', { name: /Let Qualification Launcher/ })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Repository' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Authorize and start' }).click();
+  await expect(page.getByText('Returned to launcher')).toBeVisible();
+  const exchange = await request.post(issuer + '/api/mcp-oauth/token', {
+    form: {
+      grant_type: 'authorization_code',
+      client_id: launcher,
+      code: receivedCode,
+      code_verifier: verifier,
+      resource: resource.href,
+      redirect_uri: callback.href,
+    },
+  });
+  expect(exchange.status()).toBe(200);
+  const { access_token, scope } = await exchange.json();
+  expect(scope).toBe('repository:read');
+  const client = await connectBearer(access_token);
+  try {
+    expect(await invoke(client, 't3x_context', {})).toMatchObject({
+      project_id,
+      transition_scopes: ['transition:inspect'],
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test('reopen a fixed Review after its owner approves and commits on the Web', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  await waitForReviewRequestBudget(request);
+  const identity = account('web-review');
+  const owner = await registerBrowser(page, identity);
+  const { project_id } = await owner.actor<{ project_id: string }>('POST', '/projects', {
+    name: 'web-review',
+    namespace: identity.namespace,
+  });
+  const workspace = 'first-schema-review';
+  await initializeQualificationSchema(
+    owner.actor,
+    project_id,
+    workspace,
+    await owner.evidence(project_id)
+  );
+  await page.goto(
+    `${issuer}/${identity.namespace}/web-review/branches/main/workspaces?${new URLSearchParams({ workspace, workspaceMode: 'review' })}`
+  );
+  const preparing = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/authoring/reviews')
+  );
+  await page.getByRole('button', { name: 'Prepare review', exact: true }).click();
+  const prepared = await preparing;
+  expect(prepared.ok()).toBe(true);
+  await expect(page).toHaveURL(/\/reviews\/\d+(?:\?|$)/);
+  const url = page.url();
+  const response = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/transition/decide')
+  );
+  await page.getByRole('button', { name: 'Approve and commit', exact: true }).click();
+  const decision = await response;
+  expect(decision.ok()).toBe(true);
+  const commit = (await decision.json()).data.review_snapshot.objects.commit.digest as string;
+  await page.goto(url);
+  await expect(page.getByRole('heading', { name: 'Recorded review' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View commit in History' })).toHaveAttribute(
+    'href',
+    new RegExp(encodeURIComponent(commit))
+  );
+  await expect(page.getByRole('button', { name: 'Approve and commit' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reject change' })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('fixed-review-after-web-commit.png') });
 });

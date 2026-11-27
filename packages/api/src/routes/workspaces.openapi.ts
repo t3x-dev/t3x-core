@@ -51,6 +51,7 @@ import {
 } from '../lib/transition-authority';
 import { observeTransitionCompatibilityRoute } from '../lib/transition-compatibility-route';
 import { decideWorkspaceChange } from '../lib/workspace-change-decision';
+import { readWorkspaceReviewOutcome } from '../lib/workspace-review-artifacts';
 import { captureWorkspaceSchema } from '../lib/workspace-schema-review';
 import {
   decideWorkspaceTransition,
@@ -201,6 +202,13 @@ const WorkspaceTransitionReviewSnapshotResponseSchema = z.object({
   supersedes_snapshot_digest: TransitionDigestSchema.nullable(),
   snapshot: z.any(),
   can_request_override: z.boolean().optional(),
+  recorded_outcome: z
+    .object({
+      decision_digest: TransitionDigestSchema,
+      outcome: z.enum(['accepted', 'overridden', 'rejected']),
+      commit_digest: TransitionDigestSchema.optional(),
+    })
+    .optional(),
   change_projection: z.any(),
   created_at: z.string(),
 });
@@ -734,7 +742,10 @@ workspaceRoutes.openapi(getLatestWorkspaceTransitionReviewSnapshotRoute, async (
   return c.json(
     {
       success: true as const,
-      data: await transitionReviewSnapshotToWire(db, snapshot),
+      data: {
+        ...(await transitionReviewSnapshotToWire(db, snapshot)),
+        recorded_outcome: await readWorkspaceReviewOutcome(db, snapshot),
+      },
     },
     200
   );
@@ -756,6 +767,7 @@ workspaceRoutes.openapi(getWorkspaceTransitionReviewSnapshotRoute, async (c) => 
       success: true as const,
       data: {
         ...(await transitionReviewSnapshotToWire(db, snapshot)),
+        recorded_outcome: await readWorkspaceReviewOutcome(db, snapshot),
         can_request_override: canRequestWorkspaceOverride(getRequestPrincipal(c), projectId),
       },
     },

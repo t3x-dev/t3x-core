@@ -297,14 +297,21 @@ export interface CreatedRepositoryCommit {
   object: RepositoryCommitV2;
 }
 
-export interface StoredRepositoryCommit {
+export interface CommitDisplayFields {
+  committed_by?: TransitionActorRef | null;
+  decided_by?: TransitionActorRef | null;
+  operation_count?: number;
+  message?: string | null;
+}
+
+export interface StoredRepositoryCommit extends CommitDisplayFields {
   address_number?: string;
   digest: string;
   recorded_at: string;
   object: RepositoryCommitV2;
 }
 
-export interface CommitHistoryProjectionV2 {
+export interface CommitHistoryProjectionV2 extends CommitDisplayFields {
   address_number?: string;
   format: 'transition_v2';
   id: string;
@@ -815,6 +822,11 @@ export interface WorkspaceTransitionDecisionEnvelope extends WorkspaceTransition
 export interface WorkspaceTransitionReviewSnapshotEnvelope {
   address_number?: string;
   can_request_override?: boolean;
+  recorded_outcome?: {
+    decision_digest: string;
+    outcome: 'accepted' | 'rejected' | 'overridden';
+    commit_digest?: string;
+  };
   schema_review?: import('./schema-studio').WorkspaceFullSchemaReview | null;
   snapshot_id: string;
   snapshot_digest: string;

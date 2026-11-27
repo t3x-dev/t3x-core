@@ -85,7 +85,7 @@ describe('State node history', () => {
     render(
       <StateNodeHistoryPanel commit={root} path="prd/outcome" name="outcome" onBack={vi.fn()} />
     );
-    expect(await screen.findByText(/Unrecorded author/)).toBeInTheDocument();
+    expect(await screen.findByText(/Author not recorded/)).toBeInTheDocument();
     expect(screen.getByRole('article')).toHaveTextContent('Original');
     expect(screen.getByRole('status')).toHaveTextContent('1 change · 1 revision checked');
   });

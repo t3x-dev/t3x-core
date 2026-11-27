@@ -112,7 +112,7 @@ The person gives the Agent a task in their current conversation, for example “
 
 After confirmation, the requesting client receives the authorization callback, checks that access is ready and resumes the pending task in the original chat. The person can see which repository the Agent is working on without repeating their instruction. If they cancel, the host leaves that task paused and explains how to resume it.
 
-Repository **Settings → Agent access** is the management surface. The repository home can link to the same page as a shortcut. Show the Agent, effective scope and status of each delegation and let the person inspect, adjust, renew or revoke it. After revocation, a later task can request a fresh authorization in chat. The person must confirm again before that Agent can use the repository through a new grant.
+Repository **Settings → Agent access** manages existing grants and offers **Connect an Agent**. A person can also open `/settings/agent-access` directly to select a repository and registered client. Web saves that choice while the client is offline. Consent occurs when the client starts OAuth. The grant can subsequently be adjusted or revoked in repository Settings. [Web and Chat coordination](authorization-coordination.md#two-entries-one-confirmation)
 
 ### What the person confirms
 

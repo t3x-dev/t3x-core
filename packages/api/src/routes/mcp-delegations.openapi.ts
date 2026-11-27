@@ -1,44 +1,34 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  type AnyDB,
-  findApiKeyById,
+  createMcpPreselection,
   findApiKeyByValue,
   findBranchByName,
   findCurrentBranch,
-  findProjects,
-  getRepositoryAddress,
-  getRepositoryAddresses,
-  pendingMcpApproval,
+  McpPreselectionLimitError,
+  readAgentDelegation,
+  readMcpPreselectionStatus,
+  recordMcpExchangeOutcome,
   redeemMcpAuthorizationCode,
-  resolveRepositoryProject,
-  storeMcpAuthorizationCode,
 } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getDB } from '../lib/db';
 import {
   AuthorizationError,
-  approvalNonce,
-  authorizationCode,
-  authorizationRequest,
-  callbackUrl,
   checkParameters,
   codeSecret,
   delegationModes,
   digest,
   issuerConfig,
   registeredClient,
-  scopeAllows,
+  registeredClients,
   scopeFor,
-  serviceMode,
 } from '../lib/mcp-authorization';
+import { decideMcpConsent, previewMcpConsent } from '../lib/mcp-consent';
+import { canDelegate, delegationDays, repositoryChoices } from '../lib/mcp-consent-preview';
 import { openMcpAccessToken, sealMcpAccessToken } from '../lib/mcp-oauth';
-import { contentSchemaReadiness } from '../lib/open-workspace';
-import { evaluateProjectAccess, getProjectListAuthority } from '../lib/project-access';
 import {
-  issueRepositoryAgentDelegation,
   listRepositoryAgentDelegations,
-  previewRepositoryAgentDelegation,
   type RepositoryAgentGrant,
   RepositoryDelegationError,
   repairRepositoryAgentDelegation,
@@ -53,20 +43,13 @@ const base = '/v1/mcp-delegations';
 const consent = base + '/consent';
 const publicBase = '/mcp-oauth';
 const id = z.string().min(1).max(255);
-const allowedDays = z.union([z.literal(1), z.literal(7), z.literal(30)]);
-const optionsSchema = z.object({
-  projectId: id,
-  branch: id,
-  branchOnly: z.boolean(),
-  mode: z.enum(delegationModes),
-  days: allowedDays,
-});
+const registeredClientId = z.string().min(1).max(256);
 const updateSchema = z.object({
   projectId: id,
   id,
   branch: id.nullable(),
   mode: z.enum(delegationModes),
-  days: allowedDays,
+  days: delegationDays,
 });
 
 const grantSchema = z.object({
@@ -85,7 +68,23 @@ const consentResponse = z.object({
   repositories: z.array(repositorySchema),
   repositoryLocked: z.boolean(),
   scope: z.enum(delegationModes),
-  task: z.string().optional(),
+  status: z.enum([
+    'pending',
+    'approved',
+    'cancelled',
+    'expired',
+    'token_issued',
+    'spent_without_token',
+    'code_expired',
+    'closed',
+  ]),
+  account: z.object({ id, name: z.string() }),
+  priorGrant: z.object({ id, clientName: z.string() }).nullable(),
+  mode: z.enum(delegationModes),
+  days: delegationDays,
+  branchOnly: z.boolean(),
+  previewVersion: z.string().nullable(),
+  preselections: z.array(z.object({ id, projectId: id, repository: z.string(), branch: id })),
   selected: repositorySchema
     .extend({
       branch: z.string(),
@@ -104,6 +103,7 @@ const failures = {
   403: { description: 'Insufficient authority' },
   404: { description: 'Not available' },
   409: { description: 'Selection or grant changed' },
+  429: { description: 'Too many authorization attempts or saved selections' },
   503: { description: 'Service unavailable' },
 };
 const previewConsent = createRoute({
@@ -119,6 +119,49 @@ const decideConsent = createRoute({
   tags: ['MCP authorization'],
   summary: 'Approve or cancel a repository delegation',
   responses: { ...success(z.object({ redirectTo: z.string() })), ...failures },
+});
+const listChoices = createRoute({
+  method: 'get',
+  path: '/v1/mcp-delegations/preselections',
+  tags: ['MCP authorization'],
+  summary: 'Choose a registered Agent and delegable repository',
+  responses: {
+    ...success(
+      z.object({
+        clients: z.array(z.object({ id: registeredClientId, name: z.string() })),
+        repositories: z.array(repositorySchema),
+      })
+    ),
+    ...failures,
+  },
+});
+const saveSelection = createRoute({
+  method: 'post',
+  path: '/v1/mcp-delegations/preselections',
+  tags: ['MCP authorization'],
+  summary: 'Save a short-lived Web preselection for one client authorization',
+  responses: {
+    ...success(
+      z.object({
+        id,
+        expiresAt: z.string(),
+        launchUrl: z.string().nullable(),
+        resourceUrl: z.string(),
+      })
+    ),
+    ...failures,
+  },
+});
+const selectionStatus = createRoute({
+  method: 'get',
+  path: '/v1/mcp-delegations/preselections/{id}',
+  tags: ['MCP authorization'],
+  summary: 'Read the status of one saved selection for its owner',
+  request: { params: z.object({ id }) },
+  responses: {
+    ...success(z.object({ status: z.enum(['pending', 'used', 'expired']) })),
+    ...failures,
+  },
 });
 const listGrants = createRoute({
   method: 'get',
@@ -168,7 +211,13 @@ const exchangeCode = createRoute({
 
 const invalid = (message: string) => new AuthorizationError(400, message);
 
-for (const path of [base, consent, publicBase + '/*'])
+for (const path of [
+  base,
+  consent,
+  base + '/preselections',
+  base + '/preselections/*',
+  publicBase + '/*',
+])
   routes.use(path, async (c, next) => {
     c.header('Cache-Control', 'no-store');
     c.header('Referrer-Policy', 'no-referrer');
@@ -179,6 +228,11 @@ routes.use(
   bodyLimit({ maxSize: 8192, onError: (c) => c.json({ error: 'invalid_request' }, 413) })
 );
 routes.onError((err, c) => {
+  if (err instanceof McpPreselectionLimitError)
+    return c.json(
+      { error: 'Too many pending selections. Use an existing selection or wait for expiry.' },
+      429
+    );
   if (err instanceof AuthorizationError || err instanceof RepositoryDelegationError)
     return c.json({ error: err.message }, err.status);
   if (err instanceof z.ZodError || err instanceof SyntaxError)
@@ -191,63 +245,6 @@ function sessionUser(c: Context) {
   if (p?.subject.kind !== 'human' || p.credential.kind !== 'session' || !p.userId)
     throw new AuthorizationError(401, 'Sign in to T3X to manage repository access.');
   return p.userId;
-}
-
-async function canDelegate(db: AnyDB, userId: string, projectId: string) {
-  const result = await evaluateProjectAccess(
-    db,
-    projectId,
-    { userId, principalKind: 'human', projectId: null },
-    'project:guests:manage'
-  );
-  if (!result.allowed) throw new AuthorizationError(404, 'Repository unavailable for delegation.');
-  return result.project;
-}
-
-async function resolveSelection(
-  db: AnyDB,
-  userId: string,
-  repository: string | null,
-  projectId: string | null
-) {
-  if (repository !== null) {
-    const parts = repository.split('/');
-    if (parts.length !== 2 || parts.some((part) => !part.trim()))
-      throw invalid('Use a repository address in owner/name format.');
-    const named = await resolveRepositoryProject(db, parts[0], parts[1]);
-    if (!named || (projectId && projectId !== named.projectId))
-      throw new AuthorizationError(404, 'Repository unavailable for delegation.');
-    return canDelegate(db, userId, named.projectId);
-  }
-  return projectId ? canDelegate(db, userId, projectId) : null;
-}
-
-async function repositoryChoices(c: Context, db: AnyDB) {
-  const authority = getProjectListAuthority(c);
-  if (!authority) return [];
-  const repositories: { id: string; name: string }[] = [];
-  let cursor: string | null = '';
-  do {
-    const page: { items: { projectId: string; name: string }[]; next_cursor: string | null } =
-      await findProjects(db, {
-        authority,
-        required_action: 'project:guests:manage',
-        cursor,
-        limit: 100,
-      });
-    const addresses = await getRepositoryAddresses(
-      db,
-      page.items.map((p) => p.projectId)
-    );
-    repositories.push(
-      ...page.items.map((p) => ({
-        id: p.projectId,
-        name: addresses.get(p.projectId)?.canonical_path?.slice(1) ?? p.name,
-      }))
-    );
-    cursor = page.next_cursor;
-  } while (cursor);
-  return repositories;
 }
 
 function presentGrant(grant: RepositoryAgentGrant) {
@@ -263,172 +260,56 @@ function presentGrant(grant: RepositoryAgentGrant) {
   };
 }
 
-routes.openapi(previewConsent, async (c) => {
+routes.openapi(previewConsent, async (c) =>
+  c.json(await previewMcpConsent(c, await getDB(), sessionUser(c)))
+);
+routes.openapi(decideConsent, async (c) =>
+  c.json(await decideMcpConsent(c, await getDB(), sessionUser(c)))
+);
+
+routes.openapi(listChoices, async (c) => {
+  sessionUser(c);
+  issuerConfig();
+  const clients = registeredClients().map((entry) => ({
+    id: entry.client_id,
+    name: entry.client_name,
+  }));
+  return c.json({ clients, repositories: await repositoryChoices(c, await getDB()) });
+});
+
+routes.openapi(saveSelection, async (c) => {
   const userId = sessionUser(c);
-  const config = issuerConfig();
-  const params = new URL(c.req.url).searchParams;
-  const request = authorizationRequest(params, config);
+  const { resource } = issuerConfig();
+  const input = z
+    .object({ projectId: id, clientId: registeredClientId, branch: z.string().max(255).optional() })
+    .parse(await c.req.json());
+  const client = registeredClients().find((entry) => entry.client_id === input.clientId);
+  if (!client) throw invalid('Unknown registered Agent.');
   const db = await getDB();
-  const project = await resolveSelection(db, userId, request.repository, params.get('projectId'));
-  const deployment = await serviceMode(config);
-  const scope = scopeAllows(deployment, request.mode) ? request.mode : deployment;
-  let selected = null;
-  if (project) {
-    const branch =
-      request.branch || (await findCurrentBranch(db, project.projectId))?.name || 'main';
-    const target = await findBranchByName(db, project.projectId, branch);
-    if (!target) throw new AuthorizationError(404, 'Branch not found.');
-    const effective = await previewRepositoryAgentDelegation(db, {
-      projectId: project.projectId,
-      options: { branch, branchOnly: false, days: 7, mode: scope },
-    });
-    const address = await getRepositoryAddress(db, project);
-    let outcome: string;
-    let detail: string;
-    if (scope === 'read') {
-      outcome = 'read_only';
-      detail =
-        deployment === 'read'
-          ? 'This MCP connection can read repository content and history. Its editing tools are unavailable.'
-          : 'The requested access covers reading content and history.';
-    } else if (effective.outcome === 'missing-policy') {
-      outcome = 'draft_only';
-      detail =
-        'The Agent can save a draft. A repository administrator must configure a branch acceptance policy before the Agent can prepare a fixed Review.';
-    } else if (effective.outcome === 'commit' && scope === 'commit') {
-      outcome = 'eligible';
-      detail =
-        'The Agent can prepare a fixed Review and commit its eligible changes after checks pass.';
-    } else {
-      outcome = 'protected';
-      detail =
-        scope === 'prepare'
-          ? 'The Agent can prepare changes for your review. A person must decide before commit.'
-          : 'This branch keeps its existing acceptance rules. The Agent can prepare a Review. An eligible reviewer must approve before commit.';
-    }
-    let readinessDetail: string | undefined;
-    if (scope !== 'read') {
-      const schema = await contentSchemaReadiness(
-        db,
-        project.projectId,
-        { kind: 'human', id: userId },
-        branch,
-        target.headCommitHash
-      );
-      if (schema === 'unbound')
-        readinessDetail =
-          'The Agent can collect sources now. Choose a Schema before its first content commit.';
-      if (schema === 'first-schema')
-        readinessDetail =
-          'This Workspace has a selected Schema. Its first Schema needs your approval.';
-      if (schema === 'unresolved')
-        readinessDetail = 'The Workspace Schema needs attention before content can be verified.';
-    }
-    selected = {
-      id: project.projectId,
-      name: address.canonical_path?.slice(1) ?? project.name,
-      branch,
-      outcome,
-      detail,
-      ...(readinessDetail && { readinessDetail }),
-    };
-  }
-  const repositories =
-    request.repository && selected
-      ? [{ id: selected.id, name: selected.name }]
-      : await repositoryChoices(c, db);
+  const saved = await db.transaction(async (tx) => {
+    await canDelegate(tx, userId, input.projectId);
+    const branch = input.branch || (await findCurrentBranch(tx, input.projectId))?.name || 'main';
+    if (!(await findBranchByName(tx, input.projectId, branch)))
+      throw new AuthorizationError(404, 'Branch not found.');
+    return createMcpPreselection(tx, { ...input, userId, branch });
+  });
+  const launch = client.connection_start_uri ? new URL(client.connection_start_uri) : null;
+  launch?.searchParams.set('preselection', saved.id);
   return c.json({
-    clientName: request.client.client_name,
-    repositories,
-    selected,
-    scope,
-    repositoryLocked: request.repository !== null,
-    task: params.get('task') ?? undefined,
+    id: saved.id,
+    expiresAt: saved.expiresAt.toISOString(),
+    launchUrl: launch?.href ?? null,
+    resourceUrl: resource.href,
   });
 });
 
-routes.openapi(decideConsent, async (c) => {
+routes.openapi(selectionStatus, async (c) => {
   const userId = sessionUser(c);
-  const config = issuerConfig();
-  const request = authorizationRequest(new URL(c.req.url).searchParams, config);
-  const body = await c.req.json();
-  if (body?.decision === 'cancel')
-    return c.json({
-      redirectTo: callbackUrl(request, config.issuer.origin, { error: 'access_denied' }),
-    });
-  if (body?.decision !== 'approve') throw invalid('Confirm or cancel the request.');
-  const { projectId, ...options } = optionsSchema.parse(body);
-  if (
-    !scopeAllows(request.mode, options.mode) ||
-    (request.branch && request.branch !== options.branch)
-  )
-    throw invalid('Selection exceeds this authorization request.');
   const db = await getDB();
-  await resolveSelection(db, userId, request.repository, projectId);
-  const deployment = await serviceMode(config);
-  if (!scopeAllows(deployment, options.mode))
-    throw new AuthorizationError(409, 'The available MCP tools changed. Review the request again.');
-  const requestHash = digest(
-    JSON.stringify([
-      userId,
-      request.client.client_id,
-      config.resource.href,
-      request.redirectUri,
-      request.challenge,
-    ])
-  );
-  const approvalHash = digest(
-    JSON.stringify([
-      projectId,
-      options.branch,
-      options.branchOnly,
-      options.mode,
-      options.days,
-      request.state,
-    ])
-  );
-  const code = await db.transaction(async (tx) => {
-    const earlier = await pendingMcpApproval(tx, requestHash);
-    if (earlier) {
-      const grant = await findApiKeyById(tx, earlier.grantId);
-      if (earlier.approvalHash !== approvalHash || earlier.redeemed || !grant || grant.revoked_at)
-        throw new AuthorizationError(
-          409,
-          'This request has already been handled. Start a new request from your chat.'
-        );
-      return authorizationCode(earlier.nonce, config.secret);
-    }
-    const nonce = approvalNonce();
-    const code = authorizationCode(nonce, config.secret);
-    const { grant, credential } = await issueRepositoryAgentDelegation(tx, {
-      projectId,
-      userId,
-      clientId: request.client.client_id,
-      agentName: request.client.client_name,
-      options,
-    });
-    const expiresAt = new Date(Date.now() + 300_000);
-    const encryptedCredential = sealMcpAccessToken(
-      { audience: 't3x:authorization-code', apiKey: credential, expiresAt: expiresAt.getTime() },
-      codeSecret(code, config.secret)
-    );
-    await storeMcpAuthorizationCode(tx, {
-      codeHash: digest(code),
-      requestHash,
-      approvalHash,
-      nonce,
-      clientId: request.client.client_id,
-      redirectUri: request.redirectUri,
-      resource: config.resource.href,
-      challenge: request.challenge,
-      grantId: grant.id,
-      mode: options.mode,
-      encryptedCredential,
-      expiresAt,
-    });
-    return code;
-  });
-  return c.json({ redirectTo: callbackUrl(request, config.issuer.origin, { code }) });
+  const item = await readMcpPreselectionStatus(db, c.req.valid('param').id, userId);
+  if (!item) throw new AuthorizationError(404, 'Saved selection unavailable.');
+  await canDelegate(db, userId, item.projectId);
+  return c.json({ status: item.status });
 });
 
 routes.openapi(listGrants, async (c) => {
@@ -523,9 +404,14 @@ routes.openapi(exchangeCode, async (c) => {
       't3x:authorization-code',
       codeSecret(code, config.secret)
     );
+    const managed = await readAgentDelegation(tx, receipt.grantId, true);
     const grant = key && (await findApiKeyByValue(tx, key));
-    if (!key || !grant || grant.id !== receipt.grantId || !grant.expires_at) return null;
+    if (!key || !grant || grant.id !== receipt.grantId || !grant.expires_at || !managed) {
+      await recordMcpExchangeOutcome(tx, receipt.requestHash, 'spent_without_token');
+      return null;
+    }
     const expiresAt = Date.parse(grant.expires_at);
+    await recordMcpExchangeOutcome(tx, receipt.requestHash, 'token_issued');
     return {
       access_token: sealMcpAccessToken(
         { audience: config.resource.href, expiresAt, apiKey: key },
@@ -533,7 +419,7 @@ routes.openapi(exchangeCode, async (c) => {
       ),
       token_type: 'Bearer',
       expires_in: Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)),
-      scope: scopeFor(z.enum(delegationModes).parse(receipt.mode)),
+      scope: scopeFor(managed.mode),
     };
   });
   return result ? c.json(result) : c.json({ error: 'invalid_grant' }, 400);

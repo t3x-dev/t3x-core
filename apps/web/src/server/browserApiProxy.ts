@@ -113,18 +113,23 @@ export async function proxyBrowserApi(request: Request, path: string[]): Promise
       : `/api/${path.map(encodeURIComponent).join('/')}`;
   const target = new URL(upstreamPath, upstreamOrigin());
   target.search = incoming.search;
+  const route = path.join('/');
+  if (route === 'v1/mcp-delegations/consent' && target.searchParams.has('task')) {
+    target.searchParams.delete('task');
+  }
   const session = readCookie(request.headers.get('cookie'), SESSION_COOKIE);
   const body = ['GET', 'HEAD'].includes(request.method.toUpperCase())
     ? undefined
     : await request.blob();
+  const headersToForward = upstreamHeaders(request, session);
+  if (route === 'v1/mcp-delegations/consent') headersToForward.delete('referer');
   const upstream = await fetch(target, {
     method: request.method,
-    headers: upstreamHeaders(request, session),
+    headers: headersToForward,
     body: body && body.size > 0 ? body : undefined,
     redirect: 'manual',
     signal: request.signal,
   });
-  const route = path.join('/');
 
   if (LOGIN_PATHS.has(route) && upstream.ok) {
     const payload = (await upstream.json()) as {

@@ -156,6 +156,76 @@ describe('useWorkspaceReviewSnapshot', () => {
     window.removeEventListener('t3x:commit-created', commitCreated);
   });
 
+  it.each([
+    'accepted',
+    'rejected',
+    'overridden',
+  ] as const)('preserves fixed facts and blocks a second Decision after a recorded %s', async (outcome) => {
+    const fixed = snapshotEnvelope('reviewing');
+    const recorded = { outcome, decision_digest: `sha256:${'1'.repeat(64)}` };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(fixed);
+    vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+      ...fixed,
+      recorded_outcome: recorded,
+    });
+    const { result } = renderHook(() =>
+      useWorkspaceReviewSnapshot(fixed.project_id, fixed.workspace_id, fixed.snapshot_id)
+    );
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    expect(result.current.state.data?.recorded_outcome).toEqual(recorded);
+    expect(result.current.state.data?.snapshot).toEqual(fixed.snapshot);
+    await act(() => result.current.decide('accepted'));
+    expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
+  it.each([
+    'offline',
+    'different subject',
+  ])('retains a newly confirmed pinned commit when the latest read is %s', async (failure) => {
+    const pinned = snapshotEnvelope('reviewing');
+    const later = snapshotEnvelope('reviewing');
+    later.snapshot = { ...later.snapshot, snapshotId: 'rvs_' + 'a'.repeat(32) };
+    later.snapshot_id = later.snapshot.snapshotId;
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue(pinned);
+    vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue(later);
+    const { result } = renderHook(() =>
+      useWorkspaceReviewSnapshot(pinned.project_id, pinned.workspace_id, pinned.snapshot_id)
+    );
+    await waitFor(() =>
+      expect(result.current.state.laterResult?.snapshot_id).toBe(later.snapshot_id)
+    );
+
+    const recorded = {
+      outcome: 'accepted' as const,
+      decision_digest: 'sha256:' + 'f'.repeat(64),
+      commit_digest: 'sha256:' + 'c'.repeat(64),
+    };
+    vi.mocked(fetchWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+      ...pinned,
+      recorded_outcome: recorded,
+      can_request_override: false,
+    });
+    if (failure === 'offline')
+      vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockRejectedValue(
+        new Error('Offline')
+      );
+    else
+      vi.mocked(fetchLatestWorkspaceTransitionReviewSnapshot).mockResolvedValue({
+        ...later,
+        snapshot: {
+          ...later.snapshot,
+          review: { ...later.snapshot.review, digest: 'sha256:' + '0'.repeat(64) },
+        },
+      });
+    await act(async () => result.current.load());
+    expect(result.current.state).toMatchObject({
+      latestUnavailable: true,
+      loading: false,
+      data: { recorded_outcome: recorded, can_request_override: false, snapshot: pinned.snapshot },
+    });
+    expect(result.current.state.laterResult).toBeUndefined();
+    await act(async () => result.current.decide('rejected'));
+    expect(decideWorkspaceTransition).not.toHaveBeenCalled();
+  });
   it('blocks accept for an unavailable Base contract but leaves rejection available for audit', async () => {
     vi.mocked(decideWorkspaceTransition).mockClear();
     const loaded: WorkspaceTransitionReviewSnapshotEnvelope = snapshotEnvelope('reviewing');

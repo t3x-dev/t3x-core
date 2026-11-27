@@ -9,6 +9,7 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../schema';
 import { seedBuiltinTemplates } from '../seed/templates';
+import { ensureMcpAuthorizationAttempts } from './mcp-authorization-attempts-sql';
 import { MCP_AUTHORIZATION_CODES_SQL } from './mcp-authorization-codes-sql';
 import { REPOSITORY_OBJECT_ADDRESSES_SQL } from './repository-object-addresses-sql';
 import { ensureRepositoryPaths } from './repository-paths';
@@ -192,7 +193,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-export const POSTGRES_SCHEMA_VERSION = 90;
+export const POSTGRES_SCHEMA_VERSION = 91;
 
 function schemaStatus(currentVersion: number | null, tableExists: boolean): PostgresSchemaStatus {
   if (!tableExists) return 'missing';
@@ -298,7 +299,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
     await ensureSourceTextRevisionsSchema(sql);
     await ensurePullRequestsSchema(sql);
     await ensureMachineWorkflowSchema(sql);
-    await recordSchemaVersion(sql);
+    await recordSchemaVersion(sql, version);
     return false;
   }
 
@@ -2873,7 +2874,7 @@ async function initializeSchemaWithLock(sql: postgres.Sql): Promise<boolean> {
 
   await sql.unsafe(REPOSITORY_OBJECT_ADDRESSES_SQL);
 
-  await recordSchemaVersion(sql);
+  await recordSchemaVersion(sql, version);
   return true;
 }
 
@@ -2943,7 +2944,10 @@ async function ensureMachineWorkflowSchema(sql: postgres.Sql): Promise<void> {
   `);
 }
 
-async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {
+async function recordSchemaVersion(
+  sql: postgres.Sql,
+  previousVersion: number | undefined
+): Promise<void> {
   await sql.unsafe(MCP_AUTHORIZATION_CODES_SQL);
   // v90. Legacy credentials do not acquire repository delegation.
   await sql.unsafe(`
@@ -2955,6 +2959,8 @@ async function recordSchemaVersion(sql: postgres.Sql): Promise<void> {
       mode TEXT NOT NULL CHECK (mode IN ('read','prepare','commit'))
     );
   `);
+  if (previousVersion === undefined || previousVersion < 91)
+    await ensureMcpAuthorizationAttempts(sql);
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${POSTGRES_SCHEMA_VERSION}, NOW())

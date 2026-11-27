@@ -31,23 +31,30 @@ function makeClient(
   options: { tableExists?: boolean; version?: number | null; versionError?: Error } = {}
 ) {
   const { tableExists = true, version = POSTGRES_SCHEMA_VERSION, versionError } = options;
-  const client = {
-    begin: vi.fn(async (callback: (transaction: typeof client) => Promise<void>) =>
-      callback(client)
+  const client = Object.assign(
+    vi.fn(async (query: TemplateStringsArray) =>
+      query.join('').includes('SELECT secret FROM mcp_attempt_lookup_keys')
+        ? [{ secret: '00'.repeat(32) }]
+        : []
     ),
-    end: vi.fn().mockResolvedValue(undefined),
-    unsafe: vi.fn(async (query: string) => {
-      if (query.includes("to_regclass('public._schema_version')")) {
-        return [{ tableName: tableExists ? '_schema_version' : null }];
-      }
-      if (query.includes('FROM public._schema_version')) {
-        if (versionError) throw versionError;
-        return version === null ? [] : [{ version }];
-      }
-      if (query.includes('SELECT version FROM _schema_version')) return [];
-      return [];
-    }),
-  };
+    {
+      begin: vi.fn(async (callback: (transaction: typeof client) => Promise<void>) =>
+        callback(client)
+      ),
+      end: vi.fn().mockResolvedValue(undefined),
+      unsafe: vi.fn(async (query: string) => {
+        if (query.includes("to_regclass('public._schema_version')")) {
+          return [{ tableName: tableExists ? '_schema_version' : null }];
+        }
+        if (query.includes('FROM public._schema_version')) {
+          if (versionError) throw versionError;
+          return version === null ? [] : [{ version }];
+        }
+        if (query.includes('SELECT version FROM _schema_version')) return [];
+        return [];
+      }),
+    }
+  );
   return client;
 }
 
@@ -72,6 +79,7 @@ describe('PostgreSQL runtime and migration entry points', () => {
     ).resolves.toEqual({ kind: 'drizzle-db' });
 
     expect(client.begin).not.toHaveBeenCalled();
+    expect(client).not.toHaveBeenCalled();
     expect(seedBuiltinTemplatesMock).not.toHaveBeenCalled();
     expect(client.unsafe).toHaveBeenCalledTimes(2);
     for (const [query] of client.unsafe.mock.calls) {

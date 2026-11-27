@@ -11,7 +11,7 @@ import {
 import { useId, useState } from 'react';
 import { StateScrollArea } from '@/components/project/StateScrollArea';
 import { Badge } from '@/components/ui/badge';
-import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitByline, commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import type {
   StateNodeHistoryEntry,
   StateNodeHistoryValue,
@@ -196,14 +196,14 @@ function HistoryEntry({ entry, selected }: { entry: StateNodeHistoryEntry; selec
           {relativeTime(entry.commit.committed_at)}
         </time>
       </div>
-      {entry.commit.message && (
+      {(entry.commit.message || entry.commit.operation_count !== undefined) && (
         <p className="mt-2 text-[13px] font-medium leading-5 text-[var(--text-primary)] [overflow-wrap:anywhere]">
-          {entry.commit.message}
+          {commitTitle(entry.commit.message, entry.commit.operation_count)}
         </p>
       )}
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-[var(--text-tertiary)]">
-        <span className="min-w-0 truncate" title={entry.commit.author?.name}>
-          {entry.commit.author?.name || entry.commit.author?.type || 'Unrecorded author'}
+        <span className="min-w-0 truncate" title={commitByline(entry.commit)}>
+          {commitByline(entry.commit)}
         </span>
         {selected && <span className="text-[var(--accent-commit)]">· Selected version</span>}
       </div>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AgentConsent } from '@/components/project/agent-access/AgentConsent';
 import type { DelegationConsent } from '@/domain/mcpDelegation';
@@ -21,6 +21,14 @@ const selected = {
   detail: 'Can commit its changes after checks pass.',
 };
 const preview: DelegationConsent = {
+  status: 'pending',
+  previewVersion: 'preview-1',
+  account: { id: 'user-one', name: 'Maya' },
+  mode: 'commit',
+  days: 7,
+  branchOnly: false,
+  priorGrant: null,
+  preselections: [],
   clientName: 'Editorial agent',
   repositories: [repo],
   repositoryLocked: true,
@@ -52,6 +60,7 @@ it('displays the resolved client and locked repository with one confirmation', a
   await waitFor(() =>
     expect(api.decide).toHaveBeenCalledWith('client_id=one&state=pending', {
       decision: 'approve',
+      previewVersion: 'preview-1',
       projectId: 'project-one',
       branch: 'main',
       mode: 'commit',
@@ -74,6 +83,15 @@ it('loads a picked repository and displays its independent reviewer before autho
         detail: 'An independent reviewer must approve each change.',
       },
       scope: 'prepare',
+      mode: 'prepare',
+    })
+    .mockResolvedValueOnce({
+      ...preview,
+      repositoryLocked: false,
+      scope: 'prepare',
+      mode: 'read',
+      previewVersion: 'narrower',
+      selected: { ...selected, detail: 'The requested access covers reading content and history.' },
     });
   render(<AgentConsent />);
   expect(await screen.findByRole('heading', { name: 'Choose a repository' })).toBeVisible();
@@ -85,12 +103,12 @@ it('loads a picked repository and displays its independent reviewer before autho
   fireEvent.click(screen.getByText('Advanced settings'));
   expect(screen.queryByRole('option', { name: 'Submit eligible changes' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Agent actions'), { target: { value: 'read' } });
-  expect(screen.getByText('Read content and history only.')).toBeVisible();
+  expect(await screen.findByText('Read this repository.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Authorize and start' }));
   await waitFor(() =>
     expect(api.decide).toHaveBeenCalledWith(
-      'client_id=one&state=pending&projectId=project-one',
-      expect.objectContaining({ mode: 'read', projectId: repo.id })
+      'client_id=one&state=pending&projectId=project-one&requestedMode=read',
+      expect.objectContaining({ mode: 'read', projectId: repo.id, previewVersion: 'narrower' })
     )
   );
 });
@@ -160,15 +178,83 @@ it('shows the missing-policy limit for an organization and the first-Schema cond
 });
 
 it('keeps the Schema prerequisite visible when a user narrows eligible changes to human review', async () => {
-  api.read.mockResolvedValue({
-    ...preview,
-    selected: { ...selected, readinessDetail: 'The first Schema needs your approval.' },
-  });
+  api.read
+    .mockResolvedValueOnce({
+      ...preview,
+      selected: { ...selected, readinessDetail: 'The first Schema needs your approval.' },
+    })
+    .mockResolvedValueOnce({
+      ...preview,
+      mode: 'prepare',
+      selected: {
+        ...selected,
+        detail: 'You decide which changes to commit.',
+        readinessDetail: 'The first Schema needs your approval.',
+      },
+    });
   render(<AgentConsent />);
   fireEvent.click(await screen.findByText('Advanced settings'));
   fireEvent.change(screen.getByLabelText('Agent actions'), { target: { value: 'prepare' } });
-  expect(screen.getByText(/first Schema needs your approval/)).toHaveTextContent(
+  expect(await screen.findByText(/first Schema needs your approval/)).toHaveTextContent(
     'You decide which changes to commit.'
   );
   expect(screen.queryByText(/Can commit its changes after checks pass/)).toBeNull();
+});
+
+it('reloads a conflicting preview and stops decisions on the cancelled attempt', async () => {
+  api.read.mockResolvedValueOnce(preview).mockResolvedValueOnce({
+    ...preview,
+    status: 'cancelled',
+    previewVersion: null,
+    selected: null,
+  });
+  api.decide.mockRejectedValueOnce(
+    Object.assign(new Error('Changed.'), { code: 'PREVIEW_CONFLICT' })
+  );
+  render(<AgentConsent />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Authorize and start' }));
+  expect(await screen.findByText(/Authorization cancelled/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Authorize and start' })).toBeNull();
+  expect(api.decide).toHaveBeenCalledOnce();
+});
+
+it('withdraws the old preview while a changed writable scope is awaiting the server', async () => {
+  let resolvePreview!: (preview: DelegationConsent) => void;
+  const next = new Promise<DelegationConsent>((resolve) => {
+    resolvePreview = resolve;
+  });
+  api.read.mockResolvedValueOnce(preview).mockReturnValueOnce(next);
+  render(<AgentConsent />);
+  fireEvent.click(await screen.findByText('Advanced settings'));
+  fireEvent.change(screen.getByLabelText('Writable branches'), { target: { value: 'current' } });
+  expect(screen.queryByRole('button', { name: 'Authorize and start' })).toBeNull();
+  await act(async () =>
+    resolvePreview({ ...preview, branchOnly: true, previewVersion: 'single-branch' })
+  );
+  expect(await screen.findByText('Read this repository. Edit content only on main.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Authorize and start' }));
+  await waitFor(() =>
+    expect(api.decide.mock.lastCall?.[1]).toMatchObject({
+      previewVersion: 'single-branch',
+      branchOnly: true,
+    })
+  );
+});
+
+it('shows the receiving account and replacement and requires a deliberate choice of a saved selection', async () => {
+  window.history.replaceState(null, '', '?client_id=one&task=private-instruction&useSelection=sel');
+  api.read.mockResolvedValue({
+    ...preview,
+    priorGrant: { id: 'replacement', clientName: 'Editorial agent' },
+    preselections: [{ id: 'sel', projectId: repo.id, repository: repo.name, branch: 'editorial' }],
+  });
+  render(<AgentConsent />);
+  const saved = await screen.findByLabelText('Use this saved selection');
+  expect(saved).toHaveValue('');
+  expect(screen.getByText('Maya')).toBeVisible();
+  expect(screen.getByText(/replaces Editorial agent/)).toBeVisible();
+  expect(screen.queryByText('private-instruction')).toBeNull();
+  expect(api.read.mock.calls[0][0]).toBe('client_id=one');
+  fireEvent.change(saved, { target: { value: 'sel' } });
+  await waitFor(() => expect(api.read.mock.lastCall?.[0]).toBe('client_id=one&useSelection=sel'));
 });

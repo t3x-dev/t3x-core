@@ -165,6 +165,30 @@ describe('History node navigation', () => {
     expect(values('prd/reviewers')).toEqual(['Absent', '- second\n- first']);
   });
 
+  it('uses the exact committer and recorded Effect when no commit message is available', async () => {
+    mocks.loadCommits.mockResolvedValue([
+      {
+        ...selected,
+        message: null,
+        committed_by: { kind: 'agent', id: 'agent:editor' },
+        decided_by: { kind: 'human', id: 'reviewer' },
+        operation_count: 3,
+      },
+      root,
+    ]);
+    render(<CommitHistoryPage projectId="proj_test" />);
+    const list = screen.getByRole('region', { name: 'Commit list' });
+    const card = screen.getByRole('region', { name: 'Selected commit' });
+    expect(
+      await within(list).findByRole('button', { name: /Recorded effect · 3 operations/ })
+    ).toHaveTextContent('Committed by agent:editor');
+    expect(
+      within(card).getByRole('heading', { name: 'Recorded effect · 3 operations' })
+    ).toBeVisible();
+    expect(within(card).getByText('Committed by agent:editor')).toBeVisible();
+    expect(within(card).queryByText(/reviewer/)).toBeNull();
+  });
+
   it('never renders an unknown parent as an empty baseline', async () => {
     mocks.loadCommits.mockResolvedValue([selected]);
     mocks.loadCommit.mockRejectedValue(new Error('Parent unavailable'));
@@ -188,7 +212,7 @@ describe('History node navigation', () => {
     expect(screen.queryByRole('button', { name: /Update title/ })).not.toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: '' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Author filter' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Participant filter' }), {
       target: { value: 'Maya Chen' },
     });
     expect(screen.getByRole('button', { name: /Update title/ })).toBeInTheDocument();
@@ -235,7 +259,7 @@ describe('History node navigation', () => {
       screen.queryByRole('link', { name: 'View this version in State' })
     ).not.toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search commits' })).toHaveValue('Update');
-    expect(screen.getByRole('combobox', { name: 'Author filter' })).toHaveValue('Maya Chen');
+    expect(screen.getByRole('combobox', { name: 'Participant filter' })).toHaveValue('Maya Chen');
     expect(screen.queryByRole('button', { name: /Initial state/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back to previous page' }));
     expect(mocks.routerPush).toHaveBeenLastCalledWith('/team/repo/community');

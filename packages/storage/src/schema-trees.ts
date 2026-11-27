@@ -870,6 +870,7 @@ export const repositoryAgentDelegations = pgTable('repository_agent_delegations'
     .primaryKey()
     .references(() => apiKeys.id, { onDelete: 'cascade' }),
   clientId: text('client_id').notNull(),
+  revision: integer('revision').notNull().default(1),
   branch: text('branch').notNull(),
   branchOnly: boolean('branch_only').notNull(),
   mode: text('mode').$type<'read' | 'prepare' | 'commit'>().notNull(),
