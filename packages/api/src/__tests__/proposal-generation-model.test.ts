@@ -1,12 +1,19 @@
 import { LLMProviderError } from '@t3x-dev/core';
 import type { YSchema } from '@t3x-dev/yschema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInferenceRuntime, executeMeteredInference } from '../lib/inference';
+import {
+  allowAllInferenceAdmissionPolicy,
+  createInferenceRuntime,
+  executeMeteredInference,
+} from '../lib/inference';
 import {
   GENERATION_MODEL_SPECIFICATION_VERSION,
   type GenerationModel,
 } from '../lib/model-runtime-contract';
-import type { ProposalGenerationModelInput } from '../lib/proposal-generation';
+import type {
+  ProposalGenerationMeter,
+  ProposalGenerationModelInput,
+} from '../lib/proposal-generation';
 import { defaultProposalGenerationModel } from '../lib/proposal-generation-model';
 import { semanticSchemaLayout } from '../lib/semantic-schema-layout';
 import { createWorkspaceProposalModel } from '../lib/workspace-assistant/adapters/generation-model';
@@ -86,34 +93,40 @@ describe('managed Workspace Proposal binding', () => {
       generate,
     });
   }
-  async function invoke(generate: GenerationModel['generate']) {
+  function invoke(generate: GenerationModel['generate']) {
     const target = managed(generate);
-    return executeMeteredInference({
-      runtime: createInferenceRuntime({ createGenerationId: () => 'managed-proposal-attempt' }),
-      input: {
-        runId: 'proposal-run',
-        feature: 'transition.proposal-generation',
-        requestedModel: 'balanced',
-        scope: { actor: { kind: 'user', id: 'u' }, projectId: 'p' },
-      },
-      resolvedProvider: target.provider,
-      resolvedModel: target.model,
-      invoke: async (attempt) => {
-        const result = await target.generate(input, attempt);
-        return { ...result, value: result.draft };
-      },
+    let generation = 0;
+    const settle = vi.fn(allowAllInferenceAdmissionPolicy.settle);
+    const runtime = createInferenceRuntime({
+      admissionPolicy: { ...allowAllInferenceAdmissionPolicy, settle },
+      createGenerationId: () => `managed-proposal-attempt-${++generation}`,
     });
+    const meter: ProposalGenerationMeter = (attemptIndex, invoke) =>
+      executeMeteredInference({
+        runtime,
+        input: {
+          runId: 'proposal-run',
+          attemptIndex,
+          feature: 'transition.proposal-generation',
+          requestedModel: 'balanced',
+          scope: { actor: { kind: 'user', id: 'u' }, projectId: 'p' },
+        },
+        resolvedProvider: target.provider,
+        resolvedModel: target.model,
+        invoke,
+      });
+    return { result: target.generateMetered(input, meter), settle };
   }
   it('uses the admitted identity and existing draft validation with actual upstream evidence', async () => {
     const generate = vi.fn<GenerationModel['generate']>(async () => ({
       output: [{ type: 'json', value: draft }],
       evidence,
     }));
-    const result = await invoke(generate);
+    const result = await invoke(generate).result;
     expect(result.value).toEqual(draft);
     expect(generate).toHaveBeenCalledOnce();
     expect(generate.mock.calls[0][0]).toMatchObject({
-      generationId: 'managed-proposal-attempt',
+      generationId: 'managed-proposal-attempt-1',
       runId: 'proposal-run',
       attemptIndex: 0,
       feature: 'transition.proposal-generation',
@@ -130,24 +143,59 @@ describe('managed Workspace Proposal binding', () => {
       usage: evidence.usage,
     });
   });
-  it('rejects invalid drafts without a hidden second upstream call or local fallback', async () => {
+  it.each([
+    'invalid operations',
+    'invalid JSON',
+  ])('repairs %s in its own metered attempt', async (caseName) => {
     const invalid = structuredClone(draft);
     invalid.changes[0].operations = [
       { append: { path: 'missing/children', value: 'invalid' } },
     ] as never;
+    const generate = vi
+      .fn<GenerationModel['generate']>()
+      .mockResolvedValueOnce({
+        output: [
+          caseName === 'invalid JSON'
+            ? { type: 'text', text: '{"changes":[' }
+            : { type: 'json', value: invalid },
+        ],
+        evidence,
+      })
+      .mockResolvedValueOnce({
+        output: [{ type: 'text', text: JSON.stringify(draft) }],
+        evidence: { ...evidence, providerRequestId: 'repair-request' },
+      });
+    const { result, settle } = invoke(generate);
+    await expect(result).resolves.toMatchObject({
+      value: draft,
+      attempt: { generationId: 'managed-proposal-attempt-2', attemptIndex: 1 },
+    });
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0]).toMatchObject({
+      generationId: 'managed-proposal-attempt-2',
+      runId: 'proposal-run',
+      attemptIndex: 1,
+    });
+    expect(JSON.stringify(generate.mock.calls[1][0].request.messages)).toContain(
+      caseName === 'invalid JSON' ? 'Return valid JSON only' : 'changes.operations'
+    );
+    expect(settle.mock.calls.map(([call]) => call.terminal)).toMatchObject([
+      { kind: 'receipt', receipt: { providerRequestId: 'structured-request' } },
+      { kind: 'receipt', receipt: { providerRequestId: 'repair-request' } },
+    ]);
+  });
+  it('stops after one repair when the proposal is still invalid', async () => {
     const generate = vi.fn<GenerationModel['generate']>(async () => ({
-      output: [{ type: 'json', value: invalid }],
+      output: [{ type: 'json', value: {} }],
       evidence,
     }));
-    await expect(invoke(generate)).rejects.toThrow('Generated operations cannot be applied');
-    expect(generate).toHaveBeenCalledOnce();
+    await expect(invoke(generate).result).rejects.toThrow('Generated Proposal Draft is invalid');
+    expect(generate).toHaveBeenCalledTimes(2);
   });
-  it('rejects unmanaged calls without an admitted attempt identity', async () => {
-    const generate = vi.fn();
-    await expect(managed(generate).generate(input)).rejects.toThrow(
-      'generation_capability_unsupported'
-    );
-    expect(generate).not.toHaveBeenCalled();
+  it('does not retry a provider failure', async () => {
+    const generate = vi.fn<GenerationModel['generate']>().mockRejectedValue(new Error('offline'));
+    await expect(invoke(generate).result).rejects.toThrow('offline');
+    expect(generate).toHaveBeenCalledOnce();
   });
 });
 

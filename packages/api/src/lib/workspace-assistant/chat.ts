@@ -1,6 +1,6 @@
 import type { DraftActionActor, DraftYOp } from '@t3x-dev/application';
 import type { AnyDB } from '@t3x-dev/storage';
-import type { ProposalGenerationModel } from '../proposal-generation';
+import type { ContentProposalGenerationModel } from '../proposal-generation';
 import {
   type AssistantEvent,
   type AssistantModelBinding,
@@ -28,7 +28,7 @@ export async function chatWithWorkspace(
       posture: 'source_only' | 'guided' | 'recommend';
       requestedProvider?: string;
       requestedModel?: string;
-      resolveModel?: () => Promise<ProposalGenerationModel>;
+      resolveModel?: () => Promise<ContentProposalGenerationModel>;
     };
     signal?: AbortSignal;
     emit: (
