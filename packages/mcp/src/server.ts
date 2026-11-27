@@ -193,6 +193,9 @@ t3x_generate creates validated outputs from committed state.`;
 const BUSINESS_INSTRUCTIONS = `Use the advertised T3X tools and their enabled actions. The API authorizes each request.
 When a tool returns isError, read the message, diagnostic reference, and any next action in its text response. Tell the user when an unexpected error blocks the task, a write's outcome is unconfirmed, or an authorized person must act. Include the failed operation, what is known, and the next action. Use the existing authorized reads to confirm an interrupted write before retrying. Read Run and Delivery statuses and Review findings even when the tool call succeeds.`;
 
+const CHAT_LANGUAGE_INSTRUCTIONS =
+  'Reply in the language the user requests or uses in the conversation. Default to English when that language is unclear. Preserve quoted text and repository values in their original language.';
+
 // ── Factory ──
 
 export interface McpServerOptions {
@@ -244,7 +247,10 @@ export function createMcpServer(options: McpServerOptions) {
     { name: 't3x-mcp', version: packageJson.version ?? '0.0.0' },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: exposure ? BUSINESS_INSTRUCTIONS : SERVER_INSTRUCTIONS,
+      instructions: [
+        exposure ? BUSINESS_INSTRUCTIONS : SERVER_INSTRUCTIONS,
+        CHAT_LANGUAGE_INSTRUCTIONS,
+      ].join('\n\n'),
     }
   );
 

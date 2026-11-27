@@ -71,10 +71,12 @@ it.each([
     />
   );
   fireEvent.click(
-    screen.getByRole('radio', { name: mode === 'preserve' ? '保留原内容' : '清空内容' })
+    screen.getByRole('radio', {
+      name: mode === 'preserve' ? 'Keep existing content' : 'Clear existing content',
+    })
   );
-  if (mode === 'clear') expect(screen.getByText(/Confirm 将清除旧字段的内容/)).toBeVisible();
-  fireEvent.click(screen.getByText(/编辑迁移映射/));
+  if (mode === 'clear') expect(screen.getByText(/Confirm clears the old content/)).toBeVisible();
+  fireEvent.click(screen.getByText(/Edit migration mapping/));
   if (mode === 'preserve') {
     fireEvent.change(screen.getByRole('textbox', { name: 'Destination for change 1' }), {
       target: { value: 'candidate/product/mail' },
@@ -120,8 +122,8 @@ it('retargets a cleared Node mapping when the editable new name changes', async 
   fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
     target: { value: 'final_name' },
   });
-  fireEvent.click(screen.getByRole('radio', { name: '保留原内容' }));
-  fireEvent.click(screen.getByRole('radio', { name: '清空内容' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Keep existing content' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Clear existing content' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm', exact: true }));
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith({
@@ -587,21 +589,57 @@ describe('Assistant settings reuse the Studio property controls', () => {
     expect(
       screen.getByText(
         action === 'remove_slot'
-          ? /Confirm 将同时删除字段定义和所有对应实例中的字段值/
-          : /Confirm 将同时删除节点定义及对应节点的全部内容/
+          ? /Confirm removes the Slot definition and its value from every matching instance/
+          : /Confirm removes the Node definition and all matching content/
       )
     ).toBeVisible();
-    fireEvent.click(screen.getByText('查看内容删除范围 · 1 项'));
+    fireEvent.click(screen.getByText('Content to delete (1)'));
     expect(screen.getByRole('list', { name: 'Confirmed content deletions' })).toHaveTextContent(
       '"candidate"/"requirements"/"owner"'
     );
     fireEvent.click(screen.getByText('Change details'));
     expect(screen.queryByText(/YAML content.*unchanged/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Schema 和内容原子保存到 Draft，不调用模型/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /without a model call.*saves the Schema and content together in a single Draft update/
+      )
+    ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Edit attributes' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(deletion.settings));
   });
+  it.each([
+    ['remove_node', 'all matching content, including child nodes'],
+    ['remove_slot', 'its value from every matching instance'],
+    ['remove_rule', 'only the definition and keeps existing YAML values'],
+  ] as const)('shows the %s deletion scope before replacing a Studio candidate', async (action, scope) => {
+    const save = vi.fn();
+    const settings = {
+      ...record.settings,
+      action,
+      ...(action === 'remove_rule'
+        ? {}
+        : { contentMigration: [{ kind: 'remove' as const, path: 'requirements/advantage' }] }),
+    };
+    render(
+      <SettingsForm
+        record={{ ...record, settings, studioConflict: { candidateId: 'studio', revision: 7 } }}
+        disabled={false}
+        onSave={save}
+        onResume={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Schema change candidate' })).toHaveTextContent(
+      scope
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm', exact: true }));
+    const dialog = screen.getByRole('dialog', { name: 'Replace the Studio candidate?' });
+    expect(dialog).toHaveAccessibleDescription(expect.stringContaining(scope));
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Replace & apply to Draft' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(settings, true));
+  });
+
   it('offers direct Draft saving for an already generated snapshot', async () => {
     hook.record = {
       ...record,

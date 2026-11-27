@@ -71,6 +71,16 @@ function fixture(): Omit<PreparedAssistantContext, 'prompt' | 'disclosure'> {
   };
 }
 describe('Assistant model context', () => {
+  it('sets reply language from the conversation and keeps the actual user turn intact', () => {
+    const prepared = fixture();
+    const message = 'Réponds en français. Explain the Draft value “原文”.';
+    prepared.turns = [{ hash: 'u', role: 'user', content: message }];
+    const { prompt } = renderAssistantContext(prepared);
+    expect(prompt.system).toContain("user's explicitly requested reply language");
+    expect(prompt.system).toContain('follow the language the user uses in conversation');
+    expect(prompt.system).toContain('Default to English');
+    expect(prompt.messages.at(-1)?.content).toBe(message);
+  });
   it('binds all actions while explaining historical and current values separately', () => {
     const prepared = fixture();
     const result = renderAssistantContext(prepared);

@@ -49,6 +49,8 @@ export type Task = {
 export type Conversation = { tasks: Task[] };
 
 const repositoryAddress = /[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*/gi;
+const groupStories = 'Group the stories by status.';
+const unsupportedRequest = `This demo can list, group, or assign items. Try “${groupStories}”`;
 type Request =
   | { kind: 'list' | 'group'; required: Action }
   | { kind: 'assign'; required: Action; item: string; owner: string };
@@ -151,15 +153,16 @@ export function startTask(text: string, priorRepository: string | null): Task {
     return {
       ...task,
       status: 'limited',
-      result:
-        'This demo can group or list repository items, or assign the first item to Sam. Try “帮我整理选题”.',
+      result: unsupportedRequest,
     };
   return task;
 }
 
 export function initialConversation(chatId: ChatId): Conversation {
   const text =
-    chatId === 'editorial' ? '帮我整理 studio/editorial-calendar 的选题。' : '帮我整理选题。';
+    chatId === 'editorial'
+      ? 'Group the stories in studio/editorial-calendar by status.'
+      : groupStories;
   return { tasks: [{ ...startTask(text, null), id: `initial-${chatId}` }] };
 }
 
@@ -189,7 +192,7 @@ export function runTask(
     return {
       ...task,
       status: 'limited',
-      result: 'The demo cannot run that instruction. Try “帮我整理选题”.',
+      result: unsupportedRequest,
     };
   const scoped: Task = { ...task, repository: repo.name };
   const unavailable = (result: string): Task => ({

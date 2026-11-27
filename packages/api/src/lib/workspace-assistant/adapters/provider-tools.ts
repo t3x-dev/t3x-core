@@ -259,7 +259,7 @@ export async function runAssistantProvider(
         hasTools = false;
         explainingResult = true;
         terminalReason = 'awaiting_confirmation';
-        prompt.system = `${prompt.system ?? ''}\nGive one brief reply in the user's language after the tool has created the editable Schema cards in the Workspace timeline: summarize the requested changes and tell the user to adjust parameters, then Confirm each card to generate, validate and apply its snapshot to Draft. A child card waits only for its parent Node; sibling Slots can be confirmed in either order. Nothing has been applied yet. Mention a blocker only if the tool actually reports one. Do not enumerate internal statuses, routine checks, unrelated content gaps or claim readiness to publish. Confirm updates the cards without another chat reply. This continuation is text-only; do not request tools or claim a completed edit.`;
+        prompt.system = `${prompt.system ?? ''}\nGive one brief reply after the tool has created the editable Schema cards in the Workspace timeline: summarize the requested changes and tell the user to adjust parameters, then Confirm each card to generate, validate and apply its snapshot to Draft. A child card waits only for its parent Node; sibling Slots can be confirmed in either order. Nothing has been applied yet. Mention a blocker only if the tool actually reports one. Do not enumerate internal statuses, routine checks, unrelated content gaps or claim readiness to publish. Confirm updates the cards without another chat reply. This continuation is text-only; do not request tools or claim a completed edit.`;
       }
       if (
         call.name === 'requestProposal' &&
@@ -270,7 +270,7 @@ export async function runAssistantProvider(
       ) {
         hasTools = false;
         explainingResult = true;
-        prompt.system = `${prompt.system ?? ''}\nExplain the actual Schema tool result in the user's language. A candidate is not an applied change. This continuation is text-only; do not request tools or claim content or Commit changes.`;
+        prompt.system = `${prompt.system ?? ''}\nExplain the actual Schema tool result. A candidate is not an applied change. This continuation is text-only; do not request tools or claim content or Commit changes.`;
       }
       if (call.name === 'applyUserEdit') {
         await input.emit({ type: 'done', reason: 'completed' });

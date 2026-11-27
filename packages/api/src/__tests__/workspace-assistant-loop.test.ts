@@ -1,4 +1,4 @@
-import type { LLMProvider } from '@t3x-dev/core';
+import type { LLMPrompt, LLMProvider } from '@t3x-dev/core';
 import { normalizeYSchemaObject } from '@t3x-dev/yschema';
 import { describe, expect, it, vi } from 'vitest';
 import { createInferenceRuntime } from '../lib/inference';
@@ -11,6 +11,7 @@ import {
   type AssistantEvent,
   runAssistantProvider,
 } from '../lib/workspace-assistant/adapters/provider-tools';
+import { ASSISTANT_SYSTEM } from '../lib/workspace-assistant/policy';
 
 const usage = { inputTokens: 4, outputTokens: 2 };
 function invalidSchemaDefinition(): Error {
@@ -152,26 +153,45 @@ describe('metered Assistant loop', () => {
     expect(JSON.stringify(generateWithTools.mock.calls[1][0])).toContain('invalid_definition');
     expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
   });
-  it('returns the settings tool result to a text-only AI continuation before awaiting confirmation', async () => {
+  it.each([
+    {
+      name: 'showSchemaChangeCard',
+      result: { status: 'awaiting_confirmation', settings: { settingsId: 's' } },
+      guidance: ['one brief reply', 'parent Node'],
+      reply: '请确认上方的字段设置。',
+      reason: 'awaiting_confirmation',
+    },
+    {
+      name: 'requestProposal',
+      result: { kind: 'schema', status: 'candidate' },
+      guidance: ['Explain the actual Schema tool result'],
+      reply: '已生成候选更改。',
+      reason: 'completed',
+    },
+  ])('explains the $name result using the conversation reply policy', async ({
+    name,
+    result,
+    guidance,
+    reply,
+    reason,
+  }) => {
     const { input, events } = fixture();
-    const execute = vi.fn(async () => ({
-      status: 'awaiting_confirmation',
-      settings: { settingsId: 's' },
-    }));
+    const execute = vi.fn(async () => result);
     const generateWithTools = vi.fn(async () => ({
-      tool_calls: [{ id: 'settings', name: 'showSchemaChangeCard', input: {} }],
+      tool_calls: [{ id: 'schema', name, input: {} }],
       stop_reason: 'tool_use',
       usage,
     }));
-    const generateFromPrompt = vi.fn(async () => ({ text: '请确认上方的字段设置。', usage }));
+    const generateFromPrompt = vi.fn(async (_prompt: LLMPrompt) => ({ text: reply, usage }));
     await runAssistantProvider({
       ...input,
+      prompt: { system: ASSISTANT_SYSTEM, messages: [{ role: 'user', content: '请调整字段。' }] },
       provider: { id: 'test', generateWithTools, generateFromPrompt } as unknown as LLMProvider,
       capabilities: {
-        showSchemaChangeCard: {
+        [name]: {
           definition: {
-            name: 'showSchemaChangeCard',
-            description: 'settings',
+            name,
+            description: 'Schema settings',
             input_schema: { type: 'object' },
           },
           execute,
@@ -181,12 +201,14 @@ describe('metered Assistant loop', () => {
     expect(generateWithTools).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(generateFromPrompt).toHaveBeenCalledOnce();
-    expect(JSON.stringify(generateFromPrompt.mock.calls[0][0])).toContain('tool_result');
-    expect(JSON.stringify(generateFromPrompt.mock.calls[0][0])).toContain('awaiting_confirmation');
-    expect(generateFromPrompt.mock.calls[0][0].system).toContain('one brief reply');
-    expect(generateFromPrompt.mock.calls[0][0].system).toContain('parent Node');
-    expect(events).toContainEqual({ type: 'text', content: '请确认上方的字段设置。' });
-    expect(events.at(-1)).toEqual({ type: 'done', reason: 'awaiting_confirmation' });
+    const [prompt] = generateFromPrompt.mock.calls[0];
+    expect(prompt.messages.at(-1)?.content).toContainEqual(
+      expect.objectContaining({ type: 'tool_result', content: JSON.stringify(result) })
+    );
+    expect(prompt.system).toContain(ASSISTANT_SYSTEM);
+    for (const instruction of guidance) expect(prompt.system).toContain(instruction);
+    expect(events).toContainEqual({ type: 'text', content: reply });
+    expect(events.at(-1)).toEqual({ type: 'done', reason });
   });
   it('rejects a batch combining settings with a write before executing either tool', async () => {
     const { input } = fixture();

@@ -75,6 +75,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
 
       const result = await client.listTools();
       const names = result.tools.map((tool) => tool.name);
+      expect(client.getInstructions()).toContain('language the user requests or uses');
 
       expect(names).toEqual(
         expect.arrayContaining([

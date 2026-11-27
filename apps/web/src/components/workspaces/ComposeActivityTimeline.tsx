@@ -85,7 +85,7 @@ function ConfirmDeletion({
   return (
     <div className={styles.stagingActions}>
       <details>
-        <summary>删除范围 · {confirmation.paths.length} 项</summary>
+        <summary>Paths to delete ({confirmation.paths.length})</summary>
         <ul>
           {confirmation.paths.map((path) => (
             <li key={path}>
@@ -95,10 +95,13 @@ function ConfirmDeletion({
         </ul>
       </details>
       {confirmation.status === 'confirmed' ? (
-        <span>已人工确认删除</span>
+        <span>Deletion confirmed by a user</span>
       ) : (
         <>
-          <span>此删除尚未获得人工确认；Confirm 只授权这张卡片的删除。</span>
+          <span>
+            Review the paths before confirming. Your confirmation authorizes only the deletions
+            listed on this card.
+          </span>
           <button
             type="button"
             disabled={pending}

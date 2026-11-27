@@ -1733,7 +1733,7 @@ function ComposeSurface({
                 }}
                 onDiscuss={(subject, path) => {
                   controller.prefillAssistant(
-                    `修改 ${subject === 'schema' ? 'Schema 定义' : 'Content'} ${path}：`
+                    `Revise ${subject === 'schema' ? 'the Schema definition' : 'the content'} at ${path}: `
                   );
                   openChat();
                 }}
@@ -1783,7 +1783,7 @@ function ComposeSurface({
                       .filter(Boolean)
                       .join('/');
                     setActivitySelection(null);
-                    controller.prefillAssistant(`修改 Schema 结构 ${path}：`);
+                    controller.prefillAssistant(`Revise the Schema structure at ${path}: `);
                     openChat();
                   }}
                 />
@@ -1973,7 +1973,7 @@ function ComposeSurface({
           onDiscuss={() => {
             setFieldDialog(null);
             controller.prefillAssistant(
-              draftSubject === 'schema' ? '修改 Schema：' : '修改 Content：'
+              draftSubject === 'schema' ? 'Revise the Schema: ' : 'Revise the content: '
             );
             openChat();
           }}

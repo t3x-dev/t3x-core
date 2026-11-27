@@ -761,6 +761,11 @@ export function SettingsForm({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const removing = value.action.startsWith('remove_');
   const deletingContent = value.action === 'remove_slot' || value.action === 'remove_node';
+  const removalScope = deletingContent
+    ? value.action === 'remove_node'
+      ? 'Confirm removes the Node definition and all matching content, including child nodes.'
+      : 'Confirm removes the Slot definition and its value from every matching instance.'
+    : 'Confirm removes only the definition and keeps existing YAML values. Migration may be required.';
   const renaming = value.action.startsWith('rename_');
   const clearContent = value.renameContentMode === 'clear';
   const moving = value.action.startsWith('move_');
@@ -882,16 +887,12 @@ export function SettingsForm({
       ) : null}
       {removing ? (
         <p className={styles.warning}>
-          {deletingContent
-            ? value.action === 'remove_node'
-              ? 'Confirm 将同时删除节点定义及对应节点的全部内容（包含子节点）。只保存到 Draft，不创建 Commit。'
-              : 'Confirm 将同时删除字段定义和所有对应实例中的字段值。只保存到 Draft，不创建 Commit。'
-            : 'Removes the definition only; existing YAML values are kept. Migration may be required.'}
+          {removalScope} This change is saved to Draft without creating a Commit.
         </p>
       ) : null}
       {deletingContent ? (
         <details className={styles.technicalDetails}>
-          <summary>查看内容删除范围 · {value.contentMigration?.length ?? 0} 项</summary>
+          <summary>Content to delete ({value.contentMigration?.length ?? 0})</summary>
           <ul aria-label="Confirmed content deletions">
             {value.contentMigration?.map((command) =>
               command.kind === 'remove' ? (
@@ -901,7 +902,7 @@ export function SettingsForm({
               ) : null
             )}
           </ul>
-          {value.contentMigration?.length === 0 ? <p>没有现有内容需要删除。</p> : null}
+          {value.contentMigration?.length === 0 ? <p>No existing content to delete.</p> : null}
         </details>
       ) : null}
       {renaming ? (
@@ -928,7 +929,7 @@ export function SettingsForm({
           className={styles.fields}
           aria-label="Rename content mapping"
         >
-          <legend>重命名后的内容</legend>
+          <legend>Content after rename</legend>
           <div className="flex gap-4 text-xs">
             <label>
               <input
@@ -937,7 +938,7 @@ export function SettingsForm({
                 checked={!clearContent}
                 onChange={() => chooseContentMode('preserve')}
               />{' '}
-              保留原内容
+              Keep existing content
             </label>
             <label>
               <input
@@ -946,16 +947,16 @@ export function SettingsForm({
                 checked={clearContent}
                 onChange={() => chooseContentMode('clear')}
               />{' '}
-              清空内容
+              Clear existing content
             </label>
           </div>
           <p className={clearContent ? styles.warning : styles.scope}>
             {clearContent
-              ? 'Confirm 将清除旧字段的内容，新字段留空。必填内容未补齐时可以保存 Draft，但不能通过提交校验。'
-              : 'Confirm 将保留原值并迁移到新名称，同时校验和保存 Schema 与内容。'}
+              ? 'Confirm clears the old content and leaves the renamed item empty. You can save the Draft with missing required values. Fill them in before committing.'
+              : 'Confirm moves existing values to the new name, then validates and saves the Schema and content together.'}
           </p>
           <details>
-            <summary>编辑迁移映射 · {mapping.length} 项</summary>
+            <summary>Edit migration mapping ({mapping.length})</summary>
             {mapping.map((change, index) => (
               <PreparationChangeForm
                 key={change.id}
@@ -968,14 +969,16 @@ export function SettingsForm({
                 onRemove={() => updateMapping(mapping.filter((item) => item.id !== change.id))}
               />
             ))}
-            {!mapping.length ? <p className={styles.scope}>没有现有内容需要迁移。</p> : null}
+            {!mapping.length ? (
+              <p className={styles.scope}>No existing content to migrate.</p>
+            ) : null}
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={() => updateMapping([...mapping, newPreparationChange()])}
             >
-              添加内容变更
+              Add content change
             </Button>
           </details>
           {mappingError ? <p role="alert">{mappingError}</p> : null}
@@ -1018,12 +1021,12 @@ export function SettingsForm({
           </summary>
           <p className={styles.scope}>
             {renaming || deletingContent
-              ? 'Schema 与确认的内容映射一起保存到 Draft · No Commit'
+              ? 'Save the Schema and confirmed content mapping to Draft · No Commit'
               : 'YAML content stays unchanged · No Commit'}
           </p>
           <p>
             {renaming || deletingContent ? (
-              'Confirm 按当前参数确定性生成操作，校验后将 Schema 和内容原子保存到 Draft，不调用模型。'
+              'Confirm uses these parameters to generate the operations deterministically without a model call, then validates and saves the Schema and content together in a single Draft update.'
             ) : (
               <>
                 Confirm generates, validates and applies the Schema change to Draft using the exact
@@ -1096,9 +1099,12 @@ export function SettingsForm({
               <DialogDescription>
                 Replace the unadopted Studio candidate r{record.studioConflict?.revision} with this
                 confirmed Schema change and apply it to Draft after validation.{' '}
-                {renaming
-                  ? 'The selected content mapping will also be applied. No Commit is created.'
-                  : 'YAML content stays unchanged and no Commit is created.'}
+                {removing
+                  ? removalScope
+                  : renaming
+                    ? 'The selected content mapping will also be applied.'
+                    : 'YAML content stays unchanged.'}{' '}
+                No Commit is created.
               </DialogDescription>
             </DialogHeader>
             {error ? <p role="alert">{error}</p> : null}

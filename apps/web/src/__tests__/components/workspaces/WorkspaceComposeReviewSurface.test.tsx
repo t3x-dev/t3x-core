@@ -1340,7 +1340,9 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     ).not.toBeInTheDocument();
     expect(inspect).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(within(details).getByRole('button', { name: 'Ask AI' }));
-    expect(schemaDiscussion).toHaveBeenCalledWith('修改 Schema 结构 requirements/advantage：');
+    expect(schemaDiscussion).toHaveBeenCalledWith(
+      'Revise the Schema structure at requirements/advantage: '
+    );
     expect(inspect).toHaveAttribute('aria-pressed', 'false');
     expect(
       within(generated).queryByRole('region', { name: 'Selected Schema change details' })

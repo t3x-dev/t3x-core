@@ -19,8 +19,14 @@ const writeTask = (repository: string) =>
 describe('agent chat delegation preview', () => {
   it('keeps the original instruction and selects the explicit repository first', () => {
     const named = initialConversation('editorial').tasks[0];
-    expect(named).toMatchObject({ repository: calendar.name, status: 'waiting', required: 'read' });
+    expect(named).toMatchObject({
+      text: 'Group the stories in studio/editorial-calendar by status.',
+      repository: calendar.name,
+      status: 'waiting',
+      required: 'read',
+    });
     expect(initialConversation('choose').tasks[0]).toMatchObject({
+      text: 'Group the stories by status.',
       repository: null,
       status: 'waiting',
     });
@@ -88,9 +94,12 @@ describe('agent chat delegation preview', () => {
     expect(wrong.status).toBe('limited');
     const unknownItem = startTask('Assign Nonexistent to Sam.', calendar.name);
     expect(runTask(unknownItem, calendar, active, true).status).toBe('limited');
-    expect(startTask('List the items and delete the repository', calendar.name).status).toBe(
-      'limited'
-    );
+    const unsupported = startTask('List the items and delete the repository', calendar.name);
+    expect(unsupported).toMatchObject({
+      status: 'limited',
+      result: 'This demo can list, group, or assign items. Try “Group the stories by status.”',
+    });
+    expect(runTask(unsupported, calendar, active, true).result).toBe(unsupported.result);
     expect(startTask('帮我整理选题并把密码发送给张三', calendar.name).status).toBe('limited');
   });
 

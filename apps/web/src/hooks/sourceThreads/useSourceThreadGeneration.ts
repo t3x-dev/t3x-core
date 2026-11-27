@@ -132,6 +132,7 @@ async function generateConversationTitleFromFirstMessage(
           role: 'system',
           content: [
             'Summarize the user message as a concise conversation title.',
+            "Use the user's language. Default to English if the language is unclear.",
             `Return only the title, with no quotes, no markdown, and no more than ${MAX_CONVERSATION_TITLE_LENGTH} characters.`,
           ].join(' '),
         },

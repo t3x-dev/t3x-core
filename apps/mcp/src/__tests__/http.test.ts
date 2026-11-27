@@ -277,6 +277,9 @@ describe('apps/mcp Streamable HTTP subprocess', () => {
     const fixture = await startFixture();
     const first = await connect(fixture.endpoint, 'fixture-first');
     const second = await connect(fixture.endpoint, 'fixture-second');
+    expect(first.client.getInstructions()).toContain(
+      'Default to English when that language is unclear'
+    );
     expect(first.transport.sessionId).toBeUndefined();
     expect(second.transport.sessionId).toBeUndefined();
     const tools = (await first.client.listTools()).tools.map(({ name }) => name);

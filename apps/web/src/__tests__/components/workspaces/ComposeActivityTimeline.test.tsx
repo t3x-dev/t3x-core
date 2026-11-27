@@ -185,7 +185,7 @@ describe('ComposeActivityTimeline', () => {
         renderRow={renderRow}
       />
     );
-    expect(screen.getByText('已人工确认删除')).toBeVisible();
+    expect(screen.getByText('Deletion confirmed by a user')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Confirm deletion', exact: true })
     ).not.toBeInTheDocument();

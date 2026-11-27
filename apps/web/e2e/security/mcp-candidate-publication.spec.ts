@@ -220,7 +220,7 @@ test('MCP applies a governed candidate and a signed-in Web reviewer confirms its
     await expect(openDraft).toHaveAttribute('aria-expanded', 'true');
     const confirmation = page.getByRole('button', { name: 'Confirm deletion', exact: true });
     await expect(confirmation).toBeVisible();
-    await page.locator('details summary').filter({ hasText: '删除范围' }).click();
+    await page.locator('details summary').filter({ hasText: 'Paths to delete' }).click();
     await expect(page.locator('details[open] code').filter({ hasText: deletedPath })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('candidate-deletion-confirmation.png') });
     const receiptResponse = page.waitForResponse(

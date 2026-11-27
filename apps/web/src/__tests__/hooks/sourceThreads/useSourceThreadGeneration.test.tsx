@@ -135,6 +135,10 @@ describe('Workspace assistant route lifetime', () => {
       expect.objectContaining({
         messages: expect.arrayContaining([
           expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining("Use the user's language. Default to English"),
+          }),
+          expect.objectContaining({
             role: 'user',
             content: 'Please change the workspace owner to Alice',
           }),
