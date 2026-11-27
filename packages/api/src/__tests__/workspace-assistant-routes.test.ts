@@ -285,8 +285,12 @@ describe('Workspace Assistant streaming boundary', () => {
     expect(turns.filter((turn) => turn.role === 'assistant')).toHaveLength(1);
   });
 
-  it('persists a fallback reply when the managed deadline expires after a completed proposal', async () => {
-    const f = await fixture('managed-proposal-deadline', true);
+  it.each([
+    ['completed', 'I proposed setting the audience to enterprise operators.'],
+    ['deadline', 'The proposal was generated. The follow-up reply timed out.'],
+    ['failed', 'The proposal was generated. The follow-up reply could not be completed.'],
+  ])('delivers and persists a proposal with a %s managed reply', async (outcome, reply) => {
+    const f = await fixture(`managed-proposal-${outcome}`, true);
     const evidence = {
       provider: 'hosted-gateway',
       model: 'balanced',
@@ -337,10 +341,18 @@ describe('Workspace Assistant streaming boundary', () => {
           },
         ],
         evidence,
-      })
-      .mockRejectedValueOnce(
+      });
+    if (outcome === 'deadline') {
+      generate.mockRejectedValueOnce(
         new GenerationModelError('managed_run_deadline_exceeded', 'not_started')
       );
+    } else if (outcome === 'failed') {
+      generate.mockRejectedValueOnce(
+        new GenerationModelError('gateway_unavailable', 'not_started')
+      );
+    } else {
+      generate.mockResolvedValueOnce({ output: [{ type: 'text', text: reply }], evidence });
+    }
     const hosted = managedApp(
       {
         specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
@@ -376,12 +388,26 @@ describe('Workspace Assistant streaming boundary', () => {
         result: expect.objectContaining({ transitionId: expect.stringMatching(/^trn_/) }),
       })
     );
+    const operation = events.find(
+      (event) => event.name === 'requestProposal' && event.status === 'completed'
+    );
+    expect(events[events.indexOf(operation) + 1]).toEqual({
+      type: 'proposal_ready',
+      transitionId: operation.result.transitionId,
+    });
     expect(events.at(-1)).toMatchObject({
       type: 'done',
-      content: 'The proposal was generated. The follow-up reply timed out.',
+      content: reply,
       turnHash: expect.any(String),
     });
     expect(generate).toHaveBeenCalledTimes(3);
+    const [first, , third] = generate.mock.calls;
+    expect(third?.[0]).toMatchObject({
+      runId: `${first?.[0].runId}:proposal-reply`,
+      attemptIndex: 0,
+      request: { maxOutputTokens: 128 },
+    });
+    expect(third?.[0].request.tools).toBeUndefined();
   });
 
   it('does not fall back to local credentials on managed resolution or admission failure', async () => {

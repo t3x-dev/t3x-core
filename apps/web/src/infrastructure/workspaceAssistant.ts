@@ -17,7 +17,8 @@ export interface WorkspaceAssistantContext {
   onSchemaSettings?: (conversationId?: string) => void;
 }
 export type WorkspaceAssistantEvent = {
-  type: 'context' | 'capabilities' | 'text' | 'operation' | 'done' | 'error';
+  type: 'context' | 'capabilities' | 'text' | 'operation' | 'proposal_ready' | 'done' | 'error';
+  transitionId?: string;
   content?: string;
   turnHash?: string;
   message?: string;

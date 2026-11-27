@@ -222,6 +222,7 @@ workspaceAssistantRoutes.post(
       let terminalReason = 'completed';
       const operations: unknown[] = [];
       let candidateSaved = false;
+      let contentProposalReady = false;
       try {
         await chatWithWorkspace({
           db,
@@ -279,6 +280,7 @@ workspaceAssistantRoutes.post(
           signal: controller.signal,
           emit: async (event) => {
             if (event.type === 'text') content += event.content;
+            if (event.type === 'proposal_ready') contentProposalReady = true;
             if (event.type === 'operation' && event.status === 'completed') {
               operations.push(event);
               if (
@@ -300,16 +302,19 @@ workspaceAssistantRoutes.post(
           },
         }).catch((error: unknown) => {
           const cause = error instanceof InferenceExecutionError ? error.cause : error;
+          const deadlineExceeded =
+            cause instanceof Error &&
+            'code' in cause &&
+            cause.code === 'managed_run_deadline_exceeded';
           if (
-            !candidateSaved ||
             controller.signal.aborted ||
-            !(cause instanceof Error) ||
-            !('code' in cause) ||
-            cause.code !== 'managed_run_deadline_exceeded'
+            !(contentProposalReady || (candidateSaved && deadlineExceeded))
           ) {
             throw error;
           }
-          const notice = 'The proposal was generated. The follow-up reply timed out.';
+          const notice = deadlineExceeded
+            ? 'The proposal was generated. The follow-up reply timed out.'
+            : 'The proposal was generated. The follow-up reply could not be completed.';
           content = content.trim() ? `${content.trim()}\n\n${notice}` : notice;
         });
         await authorize('read');

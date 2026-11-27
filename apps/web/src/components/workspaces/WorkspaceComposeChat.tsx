@@ -109,6 +109,8 @@ export function WorkspaceComposeChat({
     .reverse()
     .find((message) => message.role === 'assistant')?.id;
   const currentActivity = assistantActivity;
+  const currentPublication =
+    assistantPublication?.turnId === currentActivity?.turnId ? assistantPublication : null;
 
   const copyMessage = useCallback(async (messageId: string, content: string) => {
     if (!content.trim()) return;
@@ -227,10 +229,7 @@ export function WorkspaceComposeChat({
           const record = showLiveActivity
             ? {
                 activity: currentActivity,
-                publication:
-                  assistantPublication?.turnId === currentActivity.turnId
-                    ? assistantPublication
-                    : null,
+                publication: currentPublication,
               }
             : assistantRecords?.[message.id];
           const hasSchemaReceipt =
@@ -295,7 +294,15 @@ export function WorkspaceComposeChat({
             <WorkspaceAssistantActivity
               activity={currentActivity}
               publishing={assistantPublishing}
+              publication={currentPublication}
             />
+            {onOpenTurn && currentPublication?.action ? (
+              <WorkspaceTurnReceipt
+                changes={{ action: currentPublication.action, cards: currentPublication.cards }}
+                onOpen={onOpenTurn}
+                label="Proposal"
+              />
+            ) : null}
           </div>
         ) : null}
         {chat.isLoading && !chat.isStreaming ? <PendingAssistantMessage /> : null}

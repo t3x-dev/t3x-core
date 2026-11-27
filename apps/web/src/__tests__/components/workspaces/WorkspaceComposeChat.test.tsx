@@ -97,6 +97,63 @@ describe('WorkspaceComposeChat', () => {
     expect(screen.queryByText('YOps in this Action')).not.toBeInTheDocument();
   });
 
+  it('opens saved Draft changes before the follow-up reply arrives', () => {
+    const onOpenTurn = vi.fn();
+    const request = {
+      author: 'You',
+      role: 'user' as const,
+      id: 'request',
+      content: 'Rename the checklist',
+    };
+    const props = {
+      variant: 'discussion' as const,
+      onOpenTurn,
+      assistantActivity: { turnId: request.id, phase: 'responding' as const, operations: [] },
+      assistantPublication: {
+        turnId: request.id,
+        kind: 'published' as const,
+        action: {
+          actionId: 'action',
+          sequence: 1,
+          beforeRevision: 0,
+          afterRevision: 1,
+          actor: { kind: 'service' as const, id: 'assistant' },
+          channel: 'assistant' as const,
+          publishedAt: '2026-10-29T00:00:00Z',
+          operations: [{ set: { path: 'title', value: 'Checklist' } }],
+          reason: 'Rename checklist',
+        },
+      },
+    };
+    const view = render(
+      <WorkspaceComposeChat {...props} chat={chatState({ messages: [request] })} />
+    );
+    expect(screen.getByText('Draft updated')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Proposal.*1 changed path/ }));
+    expect(onOpenTurn).toHaveBeenCalledOnce();
+
+    view.rerender(
+      <WorkspaceComposeChat
+        {...props}
+        chat={chatState({
+          messages: [
+            request,
+            {
+              author: 'Assistant',
+              role: 'assistant',
+              id: 'reply',
+              content: 'I proposed renaming the checklist.',
+            },
+          ],
+        })}
+      />
+    );
+    expect(
+      screen.queryByRole('button', { name: /Proposal.*1 changed path/ })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /This reply.*1 changed path/ })).toBeInTheDocument();
+  });
+
   it('fills a starting prompt without sending or changing workspace data', () => {
     const setInput = vi.fn();
     const send = vi.fn();

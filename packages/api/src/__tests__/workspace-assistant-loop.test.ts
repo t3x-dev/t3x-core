@@ -362,36 +362,41 @@ describe('metered Assistant loop', () => {
     expect(events).toContainEqual({ type: 'text', content: 'value is 25' });
     expect(events.at(-1)).toEqual({ type: 'done', reason: 'completed' });
   });
-  it('runs requestProposal only when the model chooses it', async () => {
-    const { input, events } = fixture();
-    const execute = vi.fn(async () => ({ status: 'candidate', transitionId: 'transition:1' }));
+  it('delivers a content candidate before a single short model reply', async () => {
+    const { input, events, metered } = fixture();
+    const result = { kind: 'content', status: 'candidate', transitionId: 'transition:1' };
+    const execute = vi.fn(async () => result);
+    const authorizeContinuation = vi.fn(async () => {});
     const streamFromPrompt = vi.fn();
-    const generateWithTools = vi
-      .fn()
-      .mockResolvedValueOnce({
-        tool_calls: [
-          {
-            id: 'call_1',
-            name: 'requestProposal',
-            input: { instruction: 'change replicas from 4 to 10' },
-          },
-        ],
-        stop_reason: 'tool_use',
-        usage,
-      })
-      .mockResolvedValueOnce({
-        tool_calls: [],
-        stop_reason: 'end_turn',
-        usage,
-        _rawAssistantContent: [{ type: 'text', text: 'Candidate generated.' }],
-      });
+    const generateWithTools = vi.fn().mockResolvedValueOnce({
+      tool_calls: [
+        {
+          id: 'call_1',
+          name: 'requestProposal',
+          input: { instruction: 'change replicas from 4 to 10' },
+        },
+      ],
+      stop_reason: 'tool_use',
+      usage,
+    });
+    const generateFromPrompt = vi.fn(async () => {
+      expect(events.at(-1)).toEqual({ type: 'proposal_ready', transitionId: 'transition:1' });
+      return { text: 'I proposed changing the number of replicas to 10.', usage };
+    });
     await runAssistantProvider({
       ...input,
+      maxSteps: 1,
+      authorizeContinuation,
       prompt: {
         system: 'test',
         messages: [{ role: 'user', content: 'change replicas from 4 to 10' }],
       },
-      provider: { id: 'test', generateWithTools, streamFromPrompt } as unknown as LLMProvider,
+      provider: {
+        id: 'test',
+        generateWithTools,
+        generateFromPrompt,
+        streamFromPrompt,
+      } as unknown as LLMProvider,
       capabilities: {
         requestProposal: {
           definition: { name: 'requestProposal', description: 'proposal', input_schema: {} },
@@ -409,10 +414,22 @@ describe('metered Assistant loop', () => {
         type: 'operation',
         name: 'requestProposal',
         status: 'completed',
-        result: { status: 'candidate', transitionId: 'transition:1' },
+        result,
       })
     );
-    expect(generateWithTools).toHaveBeenCalledTimes(2);
+    expect(generateWithTools).toHaveBeenCalledOnce();
+    expect(generateFromPrompt).toHaveBeenCalledOnce();
+    expect(generateFromPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ maxTokens: 128 })
+    );
+    expect(metered.mock.calls[1]?.[0]).toMatchObject({
+      runId: 'inference-parent:proposal-reply',
+      attemptIndex: 0,
+    });
+    expect(input.assertCurrent).toHaveBeenCalledOnce();
+    expect(authorizeContinuation).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'completed' });
   });
   it('does not run requestProposal when the model answers without a tool call', async () => {
     const { input, events } = fixture();
