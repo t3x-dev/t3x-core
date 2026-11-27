@@ -99,6 +99,7 @@ const storageMock = vi.hoisted(() => {
           : []
       )
     ),
+    listTransitionCommandResults: vi.fn().mockResolvedValue([]),
     listTransitionReviewSnapshots: vi.fn(),
     upsertWorkspaceDraft: vi.fn(
       (
@@ -173,6 +174,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     readAgentDelegation: vi.fn().mockResolvedValue(null),
     getTransitionReviewSnapshot: storageMock.getTransitionReviewSnapshot,
     insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
+    listTransitionCommandResults: storageMock.listTransitionCommandResults,
     listTransitionReviewSnapshots: storageMock.listTransitionReviewSnapshots,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
