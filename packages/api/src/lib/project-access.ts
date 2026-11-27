@@ -503,7 +503,8 @@ export async function assertRepositoryCommitAccess(
   c: Context,
   db: AnyDB,
   digest: string,
-  projectId?: string
+  projectId?: string,
+  missingInProject?: { protocol_code: 'COMMIT_NOT_FOUND' }
 ): Promise<string | Response> {
   if (projectId) {
     const access = await assertProjectAccess(c, db, projectId);
@@ -511,7 +512,7 @@ export async function assertRepositoryCommitAccess(
 
     const memberships = await listTransitionCommitProjectIds(db, digest);
     if (!memberships.includes(projectId)) {
-      return c.json(createError('NOT_FOUND', `Commit ${digest} not found`), 404);
+      return c.json(createError('NOT_FOUND', `Commit ${digest} not found`, missingInProject), 404);
     }
     return projectId;
   }
