@@ -191,17 +191,23 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     const app = createAuthenticatedApp('user_owner');
     const hash = `sha256:${'e'.repeat(64)}`;
     commitSpies.listProjectIds.mockResolvedValue([]);
-    const read = (project_id?: string) =>
+    const read = (project_id?: string, base = hash) =>
       app.request(`/v1/diff/${route}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id, base_commit_hash: hash, target_commit_hash: hash }),
+        body: JSON.stringify({ project_id, base_commit_hash: base, target_commit_hash: hash }),
       });
     const scoped = await read(ownerProjectId);
     expect(scoped.status).toBe(404);
     expect((await scoped.json()).error).toMatchObject({
       code: 'NOT_FOUND',
       details: { protocol_code: 'COMMIT_NOT_FOUND' },
+    });
+    const malformed = await read(ownerProjectId, 'not-a-digest');
+    expect(malformed.status).toBe(404);
+    expect((await malformed.json()).error).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Commit not-a-digest not found',
     });
     const denied = await read(otherProjectId);
     expect(denied.status).toBe(403);
