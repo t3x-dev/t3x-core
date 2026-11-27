@@ -73,6 +73,20 @@ export async function readMcpPreselection(
   return item ?? null;
 }
 
+export async function readMcpPreselectionStatus(db: AnyDB, id: string, userId: string) {
+  const [item] = await db
+    .select({
+      projectId: selections.projectId,
+      status: sql<'used' | 'expired' | 'pending'>`CASE
+        WHEN ${selections.claimedBy} IS NOT NULL THEN 'used'
+        WHEN ${selections.expiresAt} <= clock_timestamp() THEN 'expired'
+        ELSE 'pending' END`,
+    })
+    .from(selections)
+    .where(and(eq(selections.id, id), eq(selections.userId, userId)));
+  return item ?? null;
+}
+
 export function listMcpPreselections(
   db: AnyDB,
   userId: string,

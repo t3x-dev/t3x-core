@@ -4,10 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ConnectAgent } from '@/components/project/agent-access/ConnectAgent';
 
-const api = vi.hoisted(() => ({ choices: vi.fn(), save: vi.fn() }));
+const api = vi.hoisted(() => ({ choices: vi.fn(), save: vi.fn(), status: vi.fn() }));
 vi.mock('@/infrastructure/mcpDelegations', () => ({
   readConnectionChoices: api.choices,
   saveConnectionSelection: api.save,
+  readConnectionSelectionStatus: api.status,
 }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
@@ -15,6 +16,7 @@ vi.mock('next/navigation', () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  api.status.mockResolvedValue({ status: 'pending' });
   window.history.replaceState(null, '', '/settings/agent-access');
   api.choices.mockResolvedValue({
     clients: [{ id: 'registered', name: 'Editorial Agent' }],
@@ -75,6 +77,7 @@ it('keeps an unavailable repository entry from silently selecting another target
 });
 
 it('recovers an expired browser selection without opening its client link or issuing another selection', async () => {
+  api.status.mockResolvedValue({ status: 'expired' });
   api.save.mockResolvedValue({
     id: 'expired',
     expiresAt: new Date(0).toISOString(),
@@ -87,6 +90,40 @@ it('recovers an expired browser selection without opening its client link or iss
   fireEvent.click(screen.getByRole('button', { name: 'Continue in client' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('This selection expired');
   expect(location.hash).toBe('');
+  expect(api.save).toHaveBeenCalledOnce();
+});
+
+it('checks the exact saved selection on return and links to its repository when used', async () => {
+  window.history.replaceState(null, '', '?projectId=project-one&branch=release%2Fv2');
+  render(<ConnectAgent />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue in client' }));
+  expect(await screen.findByText(/Selection expires/)).toBeVisible();
+  api.status.mockResolvedValue({ status: 'used' });
+  fireEvent.focus(window);
+  expect(
+    await screen.findByText(/used to authorize Editorial Agent for Studio\/Calendar/)
+  ).toBeVisible();
+  expect(api.status).toHaveBeenLastCalledWith('saved', expect.any(AbortSignal));
+  const href = screen
+    .getByRole('link', { name: 'View repository Agent access' })
+    .getAttribute('href')!;
+  expect(href).toContain('project-one');
+  expect(new URL(href, location.origin).searchParams.get('view')).toBe('agent-access');
+  expect(screen.queryByText(/Selection expires/)).toBeNull();
+});
+
+it('distinguishes a failed status check from an unavailable selection and retries the read', async () => {
+  api.status
+    .mockRejectedValueOnce(new Error('Try again later.'))
+    .mockResolvedValue({ status: 'unavailable' });
+  window.history.replaceState(null, '', '?projectId=project-one');
+  render(<ConnectAgent />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue in client' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not check this selection');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry status check' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent('This selection is unavailable')
+  );
   expect(api.save).toHaveBeenCalledOnce();
 });
 
