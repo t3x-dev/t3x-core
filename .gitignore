@@ -124,3 +124,6 @@ demo/
 /notes/
 /playwright-report/
 /blob-report/
+
+# Cursor files
+.cursor/
