@@ -2,7 +2,7 @@
  * Commits API (tree-based)
  */
 
-import type { WorkspaceCommitChanges } from '@t3x-dev/api-client';
+import type { CommitDisplayFields, WorkspaceCommitChanges } from '@t3x-dev/api-client';
 import type { SemanticContent, TransitionViewV1 } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
@@ -97,7 +97,7 @@ export interface ApiCommitOperationsResponse {
 }
 
 /** Tree-based commit from API response */
-export interface ApiCommit {
+export interface ApiCommit extends CommitDisplayFields {
   hash: string;
   address_number?: string;
   schema: 't3x/commit/v2';
@@ -119,7 +119,7 @@ export interface ApiCommit {
   position_y?: number;
 }
 
-interface CommitHistoryProjection {
+interface CommitHistoryProjection extends CommitDisplayFields {
   address_number?: string;
   assurance?: { decision?: { digest?: string } };
   branch?: string;
@@ -134,7 +134,8 @@ interface CommitHistoryProjection {
   schema: 't3x/commit/v2';
 }
 
-interface StoredCommitV2Response {
+interface StoredCommitV2Response extends CommitDisplayFields {
+  address_number?: string;
   digest: string;
   hash?: string;
   recorded_at?: string;
@@ -163,13 +164,19 @@ function normalizeApiCommit(
     projectId?: string;
   } = {}
 ): ApiCommit {
-  if ('hash' in raw && raw.hash) {
+  const author =
+    ('author' in raw && raw.author) ||
+    (raw.committed_by
+      ? { type: raw.committed_by.kind, id: raw.committed_by.id }
+      : { type: 'unknown' });
+  if ('hash' in raw && !('digest' in raw)) {
     return {
       ...raw,
+      author,
       branch: raw.branch || context.branch || 'main',
       content: raw.content ?? emptySemanticContent(),
       project_id: raw.project_id || context.projectId || '',
-    } as ApiCommit;
+    };
   }
 
   if ('format' in raw && raw.format === 'transition_v2') {
@@ -178,7 +185,10 @@ function normalizeApiCommit(
       address_number: raw.address_number,
       schema: raw.schema,
       parents: raw.parents,
-      author: { type: 'system', name: 'Transition' },
+      author,
+      committed_by: raw.committed_by,
+      decided_by: raw.decided_by,
+      operation_count: raw.operation_count,
       committed_at: raw.recordedAt,
       content: raw.content ?? emptySemanticContent(),
       project_id: raw.project_id || context.projectId || '',
@@ -198,10 +208,11 @@ function normalizeApiCommit(
   const stored = raw as StoredCommitV2Response;
   const parents = stored.parents ?? stored.object?.parents?.map((parent) => parent.digest) ?? [];
   return {
+    ...stored,
     hash: stored.hash ?? stored.digest,
     schema: stored.object?.schema ?? 't3x/commit/v2',
     parents,
-    author: { type: 'system', name: 'Transition' },
+    author,
     committed_at: stored.committed_at ?? stored.recorded_at ?? new Date(0).toISOString(),
     content: stored.content ?? emptySemanticContent(),
     project_id: stored.project_id || context.projectId || '',

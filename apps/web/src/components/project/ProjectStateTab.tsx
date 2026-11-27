@@ -57,7 +57,7 @@ import {
   type StructuredDiffChange,
   type StructuredDiffKind,
 } from '@/domain/diff/structuredStateDiff';
-import { commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitByline, commitTitle, relativeTime, shortHash } from '@/domain/format/formatters';
 import { commitStructureHref, historyCommitHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
@@ -1083,14 +1083,9 @@ export function ProjectStateTab({
                     <div className={inspectionStyles.commitSummary}>
                       <GitCommit aria-hidden="true" />
                       <Link href={historyCommitHref(historyHref, headCommit)}>
-                        {commitTitle(headCommit.message)}
+                        {commitTitle(headCommit.message, headCommit.operation_count)}
                       </Link>
-                      <span>
-                        {headCommit.author?.name ||
-                          headCommit.author?.id ||
-                          headCommit.author?.type ||
-                          'Author not recorded'}
-                      </span>
+                      <span>{commitByline(headCommit)}</span>
                       <time dateTime={headCommit.committed_at}>
                         {relativeTime(headCommit.committed_at)}
                       </time>
@@ -1966,7 +1961,7 @@ function StateFieldTracePanel({
           <ComposeChangeReason
             heading="Commit details"
             reason={changeReason || 'No commit reason recorded.'}
-            channelLabel={stateInspectorAuthorLabel(headCommit)}
+            channelLabel={commitByline(headCommit)}
             timestamp={headCommit.committed_at}
           />
         ) : (
@@ -2442,7 +2437,7 @@ function StateSelectedNodeInspector({
   nodeHistoryEnabled: boolean;
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
-  const authorLabel = stateInspectorAuthorLabel(headCommit);
+  const authorLabel = commitByline(headCommit);
   const sourceLabel = stateInspectorSourceLabel(row, headCommit);
   const diffTone = stateInspectorDiffTone(row?.diff?.kind);
   const beforeValue = row ? stateInspectorBeforeValue(row) : '';
@@ -3230,15 +3225,6 @@ function stateInspectorWhyText(row: StateStructureRow, changeReason: string): st
   if (row.status === 'missing') return row.statusLabel;
   if (row.status !== 'unchanged') return changeReason || row.statusLabel;
   return 'No direct change recorded for this node.';
-}
-
-function stateInspectorAuthorLabel(headCommit: ApiCommit): string {
-  return (
-    headCommit.author?.name?.trim() ||
-    headCommit.author?.id?.trim() ||
-    headCommit.author?.type?.trim() ||
-    'Unrecorded author'
-  );
 }
 
 function stateInspectorSourceLabel(row: StateStructureRow | null, headCommit: ApiCommit): string {

@@ -352,6 +352,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       },
     };
     const message = 'Update the editorial plan and commit it.';
+    let agentCommit = '';
     const { job, token } = await authorize(page, host, message, {
       repository,
       signIn: identity,
@@ -423,6 +424,7 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
             { action: 'read', project_id, commit_digest: commit }
           );
           expect(result.value.prd).toMatchObject(prd);
+          agentCommit = commit;
           return 'Committed ' + result.value.prd.title + ' at ' + commit;
         } finally {
           await agent.close();
@@ -430,6 +432,40 @@ test('resume an OAuth task in its originating chat and verify the exact agent co
       },
     });
     await expect(page.getByText(job.result!, { exact: true })).toBeVisible();
+    await test.step('identify the Agent commit in State and History', async () => {
+      const pinned = await page.request.get(
+        `${issuer}/api/v1/commits/${encodeURIComponent(agentCommit)}?project_id=${project_id}`
+      );
+      expect(pinned.ok()).toBe(true);
+      const { commit } = (await pinned.json()).data;
+      expect(commit.committed_by.kind).toBe('agent');
+      expect(commit.committed_by.id).toMatch(/^agent:/);
+      expect(commit.operation_count).toBeGreaterThan(0);
+      const title =
+        commit.message?.trim() ||
+        `Recorded effect · ${commit.operation_count} operation${commit.operation_count === 1 ? '' : 's'}`;
+      const byline = 'Committed by ' + commit.committed_by.id;
+      const versionPage = await page.context().newPage();
+      try {
+        await versionPage.goto(
+          `${issuer}/${repository}/commits/${commit.address_number}?view=overview`
+        );
+        const version = versionPage.getByRole('region', { name: 'Viewed version' });
+        await expect(version).toContainText(byline);
+        await expect(version).toContainText(title);
+        await versionPage.screenshot({ path: test.info().outputPath('mcp03-state.png') });
+        await versionPage.goto(`${issuer}/${repository}/history/${commit.address_number}`);
+        const list = versionPage.getByRole('region', { name: 'Commit list' });
+        await expect(list.locator(`[data-commit-hash="${agentCommit}"]`)).toContainText(byline);
+        await expect(versionPage.getByRole('region', { name: 'Selected commit' })).toContainText(
+          byline
+        );
+        await expect(versionPage.getByRole('heading', { name: title, exact: true })).toBeVisible();
+        await versionPage.screenshot({ path: test.info().outputPath('mcp03-history.png') });
+      } finally {
+        await versionPage.close();
+      }
+    });
     const agent = await connectBearer(token);
     clients.push(agent);
     expect(
