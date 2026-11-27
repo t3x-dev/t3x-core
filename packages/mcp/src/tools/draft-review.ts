@@ -1,5 +1,5 @@
 import { T3xApiError } from '@t3x-dev/api-client';
-import { withTransitionApi } from './transition/index.js';
+import { policyRecovery, withTransitionApi } from './transition/index.js';
 import type { ToolDef, ToolHandler } from './types.js';
 
 export const draftReviewDef: ToolDef = {
@@ -97,7 +97,7 @@ export const draftReviewHandler: ToolHandler = async (args) =>
     if (precondition.policy_digest === null) {
       throw new T3xApiError(
         'REVIEW_SNAPSHOT_POLICY_REQUIRED',
-        'The Transition has no applicable policy, so no fixed Review snapshot was created.',
+        `The Transition has no applicable policy. ${policyRecovery(precondition.ref_name)} Read the saved Draft and prepare its fixed Review using the current revisions and basis head.`,
         409,
         { transition_id: transitionId, checks: transition.checks }
       );
