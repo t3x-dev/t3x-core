@@ -107,7 +107,13 @@ describe('CommitV2 read routes', () => {
     const detail = await app.request(
       `/v1/commits/${encodeURIComponent(result.commitDigest)}?project_id=${project.projectId}`
     );
-    expect((await detail.json()).data.commit.message).toBe('Explain the reviewed change');
+    const description = {
+      message: 'Explain the reviewed change',
+      committed_by: null,
+      decided_by: ACTOR,
+      operation_count: expect.any(Number),
+    };
+    expect((await detail.json()).data.commit).toMatchObject(description);
     for (const path of [
       `/v1/projects/${project.projectId}/commits?branch=main`,
       `/v1/projects/${project.projectId}/commits`,
@@ -115,7 +121,7 @@ describe('CommitV2 read routes', () => {
       const response = await app.request(path);
       expect(response.status).toBe(200);
       const { data } = await response.json();
-      expect(data.commits[0].message).toBe('Explain the reviewed change');
+      expect(data.commits[0]).toMatchObject(description);
     }
   });
 

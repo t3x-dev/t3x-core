@@ -31,6 +31,7 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { BranchLoadError } from '@/components/project/BranchLoadError';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { commitByline, commitTitle } from '@/domain/format/formatters';
 import { commitStructureHref } from '@/domain/project/objectLocation';
 import {
   getCanonicalRepositoryPath,
@@ -86,7 +87,7 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
     id: 'filter',
     label: 'Filter',
     title: 'Filter history',
-    description: 'Focus one author or search the timeline.',
+    description: 'Filter by a recorded participant or search the timeline.',
     target: 'history-branch-filter',
     tone: 'pending',
     icon: GitBranch,
@@ -217,17 +218,22 @@ export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPagePr
   const authorOptions = useMemo(() => {
     const authors = new Set<string>();
     for (const item of commits) {
-      authors.add(item.commit.author?.name || item.commit.author?.type || 'Unknown');
+      authors.add(commitByline(item.commit));
     }
     return [...authors].sort((a, b) => a.localeCompare(b));
   }, [commits]);
   const visibleCommits = useMemo(() => {
     const query = searchInput.trim().toLocaleLowerCase();
     return commits.filter(({ commit }) => {
-      const author = commit.author?.name || commit.author?.type || 'Unknown';
+      const author = commitByline(commit);
       if (authorFilter !== 'all' && author !== authorFilter) return false;
       if (!query) return true;
-      return [commit.message, commit.hash, commit.branch, author]
+      return [
+        commitTitle(commit.message, commit.operation_count),
+        commit.hash,
+        commit.branch,
+        author,
+      ]
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLocaleLowerCase().includes(query));
     });
@@ -556,13 +562,13 @@ export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPagePr
             <label className={styles.filterControl} data-intro-target="history-branch-filter">
               <UserRound size={15} strokeWidth={2} />
               <select
-                aria-label="Author filter"
+                aria-label="Participant filter"
                 value={authorFilter}
                 onChange={(event) =>
                   updateQuery({ author: event.target.value === 'all' ? null : event.target.value })
                 }
               >
-                <option value="all">All authors</option>
+                <option value="all">All participants</option>
                 {Array.from(
                   new Set([...authorOptions, ...(authorFilter === 'all' ? [] : [authorFilter])])
                 ).map((author) => (
@@ -634,7 +640,8 @@ export function CommitHistoryPage({ projectId, commitHash }: CommitHistoryPagePr
                       key={item.commit.hash}
                       hash={item.commit.hash}
                       message={item.commit.message}
-                      author={item.commit.author}
+                      byline={commitByline(item.commit)}
+                      operationCount={item.commit.operation_count}
                       committedAt={item.commit.committed_at}
                       branch={item.commit.branch}
                       parentCount={(item.commit.parents ?? []).length}
