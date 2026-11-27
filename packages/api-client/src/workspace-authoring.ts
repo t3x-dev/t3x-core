@@ -53,6 +53,7 @@ export interface WorkspaceAuthoringCard {
 export interface WorkspaceAuthoringView {
   schema: 't3x.application/workspace-authoring-view/v1';
   projectionVersion: number;
+  fixedReview?: { snapshotId: string; number?: string };
   workspaceRevision: number;
   compositionRevision: number;
   basis: { refName: string; refHead: string | null; baseDigest: string };

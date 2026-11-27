@@ -2667,6 +2667,45 @@ describe('WorkspaceComposeReviewSurface composer', () => {
     expect(snapshotMocks.list).not.toHaveBeenCalled();
   });
 
+  it('links the inspected saved Draft to its existing fixed Review until the Draft changes', () => {
+    enableComposeActivity();
+    const candidate = getProjectWorkspaceStarterCandidate('proj_1');
+    const view = activityMocks.value!.view!;
+    Object.assign(view, {
+      workspaceRevision: candidate.revision ?? view.workspaceRevision,
+      fixedReview: { snapshotId: 'rvs_5678', number: '3' },
+      hasChanges: true,
+      base: { title: 'Old' },
+      current: { title: 'New' },
+    });
+    const controller = {
+      candidate,
+      isBusy: false,
+      busyAction: null,
+      scenarios: { options: [], selectedId: candidate.id },
+      review: { content: null, deterministicValidation: null, reviewSnapshot: null, view: null },
+      prepareReview: vi.fn(),
+    } as unknown as WorkspaceComposeReviewController;
+    const surface = () => (
+      <WorkspaceComposeReviewSurface
+        candidate={candidate}
+        controller={controller}
+        mode="review"
+        onModeChange={vi.fn()}
+      />
+    );
+    const { rerender } = render(surface());
+    expect(screen.getByRole('link', { name: 'Open fixed review' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/reviews/3')
+    );
+    expect(screen.getByText('Recorded in fixed review')).toBeInTheDocument();
+    activityMocks.value!.newActivity = { ...view, workspaceRevision: view.workspaceRevision + 1 };
+    rerender(surface());
+    expect(screen.queryByRole('link', { name: 'Open fixed review' })).toBeNull();
+    expect(controller.prepareReview).not.toHaveBeenCalled();
+  });
+
   it('shows the matching saved action and original YOps beside a selected Review diff', () => {
     enableComposeActivity();
     const candidate = getProjectWorkspaceStarterCandidate('proj_1');

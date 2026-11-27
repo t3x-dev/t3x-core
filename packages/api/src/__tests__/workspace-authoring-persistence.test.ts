@@ -4,7 +4,9 @@ import {
   bindTransitionPolicy,
   createMaterial,
   deleteDraft,
+  findDraftReviewSnapshot,
   findWorkspaceDraft,
+  getLatestTransitionReviewSnapshot,
   getTransitionProposalPreparation,
   getTransitionRefHead,
   insertBranch,
@@ -431,6 +433,31 @@ describe('durable Draft authoring commands', () => {
       expectedRefHead: null,
       reason: 'Review the complete Draft',
     });
+    const scope = { projectId, workspaceId: 'review-service' };
+    const view = await readWorkspaceAuthoring(setup.db, scope);
+    const fixed = await getLatestTransitionReviewSnapshot(setup.db, {
+      ...scope,
+      transitionId: reviewed.view.transitionId,
+    });
+    expect(fixed).not.toBeNull();
+    expect(view.fixedReview).toEqual({
+      snapshotId: fixed!.snapshotId,
+      number: expect.stringMatching(/^[1-9][0-9]*$/),
+    });
+    const facts = {
+      ...scope,
+      workspaceRevision: view.workspaceRevision,
+      compositionRevision: view.compositionRevision,
+      basis: view.basis,
+    };
+    for (const changed of [
+      { workspaceId: 'different' },
+      { workspaceRevision: facts.workspaceRevision + 1 },
+      { compositionRevision: facts.compositionRevision + 1 },
+      { basis: { ...facts.basis, refHead: 'sha256:' + 'f'.repeat(64) } },
+      { basis: { ...facts.basis, baseDigest: 'sha256:' + 'f'.repeat(64) } },
+    ])
+      await expect(findDraftReviewSnapshot(setup.db, { ...facts, ...changed })).resolves.toBeNull();
     expect(reviewed.authoring.actionCount).toBe(1);
     expect(reviewed.authoring.preparationDigest).toMatch(/^sha256:/);
     const graph = await resolveTransitionProposalGraph(
