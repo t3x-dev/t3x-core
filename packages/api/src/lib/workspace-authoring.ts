@@ -437,10 +437,16 @@ export async function publishWorkspaceAuthoringAction(
     expectedRefHead: string | null;
     reason?: string;
     generation?: DraftActionGeneration;
-    validate?: (tx: AnyDB) => Promise<void>;
+    validate?: (tx: AnyDB, draft: Awaited<ReturnType<typeof requireWorkspace>>) => Promise<void>;
+  },
+  options?: {
+    initialDraft: Awaited<ReturnType<typeof requireWorkspace>>;
+    timings?: Record<string, number>;
   }
 ) {
-  const initial = await requireWorkspace(db, input.projectId, input.workspaceId);
+  const initial =
+    options?.initialDraft ?? (await requireWorkspace(db, input.projectId, input.workspaceId));
+  const timings = options?.timings;
   const { basis } = workspaceAuthoringState(initial.workspace_state!);
   return transactWorkspaceAuthoring<PublishDraftActionResult>(
     db,
@@ -467,10 +473,12 @@ export async function publishWorkspaceAuthoringAction(
         throw new DraftAuthoringConflictError(result.message);
       if (draft.revision !== input.expectedWorkspaceRevision)
         throw new ConflictError(draft.id, input.expectedWorkspaceRevision);
+      const headStarted = performance.now();
       const head = await getTransitionRefHead(tx, {
         projectId: input.projectId,
         refName: basis.refName,
       });
+      if (timings) timings.head_validation_ms = performance.now() - headStarted;
       if (
         head.head !== input.expectedRefHead ||
         head.head !== current.basis.refHead ||
@@ -483,7 +491,8 @@ export async function publishWorkspaceAuthoringAction(
         throw new DraftAuthoringConflictError(
           'Generated publication requires server-bound provenance'
         );
-      await input.validate?.(tx);
+      await input.validate?.(tx, draft);
+      const replayStarted = performance.now();
       // Revalidate the complete ordered Effect against protocol Base. Never use effective Draft as Effect.base.
       const composed = buildAuthoringEffect(result.ledger);
       if (
@@ -491,8 +500,10 @@ export async function publishWorkspaceAuthoringAction(
         describeTransitionObject(createYOpsState(currentComposition(result.ledger))).digest
       )
         throw new TypeError('Authoring replay mismatch');
+      if (timings) timings.replay_ms = performance.now() - replayStarted;
       return { workspace: { ...workspace, authoringLedger: result.ledger }, value: result };
-    }
+    },
+    timings
   );
 }
 

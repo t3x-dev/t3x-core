@@ -20,6 +20,7 @@ import {
   GENERATION_MODEL_SPECIFICATION_VERSION,
   GENERATION_PROVIDER_RUNTIME_VERSION,
   type GenerationModel,
+  GenerationModelError,
   type GenerationProviderRuntime,
 } from '../lib/model-runtime-contract';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
@@ -58,7 +59,7 @@ describe('Workspace Assistant streaming boundary', () => {
   afterAll(async () => {
     await setup?.cleanup();
   });
-  async function fixture(name: string) {
+  async function fixture(name: string, withSchema = false) {
     const project = await insertProject(setup.db, { name, ownerId: 'hosted-user' });
     const projectId = project.projectId;
     await insertBranch(setup.db, { projectId, name: 'main' });
@@ -67,7 +68,14 @@ describe('Workspace Assistant streaming boundary', () => {
       workspace_id: 'ws',
       title: name,
       target_branch: 'main',
-      workspace_state: { targetBranch: 'main' },
+      workspace_state: {
+        targetBranch: 'main',
+        ...(withSchema
+          ? {
+              schemaBindings: [{ canonicalName: 't3x/prd', version: 'v2', mode: 'pinned' }],
+            }
+          : {}),
+      },
     });
     const initialized = await initializeWorkspaceAuthoring(setup.db, {
       projectId,
@@ -111,7 +119,7 @@ describe('Workspace Assistant streaming boundary', () => {
       body: JSON.stringify(body),
     });
 
-  function managedApp(model: GenerationModel, denied = false) {
+  function managedApp(model: GenerationModel, denied = false, canPropose = false) {
     const resolve = vi.fn<GenerationProviderRuntime['resolve']>(async () => ({ ok: true, model }));
     const providerRuntime: GenerationProviderRuntime = {
       contractVersion: GENERATION_PROVIDER_RUNTIME_VERSION,
@@ -149,7 +157,7 @@ describe('Workspace Assistant streaming boundary', () => {
         accountId: 'account-hosted',
         sessionId: 'session-hosted',
         credential: { kind: 'session', id: 'session-hosted', projectId: null, namespaceId: null },
-        scopes: ['transition:inspect'],
+        scopes: canPropose ? ['transition:inspect', 'transition:propose'] : ['transition:inspect'],
         ingress: 'http',
       } satisfies RequestPrincipal);
       c.set('inferenceIngressChannel', 'web');
@@ -275,6 +283,105 @@ describe('Workspace Assistant streaming boundary', () => {
       order: 'asc',
     });
     expect(turns.filter((turn) => turn.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('persists a fallback reply when the managed deadline expires after a completed proposal', async () => {
+    const f = await fixture('managed-proposal-deadline', true);
+    const evidence = {
+      provider: 'hosted-gateway',
+      model: 'balanced',
+      providerRequestId: 'upstream-test',
+      usage: { inputTokens: 7, outputTokens: 3 },
+      finishReason: 'stop' as const,
+    };
+    const generate = vi
+      .fn<GenerationModel['generate']>()
+      .mockResolvedValueOnce({
+        output: [
+          {
+            type: 'tool_call',
+            id: 'proposal',
+            name: 'requestProposal',
+            input: {
+              instruction: 'Set the audience to enterprise operators.',
+              target: 'content',
+            },
+          },
+        ],
+        evidence: { ...evidence, finishReason: 'tool_call' },
+      })
+      .mockResolvedValueOnce({
+        output: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              schema: 't3x.dev/proposal-generation-draft/v1',
+              version: 1,
+              posture: 'guided',
+              intent: { mode: 'unspecified' },
+              rationale: { mode: 'unspecified' },
+              changes: [
+                {
+                  id: 'audience',
+                  operations: [{ set: { path: 'prd/audience', value: 'enterprise operators' } }],
+                  claimedOrigin: 'inferred',
+                  evidencePointers: [],
+                  basisPointers: [],
+                  assumptions: [],
+                  reason: 'Set the requested audience',
+                  challenges: [],
+                },
+              ],
+              warnings: [],
+            }),
+          },
+        ],
+        evidence,
+      })
+      .mockRejectedValueOnce(
+        new GenerationModelError('managed_run_deadline_exceeded', 'not_started')
+      );
+    const hosted = managedApp(
+      {
+        specificationVersion: GENERATION_MODEL_SPECIFICATION_VERSION,
+        provider: 'managed-service',
+        modelId: 'balanced',
+        capabilities: ['text', 'tool_use', 'structured_output'],
+        generate,
+      },
+      false,
+      true
+    );
+    const response = await hosted.app.request(f.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...f.body,
+        provider: 'managed',
+        model: 'balanced',
+        allow_proposal: true,
+      }),
+    });
+    const transcript = await response.text();
+    expect(response.status, transcript).toBe(200);
+    const events = transcript
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'operation',
+        name: 'requestProposal',
+        status: 'completed',
+        result: expect.objectContaining({ transitionId: expect.stringMatching(/^trn_/) }),
+      })
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      content: 'The proposal was generated. The follow-up reply timed out.',
+      turnHash: expect.any(String),
+    });
+    expect(generate).toHaveBeenCalledTimes(3);
   });
 
   it('does not fall back to local credentials on managed resolution or admission failure', async () => {

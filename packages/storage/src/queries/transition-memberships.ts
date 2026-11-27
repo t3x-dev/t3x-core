@@ -7,7 +7,7 @@ import {
   type State,
   sha256,
 } from '@t3x-dev/core';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type TransitionProposalMembershipRecord,
@@ -482,6 +482,13 @@ async function loadObject(
     .from(transitionObjects)
     .where(eq(transitionObjects.digest, descriptor.digest))
     .limit(1);
+  return verifyLoadedObject(row, descriptor);
+}
+
+function verifyLoadedObject(
+  row: typeof transitionObjects.$inferSelect | undefined,
+  descriptor: { kind: string; schema: string; digest: string }
+): ProtocolObject {
   if (row === undefined) {
     throw new TransitionMembershipIntegrityError(`Object ${descriptor.digest} is missing`);
   }
@@ -703,8 +710,25 @@ export async function resolveTransitionProposalGraph(
   transitionId: string,
   includeObservations = true
 ): Promise<ResolvedTransitionProposalGraph> {
-  const membership = await getTransitionProposalMembership(db, projectId, transitionId);
-  if (membership === null) throw new TransitionMembershipNotFoundError(transitionId);
+  const [row] = await db
+    .select({
+      membership: transitionProposalMemberships,
+      preparation: transitionProposalPreparations,
+    })
+    .from(transitionProposalMemberships)
+    .leftJoin(
+      transitionProposalPreparations,
+      eq(transitionProposalPreparations.transitionId, transitionProposalMemberships.transitionId)
+    )
+    .where(
+      and(
+        eq(transitionProposalMemberships.projectId, projectId),
+        eq(transitionProposalMemberships.transitionId, transitionId)
+      )
+    )
+    .limit(1);
+  if (!row) throw new TransitionMembershipNotFoundError(transitionId);
+  const membership = proposalMembership(row.membership);
   try {
     assertActor(membership.actor, 'stored actor');
   } catch {
@@ -722,7 +746,7 @@ export async function resolveTransitionProposalGraph(
   ) {
     throw new TransitionMembershipIntegrityError('Stored Proposal membership facts are invalid');
   }
-  const preparation = await getTransitionProposalPreparation(db, transitionId);
+  const preparation = row.preparation ? proposalPreparation(row.preparation) : null;
   if (
     preparation !== null &&
     (!DIGEST_PATTERN.test(preparation.digest) ||
@@ -754,8 +778,20 @@ export async function resolveTransitionProposalGraph(
   if (effectObject.schema !== 't3x/effect/v1') {
     throw new TransitionMembershipIntegrityError('Membership Effect has the wrong schema');
   }
-  const baseObject = await loadObject(db, effectObject.base);
-  const resultObject = await loadObject(db, effectObject.result);
+  const states = await db
+    .select()
+    .from(transitionObjects)
+    .where(
+      inArray(transitionObjects.digest, [effectObject.base.digest, effectObject.result.digest])
+    );
+  const baseObject = verifyLoadedObject(
+    states.find((state) => state.digest === effectObject.base.digest),
+    effectObject.base
+  );
+  const resultObject = verifyLoadedObject(
+    states.find((state) => state.digest === effectObject.result.digest),
+    effectObject.result
+  );
   if (baseObject.schema !== 't3x/state/v1' || resultObject.schema !== 't3x/state/v1') {
     throw new TransitionMembershipIntegrityError('Membership Effect State graph is invalid');
   }

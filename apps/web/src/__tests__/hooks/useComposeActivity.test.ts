@@ -9,22 +9,30 @@ import {
   WorkspaceActivityCacheContext,
   type WorkspaceActivitySnapshot,
 } from '@/hooks/workspaces/workspaceActivityCache';
+import { ApiError } from '@/infrastructure/core';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { deferred } from './deferred';
 
-const { read, publish, reconcile, prepareReconciliation, decideReconciliation } = vi.hoisted(
-  () => ({
+const { read, publish, publishCandidate, reconcile, prepareReconciliation, decideReconciliation } =
+  vi.hoisted(() => ({
     read: vi.fn(),
     publish: vi.fn(),
+    publishCandidate: vi.fn(),
     reconcile: vi.fn(),
     prepareReconciliation: vi.fn(),
     decideReconciliation: vi.fn(),
-  })
-);
+  }));
 vi.mock('@/infrastructure/sharedApiClient', () => ({
   getSharedApiClient: () => ({
     workspaces: {
-      authoring: { read, publish, reconcile, prepareReconciliation, decideReconciliation },
+      authoring: {
+        read,
+        publish,
+        publishCandidate,
+        reconcile,
+        prepareReconciliation,
+        decideReconciliation,
+      },
     },
   }),
 }));
@@ -696,4 +704,53 @@ it('shows a cached saved Draft on return and removes it when revalidation denies
   expect(next.result.current.error).toBe('Access expired');
   expect(cache.current).toBeNull();
   next.unmount();
+});
+
+it.each([
+  true,
+  false,
+])('looks up the exact publication after a timeout (confirmed: %s)', async (matches) => {
+  const initial = {
+    actions: [],
+    selected: null,
+    netDiff: [],
+    nextBeforeSequence: null,
+    workspaceRevision: 1,
+    compositionRevision: 0,
+  };
+  const action = {
+    actionId: 'publication',
+    sequence: 1,
+    beforeRevision: 0,
+    afterRevision: 1,
+    operations: [],
+    generation: { transitionId: matches ? 'candidate' : 'other' },
+  };
+  read
+    .mockReset()
+    .mockResolvedValueOnce(initial)
+    .mockResolvedValueOnce({
+      ...initial,
+      workspaceRevision: 2,
+      compositionRevision: 1,
+      selected: { action, cards: [] },
+    })
+    .mockResolvedValue(initial);
+  publishCandidate.mockReset().mockRejectedValueOnce(new ApiError('TIMEOUT', 'Request timed out'));
+  const { result, unmount } = renderHook(() =>
+    useComposeActivity({ id: 'ws', projectId: 'p' } as WorkspaceCandidate, true)
+  );
+  await waitFor(() => expect(result.current.view).toEqual(initial));
+  const confirming = vi.fn();
+  await act(async () => {
+    const save = result.current.publishCandidate('candidate', 'publication', confirming);
+    if (matches) await expect(save).resolves.toMatchObject({ kind: 'reused', action });
+    else await expect(save).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+  expect(confirming).toHaveBeenCalledOnce();
+  expect(read).toHaveBeenCalledWith('p', 'ws', { action_id: 'publication', limit: 1 });
+  expect(publishCandidate).toHaveBeenCalledExactlyOnceWith('p', 'ws', 'candidate', {
+    request_id: 'publication',
+  });
+  unmount();
 });

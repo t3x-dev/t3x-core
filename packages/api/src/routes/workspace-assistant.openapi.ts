@@ -18,6 +18,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   createInferenceRuntime,
   getInferenceRuntime,
+  InferenceExecutionError,
   resolveInferenceActor,
   resolveInferenceIngressChannel,
   resolveInferenceProjectScope,
@@ -220,6 +221,7 @@ workspaceAssistantRoutes.post(
       let content = '';
       let terminalReason = 'completed';
       const operations: unknown[] = [];
+      let candidateSaved = false;
       try {
         await chatWithWorkspace({
           db,
@@ -277,7 +279,18 @@ workspaceAssistantRoutes.post(
           signal: controller.signal,
           emit: async (event) => {
             if (event.type === 'text') content += event.content;
-            if (event.type === 'operation' && event.status === 'completed') operations.push(event);
+            if (event.type === 'operation' && event.status === 'completed') {
+              operations.push(event);
+              if (
+                event.name === 'requestProposal' &&
+                event.result &&
+                typeof event.result === 'object' &&
+                'transitionId' in event.result &&
+                typeof event.result.transitionId === 'string'
+              ) {
+                candidateSaved = true;
+              }
+            }
             // Done is delivered only after the final assistant turn has been persisted.
             if (event.type === 'done') {
               terminalReason = event.reason;
@@ -285,6 +298,19 @@ workspaceAssistantRoutes.post(
             }
             await stream.writeSSE({ event: 'assistant', data: JSON.stringify(event) });
           },
+        }).catch((error: unknown) => {
+          const cause = error instanceof InferenceExecutionError ? error.cause : error;
+          if (
+            !candidateSaved ||
+            controller.signal.aborted ||
+            !(cause instanceof Error) ||
+            !('code' in cause) ||
+            cause.code !== 'managed_run_deadline_exceeded'
+          ) {
+            throw error;
+          }
+          const notice = 'The proposal was generated. The follow-up reply timed out.';
+          content = content.trim() ? `${content.trim()}\n\n${notice}` : notice;
         });
         await authorize('read');
         const turn = content.trim()
