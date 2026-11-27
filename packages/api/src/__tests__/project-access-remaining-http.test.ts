@@ -184,6 +184,33 @@ describe('project ownership on remaining HTTP project surfaces', () => {
     expect(commitSpies.getCommit).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'two-way',
+    'frame',
+  ])('classifies a Commit absent from the selected project in %s', async (route) => {
+    const app = createAuthenticatedApp('user_owner');
+    const hash = `sha256:${'e'.repeat(64)}`;
+    commitSpies.listProjectIds.mockResolvedValue([]);
+    const read = (project_id?: string) =>
+      app.request(`/v1/diff/${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id, base_commit_hash: hash, target_commit_hash: hash }),
+      });
+    const scoped = await read(ownerProjectId);
+    expect(scoped.status).toBe(404);
+    expect((await scoped.json()).error).toMatchObject({
+      code: 'NOT_FOUND',
+      details: { protocol_code: 'COMMIT_NOT_FOUND' },
+    });
+    const denied = await read(otherProjectId);
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).error).not.toHaveProperty('details.protocol_code');
+    const unscoped = await read();
+    expect(unscoped.status).toBe(404);
+    expect((await unscoped.json()).error).not.toHaveProperty('details.protocol_code');
+  });
+
   it('loads commit state only through an authorized project membership', async () => {
     const app = createAuthenticatedApp('user_owner');
     commitSpies.listProjectIds.mockResolvedValue([ownerProjectId]);

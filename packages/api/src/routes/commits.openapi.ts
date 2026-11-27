@@ -91,7 +91,10 @@ const getCommittedSchemaBindingRoute = createRoute({
       },
     },
     403: { description: 'Project access denied' },
-    404: { description: 'Commit unavailable' },
+    404: {
+      description: 'Commit unavailable',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 commitRoutes.openapi(getCommittedSchemaBindingRoute, async (c) => {
@@ -100,7 +103,11 @@ commitRoutes.openapi(getCommittedSchemaBindingRoute, async (c) => {
   const access = await assertProjectAccess(c, db, projectId, 'project:read');
   if (access instanceof Response) return access;
   const result = await readCommittedSchemaBinding(db, projectId, hash);
-  if (!result) return errorResponse(c, 'NOT_FOUND', 'Commit not found in project');
+  if (!result) {
+    return errorResponse(c, 'NOT_FOUND', 'Commit not found in project', {
+      protocol_code: 'COMMIT_NOT_FOUND',
+    });
+  }
   const data =
     result.status === 'bound'
       ? CommittedSchemaBindingSchema.parse({
