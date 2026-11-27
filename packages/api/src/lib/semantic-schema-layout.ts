@@ -1,4 +1,10 @@
-import { createRepositorySemanticState, repositorySemanticYSchemaTree } from '@t3x-dev/core';
+import {
+  createRepositorySemanticState,
+  type ProposalGenerationDraftV1,
+  REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+  REPOSITORY_SEMANTIC_CONTENT_VERSION,
+  repositorySemanticYSchemaTree,
+} from '@t3x-dev/core';
 import { type NodeSchema, validateTree, type YSchema } from '@t3x-dev/yschema';
 import { schemaRootKeyFromBinding } from './yschema-registry';
 
@@ -103,6 +109,82 @@ export interface SemanticLayoutIssue {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Include the transport fields in the replayable first action without changing its empty Base. */
+export function prepareGeneratedSemanticDraft(draft: ProposalGenerationDraftV1, before: unknown) {
+  const empty = isRecord(before) && Object.keys(before).length === 0;
+  const existing =
+    isRecord(before) &&
+    before.domain === REPOSITORY_SEMANTIC_CONTENT_DOMAIN &&
+    before.version === REPOSITORY_SEMANTIC_CONTENT_VERSION;
+  if (!empty) return { draft, requireEnvelope: existing };
+
+  const operations = draft.changes.flatMap((change) => change.operations);
+  const writesSemanticContent = operations.some((operation) => {
+    if (!isRecord(operation)) return false;
+    const set = operation.set;
+    return (
+      (isRecord(set) &&
+        ((set.path === 'domain' && set.value === REPOSITORY_SEMANTIC_CONTENT_DOMAIN) ||
+          (set.path === 'content' && isRecord(set.value) && Array.isArray(set.value.trees)))) ||
+      Object.values(operation).some(
+        (payload) =>
+          isRecord(payload) &&
+          typeof payload.path === 'string' &&
+          (payload.path === 'content/trees' || payload.path.startsWith('content/trees/'))
+      )
+    );
+  });
+  if (!writesSemanticContent) return { draft, requireEnvelope: false };
+
+  const sets = new Set(
+    operations.flatMap((operation) =>
+      isRecord(operation) && isRecord(operation.set) ? [operation.set.path] : []
+    )
+  );
+  const bootstrap = [
+    { set: { path: 'domain', value: REPOSITORY_SEMANTIC_CONTENT_DOMAIN } },
+    { set: { path: 'version', value: REPOSITORY_SEMANTIC_CONTENT_VERSION } },
+    { set: { path: 'content', value: { trees: [], relations: [] } } },
+  ].filter((operation) => !sets.has(operation.set.path));
+  const changes = draft.changes.map((change, index) => {
+    const normalized = change.operations.map((operation) => {
+      if (!isRecord(operation) || !isRecord(operation.set)) return operation;
+      const { path, value } = operation.set;
+      if (
+        path !== 'content' ||
+        !isRecord(value) ||
+        !Array.isArray(value.trees) ||
+        Object.hasOwn(value, 'relations')
+      )
+        return operation;
+      return { set: { path, value: { ...value, relations: [] } } };
+    });
+    return {
+      ...change,
+      operations: index === 0 ? [...bootstrap, ...normalized] : normalized,
+    };
+  });
+  return { draft: { ...draft, changes }, requireEnvelope: true };
+}
+
+export function generatedSemanticEnvelopeIssue(document: unknown): SemanticLayoutIssue | undefined {
+  try {
+    if (
+      !isRecord(document) ||
+      document.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN ||
+      document.version !== REPOSITORY_SEMANTIC_CONTENT_VERSION
+    )
+      throw new TypeError('Keep the versioned semantic-content document envelope.');
+    createRepositorySemanticState(document.content as never);
+  } catch (error) {
+    return {
+      code: 'INVALID_SEMANTIC_CONTENT',
+      path: 'content',
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**

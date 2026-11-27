@@ -610,6 +610,98 @@ describe('governed Proposal generation', () => {
   });
 });
 
+it('publishes a first semantic proposal with a complete envelope and an unchanged empty Base', async () => {
+  const data = await fixture('First semantic proposal');
+  const actor = { kind: 'human' as const, id: 'user:compose' };
+  const initialized = await initializeWorkspaceAuthoring(db, {
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+    expectedWorkspaceRevision: data.workspace.revision,
+    expectedRefHead: null,
+    actionId: 'init',
+    actor,
+  });
+  const proposed = await generateTransitionProposal({
+    db,
+    projectId: data.projectId,
+    requestId: 'first-semantic',
+    requester: actor,
+    request: {
+      workspaceId: data.workspaceId,
+      expectedRevision: initialized.draft.revision,
+      posture: 'guided',
+      instruction: 'Set the title of the product brief',
+      sourceMaterialIds: [data.material.id],
+    },
+    resolveModel: async () => ({
+      provider: 'test',
+      model: 'test-model',
+      generate: async (input) => ({
+        draft: {
+          ...draft(),
+          intent: { mode: 'unspecified' },
+          changes: [
+            {
+              ...draft().changes[0],
+              claimedOrigin: 'inferred',
+              evidencePointers: [],
+              basisPointers: [{ kind: 'source', index: 0 }],
+              operations: [
+                {
+                  set: {
+                    path: 'content',
+                    value: {
+                      trees: [
+                        {
+                          key: input.schemaLayout.rootKey,
+                          slots: {},
+                          children: [
+                            { key: 'product', slots: { title: 'Launch brief' }, children: [] },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        usage: { inputTokens: 11, outputTokens: 7 },
+      }),
+    }),
+    inference: inference(data.projectId),
+  });
+  const saved = await publishWorkspaceGeneration({
+    db,
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+    transitionId: proposed.view.transitionId,
+    requestId: 'publish-first-semantic',
+    actor,
+  });
+  expect(saved.value.kind).toBe('published');
+  const view = await readWorkspaceAuthoring(db, {
+    projectId: data.projectId,
+    workspaceId: data.workspaceId,
+  });
+  expect(view.base).toEqual({});
+  expect(view.current).toEqual({
+    domain: 't3x.dev/semantic-content',
+    version: 1,
+    content: {
+      trees: [
+        {
+          key: 'prd',
+          slots: {},
+          children: [{ key: 'product', slots: { title: 'Launch brief' }, children: [] }],
+        },
+      ],
+      relations: [],
+    },
+  });
+});
+
 it('generates incrementally over saved manual edits, then publishes one verified action', async () => {
   const data = await fixture('Incremental authoring');
   const actor = { kind: 'human' as const, id: 'user:compose' };

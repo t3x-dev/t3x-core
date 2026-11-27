@@ -18,6 +18,7 @@ import {
 } from '@t3x-dev/core';
 import { type AnyDB, DraftAuthoringConflictError, findWorkspaceDraft } from '@t3x-dev/storage';
 import { canonicalizeProtocolValue, type ProtocolValue } from '@t3x-dev/transition';
+import { generatedSemanticEnvelopeIssue } from './semantic-schema-layout';
 import {
   buildAuthoringEffect,
   type WorkspaceAuthoringBasis,
@@ -96,6 +97,7 @@ export function buildWorkspaceGeneration(input: {
   operations: ProtocolValue[];
   generation: ProposalGenerationPreparationV1;
   proposalDraft: ProposalDraft;
+  requireSemanticEnvelope?: boolean;
 }) {
   const { ledger, basis } = workspaceAuthoringState(input.workspace);
   const operations = input.operations.map(
@@ -117,6 +119,10 @@ export function buildWorkspaceGeneration(input: {
     );
   const before = currentComposition(ledger);
   const after = currentComposition(appended.ledger);
+  if (input.requireSemanticEnvelope) {
+    const issue = generatedSemanticEnvelopeIssue(after);
+    if (issue) throw new DraftAuthoringConflictError(issue.message);
+  }
   for (const binding of input.generation.bindings) {
     if (
       binding.paths.every(

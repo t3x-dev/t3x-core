@@ -1,12 +1,19 @@
 import type {
+  TransitionProtocolValue,
   WorkspaceAuthoringAction,
   WorkspaceAuthoringCard,
   WorkspaceAuthoringView,
 } from '@t3x-dev/api-client';
-import { type SemanticContent, yamlToTree } from '@t3x-dev/core';
+import {
+  REPOSITORY_SEMANTIC_CONTENT_DOMAIN,
+  type SemanticContent,
+  SemanticContentSchema,
+  yamlToTree,
+} from '@t3x-dev/core';
 import { expandAuthoringCards } from '@/domain/composeActivity';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsValidationResult, WorkspaceYOpsValue } from '@/types/workspaceYops';
+import { composeValuesEqual } from './composeObjectChanges';
 
 export function generatedActionReasons(action: WorkspaceAuthoringAction): string[] {
   const preparation = action.generation?.preparation;
@@ -29,12 +36,31 @@ export function generatedActionReasons(action: WorkspaceAuthoringAction): string
 export function authoringSemanticContent(value: unknown): SemanticContent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const document = value as Record<string, unknown>;
-  if (document.domain !== 't3x.dev/semantic-content') return null;
+  if (document.domain !== REPOSITORY_SEMANTIC_CONTENT_DOMAIN) return null;
   const content = document.content;
   if (!content || typeof content !== 'object' || Array.isArray(content)) return null;
   const semantic = content as Record<string, unknown>;
   if (!Array.isArray(semantic.trees) || !Array.isArray(semantic.relations)) return null;
   return { trees: semantic.trees, relations: semantic.relations } as SemanticContent;
+}
+
+function reviewSemanticContent(value: TransitionProtocolValue | undefined): SemanticContent | null {
+  const semantic = authoringSemanticContent(value);
+  if (semantic) return semantic;
+
+  // Older generated drafts saved the semantic tree without its document markers.
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (Object.keys(value).length !== 1) return null;
+  const content = value.content;
+  if (!content || typeof content !== 'object' || Array.isArray(content)) return null;
+  if (Object.keys(content).some((key) => key !== 'trees' && key !== 'relations')) return null;
+  const { trees, relations = [] } = content;
+  if (!Array.isArray(trees)) return null;
+  const normalized = { trees, relations };
+  const parsed = SemanticContentSchema.safeParse(normalized);
+  if (!parsed.success || !composeValuesEqual(normalized, parsed.data as TransitionProtocolValue))
+    return null;
+  return parsed.data as SemanticContent;
 }
 
 export function authoringSemanticPath(path: string): string | null {
@@ -64,11 +90,12 @@ export function authoringReviewDocuments(
   if (!view) return null;
   // This is a display projection only. Review still freezes and replays the
   // original document on the server; ordinary YAML never gains envelope paths.
-  const project = (value: unknown): SemanticContent | null => {
-    const semantic = authoringSemanticContent(value);
+  const project = (value: TransitionProtocolValue | undefined): SemanticContent | null => {
+    const semantic = reviewSemanticContent(value);
     if (semantic) return semantic;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    if ((value as Record<string, unknown>).domain === 't3x.dev/semantic-content') return null;
+    if ((value as Record<string, unknown>).domain === REPOSITORY_SEMANTIC_CONTENT_DOMAIN)
+      return null;
     return {
       trees: Object.entries(value).map(([key, item]) => yamlToTree(key, item)),
       relations: [],
@@ -135,7 +162,7 @@ export function buildAuthoringReviewProjection<
   if (!view || !documents) return null;
   const operations = authoringReviewOperations(
     expandAuthoringCards(view.selected?.cards ?? view.netDiff),
-    !authoringSemanticContent(view.selected?.after ?? view.current)
+    !reviewSemanticContent(view.selected?.after ?? view.current)
   );
   return {
     candidate: {

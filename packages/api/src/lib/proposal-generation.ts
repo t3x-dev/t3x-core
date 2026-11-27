@@ -41,7 +41,11 @@ import {
   generateSchemaTransitionProposal,
   type SchemaProposalGenerationInput,
 } from './schema-proposal-generation';
-import { type SemanticSchemaLayout, workspaceSemanticSchemaLayout } from './semantic-schema-layout';
+import {
+  prepareGeneratedSemanticDraft,
+  type SemanticSchemaLayout,
+  workspaceSemanticSchemaLayout,
+} from './semantic-schema-layout';
 import { isMachineIngestedMaterial } from './source-attachments';
 import { inspectTransition, type TransitionControlPlaneView } from './transition-control-plane';
 import {
@@ -909,6 +913,8 @@ async function generateContentTransitionProposal(
         error instanceof Error ? error.message : 'Generated Proposal Draft is invalid'
       );
     }
+    const prepared = authoring ? prepareGeneratedSemanticDraft(draft, authoring.current) : null;
+    draft = prepared?.draft ?? draft;
     const compiled = compileProposalGenerationDraft({
       draft,
       profile: profile.profile,
@@ -937,6 +943,7 @@ async function generateContentTransitionProposal(
           operations: compiled.operations,
           generation: compiled.preparation,
           proposalDraft: compiled.proposalDraft,
+          requireSemanticEnvelope: prepared?.requireEnvelope,
         })
       : null;
     const built = composed

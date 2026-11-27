@@ -18,7 +18,9 @@ import {
 } from './proposal-generation';
 import { resolveProviderAndModel } from './provider-resolver';
 import {
+  generatedSemanticEnvelopeIssue,
   newSemanticLayoutIssues,
+  prepareGeneratedSemanticDraft,
   type SemanticSchemaLayout,
   type SemanticSchemaLayoutNode,
   type SemanticSchemaLayoutSlot,
@@ -212,12 +214,14 @@ export function createProposalGenerationModel(resolved: {
             temperature: 0,
             maxTokens: 16_000,
           });
-          const draft = completeExplicitCardContent(
+          let draft = completeExplicitCardContent(
             normalizeGeneratedClaims(result.data, generation.sources),
             generation.instruction,
             generation.schemaLayout
           );
           if (generation.authoring) {
+            const prepared = prepareGeneratedSemanticDraft(draft, generation.authoring.current);
+            draft = prepared.draft;
             const operations = NativeYOpSchema.array().safeParse(
               draft.changes.flatMap((change) => change.operations)
             );
@@ -246,12 +250,17 @@ export function createProposalGenerationModel(resolved: {
                 }
               );
             }
-            const layoutIssues = newSemanticLayoutIssues(
-              generation.authoring.current,
-              applied.doc,
-              generation.yschema.value,
-              generation.schemaLayout.rootKey
-            );
+            const envelopeIssue = prepared.requireEnvelope
+              ? generatedSemanticEnvelopeIssue(applied.doc)
+              : undefined;
+            const layoutIssues = envelopeIssue
+              ? [envelopeIssue]
+              : newSemanticLayoutIssues(
+                  generation.authoring.current,
+                  applied.doc,
+                  generation.yschema.value,
+                  generation.schemaLayout.rootKey
+                );
             if (layoutIssues.length > 0) {
               throw new LLMProviderError(
                 resolved.providerId,
