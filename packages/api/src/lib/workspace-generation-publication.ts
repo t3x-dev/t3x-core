@@ -27,14 +27,14 @@ async function resolveRetiredGeneration(
     transitionId: string;
     requestId: string;
   },
-  preparationJson: string
+  draft: Awaited<ReturnType<typeof findWorkspaceDraft>>,
+  preparation: { basis?: unknown }
 ) {
-  const draft = await findWorkspaceDraft(input.db, input.projectId, input.workspaceId);
   if (!draft?.workspace_state) return null;
   const ledger = await findRetiredAuthoringLedger(
     input.db,
     draft.workspace_state,
-    (JSON.parse(preparationJson) as { basis?: unknown }).basis
+    preparation.basis
   );
   if (!ledger) return null;
   const action = ledger.actions.find(
@@ -59,17 +59,31 @@ export async function publishWorkspaceGeneration(input: {
   transitionId: string;
   requestId: string;
   actor: DraftActionActor;
+  timings?: Record<string, number>;
 }) {
-  const graph = await resolveTransitionProposalGraph(input.db, input.projectId, input.transitionId);
+  const timings = input.timings;
+  const graphStarted = performance.now();
+  const graph = await resolveTransitionProposalGraph(
+    input.db,
+    input.projectId,
+    input.transitionId,
+    false
+  );
+  if (timings) timings.candidate_read_ms = performance.now() - graphStarted;
   if (graph.membership.workspaceId !== input.workspaceId || !graph.preparation)
     throw new DraftAuthoringConflictError('Candidate does not belong to this Workspace');
-  const retired = await resolveRetiredGeneration(input, graph.preparation.canonicalJson);
+  const workspaceStarted = performance.now();
+  const loadedDraft = await findWorkspaceDraft(input.db, input.projectId, input.workspaceId);
+  if (timings) timings.workspace_read_ms = performance.now() - workspaceStarted;
+  const preparation = JSON.parse(graph.preparation.canonicalJson);
+  const retired = await resolveRetiredGeneration(input, loadedDraft, preparation);
   if (retired) return retired;
   const { candidate, draft } = await resolveWorkspaceGenerationBasis(
     input.db,
     input.projectId,
     input.workspaceId,
-    JSON.parse(graph.preparation.canonicalJson)
+    preparation,
+    loadedDraft
   );
   const generation: DraftActionGeneration = {
     transitionId: input.transitionId,
@@ -93,74 +107,87 @@ export async function publishWorkspaceGeneration(input: {
     generation,
     reason: 'Apply generated changes to Draft',
   };
+  const publication = { initialDraft: draft, timings };
   // A lost response recovers the original result even after newer actions arrive.
   if (
     workspaceAuthoringState(draft.workspace_state!).ledger.actions.some(
       (action) => action.actionId === input.requestId
     )
   )
-    return publishWorkspaceAuthoringAction(input.db, command);
-  return publishWorkspaceAuthoringAction(input.db, {
-    ...command,
-    validate: async (tx) => {
-      const prefix = `t3x://projects/${encodeURIComponent(input.projectId)}/`;
-      const refs = candidate.generation.context.sources.map((resource) => {
-        if (!resource.uri.startsWith(prefix))
-          throw new DraftAuthoringConflictError('Source is outside the authorized project');
-        const path = resource.uri.slice(prefix.length);
-        const material = path.match(/^materials\/([^/]+)$/);
-        if (material)
-          return { kind: 'material' as const, id: decodeURIComponent(material[1]), resource };
-        const turn = path.match(/^conversations\/([^/]+)\/turns\/([^/]+)$/);
-        if (turn)
-          return {
-            kind: 'turn' as const,
-            id: decodeURIComponent(turn[2]),
-            conversationId: decodeURIComponent(turn[1]),
-            resource,
-          };
-        throw new DraftAuthoringConflictError('Unknown source resource');
-      });
-      const materials = await lockMaterialsForAuthoring(
-        tx,
-        refs.filter((ref) => ref.kind === 'material').map((ref) => ref.id)
-      );
-      const turns = await lockTurnsForAuthoring(
-        tx,
-        refs.filter((ref) => ref.kind === 'turn').map((ref) => ref.id)
-      );
-      for (const ref of refs) {
-        let text: string | undefined;
-        if (ref.kind === 'material') {
-          const source = materials.find((source) => source.id === ref.id);
-          if (
-            source?.project_id === input.projectId &&
-            !source.archived_at &&
-            !isMachineIngestedMaterial(source)
-          )
-            text = source.content_text;
-        } else {
-          const turn = turns.find((turn) => turn.turnHash === ref.id);
-          if (
-            turn?.projectId === input.projectId &&
-            turn.role === 'user' &&
-            turn.conversationId === ref.conversationId
-          )
-            text = turn.content;
-        }
-        if (
-          text === undefined ||
-          `sha256:${createHash('sha256').update(text).digest('hex')}` !== ref.resource.digest
-        )
-          throw new DraftAuthoringConflictError('Source version changed since generation');
-      }
-      const schema = await resolveWorkspaceYSchema(draft.workspace_state!, tx, input.projectId);
-      if (
-        !schema.schema ||
-        createYSchemaResourceDescriptor(candidate.generation.context.yschema.uri, schema.schema)
-          .digest !== candidate.generation.context.yschema.digest
-      )
-        throw new DraftAuthoringConflictError('Schema version changed since generation');
-    },
+    return publishWorkspaceAuthoringAction(input.db, command, publication);
+  const prefix = `t3x://projects/${encodeURIComponent(input.projectId)}/`;
+  const refs = candidate.generation.context.sources.map((resource) => {
+    if (!resource.uri.startsWith(prefix))
+      throw new DraftAuthoringConflictError('Source is outside the authorized project');
+    const path = resource.uri.slice(prefix.length);
+    const material = path.match(/^materials\/([^/]+)$/);
+    if (material)
+      return { kind: 'material' as const, id: decodeURIComponent(material[1]), resource };
+    const turn = path.match(/^conversations\/([^/]+)\/turns\/([^/]+)$/);
+    if (turn)
+      return {
+        kind: 'turn' as const,
+        id: decodeURIComponent(turn[2]),
+        conversationId: decodeURIComponent(turn[1]),
+        resource,
+      };
+    throw new DraftAuthoringConflictError('Unknown source resource');
   });
+  return publishWorkspaceAuthoringAction(
+    input.db,
+    {
+      ...command,
+      validate: async (tx, lockedDraft) => {
+        const sourcesStarted = performance.now();
+        const materials = await lockMaterialsForAuthoring(
+          tx,
+          refs.filter((ref) => ref.kind === 'material').map((ref) => ref.id)
+        );
+        const turns = await lockTurnsForAuthoring(
+          tx,
+          refs.filter((ref) => ref.kind === 'turn').map((ref) => ref.id)
+        );
+        for (const ref of refs) {
+          let text: string | undefined;
+          if (ref.kind === 'material') {
+            const source = materials.find((source) => source.id === ref.id);
+            if (
+              source?.project_id === input.projectId &&
+              !source.archived_at &&
+              !isMachineIngestedMaterial(source)
+            )
+              text = source.content_text;
+          } else {
+            const turn = turns.find((turn) => turn.turnHash === ref.id);
+            if (
+              turn?.projectId === input.projectId &&
+              turn.role === 'user' &&
+              turn.conversationId === ref.conversationId
+            )
+              text = turn.content;
+          }
+          if (
+            text === undefined ||
+            `sha256:${createHash('sha256').update(text).digest('hex')}` !== ref.resource.digest
+          )
+            throw new DraftAuthoringConflictError('Source version changed since generation');
+        }
+        if (timings) timings.source_validation_ms = performance.now() - sourcesStarted;
+        const schemaStarted = performance.now();
+        const schema = await resolveWorkspaceYSchema(
+          lockedDraft.workspace_state!,
+          tx,
+          input.projectId
+        );
+        if (
+          !schema.schema ||
+          createYSchemaResourceDescriptor(candidate.generation.context.yschema.uri, schema.schema)
+            .digest !== candidate.generation.context.yschema.digest
+        )
+          throw new DraftAuthoringConflictError('Schema version changed since generation');
+        if (timings) timings.schema_validation_ms = performance.now() - schemaStarted;
+      },
+    },
+    publication
+  );
 }

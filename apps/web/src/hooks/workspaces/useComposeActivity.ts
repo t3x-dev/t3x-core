@@ -21,6 +21,7 @@ import {
   composeActionOperationItems,
   type OperationStackItem,
 } from '@/domain/workspaces/composeOperationStacks';
+import { ApiError } from '@/infrastructure/core';
 import { getSharedApiClient } from '@/infrastructure/sharedApiClient';
 import { saveProjectWorkspace } from '@/infrastructure/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
@@ -736,26 +737,62 @@ export function useComposeActivity(candidate: WorkspaceCandidate, enabledOverrid
   }, [candidate.id, candidate.projectId, load, view, ownsState, captureScope]);
 
   const publishCandidate = useCallback(
-    async (transitionId: string, requestId: string) => {
+    async (transitionId: string, requestId: string, onConfirming?: () => void) => {
       const isCurrent = captureScope();
       if (!enabled || !isCurrent()) throw new Error('Draft activity is not ready');
-      const outcome = await getSharedApiClient().workspaces.authoring.publishCandidate(
-        candidate.projectId,
-        candidate.id,
-        transitionId,
-        { request_id: requestId }
-      );
+      const api = getSharedApiClient().workspaces.authoring;
+      const outcome = await api
+        .publishCandidate(candidate.projectId, candidate.id, transitionId, {
+          request_id: requestId,
+        })
+        .catch(async (error: unknown): Promise<WorkspaceAuthoringOutcome> => {
+          if (
+            !(error instanceof ApiError || error instanceof T3xApiError) ||
+            !['TIMEOUT', 'DATA_LOAD_TIMEOUT'].includes(error.code)
+          )
+            throw error;
+          if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
+          onConfirming?.();
+          const confirmed = await api
+            .read(candidate.projectId, candidate.id, {
+              action_id: requestId,
+              limit: 1,
+            })
+            .catch(() => null);
+          const action = confirmed?.selected?.action;
+          if (
+            !confirmed ||
+            action?.actionId !== requestId ||
+            action.generation?.transitionId !== transitionId
+          )
+            throw new ApiError(
+              'TIMEOUT',
+              'The Draft save could not be confirmed. Retry publication to check the same change.'
+            );
+          return {
+            kind: 'reused',
+            workspaceRevision: confirmed.workspaceRevision,
+            compositionRevision: confirmed.compositionRevision,
+            action,
+          };
+        });
       if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
-      await load();
-      if (!isCurrent()) throw new Error('Workspace changed. Refresh its Draft activity.');
+      latestPublish.current = { scope, outcome };
+      setPublishReceipt({ outcome, refreshed: false });
+      if (cache?.current?.key === cacheKey) cache.current = null;
+      void load(true).catch(() => {
+        // The acknowledgement is authoritative even if the projection cannot refresh.
+      });
       setNotice(
         outcome.kind === 'no_change'
           ? 'This proposal is already reflected in the current Draft.'
-          : 'Verified proposal published as a new Draft action.'
+          : outcome.kind === 'reused'
+            ? 'The original Draft save was confirmed.'
+            : 'Verified proposal published as a new Draft action.'
       );
       return outcome;
     },
-    [candidate.id, candidate.projectId, load, enabled, captureScope]
+    [cache, cacheKey, candidate.id, candidate.projectId, load, enabled, captureScope, scope]
   );
 
   return {

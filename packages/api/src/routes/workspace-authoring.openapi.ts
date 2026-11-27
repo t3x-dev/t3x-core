@@ -41,6 +41,7 @@ import {
   WorkspaceReconciliationValidationError,
 } from '../lib/workspace-reconciliation';
 import { captureWorkspaceSchema } from '../lib/workspace-schema-review';
+import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema } from '../schemas/common';
 
 const Params = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1) });
@@ -725,6 +726,7 @@ const publishCandidate = createRoute({
 workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
   const { projectId, workspaceId, transitionId } = c.req.valid('param');
   const body = c.req.valid('json');
+  const started = performance.now();
   const db = await getDB();
   const access = await assertProjectAccess(c, db, projectId);
   if (access instanceof Response) return access;
@@ -733,6 +735,7 @@ workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
     projectId,
     scope: 'transition:propose',
   });
+  const timings: Record<string, number> = { access_ms: performance.now() - started };
   const result = await publishWorkspaceGeneration({
     db,
     projectId,
@@ -740,6 +743,18 @@ workspaceAuthoringRoutes.openapi(publishCandidate, async (c) => {
     transitionId,
     requestId: body.request_id,
     actor: principal.actor,
+    timings,
+  }).finally(() => {
+    pinoLogger.info(
+      {
+        event: 'workspace.candidate_publication',
+        request_id: body.request_id,
+        transition_id: transitionId,
+        total_ms: performance.now() - started,
+        ...timings,
+      },
+      'Workspace candidate publication timings'
+    );
   });
   return c.json(
     {

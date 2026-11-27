@@ -99,7 +99,8 @@ export function ComposeAuthoringAssistant({
   onCreateConversation: () => Promise<string>;
   onPublishCandidate: (
     transitionId: string,
-    requestId: string
+    requestId: string,
+    onConfirming?: () => void
   ) => Promise<WorkspaceAuthoringOutcome>;
   initialPendingCandidate?: string;
   activityActions?: WorkspaceAuthoringAction[];
@@ -127,11 +128,15 @@ export function ComposeAuthoringAssistant({
     'compose.publishing',
     false
   );
-  const [publicationError, setPublicationError] = useSourceThreadSessionState<string | null>(
+  const [confirmingSave, setConfirmingSave] = useSourceThreadSessionState(
     session,
-    'compose.publicationError',
-    null
+    'compose.confirmingSave',
+    false
   );
+  const [publicationError, setPublicationError] = useSourceThreadSessionState<{
+    message: string;
+    unconfirmed: boolean;
+  } | null>(session, 'compose.publicationError', null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [published, setPublished] = useSourceThreadSessionState<AssistantPublication | null>(
     session,
@@ -178,23 +183,28 @@ export function ComposeAuthoringAssistant({
       setPublishing(true);
       setLocalError(null);
       try {
-        const outcome = await onPublishCandidate(identity.transitionId, identity.requestId);
+        const outcome = await onPublishCandidate(identity.transitionId, identity.requestId, () =>
+          setConfirmingSave(true)
+        );
         if (identity.turnId)
           setPublished({ turnId: identity.turnId, kind: outcome.kind, action: outcome.action });
         publication.current = null;
         setPendingCandidate(null);
         setPublicationError(null);
       } catch (error) {
-        setPublicationError(
-          error instanceof Error ? error.message : 'Could not publish this proposal.'
-        );
+        setPublicationError({
+          message: error instanceof Error ? error.message : 'Could not publish this proposal.',
+          unconfirmed: error instanceof Error && 'code' in error && error.code === 'TIMEOUT',
+        });
       } finally {
+        setConfirmingSave(false);
         setPublishing(false);
       }
     },
     [
       onPublishCandidate,
       publication,
+      setConfirmingSave,
       setPublished,
       setPublishing,
       setPendingCandidate,
@@ -413,13 +423,31 @@ export function ComposeAuthoringAssistant({
         chat={chatView}
         variant="discussion"
       />
-      {pendingCandidate && publicationError ? (
-        <section className={styles.candidateNotice} aria-label="Proposal publication failed">
+      {confirmingSave ? (
+        <output className={styles.authoringAssistantNotice}>
+          Checking whether the Draft was saved…
+        </output>
+      ) : null}
+      {pendingCandidate && publicationError && !confirmingSave ? (
+        <section
+          className={styles.candidateNotice}
+          aria-label={
+            publicationError.unconfirmed ? 'Draft save unconfirmed' : 'Proposal publication failed'
+          }
+        >
           <div>
             <AlertTriangle aria-hidden="true" />
             <span>
-              <strong>Proposal publication failed</strong>
-              <small>Review the error below, then retry publication.</small>
+              <strong>
+                {publicationError.unconfirmed
+                  ? 'Draft save unconfirmed'
+                  : 'Proposal publication failed'}
+              </strong>
+              <small>
+                {publicationError.unconfirmed
+                  ? 'Retry to confirm the same publication.'
+                  : 'Review the error below, then retry publication.'}
+              </small>
             </span>
           </div>
           <button disabled={publishing} onClick={() => void publish()} type="button">
@@ -435,7 +463,7 @@ export function ComposeAuthoringAssistant({
           className={styles.authoringAssistantNotice}
           role={publicationError || localError || chat.error ? 'alert' : 'status'}
         >
-          {publicationError ?? localError ?? chat.error ?? chat.warning}
+          {publicationError?.message ?? localError ?? chat.error ?? chat.warning}
         </p>
       ) : null}
       {!model.isSelectionReady ? (
