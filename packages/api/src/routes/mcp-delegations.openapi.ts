@@ -140,7 +140,14 @@ const saveSelection = createRoute({
   tags: ['MCP authorization'],
   summary: 'Save a short-lived Web preselection for one client authorization',
   responses: {
-    ...success(z.object({ id, expiresAt: z.string(), launchUrl: z.string().nullable() })),
+    ...success(
+      z.object({
+        id,
+        expiresAt: z.string(),
+        launchUrl: z.string().nullable(),
+        resourceUrl: z.string(),
+      })
+    ),
     ...failures,
   },
 });
@@ -254,7 +261,7 @@ routes.openapi(listChoices, async (c) => {
 
 routes.openapi(saveSelection, async (c) => {
   const userId = sessionUser(c);
-  issuerConfig();
+  const { resource } = issuerConfig();
   const input = z
     .object({ projectId: id, clientId: registeredClientId, branch: z.string().max(255).optional() })
     .parse(await c.req.json());
@@ -274,6 +281,7 @@ routes.openapi(saveSelection, async (c) => {
     id: saved.id,
     expiresAt: saved.expiresAt.toISOString(),
     launchUrl: launch?.href ?? null,
+    resourceUrl: resource.href,
   });
 });
 

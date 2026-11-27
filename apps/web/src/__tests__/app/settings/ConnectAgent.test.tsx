@@ -20,7 +20,12 @@ beforeEach(() => {
     clients: [{ id: 'registered', name: 'Editorial Agent' }],
     repositories: [{ id: 'project-one', name: 'Studio/Calendar' }],
   });
-  api.save.mockResolvedValue({ id: 'saved', expiresAt: '2030-11-26T12:00:00Z', launchUrl: null });
+  api.save.mockResolvedValue({
+    id: 'saved',
+    expiresAt: '2030-11-26T12:00:00Z',
+    launchUrl: null,
+    resourceUrl: 'https://editorial.example.test/mcp',
+  });
 });
 
 it('saves an explicit selection and names the manual connection action for this client', async () => {
@@ -31,6 +36,8 @@ it('saves an explicit selection and names the manual connection action for this 
   fireEvent.change(repository, { target: { value: 'project-one' } });
   fireEvent.click(screen.getByRole('button', { name: 'Continue in client' }));
   expect(await screen.findByText(/Open Editorial Agent's connection settings/)).toBeVisible();
+  expect(screen.getByText('https://editorial.example.test/mcp')).toBeVisible();
+  expect(screen.getByText(/On the T3X authorization page/)).toHaveTextContent('reference saved');
   expect(api.save).toHaveBeenCalledWith({
     projectId: 'project-one',
     clientId: 'registered',
