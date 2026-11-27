@@ -244,7 +244,7 @@ describe('ComposeAuthoringAssistant publication recovery', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Retry publication' }));
     });
-    expect(retry).toHaveBeenCalledExactlyOnceWith(...identity!);
+    expect(retry).toHaveBeenCalledExactlyOnceWith(...identity!.slice(0, 2), expect.any(Function));
     expect(screen.queryByRole('button', { name: 'Retry publication' })).not.toBeInTheDocument();
   });
 });

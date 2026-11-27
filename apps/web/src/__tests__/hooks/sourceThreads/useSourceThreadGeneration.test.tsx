@@ -110,6 +110,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Workspace assistant route lifetime', () => {
+  it('delivers a completed candidate once when the follow-up stream errors', async () => {
+    mocks.stream.mockImplementation(async function* (): AsyncGenerator<WorkspaceAssistantEvent> {
+      yield { type: 'context' };
+      yield {
+        type: 'operation',
+        operationId: 'operation',
+        name: 'requestProposal',
+        status: 'started',
+      };
+      yield {
+        type: 'operation',
+        operationId: 'operation',
+        name: 'requestProposal',
+        status: 'completed',
+        result: { transitionId: 'candidate' },
+      };
+      yield { type: 'error', message: 'follow-up failed' };
+    });
+    const initial = options();
+    const view = renderHook(() => useSourceThreadGeneration(initial));
+    await waitFor(() => expect(view.result.current.isLoading).toBe(false));
+    await act(async () => {
+      await view.result.current.sendMessage('Generate a synthetic candidate');
+    });
+    expect(view.result.current.error).toContain('follow-up failed');
+    expect(view.result.current.workspaceActivity?.operations[0]?.status).toBe('completed');
+    expect(initial.workspaceAssistant.onCandidate).toHaveBeenCalledExactlyOnceWith(
+      'candidate',
+      'user-turn'
+    );
+    expect(mocks.recover).not.toHaveBeenCalled();
+  });
+
   it('replaces a Workspace placeholder title after the first user message', async () => {
     mocks.stream.mockImplementation(async function* (): AsyncGenerator<WorkspaceAssistantEvent> {
       yield { type: 'context' };

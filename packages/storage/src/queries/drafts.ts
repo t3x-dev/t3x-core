@@ -837,9 +837,10 @@ export async function transactWorkspaceAuthoring<T>(
   command: (
     tx: AnyDB,
     draft: Draft
-  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>
+  ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>,
+  timings?: Record<string, number>
 ): Promise<{ draft: Draft; value: T }> {
-  return transactAuthoring(db, input, command, false);
+  return transactAuthoring(db, input, command, false, timings);
 }
 
 /** Explicit basis changes must retain the exact retired ledger and all other Workspace data. */
@@ -896,10 +897,15 @@ async function transactAuthoring<T>(
     tx: AnyDB,
     draft: Draft
   ) => Promise<{ workspace: Record<string, unknown> | null; value: T }>,
-  reconciliation: boolean
+  reconciliation: boolean,
+  timings?: Record<string, number>
 ): Promise<{ draft: Draft; value: T }> {
   type TxRunner = { transaction<R>(fn: (tx: unknown) => Promise<R>): Promise<R> };
-  return (db as unknown as TxRunner).transaction(async (rawTx) => {
+  const started = performance.now();
+  let lockedAt: number | undefined;
+  const transaction = (db as unknown as TxRunner).transaction(async (rawTx) => {
+    const enteredAt = performance.now();
+    if (timings) timings.transaction_begin_ms = enteredAt - started;
     const tx = rawTx as AnyDB;
     const [branch] = await tx
       .select()
@@ -913,12 +919,15 @@ async function transactAuthoring<T>(
       .where(and(eq(drafts.projectId, input.projectId), eq(drafts.workspaceId, input.workspaceId)))
       .for('update');
     if (!row) throw new NotFoundError(input.workspaceId);
+    lockedAt = performance.now();
+    if (timings) timings.lock_acquire_ms = lockedAt - enteredAt;
     const draft = rowToDraft(row);
     const result = await command(tx, draft);
     if (!result.workspace) return { draft, value: result.value };
     if (draft.status !== 'editing') throw new DraftAuthoringConflictError('Draft is not editable');
     if (reconciliation) assertReconciledWorkspace(draft.workspace_state ?? {}, result.workspace);
     else assertAppendOnlyWorkspace(draft.workspace_state ?? {}, result.workspace);
+    const writeStarted = performance.now();
     const [saved] = await tx
       .update(drafts)
       .set({
@@ -931,8 +940,13 @@ async function transactAuthoring<T>(
       })
       .where(and(eq(drafts.id, draft.id), eq(drafts.revision, draft.revision)))
       .returning();
+    if (timings) timings.write_ms = performance.now() - writeStarted;
     if (!saved) throw new ConflictError(draft.id, draft.revision);
     return { draft: rowToDraft(saved), value: result.value };
+  });
+  if (!timings) return transaction;
+  return transaction.finally(() => {
+    if (lockedAt !== undefined) timings.lock_held_ms = performance.now() - lockedAt;
   });
 }
 

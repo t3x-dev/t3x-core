@@ -570,6 +570,7 @@ export function useSourceThreadGeneration({
           controller.signal.throwIfAborted();
           const unfinished = new Set<string>();
           const completedCandidates = new Set<string>();
+          let streamFailure: { error: unknown } | undefined;
           let receivedText = false;
           let completed = false;
           let completedTurnHash: string | undefined;
@@ -680,6 +681,8 @@ export function useSourceThreadGeneration({
                   );
               }
             }
+          } catch (error) {
+            streamFailure = { error };
           } finally {
             // Reconcile persisted business results; never replay tool calls after EOF or disconnect.
             for (const operationId of unfinished) {
@@ -690,17 +693,18 @@ export function useSourceThreadGeneration({
                   operationId
                 );
                 if (result.status === 'candidate' && result.transitionId)
-                  assistantRef.current?.onCandidate?.(result.transitionId);
+                  completedCandidates.add(result.transitionId);
               } catch {
                 warnings.setWarning('Connection ended. Recheck saved proposals before retrying.');
               }
             }
           }
-          if (!completed)
+          if (!completed && !streamFailure)
             warnings.setWarning(
               'Assistant stream ended before completion. Saved business results were checked.'
             );
-          const assistantTurnId = completedTurnHash ?? `reply-${savedUserTurnHash}`;
+          const assistantTurnId =
+            completedTurnHash ?? (completed ? `reply-${savedUserTurnHash}` : savedUserTurnHash);
           if (completed && fullResponse.trim()) {
             // Keep the streaming surface mounted just long enough for the last
             // provider delta to finish its visual reveal. This does not delay or
@@ -730,6 +734,7 @@ export function useSourceThreadGeneration({
               ? { ...current, turnId: assistantTurnId, phase: completed ? 'complete' : 'error' }
               : current
           );
+          if (streamFailure) throw streamFailure.error;
           return;
         }
 
