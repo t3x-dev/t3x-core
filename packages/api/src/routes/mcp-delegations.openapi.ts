@@ -6,6 +6,7 @@ import {
   findCurrentBranch,
   McpPreselectionLimitError,
   readAgentDelegation,
+  readMcpPreselectionStatus,
   recordMcpExchangeOutcome,
   redeemMcpAuthorizationCode,
 } from '@t3x-dev/storage';
@@ -151,6 +152,17 @@ const saveSelection = createRoute({
     ...failures,
   },
 });
+const selectionStatus = createRoute({
+  method: 'get',
+  path: '/v1/mcp-delegations/preselections/{id}',
+  tags: ['MCP authorization'],
+  summary: 'Read the status of one saved selection for its owner',
+  request: { params: z.object({ id }) },
+  responses: {
+    ...success(z.object({ status: z.enum(['pending', 'used', 'expired']) })),
+    ...failures,
+  },
+});
 const listGrants = createRoute({
   method: 'get',
   path: '/v1/mcp-delegations',
@@ -199,7 +211,13 @@ const exchangeCode = createRoute({
 
 const invalid = (message: string) => new AuthorizationError(400, message);
 
-for (const path of [base, consent, base + '/preselections', publicBase + '/*'])
+for (const path of [
+  base,
+  consent,
+  base + '/preselections',
+  base + '/preselections/*',
+  publicBase + '/*',
+])
   routes.use(path, async (c, next) => {
     c.header('Cache-Control', 'no-store');
     c.header('Referrer-Policy', 'no-referrer');
@@ -283,6 +301,15 @@ routes.openapi(saveSelection, async (c) => {
     launchUrl: launch?.href ?? null,
     resourceUrl: resource.href,
   });
+});
+
+routes.openapi(selectionStatus, async (c) => {
+  const userId = sessionUser(c);
+  const db = await getDB();
+  const item = await readMcpPreselectionStatus(db, c.req.valid('param').id, userId);
+  if (!item) throw new AuthorizationError(404, 'Saved selection unavailable.');
+  await canDelegate(db, userId, item.projectId);
+  return c.json({ status: item.status });
 });
 
 routes.openapi(listGrants, async (c) => {

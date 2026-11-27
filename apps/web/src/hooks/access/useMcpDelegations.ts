@@ -5,6 +5,7 @@ import type { ConsentDecision, DelegationUpdate } from '@/domain/mcpDelegation';
 import {
   decideDelegationConsent,
   readConnectionChoices,
+  readConnectionSelectionStatus,
   readDelegationConsent,
   readRepositoryDelegations,
   revokeRepositoryDelegation,
@@ -12,6 +13,14 @@ import {
   updateRepositoryDelegation,
 } from '@/infrastructure/mcpDelegations';
 import { getSessionUserId, subscribeSessionUser } from '@/infrastructure/session';
+
+function selectionChannel(id: string) {
+  try {
+    return new BroadcastChannel('t3x-mcp-selection-' + id);
+  } catch {
+    return null;
+  }
+}
 
 function useDelegationRead<T>(key: string, load: (key: string, signal: AbortSignal) => Promise<T>) {
   const userId = useSyncExternalStore(subscribeSessionUser, getSessionUserId, () => null);
@@ -70,7 +79,20 @@ export function useDelegationConsent(query: string) {
     decide: async (input: ConsentDecision) => {
       submitting.current = true;
       try {
-        return await decideDelegationConsent(query, input);
+        const result = await decideDelegationConsent(query, input);
+        const params = new URLSearchParams(query);
+        const id = params.get('preselection') || params.get('useSelection');
+        if (input.decision === 'approve' && id) {
+          const channel = selectionChannel(id);
+          try {
+            channel?.postMessage('refresh');
+          } catch {
+            // Returning to the selection page also checks the receipt.
+          } finally {
+            channel?.close();
+          }
+        }
+        return result;
       } finally {
         submitting.current = false;
       }
@@ -80,6 +102,31 @@ export function useDelegationConsent(query: string) {
 
 export function useConnectionChoices() {
   return { ...useDelegationRead('', readConnectionChoices), save: saveConnectionSelection };
+}
+
+export function useConnectionSelectionStatus(id: string, expiresAt: string) {
+  const state = useDelegationRead(id, readConnectionSelectionStatus);
+  const { reload } = state;
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reload();
+    };
+    const delay = Date.parse(expiresAt) - Date.now();
+    const timer = delay > 0 ? setTimeout(reload, Math.min(delay, 2_147_483_647)) : undefined;
+    const channel = selectionChannel(id);
+    if (channel) channel.onmessage = reload;
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', reload);
+    window.addEventListener('pageshow', reload);
+    return () => {
+      clearTimeout(timer);
+      channel?.close();
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', reload);
+      window.removeEventListener('pageshow', reload);
+    };
+  }, [id, reload, expiresAt]);
+  return state;
 }
 
 export function useRepositoryDelegations(projectId: string, branch: string) {

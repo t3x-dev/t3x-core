@@ -359,15 +359,21 @@ describe('repository OAuth consent and code exchange', () => {
     ).json();
     expect(new URL(saved.launchUrl).searchParams.get('preselection')).toBe(saved.id);
     expect(saved.resourceUrl).toBe(resource);
+    const statusUrl = catalog + '/' + saved.id;
+    const status = async () => (await web.app.request(statusUrl)).json();
+    expect(await status()).toEqual({ status: 'pending' });
     const ordinary = fixture();
     const before = await (await ordinary.preview()).json();
     expect(before.preselections.map((s: { id: string }) => s.id)).toContain(saved.id);
     expect(before.repositoryLocked).toBe(false);
     expect((await ordinary.approve(before.previewVersion)).ok).toBe(true);
+    expect(await status()).toEqual({ status: 'pending' });
     const other = fixture();
     other.as(otherUserId);
     other.params.set('preselection', saved.id);
     expect((await other.preview()).status).toBe(404);
+    expect((await other.app.request(statusUrl)).status).toBe(404);
+    expect((await fixture(false).app.request(statusUrl)).status).toBe(401);
     web.params.set('useSelection', saved.id);
     const chosen = await (await web.preview()).json();
     expect(chosen.repositoryLocked).toBe(true);
@@ -377,5 +383,20 @@ describe('repository OAuth consent and code exchange', () => {
     expect((await web.approve(chosen.previewVersion)).ok).toBe(true);
     expect((await web.approve(chosen.previewVersion)).ok).toBe(true);
     expect((await registered.approve(competing.previewVersion)).ok).toBe(false);
+    expect(await status()).toEqual({ status: 'used' });
+    await database.sql`UPDATE mcp_preselections SET expires_at=NOW() WHERE id=${saved.id}`;
+    expect(await status()).toEqual({ status: 'used' });
+    const unused = await (
+      await web.app.request(catalog, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectId, clientId: 'host', branch: 'main' }),
+      })
+    ).json();
+    await database.sql`UPDATE mcp_preselections SET expires_at=NOW() WHERE id=${unused.id}`;
+    expect(await (await web.app.request(catalog + '/' + unused.id)).json()).toEqual({
+      status: 'expired',
+    });
+    expect((await web.app.request(statusUrl)).status).toBe(404);
   });
 });

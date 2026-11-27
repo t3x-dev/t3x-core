@@ -11,7 +11,10 @@ import {
   selectionLabel,
 } from '@/domain/mcpDelegation';
 import { getProjectIdRepoPath, repositoryAgentAccessHref } from '@/domain/project/repoPath';
-import { useConnectionChoices } from '@/hooks/access/useMcpDelegations';
+import {
+  useConnectionChoices,
+  useConnectionSelectionStatus,
+} from '@/hooks/access/useMcpDelegations';
 import s from './AgentAccessDemo.module.css';
 
 export function ConnectAgent() {
@@ -105,26 +108,6 @@ function SelectionForm({
       active.current = false;
     };
   }, []);
-  useEffect(() => {
-    if (!saved) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const checkExpiry = () => {
-      clearTimeout(timer);
-      const remaining = Date.parse(saved.expiresAt) - Date.now();
-      if (remaining > 0) {
-        timer = setTimeout(checkExpiry, Math.min(remaining, 2_147_483_647));
-      } else {
-        setSaved(null);
-        setError('This selection expired. Continue in the client to make a new selection.');
-      }
-    };
-    checkExpiry();
-    window.addEventListener('pageshow', checkExpiry);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('pageshow', checkExpiry);
-    };
-  }, [saved]);
   const client = choices.clients.find((item) => item.id === clientId);
   const repository = choices.repositories.find((item) => item.id === project);
   async function submit(event: FormEvent) {
@@ -167,43 +150,15 @@ function SelectionForm({
           : 'No Agent clients are registered on this deployment.'}
       </p>
     );
-  if (saved)
+  if (saved && client && repository)
     return (
-      <div className={s.fields}>
-        <output className={s.description}>
-          Selection saved for {client?.name} and {repository?.name}. Confirm access when the client
-          opens the T3X authorization page.
-        </output>
-        {saved.launchUrl ? (
-          <a className={s.primary} href={saved.launchUrl} referrerPolicy="no-referrer">
-            Open {client?.name}
-          </a>
-        ) : (
-          <>
-            <p className={s.statusText}>
-              Open {client?.name}'s connection settings. Add or select the HTTP MCP server{' '}
-              {saved.resourceUrl ? (
-                <>
-                  at <code>{saved.resourceUrl}</code>
-                </>
-              ) : (
-                <>using the OAuth server URL from your deployment administrator</>
-              )}{' '}
-              and start OAuth sign-in.
-            </p>
-            <p className={s.statusText}>
-              On the T3X authorization page, choose the saved selection with reference{' '}
-              <code>{selectionLabel(saved.id)}</code> and confirm access.
-            </p>
-          </>
-        )}
-        <p className={s.statusText}>
-          Selection expires {new Date(saved.expiresAt).toLocaleString()}.
-        </p>
-        <button type="button" className={s.secondary} onClick={() => setSaved(null)}>
-          Choose another connection
-        </button>
-      </div>
+      <SavedConnection
+        saved={saved}
+        client={client.name}
+        repository={repository.name}
+        settingsHref={repositoryAgentAccessHref(getProjectIdRepoPath(project), target.trim())}
+        onReset={() => setSaved(null)}
+      />
     );
   return (
     <form className={s.fields} onSubmit={submit}>
@@ -266,5 +221,93 @@ function SelectionForm({
         {busy ? 'Saving selection…' : 'Continue in client'}
       </button>
     </form>
+  );
+}
+
+function SavedConnection({
+  saved,
+  client,
+  repository,
+  settingsHref,
+  onReset,
+}: {
+  saved: SavedSelection;
+  client: string;
+  repository: string;
+  settingsHref: string;
+  onReset: () => void;
+}) {
+  const { data, error, reload } = useConnectionSelectionStatus(saved.id, saved.expiresAt);
+  return (
+    <div className={s.fields}>
+      {data?.status === 'pending' && (
+        <>
+          <output className={s.description}>
+            Selection saved for {client} and {repository}. Confirm access when the client opens the
+            T3X authorization page.
+          </output>
+          {saved.launchUrl ? (
+            <a className={s.primary} href={saved.launchUrl} referrerPolicy="no-referrer">
+              Open {client}
+            </a>
+          ) : (
+            <>
+              <p className={s.statusText}>
+                Open {client}'s connection settings. Add or select the HTTP MCP server{' '}
+                {saved.resourceUrl ? (
+                  <>
+                    at <code>{saved.resourceUrl}</code>
+                  </>
+                ) : (
+                  <>using the OAuth server URL from your deployment administrator</>
+                )}{' '}
+                and start OAuth sign-in.
+              </p>
+              <p className={s.statusText}>
+                On the T3X authorization page, choose the saved selection with reference{' '}
+                <code>{selectionLabel(saved.id)}</code> and confirm access.
+              </p>
+            </>
+          )}
+          <p className={s.statusText}>
+            Selection expires {new Date(saved.expiresAt).toLocaleString()}.
+          </p>
+        </>
+      )}
+      {data?.status === 'used' && (
+        <>
+          <output className={s.description}>
+            This selection was used to authorize {client} for {repository}.
+          </output>
+          <Link className={s.primary} href={settingsHref}>
+            View repository Agent access
+          </Link>
+        </>
+      )}
+      {data?.status === 'expired' && (
+        <p className={s.description} role="alert">
+          This selection expired before it was used.
+        </p>
+      )}
+      {data?.status === 'unavailable' && (
+        <p className={s.description} role="alert">
+          This selection is unavailable. Its authorization status cannot be confirmed.
+        </p>
+      )}
+      {error && (
+        <>
+          <p className={s.description} role="alert">
+            Could not check this selection. {error}
+          </p>
+          <button type="button" className={s.secondary} onClick={reload}>
+            Retry status check
+          </button>
+        </>
+      )}
+      {!data && !error && <output className={s.statusText}>Checking this selection…</output>}
+      <button type="button" className={s.secondary} onClick={onReset}>
+        Choose another connection
+      </button>
+    </div>
   );
 }

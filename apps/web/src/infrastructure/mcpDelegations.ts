@@ -62,6 +62,21 @@ export function saveConnectionSelection(input: {
   return request<SavedSelection>(`${path}/preselections`, 'POST', input);
 }
 
+export async function readConnectionSelectionStatus(id: string, signal: AbortSignal) {
+  try {
+    return await request<{ status: 'pending' | 'used' | 'expired' }>(
+      `${path}/preselections/${encodeURIComponent(id)}`,
+      'GET',
+      undefined,
+      signal
+    );
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.code === 'DELEGATION_UNAVAILABLE')
+      return { status: 'unavailable' as const };
+    throw cause;
+  }
+}
+
 export function readRepositoryDelegations(query: string, signal: AbortSignal) {
   return request<{ grants: RepositoryDelegation[] }>(`${path}?${query}`, 'GET', undefined, signal);
 }

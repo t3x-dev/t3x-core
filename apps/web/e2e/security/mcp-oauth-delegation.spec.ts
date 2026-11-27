@@ -744,29 +744,36 @@ test('Web preselection and Chat consent share one guarded repository approval', 
   expect(await listGrants()).toHaveLength(0);
 
   const { query } = oauthQuery();
-  await page.goto(screen(query));
-  const savedPicker = page.getByRole('combobox', { name: 'Use this saved selection' });
+  const consentPage = await page.context().newPage();
+  await consentPage.goto(screen(query));
+  const savedPicker = consentPage.getByRole('combobox', { name: 'Use this saved selection' });
   await expect(savedPicker).toHaveValue('');
   await savedPicker.selectOption(selection.id);
-  await expect(page.getByText(/Edit content on all branches/)).toBeVisible();
-  await page.getByText('Advanced settings', { exact: true }).click();
-  await page.getByRole('combobox', { name: 'Writable branches' }).selectOption('current');
-  await expect(page.getByText('Read this repository. Edit content only on main.')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Agent actions' }).selectOption('read');
-  await expect(page.getByText('Read this repository.', { exact: true })).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('article').screenshot({ path: test.info().outputPath('narrow-consent.png') });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+  await expect(consentPage.getByText(/Edit content on all branches/)).toBeVisible();
+  await consentPage.getByText('Advanced settings', { exact: true }).click();
+  await consentPage.getByRole('combobox', { name: 'Writable branches' }).selectOption('current');
+  await expect(consentPage.getByText('Read this repository. Edit content only on main.')).toBeVisible();
+  await consentPage.getByRole('combobox', { name: 'Agent actions' }).selectOption('read');
+  await expect(consentPage.getByText('Read this repository.', { exact: true })).toBeVisible();
+  await consentPage.setViewportSize({ width: 390, height: 844 });
+  await consentPage.locator('article').screenshot({ path: test.info().outputPath('narrow-consent.png') });
+  expect(await consentPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
 
   // Use the registered callback without retaining its code or full URL in diagnostics.
-  await page.route(callback.origin + '/**', (request) =>
+  await consentPage.route(callback.origin + '/**', (request) =>
     request.fulfill({ status: 200, body: 'Returned to client' })
   );
-  await page.getByRole('button', { name: 'Authorize and start' }).click();
-  await expect(page.getByText('Returned to client')).toBeVisible();
-  await page.goto(issuer + '/' + repository + '/settings?view=agent-access');
+  await consentPage.getByRole('button', { name: 'Authorize and start' }).click();
+  await expect(consentPage.getByText('Returned to client')).toBeVisible();
+  await consentPage.close();
+  await page.bringToFront();
+  await expect(page.getByText(/This selection was used to authorize/)).toBeVisible();
+  await expect(page.getByText(/Selection expires/)).toHaveCount(0);
+  await page.locator('article').screenshot({ path: test.info().outputPath('used-selection.png') });
+  await page.getByRole('link', { name: 'View repository Agent access' }).click();
+  await expect(page).toHaveURL((url) => url.searchParams.get('view') === 'agent-access');
   const active = (await listGrants()).filter((grant: { revoked: boolean }) => !grant.revoked);
   expect(active).toHaveLength(1);
   expect(active[0].mode).toBe('read');
